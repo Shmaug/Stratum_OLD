@@ -66,29 +66,30 @@ struct VertexWeight {
 Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mIndexCount(0), mVertexCount(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
 Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename, float scale)
 	: mName(name), mVertexInput(nullptr) {
+
+	bool use32bit = true;
+	vector<Vertex> vertices;
+	vector<uint16_t> indices16;
+	vector<uint32_t> indices32;
+	vec3 mn, mx;
+
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs);
 	if (!scene) {
 		printf("Failed to load %s\n", filename.c_str());
 		assert(scene);
 	}
 
-	unsigned int vertexCount = 0;
-	for (unsigned int m = 0; m < scene->mNumMeshes; m++)
+	uint32_t vertexCount = 0;
+	for (uint32_t m = 0; m < scene->mNumMeshes; m++)
 		vertexCount += scene->mMeshes[m]->mNumVertices;
-	bool use32bit = vertexCount > 0xFFFF;
-
-	vector<Vertex> vertices;
-	vector<uint16_t> indices16;
-	vector<uint32_t> indices32;
-
-	vec3 mn, mx;
+	use32bit = vertexCount > 0xFFFF;
 
 	// append vertices, keep track of bounding box
-	for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
+	for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
 		const aiMesh* mesh = scene->mMeshes[i];
 		uint32_t baseIndex = (uint32_t)vertices.size();
 
-		for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
 			Vertex vertex = {};
 			memset(&vertex, 0, sizeof(Vertex));
 
@@ -118,45 +119,45 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 		}
 
 		if (use32bit)
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 				const aiFace& f = mesh->mFaces[i];
 				assert(f.mNumIndices == 3);
 				indices32.push_back(baseIndex + f.mIndices[0]);
 				indices32.push_back(baseIndex + f.mIndices[1]);
 				indices32.push_back(baseIndex + f.mIndices[2]);
-			}
-		else
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				const aiFace& f = mesh->mFaces[i];
-				assert(f.mNumIndices == 3);
-				indices16.push_back(baseIndex + f.mIndices[0]);
-				indices16.push_back(baseIndex + f.mIndices[1]);
-				indices16.push_back(baseIndex + f.mIndices[2]);
-			}
-	}
+			} else
+				for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+					const aiFace& f = mesh->mFaces[i];
+					assert(f.mNumIndices == 3);
+					indices16.push_back(baseIndex + f.mIndices[0]);
+					indices16.push_back(baseIndex + f.mIndices[1]);
+					indices16.push_back(baseIndex + f.mIndices[2]);
+				}
+		
+		aiReleaseImport(scene);
 
-	if (use32bit) {
-		mIndexCount = (uint32_t)indices32.size();
-		mIndexType = VK_INDEX_TYPE_UINT32;
-	} else {
-		mIndexCount = (uint32_t)indices16.size();
-		mIndexType = VK_INDEX_TYPE_UINT16;
-	}
-	mVertexCount = (uint32_t)vertices.size();
-	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
-	mVertexInput = &Vertex::VertexInput;
+		if (use32bit) {
+			mIndexCount = (uint32_t)indices32.size();
+			mIndexType = VK_INDEX_TYPE_UINT32;
+		} else {
+			mIndexCount = (uint32_t)indices16.size();
+			mIndexType = VK_INDEX_TYPE_UINT16;
+		}
 
-	for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
-		Device* device = devices->GetDevice(i);
-		DeviceData& d = mDeviceData[device];
-		d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-		if (use32bit)
-			d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices32.data(), sizeof(uint32_t) * indices32.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-		else
-			d.mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-	}
+		mVertexCount = (uint32_t)vertices.size();
+		mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
+		mVertexInput = &Vertex::VertexInput;
 
-	aiReleaseImport(scene);
+		for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
+			Device* device = devices->GetDevice(i);
+			DeviceData& d = mDeviceData[device];
+			d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+			if (use32bit)
+				d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices32.data(), sizeof(uint32_t) * indices32.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+			else
+				d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+		}
+	}
 
 	printf("Loaded %s: %d verts %d tris / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
 }

@@ -1,24 +1,32 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
-#pragma render_queue 5000
+#pragma render_queue 1000
 #pragma cull false
-#pragma zwrite false
-#pragma blend_fac src_alpha inv_src_alpha
-
-#pragma static_sampler Sampler
 
 #include <shadercompat.h>
 
+struct Point {
+	float3 Position;
+	float3 Color;
+};
+
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
-[[vk::binding(BINDING_START + 2, PER_OBJECT)]] StructuredBuffer<float3> Vertices : register(t1);
+[[vk::binding(BINDING_START, PER_OBJECT)]] StructuredBuffer<Point> Points : register(t0);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
+
+[[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float Time;
+	float PointSize;
+	float3 Extents;
+}
 
 struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD1;
+	float3 color : Color0;
 };
 struct fs_out {
 	float4 color : SV_Target0;
@@ -28,29 +36,34 @@ struct fs_out {
 v2f vsmain(uint id : SV_VertexId) {
 	v2f o;
 
-	static const float2 s[6] = {
-		float2(-1,-1),
-		float2( 1,-1),
-		float2(-1, 1),
-		float2( 1,-1),
-		float2( 1, 1),
-		float2(-1, 1)
+	static const float3 offsets[6] = {
+		float3(-1,-1, 0),
+		float3( 1,-1, 0),
+		float3(-1, 1, 0),
+		float3( 1,-1, 0),
+		float3( 1, 1, 0),
+		float3(-1, 1, 0)
 	};
 
-	float2 p = Vertices[id / 6] + PointSize * s[id % 6];
-	float4 wp = mul(Object.ObjectToWorld, float4(p, 0, 1.0));
+	Point pt = Points[id / 6];
+	float3 offset = offsets[id % 6];
+	
+	offset = offset.x * Camera.Right + offset.y * Camera.Up;
 
+	float3 p = pt.Position + PointSize * offset;
+	float4 wp = mul(Object.ObjectToWorld, float4(p, 1.0));
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
+	o.color = pt.Color;
 
 	return o;
 }
 
 fs_out fsmain(v2f i) {
-	float4 color = Texture.SampleLevel(Sampler, i.texcoord, 0);
+	float3 normal = float3(0, 0, 1);
 
 	fs_out o;
-	o.color = color;
-	o.depthNormal = float4(i.normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
+	o.color = float4(i.color, 1);
+	o.depthNormal = float4(normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 	return o;
 }

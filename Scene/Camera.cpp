@@ -127,8 +127,8 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 	buf->ViewProjection = ViewProjection();
 	buf->Viewport = vec4((float)mPixelWidth, (float)mPixelHeight, mNear, mFar);
 	buf->Position = WorldPosition();
-	buf->C0 = 1.f;
-	buf->C1 = 1.f / log2f(buf->C0 * mFar + 1.f);
+	buf->Right = WorldRotation() * vec3(1, 0, 0);
+	buf->Up = WorldRotation() * vec3(0, 1, 0);
 	
 	VkClearValue clearValues[]{
 		{ .0f, .0f, .0f, 0.f },
@@ -191,18 +191,18 @@ bool Camera::UpdateMatrices() {
 	vec3 up = WorldRotation() * vec3(0.f, 1.f, 0.f);
 	vec3 fwd = WorldRotation() * vec3(0.f, 0.f, 1.f);
 
-	mView = lookAtLH(WorldPosition(), WorldPosition() + fwd, up);
+	mView = lookAt(WorldPosition(), WorldPosition() + fwd, up);
 
 	float aspect = Aspect();
 
 	if (mOrthographic)
-		mProjection = orthoLH(-mOrthographicSize / aspect, mOrthographicSize / aspect, -mOrthographicSize, mOrthographicSize, mNear, mFar);
+		mProjection = ortho(-mOrthographicSize / aspect, mOrthographicSize / aspect, -mOrthographicSize, mOrthographicSize, mNear, mFar);
 	else {
 		if (mFieldOfView)
-			mProjection = perspectiveLH(mFieldOfView, aspect, mNear, mFar);
+			mProjection = perspective(mFieldOfView, aspect, mNear, mFar);
 		else {
 			vec4 s = mPerspectiveBounds * mNear;
-			mProjection = frustumLH(s.x, s.y, s.z, s.w, mNear, mFar);
+			mProjection = frustum(s.x, s.y, s.z, s.w, mNear, mFar);
 		}
 	}
 
