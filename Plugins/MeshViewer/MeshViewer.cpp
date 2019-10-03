@@ -130,7 +130,7 @@ bool MeshViewer::Init(Scene* scene, DeviceManager* deviceManager) {
 	mScene = scene;
 
 	Shader* pbrshader  = deviceManager->AssetDatabase()->LoadShader("Shaders/pbr.shader");
-	LoadScene("Assets/SanMiguel.fbx", scene, deviceManager, pbrshader, mObjects);
+	//LoadScene("Assets/SanMiguel.fbx", scene, deviceManager, pbrshader, mObjects);
 
 	return true;
 }
