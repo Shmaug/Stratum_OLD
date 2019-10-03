@@ -85,7 +85,7 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		camera->LocalPosition(0, 0, -mCameraDistance);
 
 		mFpsText->Parent(camera);
-		mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), -0.99f, 0.001f, 1)), 1));
+		mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), 0.99f, 0.001f, 1)), 1));
 		mFpsText->TextScale(camera->Near() * .015f);
 	}
 

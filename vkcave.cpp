@@ -232,7 +232,7 @@ private:
 
 				if (camera->SampleCount() == VK_SAMPLE_COUNT_1_BIT) {
 					VkImageCopy region = {};
-					region.extent = { camera->PixelWidth(), camera->PixelHeight() };
+					region.extent = { camera->PixelWidth(), camera->PixelHeight(), 1 };
 					region.dstSubresource.layerCount = 1;
 					region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					region.srcSubresource.layerCount = 1;
@@ -241,7 +241,7 @@ private:
 						targetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 				} else {
 					VkImageResolve region = {};
-					region.extent = { camera->PixelWidth(), camera->PixelHeight() };
+					region.extent = { camera->PixelWidth(), camera->PixelHeight(), 1 };
 					region.dstSubresource.layerCount = 1;
 					region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					region.srcSubresource.layerCount = 1;
