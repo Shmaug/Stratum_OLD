@@ -34,7 +34,21 @@ VkPhysicalDevice DeviceManager::GetPhysicalDevice(uint32_t index, const vector<c
 	// 'index' represents the index of the SUITABLE devices, count the suitable devices
 	uint32_t i = 0;
 	for (const auto& device : devices) {
-		if (CheckDeviceExtensionSupport(device, extensions)) {
+		uint32_t extensionCount;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+		vector<VkExtensionProperties> availableExtensions(extensionCount);
+		if (extensionCount == 0) continue;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+		set<string> availableExtensionSet;
+		for (const VkExtensionProperties& e : availableExtensions)
+			availableExtensionSet.insert(e.extensionName);
+		bool hasExtensions = true;
+		for (auto& e : extensions)
+			if (availableExtensionSet.count(e) == 0) {
+				hasExtensions = false;
+				break;
+			}
+		if (hasExtensions) {
 			if (i == index) return device;
 			i++;
 		}
@@ -74,26 +88,27 @@ void DeviceManager::CreateInstance() {
 
 	vector<const char*> validationLayers {
 		#ifdef _DEBUG
-		"VK_LAYER_KHRONOS_validation"
+		"VK_LAYER_KHRONOS_validation",
+		"VK_LAYER_LUNARG_standard_validation",
 		#endif
 	};
-
 
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 	vector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-	set<const char*> availableLayerSet;
+	set<string> availableLayerSet;
 	for (const VkLayerProperties& layer : availableLayers)
 		availableLayerSet.insert(layer.layerName);
 
 	for (auto& it = validationLayers.begin(); it != validationLayers.end();) {
-		if (!availableLayerSet.count(*it)) {
+		if (availableLayerSet.count(*it))
+			it++;
+		else {
 			printf("Removing unsupported layer: %s\n", *it);
 			it = validationLayers.erase(it);
-		} else
-			it++;
+		}
 	}
 
 	VkApplicationInfo appInfo = {};
@@ -132,21 +147,21 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 	// create windows
 	for (const auto& it : displays) {
-		uint32_t device = it.mDevice;
-		VkPhysicalDevice physicalDevice = GetPhysicalDevice(device, deviceExtensions);
+		uint32_t deviceIndex = it.mDevice;
+		VkPhysicalDevice physicalDevice = GetPhysicalDevice(deviceIndex, deviceExtensions);
 		while (physicalDevice == VK_NULL_HANDLE) {
-			// requested device index does not exist or is not suitable, fallback to previous device
-			if (device == 0) throw runtime_error("Failed to find suitable device!");
-			device--;
-			physicalDevice = GetPhysicalDevice(device, deviceExtensions);
+			// requested device index does not exist or is not suitable, fallback to previous device if it exists
+			if (deviceIndex == 0) throw runtime_error("Failed to find suitable device!");
+			deviceIndex--;
+			physicalDevice = GetPhysicalDevice(deviceIndex, deviceExtensions);
 		}
 		if (physicalDevice == VK_NULL_HANDLE) continue; // could not find any suitable devices...
 
-		if ((uint32_t)mDevices.size() <= device) mDevices.resize((size_t)device + 1);
+		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
 
 		auto w = new Window(mInstance, "VkCAVE " + to_string(mWindows.size()), it.mWindowPosition, it.mMonitor);
-		if (!mDevices[device]) mDevices[device] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, device);
-		w->CreateSwapchain(mDevices[device]);
+		if (!mDevices[deviceIndex]) mDevices[deviceIndex] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, deviceIndex);
+		w->CreateSwapchain(mDevices[deviceIndex]);
 		minImageCount = gmin(minImageCount, w->mImageCount);
 		mWindows.push_back(w);
 	}

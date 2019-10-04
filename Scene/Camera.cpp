@@ -13,7 +13,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(vec4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_8_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
 	mRenderPriority(0),
 	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mInvViewProjection(mat4(1.f)) {
 
@@ -137,8 +137,8 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 	};
 	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, 3);
 
-	// vulkan clip space has inverted y coordinate
-	VkViewport vp{ 0, (float)mPixelHeight, (float)mPixelWidth, -(float)mPixelHeight, 0, 1.f };
+	// vulkan clip space has inverted y coordinate, flip the viewport upside-down5
+	VkViewport vp{ 0, 0, (float)mPixelWidth, (float)mPixelHeight, 0, 1.f };
 	vkCmdSetViewport(*commandBuffer, 0, 1, &vp);
 
 	VkRect2D scissor{ {0, 0}, { mPixelWidth, mPixelHeight } };
@@ -206,6 +206,8 @@ bool Camera::UpdateMatrices() {
 			mProjection = frustum(s.x, s.y, s.z, s.w, mNear, mFar);
 		}
 	}
+
+	mProjection[1][1] = -mProjection[1][1];
 
 	mViewProjection = mProjection * mView;
 	mInvViewProjection = inverse(mViewProjection);

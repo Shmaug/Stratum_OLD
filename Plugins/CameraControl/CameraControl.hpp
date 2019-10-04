@@ -11,6 +11,8 @@ public:
 	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
 
+	inline void CameraDistance(float d) { mCameraDistance = d; }
+	inline float CameraDistance() const { return mCameraDistance; }
 	inline Object* CameraPivot() const { return mCameraPivot; }
 
 private:

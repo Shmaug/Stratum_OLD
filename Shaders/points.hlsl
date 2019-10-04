@@ -27,6 +27,7 @@ struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD1;
 	float4 color : Color0;
+	float3 normal : NORMAL;
 };
 struct fs_out {
 	float4 color : SV_Target0;
@@ -52,24 +53,24 @@ v2f vsmain(uint id : SV_VertexId) {
 	offset = offset.x * Camera.Right + offset.y * Camera.Up;
 
 	float3 p = pt.Position + PointSize * offset;
-	float n = idx - floor(idx / 289.0) * 289.0 + 223.5245;
+	float n = (idx + 674938) * 874622;
+	n = n - floor(n / 289.0) * 289.0 + 223.5245;
 	float3 noise = frac(n * n * float3(.00000012, .00000543, .00000423)) * 2 - 1;
-	float t = saturate(Time * .25);
+	float t = saturate(Time);
 	p = lerp(noise * Extents, p, t * t * (3 - 2 * t));
 
 	float4 wp = mul(Object.ObjectToWorld, float4(p, 1.0));
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
 	o.color = pt.Color;
+	o.normal = cross(Camera.Up, Camera.Right);
 
 	return o;
 }
 
 fs_out fsmain(v2f i) {
-	float3 normal = float3(0, 0, 1);
-
 	fs_out o;
 	o.color = i.color;
-	o.depthNormal = float4(normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
+	o.depthNormal = float4(i.normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 	return o;
 }

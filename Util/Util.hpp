@@ -172,23 +172,6 @@ inline VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDe
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
-inline bool CheckDeviceExtensionSupport(VkPhysicalDevice device, std::vector<const char*> extensions) {
-	uint32_t extensionCount;
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-
-	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-	std::set<std::string> requiredExtensions;
-	for (int i = 0; i < (int)extensions.size(); i++)
-		requiredExtensions.insert(extensions[i]);
-
-	for (const auto& extension : availableExtensions)
-		requiredExtensions.erase(extension.extensionName);
-
-	return requiredExtensions.empty();
-}
-
 inline void QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface, SwapChainSupportDetails& details) {
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.mCapabilities);
 
