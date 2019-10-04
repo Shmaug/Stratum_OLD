@@ -65,7 +65,7 @@ struct VertexWeight {
 
 Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mIndexCount(0), mVertexCount(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
 Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename, float scale)
-	: mName(name), mVertexInput(nullptr) {
+	: mName(name), mVertexInput(nullptr), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 
 	bool use32bit = true;
 	vector<Vertex> vertices;
@@ -73,11 +73,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 	vector<uint32_t> indices32;
 	vec3 mn, mx;
 
-	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs);
-	if (!scene) {
-		printf("Failed to load %s\n", filename.c_str());
-		assert(scene);
-	}
+	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
+	if (!scene) throw runtime_error("Failed to load " + filename);
 
 	uint32_t vertexCount = 0;
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++)
@@ -118,22 +115,35 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 			vertices.push_back(vertex);
 		}
 
+		if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_POINT)
+			mTopology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+		else if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_LINE)
+			mTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+
 		if (use32bit)
 			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 				const aiFace& f = mesh->mFaces[i];
-				assert(f.mNumIndices == 3);
-				indices32.push_back(baseIndex + f.mIndices[0]);
-				indices32.push_back(baseIndex + f.mIndices[1]);
-				indices32.push_back(baseIndex + f.mIndices[2]);
-			} else
+				if (f.mNumIndices == 0) continue;
+				indices32.push_back(f.mIndices[0]);
+				if (f.mNumIndices == 2) indices32.push_back(f.mIndices[1]);
+				for (uint32_t j = 2; j < f.mNumIndices; j++) {
+					indices32.push_back(f.mIndices[j - 1]);
+					indices32.push_back(f.mIndices[j]);
+				}
+			} else {
 				for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 					const aiFace& f = mesh->mFaces[i];
-					assert(f.mNumIndices == 3);
-					indices16.push_back(baseIndex + f.mIndices[0]);
-					indices16.push_back(baseIndex + f.mIndices[1]);
-					indices16.push_back(baseIndex + f.mIndices[2]);
+					if (f.mNumIndices == 0) continue;
+					indices16.push_back(f.mIndices[0]);
+					if (f.mNumIndices == 2) indices16.push_back(f.mIndices[1]);
+					for (uint32_t j = 2; j < f.mNumIndices; j++) {
+						indices16.push_back(f.mIndices[j - 1]);
+						indices16.push_back(f.mIndices[j]);
+					}
 				}
-		
+			}
+
+
 		aiReleaseImport(scene);
 
 		if (use32bit) {
@@ -161,8 +171,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 
 	printf("Loaded %s: %d verts %d tris / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
 }
-Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType)
-	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount) {
+Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
 	
 	vec3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
@@ -191,8 +201,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, c
 		d.mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	}
 }
-Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType)
-	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount) {
+Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
 
 	vec3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
@@ -219,13 +229,10 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 	d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, float scale)
-	: mName(name), mVertexInput(nullptr) {
-	bool use32bit = mesh->mNumVertices > 0xFFFF;
+	: mName(name), mVertexInput(nullptr), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 
 	vector<Vertex> vertices(mesh->mNumVertices);
 	memset(vertices.data(), 0, sizeof(Vertex) * mesh->mNumVertices);
-	vector<uint16_t> indices16;
-	vector<uint32_t> indices32;
 
 	vec3 mn, mx;
 
@@ -256,21 +263,37 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 		}
 	}
 
+	if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_POINT)
+		mTopology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+	else if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_LINE)
+		mTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+
+	bool use32bit = mesh->mNumVertices > 0xFFFF;
+	vector<uint16_t> indices16;
+	vector<uint32_t> indices32;
+
 	if (use32bit)
-		for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
-			assert(f.mNumIndices == 3);
+			if (f.mNumIndices == 0) continue;
 			indices32.push_back(f.mIndices[0]);
-			indices32.push_back(f.mIndices[1]);
-			indices32.push_back(f.mIndices[2]);
-		} else
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				const aiFace& f = mesh->mFaces[i];
-				assert(f.mNumIndices == 3);
-				indices16.push_back(f.mIndices[0]);
-				indices16.push_back(f.mIndices[1]);
-				indices16.push_back(f.mIndices[2]);
+			if (f.mNumIndices == 2) indices32.push_back(f.mIndices[1]);
+			for (uint32_t j = 2; j < f.mNumIndices; j++) {
+				indices32.push_back(f.mIndices[j - 1]);
+				indices32.push_back(f.mIndices[j]);
 			}
+		} else {
+			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+				const aiFace& f = mesh->mFaces[i];
+				if (f.mNumIndices == 0) continue;
+				indices16.push_back(f.mIndices[0]);
+				if (f.mNumIndices == 2) indices16.push_back(f.mIndices[1]);
+				for (uint32_t j = 2; j < f.mNumIndices; j++) {
+					indices16.push_back(f.mIndices[j - 1]);
+					indices16.push_back(f.mIndices[j]);
+				}
+			}
+		}
 
 	if (use32bit) {
 		mIndexCount = (uint32_t)indices32.size();
@@ -279,6 +302,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 		mIndexCount = (uint32_t)indices16.size();
 		mIndexType = VK_INDEX_TYPE_UINT16;
 	}
+
 	mVertexCount = (uint32_t)vertices.size();
 	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
 	mVertexInput = &Vertex::VertexInput;

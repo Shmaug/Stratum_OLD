@@ -10,26 +10,71 @@
 using namespace std;
 
 Texture::Texture(const string& name, ::DeviceManager* devices, const string& filename, bool srgb) : mName(name) {
-	int x, y, channels;
+	void* pixels = nullptr;
+	uint32_t size = 0;
+	int32_t x, y, channels;
 	stbi_info(filename.c_str(), &x, &y, &channels);
 	int desiredChannels = 0;
+	bool stbifree = false;
 	if (channels == 3) desiredChannels = 4;
 
-	void* pixels;
-	uint32_t size;
-	if (!srgb && stbi_is_16_bit(filename.c_str())) {
-		pixels = stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
-		size = 2;
-	} else if (!srgb && stbi_is_hdr(filename.c_str())) {
-		pixels = stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
-		size = 4;
-	} else {
-		pixels = stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
-		size = 1;
-	}
-	if (!pixels) throw runtime_error("Failed to load image");
+	size_t h = 0;
+	hash_combine(h, filename);
+	hash_combine(h, srgb);
+	hash_combine(h, x);
+	hash_combine(h, y);
+	hash_combine(h, channels);
+	string hfilename = "Cache/" + to_string(h);
 
-	if (desiredChannels > 0) channels = desiredChannels;
+	std::ifstream cachef(hfilename, std::ios::binary);
+	if (cachef.is_open()) {
+		int32_t cx, cy, cchannels;
+		bool csrgb;
+
+		cachef.read(reinterpret_cast<char*>(&cx), sizeof(int32_t));
+		cachef.read(reinterpret_cast<char*>(&cy), sizeof(int32_t));
+		cachef.read(reinterpret_cast<char*>(&cchannels), sizeof(int32_t));
+		cachef.read(reinterpret_cast<char*>(&csrgb), sizeof(bool));
+		
+		if (x == cx && y == cy && channels == cchannels && srgb == csrgb) {
+			cachef.read(reinterpret_cast<char*>(&size), sizeof(uint32_t));
+			uint64_t imgsize;
+			cachef.read(reinterpret_cast<char*>(&imgsize), sizeof(uint64_t));
+			pixels = new uint8_t[imgsize];
+			cachef.read(reinterpret_cast<char*>(pixels), imgsize);
+		}
+
+		cachef.close();
+	}
+
+	if (!pixels) {
+		if (!srgb && stbi_is_16_bit(filename.c_str())) {
+			pixels = stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
+			size = 2;
+		} else if (!srgb && stbi_is_hdr(filename.c_str())) {
+			pixels = stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
+			size = 4;
+		} else {
+			pixels = stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
+			size = 1;
+		}
+		if (!pixels) throw runtime_error("Failed to load image");
+		if (desiredChannels > 0) channels = desiredChannels;
+
+		stbifree = true;
+
+		uint64_t imgsize = x * y * size * channels;
+
+		ofstream cachew(hfilename, ios::binary);
+		cachew.write(reinterpret_cast<const char*>(&x), sizeof(int32_t));
+		cachew.write(reinterpret_cast<const char*>(&y), sizeof(int32_t));
+		cachew.write(reinterpret_cast<const char*>(&channels), sizeof(int32_t));
+		cachew.write(reinterpret_cast<const char*>(&srgb), sizeof(bool));
+		cachew.write(reinterpret_cast<const char*>(&size), sizeof(uint32_t));
+		cachew.write(reinterpret_cast<const char*>(&imgsize), sizeof(uint64_t));
+		cachew.write((const char*)pixels, imgsize);
+	}
+
 
 	if (srgb) {
 		const VkFormat formatMap[4] {
@@ -88,7 +133,11 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 	}
 	for (auto& f : fences)
 		f->Wait();
-	stbi_image_free(pixels);
+
+	if (stbifree)
+		stbi_image_free(pixels);
+	else
+		delete[] pixels;
 
 	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), dataSize / 1000.f);
 }

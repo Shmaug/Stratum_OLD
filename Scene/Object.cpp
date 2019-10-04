@@ -22,10 +22,10 @@ Object::~Object() {
 bool Object::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
-	mObjectToWorld = scale(mat4(1.f), mLocalScale) * toMat4(mLocalRotation) * translate(mat4(1.f), mLocalPosition);
+	mObjectToWorld = translate(mat4(1.f), mLocalPosition) * toMat4(mLocalRotation) * scale(mat4(1.f), mLocalScale);
 
 	if (mParent) {
-		mObjectToWorld = mObjectToWorld * mParent->ObjectToWorld();
+		mObjectToWorld = mParent->ObjectToWorld() * mObjectToWorld;
 
 		mWorldPosition = mParent->mObjectToWorld * vec4(mLocalPosition, 1.f);
 		mWorldRotation = mParent->mWorldRotation * mLocalRotation;

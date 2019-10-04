@@ -4,7 +4,7 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mPrimitiveTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {}
+	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader) : mName(name), mShader(shader), mIsBound(false) {}
 Material::~Material(){
 	for (auto& d : mDeviceData) {
@@ -32,10 +32,6 @@ void Material::CullMode(VkCullModeFlags cullMode) {
 	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mCullMode = cullMode;
 }
-void Material::PrimitiveTopology(VkPrimitiveTopology topology) {
-	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
-	mPrimitiveTopology = topology;
-}
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
 	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mParameters[name] = param;
@@ -59,7 +55,7 @@ GraphicsShader* Material::GetShader(Device* device) {
 		return d.mShaderVariant;
 	}
 }
-VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input) {
+VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input, VkPrimitiveTopology topology) {
 	if (renderPass == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
 	auto variant = GetShader(renderPass->Device());
@@ -69,6 +65,7 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 	if (!data.mDescriptorSets[backBufferIndex])
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerMaterial DescriptorSet", commandBuffer->Device()->DescriptorPool(), variant->mDescriptorSetLayouts[PER_MATERIAL]);
 
+	// set descriptor parameters
 	if (data.mDirty[backBufferIndex]) {
 		for (auto& m : mParameters) {
 			if (m.second.index() > 3) continue;
@@ -91,43 +88,42 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 				break;
 			}
 		}
+		data.mDirty[backBufferIndex] = false;
 	}
 
 	VkDescriptorSet matds = *data.mDescriptorSets[backBufferIndex];
-	VkPipeline pipeline = variant->GetPipeline(renderPass, input, mPrimitiveTopology, mCullMode);
+	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 
-	if (data.mDirty[backBufferIndex]) {
-		for (auto& m : mParameters) {
-			if (m.second.index() <= 3) continue;
-			if (variant->mPushConstants.count(m.first) == 0) continue;
-			auto& range = variant->mPushConstants.at(m.first);
+	// set push constant parameters
+	for (auto& m : mParameters) {
+		if (m.second.index() <= 3) continue;
+		if (variant->mPushConstants.count(m.first) == 0) continue;
+		auto& range = variant->mPushConstants.at(m.first);
 
-			vec4 value(0);
+		vec4 value(0);
 
-			switch (m.second.index()) {
-			case 4:
-				if (range.size != sizeof(float)) continue;
-				value = vec4(get<float>(m.second), 0, 0, 0);
-				break;
-			case 5:
-				if (range.size != sizeof(vec2)) continue;
-				value = vec4(get<vec2>(m.second), 0, 0);
-				break;
-			case 6:
-				if (range.size != sizeof(vec3)) continue;
-				value = vec4(get<vec3>(m.second), 0);
-				break;
-			case 7:
-				if (range.size != sizeof(vec4)) continue;
-				value = get<vec4>(m.second);
-				break;
-			}
-
-			vkCmdPushConstants(*commandBuffer, variant->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
+		switch (m.second.index()) {
+		case 4:
+			if (range.size != sizeof(float)) continue;
+			value = vec4(get<float>(m.second), 0, 0, 0);
+			break;
+		case 5:
+			if (range.size != sizeof(vec2)) continue;
+			value = vec4(get<vec2>(m.second), 0, 0);
+			break;
+		case 6:
+			if (range.size != sizeof(vec3)) continue;
+			value = vec4(get<vec3>(m.second), 0);
+			break;
+		case 7:
+			if (range.size != sizeof(vec4)) continue;
+			value = get<vec4>(m.second);
+			break;
 		}
-		data.mDirty[backBufferIndex] = false;
+
+		vkCmdPushConstants(*commandBuffer, variant->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
 
 	mIsBound = true;

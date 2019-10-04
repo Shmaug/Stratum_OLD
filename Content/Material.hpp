@@ -34,10 +34,8 @@ public:
 	inline uint32_t RenderQueue() const { return Shader()->RenderQueue(); }
 
 	inline VkCullModeFlags CullMode() const { return mCullMode; }
-	inline VkPrimitiveTopology PrimitiveTopology() const { return mPrimitiveTopology; }
 
 	ENGINE_EXPORT void CullMode(VkCullModeFlags cullMode);
-	ENGINE_EXPORT void PrimitiveTopology(VkPrimitiveTopology topology);
 
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
 	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
@@ -45,14 +43,13 @@ public:
 
 private:
 	friend class CommandBuffer;
-	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input);
+	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
 	inline Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
 
 	std::variant<::Shader*, std::shared_ptr<::Shader>> mShader;
 	std::set<std::string> mShaderKeywords;
 	VkCullModeFlags mCullMode;
-	VkPrimitiveTopology mPrimitiveTopology;
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 

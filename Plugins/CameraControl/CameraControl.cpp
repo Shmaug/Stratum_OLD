@@ -1,36 +1,14 @@
 #include <thread>
+#include "CameraControl.hpp"
 
-#include <Core/EnginePlugin.hpp>
-#include <Scene/MeshRenderer.hpp>
-#include <Scene/TextRenderer.hpp>
 #include <Util/Profiler.hpp>
 
 using namespace std;
 
-class CameraControl : public EnginePlugin {
-public:
-	PLUGIN_EXPORT CameraControl();
-	PLUGIN_EXPORT ~CameraControl();
-
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
-	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
-
-private:
-	Scene* mScene;
-	Object* mCameraPivot;
-	float mCameraDistance;
-	vec3 mCameraEuler;
-
-	TextRenderer* mFpsText;
-
-	float mFrameTimeAccum;
-	float mFps;
-	uint32_t mFrameCount;
-};
-
 ENGINE_PLUGIN(CameraControl)
 
-CameraControl::CameraControl() : mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mCameraDistance(3), mCameraEuler(vec3(0, 0, 0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
+CameraControl::CameraControl()
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mCameraDistance(3), mCameraEuler(vec3(0, 0, 0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
 CameraControl::~CameraControl() {
 	mScene->RemoveObject(mCameraPivot);
 	mScene->RemoveObject(mFpsText);
@@ -63,10 +41,11 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	mCameraDistance = std::max(mCameraDistance * (1 - Input::ScrollDelta().y * .03f), .025f);
 
 	vec3 md = vec3(Input::CursorDelta(), 0);
-	if (Input::KeyDown(GLFW_KEY_LEFT_SHIFT))
-		md = -md * .0005f * mCameraDistance;
-	else
-		md = vec3(-md.y, md.x, 0) * .005f;
+	if (Input::KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+		md.x = -md.x;
+		md = md * .0005f * mCameraDistance;
+	} else
+		md = vec3(md.y, md.x, 0) * .005f;
 
 	if (Input::MouseButtonDown(1)) { // right mouse
 		if (Input::KeyDown(GLFW_KEY_LEFT_SHIFT))
@@ -84,8 +63,9 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		camera->Parent(mCameraPivot);
 		camera->LocalPosition(0, 0, -mCameraDistance);
 
-		mFpsText->Parent(camera);
-		mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), 0.99f, 0.001f, 1)), 1));
+		//mFpsText->Parent(camera);
+		//mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), 0.99f, 0.001f, 1)), 1));
+		vec3 x = mFpsText->WorldPosition();
 		mFpsText->TextScale(camera->Near() * .015f);
 	}
 

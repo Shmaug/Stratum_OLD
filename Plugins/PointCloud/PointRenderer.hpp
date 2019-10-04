@@ -9,8 +9,8 @@ public:
 	#pragma pack(push)
 	#pragma pack(1)
 	struct Point {
-		vec3 mPosition;
-		vec3 mColor;
+		vec4 mPosition;
+		vec4 mColor;
 	};
 	#pragma pack(pop)
 

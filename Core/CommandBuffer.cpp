@@ -71,10 +71,10 @@ void CommandBuffer::EndRenderPass() {
 	vkCmdEndRenderPass(*this);
 }
 
-VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input) {
+VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input, VkPrimitiveTopology topology) {
 	if (mCurrentMaterial == material) return material->GetShader(mDevice)->mPipelineLayout;
 	if (mCurrentMaterial) mCurrentMaterial->mIsBound = false;
 	mCurrentMaterial = material;
-	if (material) return material->Bind(this, backBufferIndex, mCurrentRenderPass, input);
+	if (material) return material->Bind(this, backBufferIndex, mCurrentRenderPass, input, topology);
 	return VK_NULL_HANDLE;
 }

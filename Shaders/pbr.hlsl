@@ -8,6 +8,7 @@
 #include <shadercompat.h>
 
 #define PI 3.1415926535897932
+#define unity_ColorSpaceDielectricSpec float4(0.04, 0.04, 0.04, 1.0 - 0.04) // standard dielectric reflectivity coef at incident angle (= 4%)
 
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
@@ -37,78 +38,116 @@ struct fs_out {
 	float4 depthNormal : SV_Target1;
 };
 
-struct MaterialInfo {
-	float3 diffuseColor;	// color contribution from diffuse lighting
-	float roughness;		// roughness mapped to a more linear change in the roughness
-	float3 reflectance0;	// full reflectance color (normal incidence angle)
-	float3 reflectance90;	// reflectance color at grazing angle
-};
-
-float3 specularReflection(float3 reflectance0, float3 reflectance90, float VdotH) {
-	float x = saturate(1 - VdotH);
-	float x2 = x * x;
-	return lerp(reflectance0, reflectance90, x2 * x2 * x);
-}
-float visibilityOcclusion(float roughness, float NdotL, float NdotV) {
-	float roughness2 = roughness * roughness;
-
-	float GGXV = NdotL * sqrt(NdotV * NdotV * (1 - roughness2) + roughness2);
-	float GGXL = NdotV * sqrt(NdotL * NdotL * (1 - roughness2) + roughness2);
-
-	float GGX = GGXV + GGXL;
-
-	return GGX > 0 ? .5 / GGX : 0;
-}
 float microfacetDistribution(float roughness, float NdotH) {
 	float roughness2 = roughness * roughness;
 	float f = (NdotH * roughness2 - NdotH) * NdotH + 1;
-	return roughness2 / (PI * f * f + 0.000001);
+	return roughness2 / (PI * f * f + 1e-7);
+}
+float OneMinusReflectivityFromMetallic(float metallic) {
+	// We'll need oneMinusReflectivity, so
+	//   1-reflectivity = 1-lerp(dielectricSpec, 1, metallic) = lerp(1-dielectricSpec, 0, metallic)
+	// store (1-dielectricSpec) in unity_ColorSpaceDielectricSpec.a, then
+	//   1-reflectivity = lerp(alpha, 0, metallic) = alpha + metallic*(0 - alpha) =
+	//                  = alpha - metallic * alpha
+	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
+	return oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
+}
+float3 DiffuseAndSpecularFromMetallic(float3 albedo, float metallic, out float3 specColor, out float oneMinusReflectivity) {
+	specColor = lerp(unity_ColorSpaceDielectricSpec.rgb, albedo, metallic);
+	oneMinusReflectivity = OneMinusReflectivityFromMetallic(metallic);
+	return albedo * oneMinusReflectivity;
 }
 
-float3 ShadePoint(MaterialInfo material, float3 l, float3 n, float3 v) {
-	float NdotL = saturate(dot(n, l));
-	float NdotV = saturate(dot(n, v));
+struct MaterialInfo {
+	float3 diffuseColor;
+	float3 specularColor;
+	float perceptualRoughness;
+	float oneMinusReflectivity;
+};
 
-	if (NdotL > 0 || NdotV > 0) {
-		float3 h = normalize(l + v);
-		float NdotH = saturate(dot(n, h));
-		float LdotH = saturate(dot(l, h));
-		float VdotH = saturate(dot(v, h));
+float pow5(float x) {
+	float x2 = x * x;
+	return x2 * x2 * x;
+}
 
-		// Calculate the shading terms for the microfacet specular shading model
-		float3 F = specularReflection(material.reflectance0, material.reflectance90, VdotH);
-		float Vis = visibilityOcclusion(material.roughness, NdotL, NdotV);
-		float D = microfacetDistribution(material.roughness, NdotH);
+float PerceptualRoughnessToRoughness(float perceptualRoughness) {
+	return perceptualRoughness * perceptualRoughness;
+}
+float3 FresnelTerm(float3 F0, float cosA) {
+	return F0 + (1 - F0) * pow5(1 - cosA);
+}
+float3 FresnelLerp(float3 F0, float3 F90, float cosA) {
+	return lerp(F0, F90, pow5(1 - cosA));
+}
+float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRoughness) {
+	float fd90 = 0.5 + 2 * LdotH * LdotH * perceptualRoughness;
+	// Two schlick fresnel term
+	float lightScatter = (1 + (fd90 - 1) * pow5(1 - NdotL));
+	float viewScatter = (1 + (fd90 - 1) * pow5(1 - NdotV));
 
-		// Calculation of analytical lighting contribution
-		float3 diffuseContrib = (1 - F) * material.diffuseColor / PI;
-		float3 specContrib = F * Vis * D;
+	return lightScatter * viewScatter;
+}
+float SmithJointGGXVisibilityTerm(float NdotL, float NdotV, float roughness) {
+	float a = roughness;
+	float lambdaV = NdotL * (NdotV * (1 - a) + a);
+	float lambdaL = NdotV * (NdotL * (1 - a) + a);
 
-		// Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
-		return NdotL * (diffuseContrib + specContrib);
-	}
-
-	return 0;
+	return 0.5f / (lambdaV + lambdaL + 1e-5f);
 }
 
 float3 SampleBackground(float3 D, float roughness) {
 	return .5;
 }
 
-float3 getIBLContribution(float3 diffuseColor, float3 specularColor, float3 n, float3 v, float perceptualRoughness) {
-	float3 reflection = normalize(reflect(-v, n));
+float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 viewDir) {
+	float3 halfDir = normalize(light + viewDir);
 
-	float2 brdfSamplePoint = saturate(float2(dot(n, v), perceptualRoughness));
-	// retrieve a scale and bias to F0. See [1], Figure 3
-	float2 brdf = BrdfTexture.SampleLevel(Sampler, brdfSamplePoint, 0).rg;
+	float nv = abs(dot(normal, viewDir));
+	float nl = saturate(dot(normal, light));
+	float nh = saturate(dot(normal, halfDir));
 
-	float3 diffuseLight = 0;//SampleBackground(reflection, perceptualRoughness).rgb;
-	float3 specularLight = SampleBackground(reflection, perceptualRoughness).rgb;
+	float lv = saturate(dot(light, viewDir));
+	float lh = saturate(dot(light, halfDir));
 
-	float3 diffuse = diffuseLight * diffuseColor;
-	float3 specular = specularLight * (specularColor * brdf.x + brdf.y);
+	// Diffuse term
+	float diffuseTerm = DisneyDiffuse(nv, nl, lh, material.perceptualRoughness) * nl;
 
-	return diffuse + specular;
+	// Specular term
+	// HACK: theoretically we should divide diffuseTerm by Pi and not multiply specularTerm!
+	// BUT 1) that will make shader look significantly darker than Legacy ones
+	// and 2) on engine side "Non-important" lights have to be divided by Pi too in cases when they are injected into ambient SH
+	float roughness = PerceptualRoughnessToRoughness(material.perceptualRoughness);
+
+	// GGX with roughtness to 0 would mean no specular at all, using max(roughness, 0.002) here to match HDrenderloop roughtness remapping.
+	roughness = max(roughness, 0.002);
+	float V = SmithJointGGXVisibilityTerm(nl, nv, roughness);
+	float D = microfacetDistribution(nh, roughness);
+
+	float specularTerm = V * D * PI; // Torrance-Sparrow model, Fresnel is applied later
+
+	// specularTerm * nl can be NaN on Metal in some cases, use max() to make sure it's a sane value
+	specularTerm = max(0, specularTerm * nl);
+
+	// surfaceReduction = Int D(NdotH) * NdotH * Id(NdotL>0) dH = 1/(roughness^2+1)
+	float surfaceReduction = 1.0 / (roughness * roughness + 1.0); // fade \in [0.5;1]
+
+
+	// To provide true Lambert lighting, we need to be able to kill specular completely.
+	specularTerm *= any(material.specularColor) ? 1.0 : 0.0;
+
+	float grazingTerm = saturate((1 - material.perceptualRoughness) + (1 - material.oneMinusReflectivity));
+	return material.diffuseColor * diffuseTerm + specularTerm * FresnelTerm(material.specularColor, lh);
+}
+float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float3 diffuseLight, float3 specularLight) {
+	float roughness = PerceptualRoughnessToRoughness(material.perceptualRoughness);
+	roughness = max(roughness, 0.002);
+
+	// surfaceReduction = Int D(NdotH) * NdotH * Id(NdotL>0) dH = 1/(roughness^2+1)
+	float surfaceReduction = 1.0 / (roughness * roughness + 1.0); // fade \in [0.5;1]
+
+	float nv = abs(dot(normal, viewDir));
+	float grazingTerm = saturate((1 - material.perceptualRoughness) + (1 - material.oneMinusReflectivity));
+	return material.diffuseColor * diffuseLight + surfaceReduction * specularLight * FresnelLerp(material.specularColor, grazingTerm, nv);
 }
 
 v2f vsmain(
@@ -129,15 +168,11 @@ v2f vsmain(
 	return o;
 }
 
-fs_out fsmain(v2f i) {
+fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 	float4 col = DiffuseTexture.Sample(Sampler, i.texcoord) * Color;
 	clip(col.a - .5);
 
 	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
-	float metallic = Metallic;// bump.b;
-	float perceptualRoughness = Roughness;// bump.a;
-	//bump.z = sqrt(1 - saturate(dot(bump.xy, bump.xy)));
-
 	bump.xy = bump.xy * 2 - 1;
 	bump.xyz = normalize(bump.xyz);
 
@@ -145,29 +180,28 @@ fs_out fsmain(v2f i) {
 	float3 tangent = normalize(i.tangent);
 	float3 bitangent = normalize(cross(i.normal, i.tangent));
 
+	if (!front) normal = -normal;
+
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 
-	fs_out o = {};
-	float f0 = 0.04; // specular
-	float3 diffuseColor = col.rgb * (1 - f0) * (1 - metallic);
-	float3 specularColor = lerp(f0, col.rgb, metallic);
-
-	MaterialInfo material = {
-		diffuseColor,
-		perceptualRoughness * perceptualRoughness,
-		specularColor,
-		saturate(max(max(specularColor.r, specularColor.g), specularColor.b) * 50).xxx, // reflectance
-	};
+	MaterialInfo material;
+	material.perceptualRoughness = Roughness;
+	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
 
 	float3 view = Camera.Position - i.worldPos.xyz;
 	float depth = length(view);
 	view /= depth;
 
 	float3 eval = 0;
-	eval += ShadePoint(material, normalize(float3(.5, 1.0, .2)), normal, view);
-	eval += getIBLContribution(diffuseColor, specularColor, normal, view, perceptualRoughness);
+	float3 reflection = normalize(reflect(-view, normal));
+	float3 diffuseLight = 0.5;// SampleBackground(reflection, 1).rgb;
+	float3 specularLight = SampleBackground(reflection, material.perceptualRoughness).rgb;
 
-	o.color = col;// float4(normal * .5 + .5, col.a);// float4(eval, col.a);
-	o.depthNormal = float4(normal * .5 + .5, view / Camera.Viewport.w);
+	eval += ShadePoint(material, normalize(float3(.5, 1, .25)), normal, view);
+	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
+
+	fs_out o;
+	o.color = float4(eval, col.a);
+	o.depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
 	return o;
 }
