@@ -398,6 +398,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 
 		VkPipelineMultisampleStateCreateInfo multisampleState = {};
 		multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampleState.sampleShadingEnable = VK_FALSE;
 		multisampleState.rasterizationSamples = renderPass->RasterizationSamples();
 
 		VkGraphicsPipelineCreateInfo info = {};

@@ -10,11 +10,17 @@
 #include <string>
 #include <iostream>
 
+
+#ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)
+#define PLUGIN_EXPORT
 #else
 #define ENGINE_EXPORT __declspec(dllimport)
 #define PLUGIN_EXPORT __declspec(dllexport)
+#endif
+#else
+static_assert(false, "Not implemented!");
 #endif
 
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
@@ -49,7 +55,7 @@ public:
 
 	VertexInput(const VkVertexInputBindingDescription& binding, const std::vector<VkVertexInputAttributeDescription>& attribs)
 		: mBinding(binding), mAttributes(attribs) {
-		std::size_t h;
+		std::size_t h = 0;
 		hash_combine(h, mBinding.binding);
 		hash_combine(h, mBinding.inputRate);
 		hash_combine(h, mBinding.stride);
@@ -105,6 +111,25 @@ inline bool ReadFile(const std::string& filename, std::string& dest) {
 
 	file.seekg(0);
 	file.read(const_cast<char*>(dest.data()), fileSize);
+
+	file.close();
+
+	return true;
+}
+
+inline bool ReadFile(const std::string& filename, std::vector<uint8_t>& dest) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		std::cerr << "Failed to open file " << filename.c_str() << std::endl;
+		return false;
+	}
+
+	size_t fileSize = (size_t)file.tellg();
+	dest.resize(fileSize);
+
+	file.seekg(0);
+	file.read(reinterpret_cast<char*>(dest.data()), fileSize);
 
 	file.close();
 

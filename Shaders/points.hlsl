@@ -7,8 +7,8 @@
 #include <shadercompat.h>
 
 struct Point {
-	float3 Position;
-	float3 Color;
+	float4 Position;
+	float4 Color;
 };
 
 // per-object
@@ -26,7 +26,7 @@ struct Point {
 struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD1;
-	float3 color : Color0;
+	float4 color : Color0;
 };
 struct fs_out {
 	float4 color : SV_Target0;
@@ -45,12 +45,18 @@ v2f vsmain(uint id : SV_VertexId) {
 		float3(-1, 1, 0)
 	};
 
-	Point pt = Points[id / 6];
+	uint idx = id / 6;
+	Point pt = Points[idx];
 	float3 offset = offsets[id % 6];
 	
 	offset = offset.x * Camera.Right + offset.y * Camera.Up;
 
 	float3 p = pt.Position + PointSize * offset;
+	float n = idx - floor(idx / 289.0) * 289.0 + 223.5245;
+	float3 noise = frac(n * n * float3(.00000012, .00000543, .00000423)) * 2 - 1;
+	float t = saturate(Time * .25);
+	p = lerp(noise * Extents, p, t * t * (3 - 2 * t));
+
 	float4 wp = mul(Object.ObjectToWorld, float4(p, 1.0));
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
@@ -63,7 +69,7 @@ fs_out fsmain(v2f i) {
 	float3 normal = float3(0, 0, 1);
 
 	fs_out o;
-	o.color = float4(i.color, 1);
+	o.color = i.color;
 	o.depthNormal = float4(normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 	return o;
 }

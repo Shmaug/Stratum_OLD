@@ -211,7 +211,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 
 	auto newLine = [&]() {
 		p.x = 0;
-		p.y += ly;
+		p.y -= ly;
 		prev = nullptr;
 
 		float x = 0.f;
@@ -281,7 +281,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 	vec2 mn(0);
 	vec2 mx(0);
 	for (uint32_t i = 0; i < glyphCount; i++) {
-		glyphs[i].mPosition.y -= verticalOffset;
+		glyphs[i].mPosition.y += verticalOffset;
 		mn = gmin(mn, glyphs[i].mPosition);
 		mx = gmax(mx, glyphs[i].mPosition + glyphs[i].mSize);
 	}

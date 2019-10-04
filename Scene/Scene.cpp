@@ -6,6 +6,23 @@ using namespace std;
 
 Scene::Scene(::DeviceManager* deviceManager) : mDeviceManager(deviceManager) {}
 
+void Scene::Update(const FrameTime& frameTime) {
+	PROFILER_BEGIN("Pre Update");
+	for (const auto& p : mPlugins)
+		p->PreUpdate(frameTime);
+	PROFILER_END;
+
+	PROFILER_BEGIN("Update");
+	for (const auto& p : mPlugins)
+		p->Update(frameTime);
+	PROFILER_END;
+
+	PROFILER_BEGIN("Post Update");
+	for (const auto& p : mPlugins)
+		p->PostUpdate(frameTime);
+	PROFILER_END;
+}
+
 void Scene::AddObject(Object* object) {
 	mObjects.push_back(object);
 	object->mScene = this;
@@ -51,10 +68,23 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		return a->RenderQueue() < b->RenderQueue();
 	});
 	PROFILER_END;
+
+	for (const auto& p : mPlugins)
+		p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
+
 	PROFILER_BEGIN("Draw");
+	camera->BeginRenderPass(commandBuffer, backBufferIndex);
 	for (const auto& r : mRenderers)
 		if (r->Visible())
 			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+	camera->EndRenderPass(commandBuffer, backBufferIndex);
+	PROFILER_END;
+
+
+	// Post Render
+	PROFILER_BEGIN("Post Render");
+	for (const auto& p : mPlugins)
+		p->PostRender(frameTime, camera, commandBuffer, backBufferIndex);
 	PROFILER_END;
 }
 

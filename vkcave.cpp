@@ -19,7 +19,6 @@
 #include <unordered_map>
 
 #include <Core/DeviceManager.hpp>
-#include <Core/EnginePlugin.hpp>
 #include <Scene/Scene.hpp>
 #include <ThirdParty/json11.h>
 #include <Util/Util.hpp>
@@ -77,8 +76,6 @@ private:
 	VkDebugUtilsMessengerEXT mDebugMessenger;
 	#endif
 
-	vector<EnginePlugin*> mPlugins;
-
 	#ifdef WINDOWS
 	vector<HMODULE> mPluginModules;
 	#else
@@ -108,7 +105,7 @@ private:
 					if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
 					continue;
 				}
-				mPlugins.push_back(plugin);
+				mScene->mPlugins.push_back(plugin);
 				mPluginModules.push_back(m);
 				printf("Done\n");
 			}
@@ -117,17 +114,17 @@ private:
 			#endif
 		}
 
-		sort(mPlugins.begin(), mPlugins.end(), [](const auto& a, const auto& b) {
+		sort(mScene->mPlugins.begin(), mScene->mPlugins.end(), [](const auto& a, const auto& b) {
 			return a->Priority() < b->Priority();
 		});
 
-		for (const auto& p : mPlugins)
+		for (const auto& p : mScene->mPlugins)
 			p->Init(mScene, mDeviceManager);
 	}
 	void UnloadPlugins() {
-		for (auto& p : mPlugins)
-			safe_delete(p)
-		mPlugins.clear();
+		for (auto& p : mScene->mPlugins)
+			safe_delete(p);
+		mScene->mPlugins.clear();
 		#ifdef WINDOWS
 		for (const auto& m : mPluginModules)
 			if (!FreeLibrary(m))
@@ -135,23 +132,6 @@ private:
 		#else
 		static_assert(false, "Not implemented!");
 		#endif
-	}
-
-	void Update(const FrameTime& frameTime) {
-		PROFILER_BEGIN("Pre Update");
-		for (const auto& p : mPlugins)
-			p->PreUpdate(frameTime);
-		PROFILER_END;
-
-		PROFILER_BEGIN("Update");
-		for (const auto& p : mPlugins)
-			p->Update(frameTime);
-		PROFILER_END;
-
-		PROFILER_BEGIN("Post Update");
-		for (const auto& p : mPlugins)
-			p->PostUpdate(frameTime);
-		PROFILER_END;
 	}
 
 	void Render(FrameTime* frameTime, uint32_t backBufferIndex, vector<shared_ptr<Fence>>& fences) {
@@ -186,22 +166,7 @@ private:
 				camera->PixelHeight(targetWindow->BackBufferSize().height);
 			}
 
-			for (const auto& p : mPlugins)
-				p->PreRender(*frameTime, camera, commandBuffer.get(), backBufferIndex);
-			PROFILER_END;
-
-			// Render
-			PROFILER_BEGIN("Render Scene");
-			camera->BeginRenderPass(commandBuffer.get(), backBufferIndex);
 			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex);
-			camera->EndRenderPass(commandBuffer.get(), backBufferIndex);
-			PROFILER_END;
-
-			// Post Render
-			PROFILER_BEGIN("Post Render");
-			for (const auto& p : mPlugins)
-				p->PostRender(*frameTime, camera, commandBuffer.get(), backBufferIndex);
-			PROFILER_END;
 
 			// resolve or copy render target to target window
 			if (targetWindow) {
@@ -372,7 +337,7 @@ public:
 			}
 			PROFILER_END;
 
-			Update(frameTime);
+			mScene->Update(frameTime);
 
 			// render cameras
 			fences.clear();

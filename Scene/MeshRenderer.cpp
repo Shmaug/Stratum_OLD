@@ -25,7 +25,7 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	if (!material) return;
 
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput());
+	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), m->Topology());
 	if (!layout) return;
 
 	if (!mDeviceData.count(commandBuffer->Device())) {

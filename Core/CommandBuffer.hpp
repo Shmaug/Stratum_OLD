@@ -29,7 +29,7 @@ public:
 
 	inline RenderPass* CurrentRenderPass() const { return mCurrentRenderPass; }
 
-	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input);
+	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT void BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount);
 	ENGINE_EXPORT void EndRenderPass();
 

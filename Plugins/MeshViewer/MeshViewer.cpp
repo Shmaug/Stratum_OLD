@@ -8,6 +8,9 @@
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
 #include <assimp/material.h>
+#include <assimp/pbrmaterial.h>
+
+#include <filesystem>
 
 using namespace std;
 
@@ -33,7 +36,7 @@ MeshViewer::~MeshViewer() {
 		safe_delete(obj);
 }
 
-void LoadScene(const string& filename, Scene* scene, DeviceManager* deviceManager, Shader* shader, vector<Object*>& objects, float scale = .01f, uint32_t threadCount = 6) {
+void LoadScene(const filesystem::path& filename, Scene* scene, DeviceManager* deviceManager, Shader* shader, vector<Object*>& objects, float scale = .05f, uint32_t threadCount = 6) {
 	Texture* brdfTexture  = deviceManager->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = deviceManager->AssetDatabase()->LoadTexture("Assets/white.png");
 	Texture* bumpTexture  = deviceManager->AssetDatabase()->LoadTexture("Assets/bump.png", false);
@@ -41,7 +44,7 @@ void LoadScene(const string& filename, Scene* scene, DeviceManager* deviceManage
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
 
-	const aiScene* aiscene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs);
+	const aiScene* aiscene = aiImportFile(filename.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
 	assert(scene);
 
 	queue<pair<aiNode*, Object*>> nodes;
@@ -59,11 +62,11 @@ void LoadScene(const string& filename, Scene* scene, DeviceManager* deviceManage
 		node->mTransformation.Decompose(s, r, t);
 
 		t *= scale;
-
+		
 		Object* nodeobj = new Object(node->mName.C_Str());
 		nodeobj->Parent(nodepair.second);
 		nodeobj->LocalPosition(t.x, t.y, t.z);
-		nodeobj->LocalRotation(quat(r.w, r.x, r.y, -r.z));
+		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
 		scene->AddObject(nodeobj);
@@ -73,36 +76,46 @@ void LoadScene(const string& filename, Scene* scene, DeviceManager* deviceManage
 			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
 			aiMaterial* aimat = aiscene->mMaterials[aimesh->mMaterialIndex];
 
-
 			shared_ptr<Material>& material = materials[aimesh->mMaterialIndex];
 			if (!material) {
 				VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
 				int twoSided;
 				aiColor3D color;
-				aiString matname, diffuse, normal;
+				aiString matname;
+				float metallic, roughness;
 				aimat->Get(AI_MATKEY_NAME, matname);
-				aimat->Get(AI_MATKEY_COLOR_DIFFUSE, color);
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS) color.r = color.g = color.b = 1;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .8f;
 				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
 
-				aimat->GetTexture(aiTextureType_DIFFUSE, 0, &diffuse);
+				aiString diffuse, normal, metalroughness;
+				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &diffuse);
+				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalroughness);
 				aimat->GetTexture(aiTextureType_NORMALS, 0, &normal);
 
 				material = make_shared<Material>(matname.C_Str(), shader);
 				material->CullMode(cullMode);
 				material->SetParameter("BrdfTexture", brdfTexture);
 				material->SetParameter("Color", vec4(color.r, color.g, color.b, 1.f));
-				material->SetParameter("Metallic", 0.f);
-				material->SetParameter("Roughness", .8f);
+				material->SetParameter("Metallic", metallic);
+				material->SetParameter("Roughness", roughness);
 
-				if (diffuse == aiString(""))
+				if (diffuse == aiString("") || diffuse.C_Str()[0] == '*')
 					material->SetParameter("DiffuseTexture", whiteTexture);
-				else
+				else {
+					if (filename.has_parent_path())
+						diffuse = filename.parent_path().string() + "/" + diffuse.C_Str();
 					material->SetParameter("DiffuseTexture", deviceManager->AssetDatabase()->LoadTexture(diffuse.C_Str()));
+				}
 
-				if (normal == aiString(""))
+				if (normal == aiString("") || normal.C_Str()[0] == '*')
 					material->SetParameter("NormalTexture", bumpTexture);
-				else
+				else {
+					if (filename.has_parent_path())
+						normal = filename.parent_path().string() + "/" + normal.C_Str();
 					material->SetParameter("NormalTexture", deviceManager->AssetDatabase()->LoadTexture(normal.C_Str(), false));
+				}
 			}
 
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
@@ -122,15 +135,13 @@ void LoadScene(const string& filename, Scene* scene, DeviceManager* deviceManage
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
 			nodes.push(make_pair(node->mChildren[i], nodeobj));
 	}
-
-	objects[0]->LocalRotation(quat(vec3(pi<float>(), 0, 0)));
 }
 
 bool MeshViewer::Init(Scene* scene, DeviceManager* deviceManager) {
 	mScene = scene;
 
 	Shader* pbrshader  = deviceManager->AssetDatabase()->LoadShader("Shaders/pbr.shader");
-	//LoadScene("Assets/SanMiguel.fbx", scene, deviceManager, pbrshader, mObjects);
+	//LoadScene("Assets/SanMiguel/SanMiguel.gltf", scene, deviceManager, pbrshader, mObjects);
 
 	return true;
 }
