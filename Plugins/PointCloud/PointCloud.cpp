@@ -89,8 +89,6 @@ bool PointCloud::Init(Scene* scene, DeviceManager* deviceManager) {
 	th1.join();
 	th2.join();
 
-	if (!mBunny || !mBear || !mDragon) return false;
-	
 	mBunny->Material(mPointMaterial);
 	mBear->Material(mPointMaterial);
 	mDragon->Material(mPointMaterial);
@@ -103,8 +101,8 @@ bool PointCloud::Init(Scene* scene, DeviceManager* deviceManager) {
 	mPointMaterial->SetParameter("Extents", mBunny->Bounds().mExtents);
 
 	mCameraControl = mScene->GetPlugin<CameraControl>();
-	float dist = mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f);
-	mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter - vec3(0, 0, dist));
+	mCameraControl->CameraDistance(mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+	mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter);
 
 	mBear->mVisible = false;
 	mDragon->mVisible = false;
@@ -129,8 +127,8 @@ void PointCloud::Update(const FrameTime& frameTime) {
 		mAnimStart = frameTime.mTotalTime;
 		mPointMaterial->SetParameter("Extents", mBunny->Bounds().mExtents);
 
-		float dist = mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f);
-		mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter - vec3(0, 0, dist));
+		mCameraControl->CameraDistance(1.5f * mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+		mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter);
 	}
 	if (Input::KeyDownFirst(GLFW_KEY_F2)) {
 		mBunny->mVisible = false;
@@ -139,8 +137,8 @@ void PointCloud::Update(const FrameTime& frameTime) {
 		mAnimStart = frameTime.mTotalTime;
 		mPointMaterial->SetParameter("Extents", mBear->Bounds().mExtents);
 
-		float dist = mBear->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f);
-		mCameraControl->CameraPivot()->LocalPosition(mBear->Bounds().mCenter - vec3(0, 0, dist));
+		mCameraControl->CameraDistance(1.5f * mBear->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+		mCameraControl->CameraPivot()->LocalPosition(mBear->Bounds().mCenter);
 	}
 	if (Input::KeyDownFirst(GLFW_KEY_F3)) {
 		mBunny->mVisible = false;
@@ -149,9 +147,9 @@ void PointCloud::Update(const FrameTime& frameTime) {
 		mAnimStart = frameTime.mTotalTime;
 		mPointMaterial->SetParameter("Extents", mDragon->Bounds().mExtents);
 
-		float dist = mDragon->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f);
-		mCameraControl->CameraPivot()->LocalPosition(mDragon->Bounds().mCenter - vec3(0, 0, dist));
+		mCameraControl->CameraDistance(1.5f * mDragon->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+		mCameraControl->CameraPivot()->LocalPosition(mDragon->Bounds().mCenter);
 	}
 
-	mPointMaterial->SetParameter("Time", frameTime.mTotalTime - mAnimStart);
+	mPointMaterial->SetParameter("Time", .4f * (frameTime.mTotalTime - mAnimStart));
 }

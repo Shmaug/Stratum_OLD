@@ -30,7 +30,7 @@ void PointRenderer::Points(const vector<Point>& points) {
 	vec3 mx = vec3(points[0].mPosition);
 	for (uint32_t i = 1; i < points.size(); i++) {
 		mn = gmin(vec3(points[i].mPosition), mn);
-		mx = gmin(vec3(points[i].mPosition), mx);
+		mx = gmax(vec3(points[i].mPosition), mx);
 	}
 	mPointAABB = AABB((mn + mx) * .5f, (mx - mn) * .5f);
 
