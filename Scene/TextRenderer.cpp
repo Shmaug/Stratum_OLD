@@ -15,29 +15,31 @@ TextRenderer::~TextRenderer() {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
 			safe_delete(d.second.mObjectBuffers[i]);
 			safe_delete(d.second.mDescriptorSets[i]);
+			safe_delete(d.second.mGlyphBuffers[i]);
 		}
-		safe_delete(d.second.mGlyphBuffer);
+		safe_delete(d.second.mGlyphBuffers);
 		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
 	}
 }
 
-void TextRenderer::BuildText(Device* device, DeviceData& d) {
+uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
-	vector<TextGlyph> glyphs;
-	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, glyphs, mHorizontalAnchor, mVerticalAnchor);
+	mTempGlyphs.clear();
+	mTempGlyphs.reserve(mText.length());
+	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
 	PROFILER_END;
 
-	if (glyphCount == 0) return;
+	if (glyphCount == 0) return 0;
 
 	PROFILER_BEGIN("Upload");
-	if (d.mGlyphBuffer && d.mGlyphCount < glyphCount)
-		safe_delete(d.mGlyphBuffer);
-	if (!d.mGlyphBuffer)
-		d.mGlyphBuffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	d.mGlyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-	d.mGlyphCount = glyphCount;
+	if (buffer && buffer->Size() < glyphCount * sizeof(TextGlyph))
+		safe_delete(buffer);
+	if (!buffer)
+		buffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	buffer ->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
 	PROFILER_END;
+	return glyphCount;
 }
 
 void TextRenderer::Text(const string& text) {
@@ -53,10 +55,11 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mDirty = true;
-		d.mGlyphBuffer = nullptr;
 		d.mGlyphCount = 0;
+		d.mGlyphBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mObjectBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
 		d.mDescriptorSets = new DescriptorSet * [commandBuffer->Device()->MaxFramesInFlight()];
+		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
 	}
@@ -64,7 +67,7 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
 	if (data.mDirty) {
-		BuildText(commandBuffer->Device(), data);
+		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
 		data.mDirty = false;
 	}
 
@@ -85,7 +88,7 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
 	if (bindings.count("Glyphs"))
-		data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffer, bindings.at("Glyphs").second.binding);
+		data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
 	objbuffer->ObjectToWorld = ObjectToWorld();

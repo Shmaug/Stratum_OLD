@@ -47,12 +47,13 @@ private:
 	struct DeviceData {
 		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
-		Buffer* mGlyphBuffer;
+		Buffer** mGlyphBuffers;
 		uint32_t mGlyphCount;
 		bool mDirty;
 	};
 
-	void BuildText(Device* device, DeviceData& d);
+	std::vector<TextGlyph> mTempGlyphs;
+	uint32_t BuildText(Device* device, Buffer*& buffer);
 
 	HorizontalTextAnchor mHorizontalAnchor;
 	VerticalTextAnchor mVerticalAnchor;
