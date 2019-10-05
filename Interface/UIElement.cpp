@@ -5,7 +5,7 @@
 using namespace std;
 
 UIElement::UIElement(const string& name, UICanvas* canvas)
-	: mName(name), mCanvas(canvas), mParent(nullptr), mPosition({}), mSize({}), mCanvasPosition({}), mCanvasSize({}), mTransformDirty(true) {}
+	: mName(name), mCanvas(canvas), mParent(nullptr), mPosition({}), mExtent({}), mAbsolutePosition({}), mAbsoluteExtent({}), mTransformDirty(true) {}
 UIElement::~UIElement() {}
 
 bool UIElement::Parent(UIElement* p) {
@@ -28,11 +28,7 @@ bool UIElement::Parent(UIElement* p) {
 }
 bool UIElement::AddChild(UIElement* e) {
 	mChildren.push_back(e);
-
-	mCanvasAABB = AABB(mCanvasPosition + vec3(mCanvasSize * .5f, 0), vec3(mCanvasSize * .5f, UI_THICKNESS));
-	for (UIElement*& e : mChildren)
-		mCanvasAABB.Encapsulate(e->CanvasBounds());
-
+	Dirty();
 	return true;
 }
 
@@ -40,16 +36,16 @@ bool UIElement::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
 	if (mParent) {
-		mCanvasPosition = mParent->CanvasPosition() + vec3(mParent->CanvasSize() * mPosition.mScale + mPosition.mOffset, mDepth);
-		mCanvasSize = mParent->CanvasSize() * mSize.mScale + mSize.mOffset;
+		mAbsolutePosition = mParent->AbsolutePosition() + vec3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsoluteExtent   = mParent->AbsoluteExtent() * mExtent.mScale + mExtent.mOffset;
 	} else {
-		mCanvasPosition = vec3(mCanvas->Size() * mPosition.mScale + mPosition.mOffset, mDepth);
-		mCanvasSize = mCanvas->Size() * mSize.mScale + mSize.mOffset;
+		mAbsolutePosition = vec3(mCanvas->Size() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsoluteExtent = mCanvas->Size() * mExtent.mScale + mExtent.mOffset;
 	}
 
-	mCanvasAABB = AABB(mCanvasPosition + vec3(mCanvasSize * .5f, 0), vec3(mCanvasSize * .5f, UI_THICKNESS));
+	mAbsoluteAABB = AABB(mAbsolutePosition + vec3(mAbsoluteExtent, 0), vec3(mAbsoluteExtent, UI_THICKNESS));
 	for (UIElement*& e : mChildren)
-		mCanvasAABB.Encapsulate(e->CanvasBounds());
+		mAbsoluteAABB.Encapsulate(e->AbsoluteBounds());
 
 	mTransformDirty = false;
 	return true;
