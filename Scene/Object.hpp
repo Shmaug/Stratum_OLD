@@ -13,6 +13,7 @@ class Scene;
 class Object {
 public:
 	const std::string mName;
+	bool mEnabled;
 
 	ENGINE_EXPORT Object(const std::string& name);
 	ENGINE_EXPORT ~Object();
@@ -41,7 +42,9 @@ public:
 	inline void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
 	inline void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
 
-	inline virtual AABB Bounds() { return AABB(WorldPosition(), vec3()); }
+	ENGINE_EXPORT bool EnabledHeirarchy();
+	ENGINE_EXPORT virtual AABB Bounds();
+	ENGINE_EXPORT virtual AABB BoundsHeirarchy();
 
 private:
 	friend class Scene;

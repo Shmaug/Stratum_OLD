@@ -8,7 +8,7 @@ public:
 	PLUGIN_EXPORT CameraControl();
 	PLUGIN_EXPORT ~CameraControl();
 
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
 
 	inline void CameraDistance(float d) { mCameraDistance = d; }

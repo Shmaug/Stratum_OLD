@@ -1,8 +1,14 @@
 #include <Core/EnginePlugin.hpp>
 #include <iterator>
-#include <sstream>
+#include <filesystem>
 
 #include <Util/Profiler.hpp>
+
+#include <assimp/scene.h>
+#include <assimp/cimport.h>
+#include <assimp/postprocess.h>
+#include <assimp/material.h>
+#include <assimp/pbrmaterial.h>
 
 #include <Plugins/CameraControl/CameraControl.hpp>
 #include "PointRenderer.hpp"
@@ -14,14 +20,15 @@ public:
 	PLUGIN_EXPORT PointCloud();
 	PLUGIN_EXPORT ~PointCloud();
 
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
 
 private:
 	CameraControl* mCameraControl;
-	PointRenderer* mBunny;
-	PointRenderer* mBear;
-	PointRenderer* mDragon;
+	vector<Object*> mObjects;
+	vector<Object*> mSceneRoots;
+
+	void LoadScene(const filesystem::path& filename, float scale = .05f);
 
 	Scene* mScene;
 	float mPointSize;
@@ -31,81 +38,101 @@ private:
 
 ENGINE_PLUGIN(PointCloud)
 
-PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mBunny(nullptr), mBear(nullptr), mDragon(nullptr), mPointSize(0.0025f), mAnimStart(0) {}
+PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mPointSize(0.0025f), mAnimStart(0) {}
 PointCloud::~PointCloud() {
-	mScene->RemoveObject(mBunny);
-	mScene->RemoveObject(mBear);
-	mScene->RemoveObject(mDragon);
-	safe_delete(mBunny);
-	safe_delete(mBear);
-	safe_delete(mDragon);
+	for (Object* p : mObjects)
+		mScene->RemoveObject(p);
+	for (Object* p : mObjects)
+		safe_delete(p);
 }
 
-PointRenderer* LoadPoints(const string& filename) {
-	string objfile;
-	if (!ReadFile(filename, objfile)) return nullptr;
-	istringstream srcstream(objfile);
+void PointCloud::LoadScene(const filesystem::path& filename, float scale) {
+	unordered_map<uint32_t, vector<PointRenderer::Point>> points;
 
-	vector<PointRenderer::Point> points;
+	const aiScene* aiscene = aiImportFile(filename.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
+	if (!aiscene) return;
 
-	string line;
-	while (getline(srcstream, line)) {
-		istringstream linestream(line);
-		vector<string> words{ istream_iterator<string>{linestream}, istream_iterator<string>{} };
-		if (words.size() < 4 || words[0] != "v") continue;
+	queue<pair<aiNode*, Object*>> nodes;
+	nodes.push(make_pair(aiscene->mRootNode, nullptr));
 
-		vec3 point = vec3(atof(words[1].c_str()), atof(words[2].c_str()), atof(words[3].c_str()));
-		vec3 col(1);
-		if (words.size() >= 7)
-			col = vec3(atof(words[4].c_str()), atof(words[5].c_str()), atof(words[6].c_str()));
+	while (!nodes.empty()) {
+		pair<aiNode*, Object*> nodepair = nodes.front();
+		nodes.pop();
 
-		points.push_back({ vec4(point, 1), vec4(col, 1) });
+		aiNode* node = nodepair.first;
+
+		aiVector3D s;
+		aiQuaternion r;
+		aiVector3D t;
+		node->mTransformation.Decompose(s, r, t);
+
+		t *= scale;
+
+		Object* nodeobj = new Object(node->mName.C_Str());
+		nodeobj->Parent(nodepair.second);
+		nodeobj->LocalPosition(t.x, t.y, t.z);
+		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
+		nodeobj->LocalScale(s.x, s.y, s.z);
+
+		mScene->AddObject(nodeobj);
+		mObjects.push_back(nodeobj);
+
+		if (nodepair.first == aiscene->mRootNode)
+			mSceneRoots.push_back(nodeobj);
+
+		for (uint32_t i = 0; i < node->mNumMeshes; i++) {
+			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
+
+			vector<PointRenderer::Point>& pts = points[node->mMeshes[i]];
+			if (pts.size() != aimesh->mNumVertices) {
+				pts.resize(aimesh->mNumVertices);
+				for (uint32_t i = 0; i < aimesh->mNumVertices; i++) {
+					memcpy(&pts[i].mPosition, &aimesh->mVertices[i], sizeof(vec3));
+					if (aimesh->HasVertexColors(0))
+						memcpy(&pts[i].mColor, &aimesh->mColors[0][i], sizeof(vec3));
+					else
+						memset(&pts[i].mColor, 1.f, sizeof(vec3));
+				}
+			}
+
+			auto renderer = new PointRenderer(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
+			renderer->Parent(nodeobj);
+			renderer->Points(pts);
+			renderer->Material(mPointMaterial);
+
+			mScene->AddObject(renderer);
+			mObjects.push_back(renderer);
+		}
+
+		for (uint32_t i = 0; i < node->mNumChildren; i++)
+			nodes.push(make_pair(node->mChildren[i], nodeobj));
 	}
 
-	printf("Loaded %s (%d points)\n", filename.c_str(), (int)points.size());
-
-	PointRenderer* renderer = new PointRenderer(filename);
-	renderer->Points(points);
-	return renderer;
 }
 
-bool PointCloud::Init(Scene* scene, DeviceManager* deviceManager) {
+bool PointCloud::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* pointShader = deviceManager->AssetDatabase()->LoadShader("Shaders/points.shader");
+	Shader* pointShader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/points.shader");
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
 
-	thread th0([&]() {
-		mBunny = LoadPoints("Assets/bunny.obj");
-	});
-	thread th1([&]() {
-		mBear = LoadPoints("Assets/bear.obj");
-	});
-	thread th2([&]() {
-		mDragon = LoadPoints("Assets/dragon.obj");
-	});
-	
-	th0.join();
-	th1.join();
-	th2.join();
+	LoadScene("Assets/bunny.obj");
+	//LoadScene("Assets/dragon.obj");
+	//LoadScene("Assets/bear.obj");
 
-	mBunny->Material(mPointMaterial);
-	mBear->Material(mPointMaterial);
-	mDragon->Material(mPointMaterial);
-	scene->AddObject(mBunny);
-	scene->AddObject(mBear);
-	scene->AddObject(mDragon);
+	for (Object* o : mSceneRoots)
+		o->mEnabled = false;
+	mSceneRoots[0]->mEnabled = true;
+	AABB aabb = mSceneRoots[0]->BoundsHeirarchy();
 
+	mPointMaterial->SetParameter("Noise", scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/rgbanoise.png", false));
 	mPointMaterial->SetParameter("Time", 0.f);
 	mPointMaterial->SetParameter("PointSize", mPointSize);
-	mPointMaterial->SetParameter("Extents", mBunny->Bounds().mExtents);
+	mPointMaterial->SetParameter("Extents", aabb.mExtents);
 
 	mCameraControl = mScene->GetPlugin<CameraControl>();
-	mCameraControl->CameraDistance(mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-	mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter);
-
-	mBear->mVisible = false;
-	mDragon->mVisible = false;
+	mCameraControl->CameraDistance(aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+	mCameraControl->CameraPivot()->LocalPosition(aabb.mCenter);
 
 	return true;
 }
@@ -120,35 +147,24 @@ void PointCloud::Update(const FrameTime& frameTime) {
 		mPointMaterial->SetParameter("PointSize", mPointSize);
 	}
 
-	if (Input::KeyDownFirst(GLFW_KEY_F1)) {
-		mBunny->mVisible = true;
-		mBear->mVisible = false;
-		mDragon->mVisible = false;
-		mAnimStart = frameTime.mTotalTime;
-		mPointMaterial->SetParameter("Extents", mBunny->Bounds().mExtents);
+	int idx = -1;
 
-		mCameraControl->CameraDistance(1.5f * mBunny->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-		mCameraControl->CameraPivot()->LocalPosition(mBunny->Bounds().mCenter);
-	}
-	if (Input::KeyDownFirst(GLFW_KEY_F2)) {
-		mBunny->mVisible = false;
-		mBear->mVisible = true;
-		mDragon->mVisible = false;
-		mAnimStart = frameTime.mTotalTime;
-		mPointMaterial->SetParameter("Extents", mBear->Bounds().mExtents);
+	if (mSceneRoots.size() > 0 && Input::KeyDownFirst(GLFW_KEY_F1)) idx = 0;
+	if (mSceneRoots.size() > 1 && Input::KeyDownFirst(GLFW_KEY_F2)) idx = 1;
+	if (mSceneRoots.size() > 2 && Input::KeyDownFirst(GLFW_KEY_F3)) idx = 2;
+	if (mSceneRoots.size() > 3 && Input::KeyDownFirst(GLFW_KEY_F4)) idx = 4;
+	if (mSceneRoots.size() > 4 && Input::KeyDownFirst(GLFW_KEY_F5)) idx = 5;
 
-		mCameraControl->CameraDistance(1.5f * mBear->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-		mCameraControl->CameraPivot()->LocalPosition(mBear->Bounds().mCenter);
-	}
-	if (Input::KeyDownFirst(GLFW_KEY_F3)) {
-		mBunny->mVisible = false;
-		mBear->mVisible = false;
-		mDragon->mVisible = true;
-		mAnimStart = frameTime.mTotalTime;
-		mPointMaterial->SetParameter("Extents", mDragon->Bounds().mExtents);
+	if (idx >= 0) {
+		for (Object* o : mSceneRoots)
+			o->mEnabled = false;
+		mSceneRoots[idx]->mEnabled = true;
+		AABB aabb = mSceneRoots[idx]->BoundsHeirarchy();
 
-		mCameraControl->CameraDistance(1.5f * mDragon->Bounds().mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-		mCameraControl->CameraPivot()->LocalPosition(mDragon->Bounds().mCenter);
+		mPointMaterial->SetParameter("Extents", aabb.mExtents);
+		mCameraControl->CameraDistance(1.5f * aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+		mCameraControl->CameraPivot()->LocalPosition(aabb.mCenter);
+		mAnimStart = frameTime.mTotalTime;
 	}
 
 	mPointMaterial->SetParameter("Time", .4f * (frameTime.mTotalTime - mAnimStart));

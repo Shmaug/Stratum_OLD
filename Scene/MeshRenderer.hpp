@@ -24,7 +24,7 @@ public:
 	inline std::shared_ptr<::Material> Material() const { return mMaterial; }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
-	inline virtual bool Visible() override { return mVisible && Mesh(); }
+	inline virtual bool Visible() override { return mVisible && Mesh() && EnabledHeirarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 	

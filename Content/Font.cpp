@@ -50,8 +50,8 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 		int w, h, x, y;
 		unsigned char* data = stbtt_GetCodepointBitmapSubpixel(&font, fontScale, fontScale, 0, 0, c, &w, &h, &x, &y);
 		
-		g.mVertOffset = ymin * scale;
-		g.mSize = vec2((float)w, (float)h) * scale;
+		g.mVertOffset = -ymin * scale;
+		g.mSize = vec2((float)w, -(float)h) * scale;
 		g.mAdvance = advance * fontScale * scale;
 
 		w += PADDING;

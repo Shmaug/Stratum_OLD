@@ -119,7 +119,7 @@ private:
 		});
 
 		for (const auto& p : mScene->mPlugins)
-			p->Init(mScene, mDeviceManager);
+			p->Init(mScene);
 	}
 	void UnloadPlugins() {
 		for (auto& p : mScene->mPlugins)

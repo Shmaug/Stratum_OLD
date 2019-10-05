@@ -16,10 +16,10 @@ class PLUGIN_EXPORT EnginePlugin {
 public:
 	inline virtual ~EnginePlugin() {}
 	
-	inline virtual bool Init(Scene* scene, DeviceManager* deviceManager) { return true; }
+	inline virtual bool Init(Scene* scene) { return true; }
 	
 	inline virtual void PreUpdate (const FrameTime& frameTime) {}
-	inline virtual void Update	   (const FrameTime& frameTime) {}
+	inline virtual void Update	  (const FrameTime& frameTime) {}
 	inline virtual void PostUpdate(const FrameTime& frameTime) {}
 	
 	inline virtual void PreRender (const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}

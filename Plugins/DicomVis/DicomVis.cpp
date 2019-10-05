@@ -26,11 +26,11 @@ DicomVis::~DicomVis() {
 
 }
 
-bool DicomVis::Init(Scene* scene, DeviceManager* deviceManager) {
+bool DicomVis::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* fontshader = deviceManager->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = deviceManager->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
+	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
+	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
 
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("Texture", font->Texture());

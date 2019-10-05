@@ -19,7 +19,7 @@ public:
 	PLUGIN_EXPORT MeshViewer();
 	PLUGIN_EXPORT ~MeshViewer();
 
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
 
 private:
 	vector<Object*> mObjects;
@@ -36,16 +36,16 @@ MeshViewer::~MeshViewer() {
 		safe_delete(obj);
 }
 
-void LoadScene(const filesystem::path& filename, Scene* scene, DeviceManager* deviceManager, Shader* shader, vector<Object*>& objects, float scale = .05f, uint32_t threadCount = 6) {
-	Texture* brdfTexture  = deviceManager->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
-	Texture* whiteTexture = deviceManager->AssetDatabase()->LoadTexture("Assets/white.png");
-	Texture* bumpTexture  = deviceManager->AssetDatabase()->LoadTexture("Assets/bump.png", false);
+void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, vector<Object*>& objects, float scale = .05f) {
+	Texture* brdfTexture  = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
+	Texture* whiteTexture = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/white.png");
+	Texture* bumpTexture  = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/bump.png", false);
 
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
 
 	const aiScene* aiscene = aiImportFile(filename.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
-	assert(scene);
+	if (!aiscene) return;
 
 	queue<pair<aiNode*, Object*>> nodes;
 	nodes.push(make_pair(aiscene->mRootNode, nullptr));
@@ -106,7 +106,7 @@ void LoadScene(const filesystem::path& filename, Scene* scene, DeviceManager* de
 				else {
 					if (filename.has_parent_path())
 						diffuse = filename.parent_path().string() + "/" + diffuse.C_Str();
-					material->SetParameter("DiffuseTexture", deviceManager->AssetDatabase()->LoadTexture(diffuse.C_Str()));
+					material->SetParameter("DiffuseTexture", scene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
 				}
 
 				if (normal == aiString("") || normal.C_Str()[0] == '*')
@@ -114,12 +114,12 @@ void LoadScene(const filesystem::path& filename, Scene* scene, DeviceManager* de
 				else {
 					if (filename.has_parent_path())
 						normal = filename.parent_path().string() + "/" + normal.C_Str();
-					material->SetParameter("NormalTexture", deviceManager->AssetDatabase()->LoadTexture(normal.C_Str(), false));
+					material->SetParameter("NormalTexture", scene->DeviceManager()->AssetDatabase()->LoadTexture(normal.C_Str(), false));
 				}
 			}
 
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
-			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), deviceManager, aimesh, scale);
+			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), scene->DeviceManager(), aimesh, scale);
 
 			auto meshRenderer = new MeshRenderer(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
 			meshRenderer->Parent(nodeobj);
@@ -137,11 +137,11 @@ void LoadScene(const filesystem::path& filename, Scene* scene, DeviceManager* de
 	}
 }
 
-bool MeshViewer::Init(Scene* scene, DeviceManager* deviceManager) {
+bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* pbrshader  = deviceManager->AssetDatabase()->LoadShader("Shaders/pbr.shader");
-	//LoadScene("Assets/SanMiguel/SanMiguel.gltf", scene, deviceManager, pbrshader, mObjects);
+	Shader* pbrshader  = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/pbr.shader");
+	//LoadScene("Assets/SanMiguel/SanMiguel.gltf", scene, pbrshader, mObjects);
 
 	return true;
 }
