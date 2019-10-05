@@ -10,7 +10,7 @@ bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
 	mAABB = AABB(vec3(mSize * .5f, 0), vec3(mSize * .5f, UI_THICKNESS));
 	for (UIElement*& e : mRootElements)
-		mAABB.Encapsulate(e->CanvasBounds());
+		mAABB.Encapsulate(e->AbsoluteBounds());
 	mAABB *= ObjectToWorld();
 	return true;
 }

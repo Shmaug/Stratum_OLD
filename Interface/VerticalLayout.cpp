@@ -20,10 +20,10 @@ void VerticalLayout::UpdateLayout() {
 		p.mScale = vec2(0);
 		e->Position(p);
 
-		UDim2 s = e->Size();
+		UDim2 s = e->Extent();
 		s.mScale = vec2(0, 1);
 		s.mOffset.x = -mPadding * 2.f;
-		e->Size(s);
+		e->Extent(s);
 
 		c.y += s.mOffset.y + mSpacing;
 	}
