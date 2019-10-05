@@ -17,11 +17,11 @@ CameraControl::~CameraControl() {
 	safe_delete(mFpsText);
 }
 
-bool CameraControl::Init(Scene* scene, DeviceManager* deviceManager) {
+bool CameraControl::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* fontshader = deviceManager->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = deviceManager->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
+	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
+	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
 
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("Texture", font->Texture());
@@ -63,9 +63,8 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		camera->Parent(mCameraPivot);
 		camera->LocalPosition(0, 0, -mCameraDistance);
 
-		//mFpsText->Parent(camera);
-		//mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), 0.99f, 0.001f, 1)), 1));
-		vec3 x = mFpsText->WorldPosition();
+		mFpsText->Parent(camera);
+		mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), -.99f, 0.001f, 1)), 1));
 		mFpsText->TextScale(camera->Near() * .015f);
 	}
 

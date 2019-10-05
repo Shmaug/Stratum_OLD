@@ -9,7 +9,7 @@ Object::Object(const string& name)
 	: mName(name), mParent(nullptr),
 	mLocalPosition(vec3()), mLocalRotation(quat(1.f, 0.f, 0.f, 0.f)), mLocalScale(vec3(1.f, 1.f, 1.f)),
 	mWorldPosition(vec3()), mWorldRotation(quat(1.f, 0.f, 0.f, 0.f)),
-	mObjectToWorld(mat4(1.f)), mWorldToObject(mat4(1.f)), mTransformDirty(true) {
+	mObjectToWorld(mat4(1.f)), mWorldToObject(mat4(1.f)), mTransformDirty(true), mEnabled(true) {
 	Dirty();
 }
 Object::~Object() {
@@ -69,4 +69,23 @@ void Object::Dirty() {
 	mTransformDirty = true;
 	for (const auto& o : mChildren)
 		o->Dirty();
+}
+
+AABB Object::Bounds() {
+	return AABB(WorldPosition(), vec3());
+}
+
+AABB Object::BoundsHeirarchy() {
+	AABB aabb = Bounds();
+	for (Object* c : mChildren)
+		aabb.Encapsulate(c->BoundsHeirarchy());
+	return aabb;
+}
+bool Object::EnabledHeirarchy() {
+	Object* o = this;
+	while (o) {
+		if (!o->mEnabled) return false;
+		o = o->mParent;
+	}
+	return true;
 }

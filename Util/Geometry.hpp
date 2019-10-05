@@ -80,6 +80,8 @@ struct AABB {
 	inline void Encapsulate(const AABB& aabb) {
 		vec3 mn = gmin(mCenter - mExtents, aabb.mCenter - aabb.mExtents);
 		vec3 mx = gmax(mCenter + mExtents, aabb.mCenter + aabb.mExtents);
+		mCenter = (mn + mx) * .5f;
+		mExtents = (mx - mn) * .5f;
 	}
 
 	inline AABB operator *(const mat4& transform) {

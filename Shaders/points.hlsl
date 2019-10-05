@@ -4,6 +4,8 @@
 #pragma render_queue 1000
 #pragma cull false
 
+#pragma static_sampler Sampler
+
 #include <shadercompat.h>
 
 struct Point {
@@ -16,6 +18,9 @@ struct Point {
 [[vk::binding(BINDING_START, PER_OBJECT)]] StructuredBuffer<Point> Points : register(t0);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
+// per-material
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> Noise : register(t1);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float Time;
@@ -53,9 +58,7 @@ v2f vsmain(uint id : SV_VertexId) {
 	offset = offset.x * Camera.Right + offset.y * Camera.Up;
 
 	float3 p = pt.Position + PointSize * offset;
-	float n = (idx + 674938) * 874622;
-	n = n - floor(n / 289.0) * 289.0 + 223.5245;
-	float3 noise = frac(n * n * float3(.00000012, .00000543, .00000423)) * 2 - 1;
+	float3 noise = Noise.SampleLevel(Sampler, float2(idx, 0) / 255, 0).xyz * 2 - 1;
 	float t = saturate(Time);
 	p = lerp(noise * Extents, p, t * t * (3 - 2 * t));
 

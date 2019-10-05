@@ -7,7 +7,7 @@ public:
 	PLUGIN_EXPORT DicomVis();
 	PLUGIN_EXPORT ~DicomVis();
 
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
 
 private:
