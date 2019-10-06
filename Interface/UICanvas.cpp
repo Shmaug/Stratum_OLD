@@ -1,6 +1,8 @@
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIElement.hpp>
 
+#include <queue>
+
 using namespace std;
 
 UICanvas::UICanvas(const string& name, const vec3& size) : Renderer(name), mSize(size) {};
@@ -21,5 +23,13 @@ void UICanvas::Dirty() {
 }
 
 void UICanvas::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
-
+	queue<UIElement*> elems;
+	for (UIElement* e : mRootElements) elems.push(e);
+	while (elems.size()) {
+		UIElement* e = elems.front();
+		elems.pop();
+		e->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
+		for (UIElement* c : e->mChildren)
+			elems.push(c);
+	}
 }

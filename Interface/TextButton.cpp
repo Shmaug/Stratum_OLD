@@ -11,7 +11,8 @@
 
 using namespace std;
 
-TextButton::TextButton(const string& name, UICanvas* canvas) : UIElement(name, canvas), mTextScale(1.f), mHorizontalAnchor(Left), mVerticalAnchor(Top) {}
+TextButton::TextButton(const string& name, UICanvas* canvas)
+	: UIElement(name, canvas), mTextScale(1.f), mHorizontalAnchor(Left), mVerticalAnchor(Top) {}
 TextButton::~TextButton() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {

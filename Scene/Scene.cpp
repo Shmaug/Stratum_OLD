@@ -75,8 +75,11 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	PROFILER_BEGIN("Draw");
 	camera->BeginRenderPass(commandBuffer, backBufferIndex);
 	for (const auto& r : mRenderers)
-		if (r->Visible())
+		if (r->Visible()) {
+			PROFILER_BEGIN("Draw " + r->mName);
 			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+			PROFILER_END;
+		}
 	camera->EndRenderPass(commandBuffer, backBufferIndex);
 	PROFILER_END;
 

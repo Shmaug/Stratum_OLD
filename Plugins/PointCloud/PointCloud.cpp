@@ -107,7 +107,6 @@ void PointCloud::LoadScene(const filesystem::path& filename, float scale) {
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
 			nodes.push(make_pair(node->mChildren[i], nodeobj));
 	}
-
 }
 
 bool PointCloud::Init(Scene* scene) {
@@ -117,8 +116,9 @@ bool PointCloud::Init(Scene* scene) {
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
 
 	LoadScene("Assets/bunny.obj");
-	//LoadScene("Assets/dragon.obj");
-	//LoadScene("Assets/bear.obj");
+	LoadScene("Assets/dragon.obj");
+	LoadScene("Assets/bear.obj");
+	LoadScene("Assets/island.obj");
 
 	for (Object* o : mSceneRoots)
 		o->mEnabled = false;
