@@ -14,11 +14,13 @@ public:
 		SBSHorizontal, SBSVertical
 	};
 
+	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
 	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
 	ENGINE_EXPORT ~Camera();
 
 	inline ::Device* Device() const { return mDevice; }
 
+	ENGINE_EXPORT void PreRender();
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
@@ -83,6 +85,7 @@ private:
 	mat4 mInvViewProjection;
 	bool mMatricesDirty;
 
+	Window* mTargetWindow;
 	::Device* mDevice;
 
 	VkDescriptorSetLayout mDescriptorSetLayout;

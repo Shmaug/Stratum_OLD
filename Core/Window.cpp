@@ -1,4 +1,3 @@
-#include <Core/Input.hpp>
 #include <Core/Window.hpp>
 #include <Core/Device.hpp>
 #include <Util/Profiler.hpp>
@@ -19,9 +18,31 @@ void Window::FramebufferResizeCallback(GLFWwindow* window, int width, int height
 		if (win->mDevice) win->CreateSwapchain(win->mDevice);
 	}
 }
+void Window::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	if (action == GLFW_REPEAT) return;
+	Window* win = (Window*)glfwGetWindowUserPointer(window);
 
-Window::Window(VkInstance instance, const string& title, VkRect2D position, int monitorIndex)
-	: mInstance(instance), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}),
+	win->mInput->mCurrent.mKeys[key] = action;
+	if (win && win->mInput->mCurrent.mKeys[GLFW_KEY_LEFT_ALT] == GLFW_PRESS && win->mInput->mCurrent.mKeys[GLFW_KEY_ENTER] == GLFW_PRESS && (key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT_ALT))
+		win->Fullscreen(!win->Fullscreen());
+}
+void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
+	Window* win = (Window*)glfwGetWindowUserPointer(window);
+	win->mInput->mCurrent.mCursorPos.x = (float)x + win->ClientRect().offset.x;
+	win->mInput->mCurrent.mCursorPos.y = (float)y + win->ClientRect().offset.y;
+}
+void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	Window* win = (Window*)glfwGetWindowUserPointer(window);
+	win->mInput->mCurrent.mMouseButtons[button] = action;
+}
+void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
+	Window* win = (Window*)glfwGetWindowUserPointer(window);
+	win->mInput->mCurrent.mScrollDelta.x += (float)x;
+	win->mInput->mCurrent.mScrollDelta.y += (float)y;
+}
+
+Window::Window(VkInstance instance, const string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex)
+	: mInstance(instance), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
 	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
 
@@ -47,10 +68,10 @@ Window::Window(VkInstance instance, const string& title, VkRect2D position, int 
 
 	glfwSetFramebufferSizeCallback(mWindow, FramebufferResizeCallback);
 	glfwSetWindowPosCallback(mWindow, WindowPosCallback);
-	glfwSetKeyCallback(mWindow, Input::KeyCallback);
-	glfwSetCursorPosCallback(mWindow, Input::CursorPosCallback);
-	glfwSetScrollCallback(mWindow, Input::ScrollCallback);
-	glfwSetMouseButtonCallback(mWindow, Input::MouseButtonCallback);
+	glfwSetKeyCallback(mWindow, KeyCallback);
+	glfwSetCursorPosCallback(mWindow, CursorPosCallback);
+	glfwSetScrollCallback(mWindow, ScrollCallback);
+	glfwSetMouseButtonCallback(mWindow, MouseButtonCallback);
 
 	if (glfwCreateWindowSurface(instance, mWindow, nullptr, &mSurface) != VK_SUCCESS) {
 		const char* msg;

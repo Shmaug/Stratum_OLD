@@ -2,6 +2,7 @@
 
 #include <Core/EnginePlugin.hpp>
 #include <Scene/TextRenderer.hpp>
+#include <Input/MouseKeyboardInput.hpp>
 
 class CameraControl : public EnginePlugin {
 public:
@@ -13,15 +14,17 @@ public:
 
 	inline void CameraDistance(float d) { mCameraDistance = d; }
 	inline float CameraDistance() const { return mCameraDistance; }
-	inline Object* CameraPivot() const { return mCameraPivot; }
+	inline Object* CameraPivot() const { return mCameraPivot.get(); }
 
 private:
 	Scene* mScene;
-	Object* mCameraPivot;
 	float mCameraDistance;
 	vec3 mCameraEuler;
 
-	TextRenderer* mFpsText;
+	MouseKeyboardInput* mInput;
+
+	std::shared_ptr<TextRenderer> mFpsText;
+	std::shared_ptr<Object> mCameraPivot;
 
 	float mFrameTimeAccum;
 	float mFps;

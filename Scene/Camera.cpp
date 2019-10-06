@@ -1,10 +1,12 @@
 #include <Scene/Camera.hpp>
 #include <Shaders/shadercompat.h>
 
+#include <Util/Profiler.hpp>
+
 using namespace std;
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat)
-	: Object(name), mDevice(device),
+	: Object(name), mDevice(device), mTargetWindow(nullptr),
 	mRenderPass(VK_NULL_HANDLE), mDescriptorSetLayout(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
 	mMatricesDirty(true),
 	mRenderFormat(renderFormat),
@@ -13,7 +15,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(vec4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
 	mRenderPriority(0),
 	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mInvViewProjection(mat4(1.f)) {
 
@@ -94,6 +96,99 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 		mFrameData[i].mDepthBuffer = nullptr;
 	}
 }
+Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
+	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
+	mRenderPass(VK_NULL_HANDLE), mDescriptorSetLayout(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
+	mMatricesDirty(true),
+	mRenderFormat(targetWindow->Format().format),
+	mDepthFormat(depthFormat),
+	mOrthographic(false), mOrthographicSize(0),
+	mFieldOfView(radians(70.f)), mPerspectiveBounds(vec4(0.f)),
+	mNear(.03f), mFar(500.f),
+	mPixelWidth(1600), mPixelHeight(900),
+	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
+	mRenderPriority(0),
+	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mInvViewProjection(mat4(1.f)) {
+
+	mTargetWindow->mTargetCamera = this;
+
+	#pragma region create renderpass
+	vector<VkAttachmentDescription> attachments(3);
+	attachments[0].format = mRenderFormat;
+	attachments[0].samples = mSampleCount;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	attachments[1].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[1].samples = mSampleCount;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	attachments[2].format = mDepthFormat;
+	attachments[2].samples = mSampleCount;
+	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference colorAttachmentRef = {};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	VkAttachmentReference depthNormalAttachmentRef = {};
+	depthNormalAttachmentRef.attachment = 1;
+	depthNormalAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	VkAttachmentReference depthAttachmentRef = {};
+	depthAttachmentRef.attachment = 2;
+	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference colorAttachments[]{
+		colorAttachmentRef, depthNormalAttachmentRef
+	};
+
+	vector<VkSubpassDescription> subpasses(1);
+	subpasses[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpasses[0].colorAttachmentCount = 2;
+	subpasses[0].pColorAttachments = colorAttachments;
+	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
+
+	mRenderPass = new ::RenderPass(mName + "RenderPass", mDevice, attachments, subpasses);
+	#pragma endregion
+
+	VkDescriptorSetLayoutBinding binding = {};
+	binding.binding = CAMERA_BUFFER_BINDING;
+	binding.descriptorCount = 1;
+	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkDescriptorSetLayoutCreateInfo dslayoutinfo = {};
+	dslayoutinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	dslayoutinfo.bindingCount = 1;
+	dslayoutinfo.pBindings = &binding;
+	vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &mDescriptorSetLayout);
+	mDevice->SetObjectName(mDescriptorSetLayout, mName + " DescriptorSetLayout");
+
+	mFrameData = new FrameData[mDevice->MaxFramesInFlight()];
+	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
+		mFrameData[i].mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, sizeof(CameraBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		mFrameData[i].mUniformBuffer->Map();
+		mFrameData[i].mDescriptorSet = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), mDescriptorSetLayout);
+		mFrameData[i].mDescriptorSet->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
+		mFrameData[i].mFramebuffer = VK_NULL_HANDLE;
+		mFrameData[i].mFramebufferDirty = true;
+		mFrameData[i].mColorBuffer = nullptr;
+		mFrameData[i].mDepthNormalBuffer = nullptr;
+		mFrameData[i].mDepthBuffer = nullptr;
+	}
+}
 Camera::~Camera() {
 	vkDestroyDescriptorSetLayout(*mDevice, mDescriptorSetLayout, nullptr);
 	delete mRenderPass;
@@ -118,6 +213,14 @@ vec3 Camera::ClipToWorld(vec3 clipPos) {
 	return wp / wp.w;
 }
 
+void Camera::PreRender(){
+	if (mTargetWindow && (mPixelWidth != mTargetWindow->BackBufferSize().width || mPixelHeight != mTargetWindow->BackBufferSize().height)) {
+		mPixelWidth = mTargetWindow->BackBufferSize().width;
+		mPixelHeight = mTargetWindow->BackBufferSize().height;
+		DirtyFramebuffers();
+		mMatricesDirty = true;
+	}
+}
 void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	UpdateFramebuffer(backBufferIndex);
 
@@ -137,7 +240,6 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 	};
 	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, 3);
 
-	// vulkan clip space has inverted y coordinate, flip the viewport upside-down5
 	VkViewport vp{ 0, 0, (float)mPixelWidth, (float)mPixelHeight, 0, 1.f };
 	vkCmdSetViewport(*commandBuffer, 0, 1, &vp);
 
@@ -146,6 +248,65 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 }
 void Camera::EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	vkCmdEndRenderPass(*commandBuffer);
+
+	// resolve or copy render target to target window
+	if (mTargetWindow) {
+		PROFILER_BEGIN("Resolve/Copy RenderTarget");
+		ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
+
+		VkImageMemoryBarrier barrier = {};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = mTargetWindow->CurrentBackBuffer();
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier
+		);
+
+		if (mSampleCount == VK_SAMPLE_COUNT_1_BIT) {
+			VkImageCopy region = {};
+			region.extent = { mPixelWidth, mPixelHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdCopyImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), ColorBuffer(backBufferIndex)->Layout(mDevice),
+				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		} else {
+			VkImageResolve region = {};
+			region.extent = { mPixelWidth, mPixelHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdResolveImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), ColorBuffer(backBufferIndex)->Layout(mDevice),
+				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
+
+		swap(barrier.oldLayout, barrier.newLayout);
+		swap(barrier.srcAccessMask, barrier.dstAccessMask);
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier
+		);
+		PROFILER_END;
+	}
 }
 
 bool Camera::UpdateFramebuffer(uint32_t backBufferIndex) {

@@ -3,9 +3,7 @@
 #include <Content/AssetDatabase.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
-#include <Core/Input.hpp>
-
-using namespace glm;
+#include <Util/Util.hpp>
 
 class VkCAVE;
 
@@ -34,9 +32,6 @@ public:
 	// Here, index represents the index of all SUITABLE devices
 	ENGINE_EXPORT VkPhysicalDevice GetPhysicalDevice(uint32_t index, const std::vector<const char*>& extensions) const;
 
-	// Asks GLFW if any windows should be closed, and polls GLFW events
-	ENGINE_EXPORT bool PollEvents() const;
-
 	inline VkInstance Instance() const { return mInstance; }
 
 	inline ::AssetDatabase* AssetDatabase() const { return mAssetDatabase; }
@@ -50,6 +45,11 @@ public:
 private:
 	friend class VkCAVE;
 	ENGINE_EXPORT DeviceManager();
+
+	// Asks GLFW if any windows should be closed, and polls GLFW events
+	ENGINE_EXPORT bool PollEvents() const;
+	ENGINE_EXPORT void PresentWindows(const std::vector<std::shared_ptr<Fence>>& fences);
+
 	std::vector<Device*> mDevices;
 	std::vector<Window*> mWindows;
 

@@ -32,8 +32,6 @@ MeshViewer::MeshViewer() : mScene(nullptr) {}
 MeshViewer::~MeshViewer() {
 	for (Object* obj : mObjects)
 		mScene->RemoveObject(obj);
-	for (Object* obj : mObjects)
-		safe_delete(obj);
 }
 
 void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, vector<Object*>& objects, float scale = .05f) {
@@ -63,14 +61,14 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 
 		t *= scale;
 		
-		Object* nodeobj = new Object(node->mName.C_Str());
+		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
 		nodeobj->Parent(nodepair.second);
 		nodeobj->LocalPosition(t.x, t.y, t.z);
 		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
 		scene->AddObject(nodeobj);
-		objects.push_back(nodeobj);
+		objects.push_back(nodeobj.get());
 
 		for (uint32_t i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
@@ -121,19 +119,19 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
 			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), scene->DeviceManager(), aimesh, scale);
 
-			auto meshRenderer = new MeshRenderer(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
-			meshRenderer->Parent(nodeobj);
+			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
+			meshRenderer->Parent(nodeobj.get());
 			meshRenderer->Mesh(mesh);
 			meshRenderer->Material(material);
 
 			scene->AddObject(meshRenderer);
-			objects.push_back(meshRenderer);
+			objects.push_back(meshRenderer.get());
 
 			//printf("%s: <%.2f, %.2f, %.2f> [%.2f, %.2f, %.2f]\n", node->mName.C_Str(), meshRenderer->Bounds().mCenter.x, meshRenderer->Bounds().mCenter.y, meshRenderer->Bounds().mCenter.z, meshRenderer->Bounds().mExtents.x, meshRenderer->Bounds().mExtents.y, meshRenderer->Bounds().mExtents.z);
 		}
 
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
-			nodes.push(make_pair(node->mChildren[i], nodeobj));
+			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
 	}
 }
 

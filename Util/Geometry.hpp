@@ -1,11 +1,7 @@
 #ifndef COLLISION_HPP
 #define COLLISION_HPP
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <Util/Util.hpp>
-
-using namespace glm;
 
 struct Sphere {
 	vec3 mCenter;
