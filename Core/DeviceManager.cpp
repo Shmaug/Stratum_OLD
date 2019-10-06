@@ -145,6 +145,8 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 	uint32_t minImageCount = ~0;
 
+	MouseKeyboardInput* windowInput = new MouseKeyboardInput();
+
 	// create windows
 	for (const auto& it : displays) {
 		uint32_t deviceIndex = it.mDevice;
@@ -159,7 +161,7 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
 
-		auto w = new Window(mInstance, "VkCAVE " + to_string(mWindows.size()), it.mWindowPosition, it.mMonitor);
+		auto w = new Window(mInstance, "VkCAVE " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
 		if (!mDevices[deviceIndex]) mDevices[deviceIndex] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, deviceIndex);
 		w->CreateSwapchain(mDevices[deviceIndex]);
 		minImageCount = gmin(minImageCount, w->mImageCount);
@@ -178,4 +180,9 @@ bool DeviceManager::PollEvents() const {
 			return false;
 	glfwPollEvents();
 	return true;
+}
+
+void DeviceManager::PresentWindows(const vector<shared_ptr<Fence>>& fences){
+	for (Window* w : mWindows)
+		w->Present(fences);
 }

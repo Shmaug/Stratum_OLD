@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 #include <Core/DeviceManager.hpp>
+#include <Input/InputManager.hpp>
 #include <Scene/Scene.hpp>
 #include <ThirdParty/json11.h>
 #include <Util/Util.hpp>
@@ -68,9 +69,8 @@ struct Configuration {
 class VkCAVE {
 private:
 	DeviceManager* mDeviceManager;
+	InputManager* mInputManager;
 	Scene* mScene;
-
-	std::unordered_map<Camera*, Window*> mCameraWindowMap;
 
 	#ifdef _DEBUG
 	VkDebugUtilsMessengerEXT mDebugMessenger;
@@ -145,7 +145,7 @@ private:
 		PROFILER_BEGIN("Render Cameras");
 		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
 		for (const auto& camera : mScene->Cameras()) {
-			PROFILER_BEGIN("Get CommandBuffer and TargetWindow");
+			PROFILER_BEGIN("Get CommandBuffer");
 			shared_ptr<CommandBuffer> commandBuffer;
 			if (commandBuffers.count(camera->Device()))
 				commandBuffer = commandBuffers.at(camera->Device());
@@ -153,79 +153,9 @@ private:
 				commandBuffer = camera->Device()->GetCommandBuffer();
 				commandBuffers.emplace(camera->Device(), commandBuffer);
 			}
-
-			Window* targetWindow = nullptr;
-			if (mCameraWindowMap.count(camera))
-				targetWindow = mCameraWindowMap.at(camera);
 			PROFILER_END;
 
-			// Pre Render
-			PROFILER_BEGIN("Pre Render");
-			if (targetWindow && (camera->PixelWidth() != targetWindow->ClientRect().extent.width || camera->PixelHeight() != targetWindow->ClientRect().extent.height)) {
-				camera->PixelWidth(targetWindow->BackBufferSize().width);
-				camera->PixelHeight(targetWindow->BackBufferSize().height);
-			}
-
 			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex);
-
-			// resolve or copy render target to target window
-			if (targetWindow) {
-				PROFILER_BEGIN("Resolve/Copy RenderTarget");
-				camera->ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
-
-				VkImageMemoryBarrier barrier = {};
-				barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-				barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-				barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.image = targetWindow->CurrentBackBuffer();
-				barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-				barrier.subresourceRange.baseMipLevel = 0;
-				barrier.subresourceRange.levelCount = 1;
-				barrier.subresourceRange.baseArrayLayer = 0;
-				barrier.subresourceRange.layerCount = 1;
-				barrier.srcAccessMask = 0;
-				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-				vkCmdPipelineBarrier(*commandBuffer,
-					VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-					0,
-					0, nullptr,
-					0, nullptr,
-					1, &barrier
-				);
-
-				if (camera->SampleCount() == VK_SAMPLE_COUNT_1_BIT) {
-					VkImageCopy region = {};
-					region.extent = { camera->PixelWidth(), camera->PixelHeight(), 1 };
-					region.dstSubresource.layerCount = 1;
-					region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					region.srcSubresource.layerCount = 1;
-					region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					vkCmdCopyImage(*commandBuffer, camera->ColorBuffer(backBufferIndex)->Image(camera->Device()), camera->ColorBuffer(backBufferIndex)->Layout(commandBuffer->Device()),
-						targetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-				} else {
-					VkImageResolve region = {};
-					region.extent = { camera->PixelWidth(), camera->PixelHeight(), 1 };
-					region.dstSubresource.layerCount = 1;
-					region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					region.srcSubresource.layerCount = 1;
-					region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					vkCmdResolveImage(*commandBuffer, camera->ColorBuffer(backBufferIndex)->Image(camera->Device()), camera->ColorBuffer(backBufferIndex)->Layout(commandBuffer->Device()),
-						targetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-				}
-
-				swap(barrier.oldLayout, barrier.newLayout);
-				swap(barrier.srcAccessMask, barrier.dstAccessMask);
-				vkCmdPipelineBarrier(*commandBuffer,
-					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-					0,
-					0, nullptr,
-					0, nullptr,
-					1, &barrier
-				);
-				PROFILER_END;
-			}
 		}
 		PROFILER_END;
 
@@ -236,7 +166,7 @@ private:
 	}
 
 public:
-	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr)
+	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr)
 #ifdef _DEBUG
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
@@ -244,6 +174,8 @@ public:
 		printf("Initializing...\n");
 		mDeviceManager = new DeviceManager();
 		mDeviceManager->CreateInstance();
+
+		mInputManager = new InputManager();
 		
 		#ifdef _DEBUG
 		if (config->mDebugMessenger) {
@@ -272,26 +204,25 @@ public:
 		 else
 			displays = { {{ {0, 0}, {0, 0} }, -1, 0 } };
 
-		Input::Initialize();
-
 		printf("Creating devices and displays... ");
 		mDeviceManager->Initialize(displays);
 		printf("Done.\n");
 
-		mScene = new Scene(mDeviceManager);
+		mScene = new Scene(mDeviceManager, mInputManager);
 
 		printf("Creating %d window cameras... ", (int)displays.size());
 		for (uint32_t i = 0; i < displays.size(); i++) {
 			auto w = mDeviceManager->GetWindow(i);
-			auto camera = new Camera("Camera", w->Device(), w->Format().format);
+			auto camera = make_shared<Camera>("Camera", w);
 			camera->LocalPosition(displays[i].mCameraPos);
 			camera->LocalRotation(quat(radians(displays[i].mCameraRot)));
 			camera->FieldOfView(radians(displays[i].mCameraFov));
 			camera->Near(displays[i].mCameraNear);
 			camera->Far(displays[i].mCameraFar);
 			mScene->AddObject(camera);
-			mCameraWindowMap.emplace(camera, w);
 		}
+		for (uint32_t i = 0; i < mDeviceManager->WindowCount(); i++)
+			mInputManager->RegisterInputDevice(mDeviceManager->GetWindow(i)->Input());
 		printf("Done.\n");
 	}
 
@@ -341,20 +272,20 @@ public:
 
 			// render cameras
 			fences.clear();
-			Render(&frameTime, mDeviceManager->GetWindow(0)->CurrentBackBufferIndex(), fences);
+			Render(&frameTime, mDeviceManager->GetWindow(0)->CurrentBackBufferIndex(), fences); // TODO: uses backBufferIndex of the first window (assumes they are in sync!)
 
 			// present windows
 			PROFILER_BEGIN("Present");
-			for (uint32_t i = 0; i < mDeviceManager->WindowCount(); i++)
-				mDeviceManager->GetWindow(i)->Present(fences);
+			mDeviceManager->PresentWindows(fences);
 			PROFILER_END;
 			
-			Input::NextFrame();
-			frameTime.mFrameNumber++;
+			for (InputDevice* d : mInputManager->mInputDevices)
+				d->NextFrame();
 
 			#ifdef PROFILER_ENABLE
 			Profiler::FrameEnd();
 			#endif
+			frameTime.mFrameNumber++;
 		}
 
 		for (uint32_t i = 0; i < mDeviceManager->DeviceCount(); i++)
@@ -366,17 +297,13 @@ public:
 	}
 
 	~VkCAVE() {
-		for (auto& c : mCameraWindowMap)
-			delete c.first;
-
-		mScene->Clear();
 		safe_delete(mScene);
-		Input::Destroy();
 
 		#ifdef _DEBUG
 		if (mDebugMessenger != VK_NULL_HANDLE) DestroyDebugUtilsMessengerEXT(mDeviceManager->Instance(), mDebugMessenger, nullptr);
 		#endif
 
+		safe_delete(mInputManager);
 		safe_delete(mDeviceManager);
 	}
 };
@@ -479,7 +406,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	#if defined(WINDOWS) && defined(_DEBUG)
-	//_CrtDumpMemoryLeaks();
+	_CrtDumpMemoryLeaks();
 	#endif
 	return EXIT_SUCCESS;
 }

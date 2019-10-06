@@ -8,11 +8,11 @@ class UIElement;
 
 class UICanvas : public Renderer {
 public:
-	ENGINE_EXPORT UICanvas(const std::string& name, const vec3& size);
+	ENGINE_EXPORT UICanvas(const std::string& name, const vec2& extent);
 	ENGINE_EXPORT ~UICanvas();
 
-	inline vec2 Size(const vec2& size) { mSize = size; Dirty(); }
-	inline vec2 Size() const { return mSize; }
+	inline vec2 Extent(const vec2& size) { mExtent = size; Dirty(); }
+	inline vec2 Extent() const { return mExtent; }
 
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }
 
@@ -23,7 +23,7 @@ public:
 private:
 	bool mVisible;
 	AABB mAABB;
-	vec2 mSize;
+	vec2 mExtent;
 	std::vector<UIElement*> mRootElements;
 
 protected:

@@ -4,18 +4,20 @@
 
 #include <Content/Material.hpp>
 #include <Core/EnginePlugin.hpp>
+#include <Core/DeviceManager.hpp>
+#include <Input/InputManager.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Object.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
 class VkCAVE;
-class DeviceManager;
 class EnginePlugin;
 
 class Scene {
 public:
-	ENGINE_EXPORT void AddObject(Object* object);
+	ENGINE_EXPORT ~Scene();
+	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
@@ -24,6 +26,7 @@ public:
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
 	inline ::DeviceManager* DeviceManager() const { return mDeviceManager; }
+	inline ::InputManager* InputManager() const { return mInputManager; }
 
 	template<class T>
 	inline T* GetPlugin() {
@@ -35,12 +38,12 @@ public:
 
 private:
 	friend class VkCAVE;
-	ENGINE_EXPORT Scene(::DeviceManager* deviceManager);
+	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::InputManager* iputManager);
 
-	ENGINE_EXPORT void Clear();
 
+	::InputManager* mInputManager;
 	::DeviceManager* mDeviceManager;
-	std::vector<Object*> mObjects;
+	std::vector<std::shared_ptr<Object>> mObjects;
 	std::vector<Camera*> mCameras;
 	std::vector<Renderer*> mRenderers;
 	std::vector<EnginePlugin*> mPlugins;

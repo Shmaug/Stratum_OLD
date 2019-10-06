@@ -5,12 +5,12 @@
 
 using namespace std;
 
-UICanvas::UICanvas(const string& name, const vec3& size) : Renderer(name), mSize(size) {};
+UICanvas::UICanvas(const string& name, const vec2& extent) : Renderer(name), mExtent(extent) {};
 UICanvas::~UICanvas() {}
 
 bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(vec3(mSize * .5f, 0), vec3(mSize * .5f, UI_THICKNESS));
+	mAABB = AABB(vec3(0), vec3(mExtent, UI_THICKNESS * .5f));
 	for (UIElement*& e : mRootElements)
 		mAABB.Encapsulate(e->AbsoluteBounds());
 	mAABB *= ObjectToWorld();

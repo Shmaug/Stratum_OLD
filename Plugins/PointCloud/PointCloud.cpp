@@ -2,6 +2,7 @@
 #include <iterator>
 #include <filesystem>
 
+#include <Interface/UICanvas.hpp>
 #include <Util/Profiler.hpp>
 
 #include <assimp/scene.h>
@@ -38,12 +39,10 @@ private:
 
 ENGINE_PLUGIN(PointCloud)
 
-PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mPointSize(0.0025f), mAnimStart(0) {}
+PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mPointSize(0.005f), mAnimStart(0) {}
 PointCloud::~PointCloud() {
 	for (Object* p : mObjects)
 		mScene->RemoveObject(p);
-	for (Object* p : mObjects)
-		safe_delete(p);
 }
 
 void PointCloud::LoadScene(const filesystem::path& filename, float scale) {
@@ -68,17 +67,17 @@ void PointCloud::LoadScene(const filesystem::path& filename, float scale) {
 
 		t *= scale;
 
-		Object* nodeobj = new Object(node->mName.C_Str());
+		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
 		nodeobj->Parent(nodepair.second);
 		nodeobj->LocalPosition(t.x, t.y, t.z);
 		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
 		mScene->AddObject(nodeobj);
-		mObjects.push_back(nodeobj);
+		mObjects.push_back(nodeobj.get());
 
 		if (nodepair.first == aiscene->mRootNode)
-			mSceneRoots.push_back(nodeobj);
+			mSceneRoots.push_back(nodeobj.get());
 
 		for (uint32_t i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
@@ -95,17 +94,17 @@ void PointCloud::LoadScene(const filesystem::path& filename, float scale) {
 				}
 			}
 
-			auto renderer = new PointRenderer(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
-			renderer->Parent(nodeobj);
+			shared_ptr<PointRenderer> renderer = make_shared<PointRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
+			renderer->Parent(nodeobj.get());
 			renderer->Points(pts);
 			renderer->Material(mPointMaterial);
 
 			mScene->AddObject(renderer);
-			mObjects.push_back(renderer);
+			mObjects.push_back(renderer.get());
 		}
 
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
-			nodes.push(make_pair(node->mChildren[i], nodeobj));
+			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
 	}
 }
 
@@ -116,9 +115,9 @@ bool PointCloud::Init(Scene* scene) {
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
 
 	LoadScene("Assets/bunny.obj");
-	LoadScene("Assets/dragon.obj");
-	LoadScene("Assets/bear.obj");
-	LoadScene("Assets/island.obj");
+	//LoadScene("Assets/dragon.obj");
+	//LoadScene("Assets/bear.obj");
+	//LoadScene("Assets/island.obj");
 
 	for (Object* o : mSceneRoots)
 		o->mEnabled = false;
@@ -134,26 +133,16 @@ bool PointCloud::Init(Scene* scene) {
 	mCameraControl->CameraDistance(aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
 	mCameraControl->CameraPivot()->LocalPosition(aabb.mCenter);
 
+	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("PointCloudUI", vec2(1, 1));
+
+	mScene->AddObject(canvas);
+	mObjects.push_back(canvas.get());
+
 	return true;
 }
 
 void PointCloud::Update(const FrameTime& frameTime) {
-	if (Input::KeyDown(GLFW_KEY_UP)) {
-		mPointSize += frameTime.mDeltaTime * 0.0025f;
-		mPointMaterial->SetParameter("PointSize", mPointSize);
-	}
-	if (Input::KeyDown(GLFW_KEY_DOWN)) {
-		mPointSize -= frameTime.mDeltaTime * 0.0025f;
-		mPointMaterial->SetParameter("PointSize", mPointSize);
-	}
-
 	int idx = -1;
-
-	if (mSceneRoots.size() > 0 && Input::KeyDownFirst(GLFW_KEY_F1)) idx = 0;
-	if (mSceneRoots.size() > 1 && Input::KeyDownFirst(GLFW_KEY_F2)) idx = 1;
-	if (mSceneRoots.size() > 2 && Input::KeyDownFirst(GLFW_KEY_F3)) idx = 2;
-	if (mSceneRoots.size() > 3 && Input::KeyDownFirst(GLFW_KEY_F4)) idx = 4;
-	if (mSceneRoots.size() > 4 && Input::KeyDownFirst(GLFW_KEY_F5)) idx = 5;
 
 	if (idx >= 0) {
 		for (Object* o : mSceneRoots)

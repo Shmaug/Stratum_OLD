@@ -30,6 +30,10 @@ static_assert(false, "Not implemented!");
 #define gmax glm::max
 #define gclamp glm::clamp
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+using namespace glm;
+
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v) {
 	std::hash<T> hasher;

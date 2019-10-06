@@ -9,7 +9,7 @@
 #else
 #define PROFILER_BEGIN(label) 
 #define PROFILER_BEGIN_RESUME(label, resume)
-#define PROFILER_END Profiler::EndSample()
+#define PROFILER_END
 #endif
 
 #define PROFILER_FRAME_COUNT 256

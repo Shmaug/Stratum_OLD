@@ -56,7 +56,7 @@ bool Object::Parent(Object* p) {
 				it++;
 
 	mParent = p;
-	if (!p || !p->AddChild(this)) {
+	if (p && !p->AddChild(this)) {
 		mParent = nullptr;
 		Dirty();
 		return false;

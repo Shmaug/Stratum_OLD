@@ -1,13 +1,14 @@
 #pragma once
 
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
 
 #include <Content/Texture.hpp>
 #include <Core/CommandBuffer.hpp>
+#include <Input/MouseKeyboardInput.hpp>
 #include <Util/Util.hpp>
 
 class DeviceManager;
+class Camera;
 
 class Window {
 public:
@@ -23,6 +24,8 @@ public:
 
 	inline std::string Title() const { return mTitle; }
 
+	inline MouseKeyboardInput* Input() const { return mInput; }
+
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
 	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
 	inline VkImageView BackBufferView(uint32_t i) const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[i].mSwapchainImageView; }
@@ -35,16 +38,23 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 private:
+	friend class Camera;
 	friend class DeviceManager;
-	ENGINE_EXPORT Window(VkInstance instance, const std::string& title, VkRect2D position, int monitorIndex = -1);
+	ENGINE_EXPORT Window(VkInstance instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex = -1);
 
 	ENGINE_EXPORT static void WindowPosCallback(GLFWwindow* window, int x, int y);
 	ENGINE_EXPORT static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+	ENGINE_EXPORT static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+	ENGINE_EXPORT static void CursorPosCallback(GLFWwindow* window, double x, double y);
+	ENGINE_EXPORT static void ScrollCallback(GLFWwindow* window, double x, double y);
+	ENGINE_EXPORT static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
 	bool mFullscreen;
 	VkRect2D mWindowedRect;
 	VkRect2D mClientRect;
 	std::string mTitle;
+
+	MouseKeyboardInput* mInput;
 
 	VkInstance mInstance;
 	::Device* mDevice;
@@ -70,6 +80,8 @@ private:
 	std::vector<VkSemaphore> mImageAvailableSemaphores;
 	// next semaphore in mImageAvailableSemaphores
 	uint32_t mImageAvailableSemaphoreIndex;
+
+	Camera* mTargetCamera;
 
 	ENGINE_EXPORT void CreateSwapchain(::Device* device);
 	ENGINE_EXPORT void DestroySwapchain();

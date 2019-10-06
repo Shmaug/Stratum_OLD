@@ -39,8 +39,8 @@ bool UIElement::UpdateTransform() {
 		mAbsolutePosition = mParent->AbsolutePosition() + vec3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, mDepth);
 		mAbsoluteExtent   = mParent->AbsoluteExtent() * mExtent.mScale + mExtent.mOffset;
 	} else {
-		mAbsolutePosition = vec3(mCanvas->Size() * mPosition.mScale + mPosition.mOffset, mDepth);
-		mAbsoluteExtent = mCanvas->Size() * mExtent.mScale + mExtent.mOffset;
+		mAbsolutePosition = vec3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsoluteExtent = mCanvas->Extent() * mExtent.mScale + mExtent.mOffset;
 	}
 
 	mAbsoluteAABB = AABB(mAbsolutePosition + vec3(mAbsoluteExtent, 0), vec3(mAbsoluteExtent, UI_THICKNESS));
