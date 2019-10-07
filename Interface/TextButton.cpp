@@ -117,9 +117,6 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld() * translate(mat4(1), offset);
 	objbuffer->WorldToObject = Canvas()->WorldToObject() * translate(mat4(1), -offset);
 
-	VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex);
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_CAMERA, 1, &camds, 0, nullptr);
-
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 

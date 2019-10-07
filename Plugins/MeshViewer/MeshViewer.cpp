@@ -114,11 +114,11 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				material->SetParameter("Roughness", roughness);
 
 				if (diffuse == aiString("") || diffuse.C_Str()[0] == '*')
-					material->SetParameter("DiffuseTexture", whiteTexture);
+					material->SetParameter("MainTexture", whiteTexture);
 				else {
 					if (filename.has_parent_path())
 						diffuse = filename.parent_path().string() + "/" + diffuse.C_Str();
-					material->SetParameter("DiffuseTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
+					material->SetParameter("MainTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
 				}
 
 				if (normal == aiString("") || normal.C_Str()[0] == '*')
@@ -127,6 +127,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 					if (filename.has_parent_path())
 						normal = filename.parent_path().string() + "/" + normal.C_Str();
 					material->SetParameter("NormalTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(normal.C_Str(), false));
+					material->EnableKeyword("NORMAL_MAP");
 				}
 			}
 
@@ -166,7 +167,7 @@ bool MeshViewer::Init(Scene* scene) {
 	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
 	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
-	fontMat->SetParameter("Texture", font->Texture());
+	fontMat->SetParameter("MainTexture", font->Texture());
 
 	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("PointCloudUI", vec2(.3f, .6f));
 	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");

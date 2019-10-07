@@ -96,9 +96,6 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	objbuffer->ObjectToWorld = ObjectToWorld();
 	objbuffer->WorldToObject = WorldToObject();
 
-	VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex);
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_CAMERA, 1, &camds, 0, nullptr);
-
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 

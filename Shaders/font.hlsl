@@ -21,7 +21,7 @@ struct Glyph {
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> Texture : register(t0);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t0);
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 struct v2f {
@@ -62,7 +62,7 @@ v2f vsmain(uint id : SV_VertexId) {
 }
 
 fs_out fsmain(v2f i) {
-	float4 color = Texture.SampleLevel(Sampler, i.texcoord, 0);
+	float4 color = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
 	fs_out o;
 	o.color = color;
 	o.depthNormal = float4(i.normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);

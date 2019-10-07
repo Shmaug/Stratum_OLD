@@ -68,7 +68,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	subpasses[0].pColorAttachments = colorAttachments;
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
-	mRenderPass = new ::RenderPass(mName + "RenderPass", mDevice, attachments, subpasses);
+	mRenderPass = new ::RenderPass(mName + "RenderPass", this, attachments, subpasses);
 	#pragma endregion
 
 	VkDescriptorSetLayoutBinding binding = {};
@@ -161,7 +161,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	subpasses[0].pColorAttachments = colorAttachments;
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
-	mRenderPass = new ::RenderPass(mName + "RenderPass", mDevice, attachments, subpasses);
+	mRenderPass = new ::RenderPass(mName + "RenderPass", this, attachments, subpasses);
 	#pragma endregion
 
 	VkDescriptorSetLayoutBinding binding = {};

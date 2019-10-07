@@ -1,6 +1,8 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
+#pragma multi_compile NORMAL_MAP
+
 #pragma render_queue 1000
 
 #pragma static_sampler Sampler
@@ -15,9 +17,9 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t0);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> DiffuseTexture : register(t1);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t2);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t0);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t1);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t2);
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
@@ -169,17 +171,17 @@ v2f vsmain(
 }
 
 fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
-	float4 col = DiffuseTexture.Sample(Sampler, i.texcoord) * Color;
+	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
 	clip(col.a - .5);
 
+	float3 normal = normalize(front ? i.normal : -i.normal);
+	#ifdef NORMAL_MAP
 	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
 	bump.xyz = bump.xyz * 2 - 1;
-
-	float3 normal = normalize(front ? i.normal : -i.normal);
 	float3 tangent = normalize(i.tangent);
 	float3 bitangent = normalize(cross(i.normal, i.tangent));
-
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
+	#endif
 
 	MaterialInfo material;
 	material.perceptualRoughness = Roughness;
@@ -198,7 +200,7 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
 
 	fs_out o;
-	o.color = float4(normal, col.a);
+	o.color = float4(eval, col.a);
 	o.depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
 	return o;
 }
