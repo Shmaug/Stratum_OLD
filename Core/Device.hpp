@@ -67,5 +67,7 @@ private:
 
 	#ifdef _DEBUG
 	PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectNameEXT;
+	PFN_vkCmdBeginDebugUtilsLabelEXT CmdBeginDebugUtilsLabelEXT;
+	PFN_vkCmdEndDebugUtilsLabelEXT CmdEndDebugUtilsLabelEXT;
 	#endif
 };

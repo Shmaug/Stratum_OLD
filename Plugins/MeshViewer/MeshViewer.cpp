@@ -3,7 +3,13 @@
 
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/TextRenderer.hpp>
+#include <Interface/UICanvas.hpp>
+#include <Interface/TextButton.hpp>
+#include <Interface/VerticalLayout.hpp>
 #include <Util/Profiler.hpp>
+
+#include <Plugins/CameraControl/CameraControl.hpp>
+
 #include <assimp/scene.h>
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
@@ -23,7 +29,11 @@ public:
 
 private:
 	vector<Object*> mObjects;
+	vector<Object*> mSceneRoots;
 	Scene* mScene;
+
+	Object* LoadScene(const filesystem::path& filename, Shader* shader, float scale = .05f);
+	void SwitchScene(Object* s);
 }; 
 
 ENGINE_PLUGIN(MeshViewer)
@@ -34,19 +44,20 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, vector<Object*>& objects, float scale = .05f) {
-	Texture* brdfTexture  = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
-	Texture* whiteTexture = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/white.png");
-	Texture* bumpTexture  = scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/bump.png", false);
+Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, float scale) {
+	Texture* brdfTexture  = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
+	Texture* whiteTexture = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/white.png");
+	Texture* bumpTexture  = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/bump.png", false);
 
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
 
 	const aiScene* aiscene = aiImportFile(filename.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
-	if (!aiscene) return;
+	if (!aiscene) return nullptr;
 
 	queue<pair<aiNode*, Object*>> nodes;
 	nodes.push(make_pair(aiscene->mRootNode, nullptr));
+	Object* root = nullptr;
 
 	while(!nodes.empty()) {
 		pair<aiNode*, Object*> nodepair = nodes.front();
@@ -67,8 +78,11 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
-		scene->AddObject(nodeobj);
-		objects.push_back(nodeobj.get());
+		mScene->AddObject(nodeobj);
+		mObjects.push_back(nodeobj.get());
+
+		if (nodepair.first == aiscene->mRootNode)
+			root = nodeobj.get();
 
 		for (uint32_t i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
@@ -104,7 +118,7 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 				else {
 					if (filename.has_parent_path())
 						diffuse = filename.parent_path().string() + "/" + diffuse.C_Str();
-					material->SetParameter("DiffuseTexture", scene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
+					material->SetParameter("DiffuseTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
 				}
 
 				if (normal == aiString("") || normal.C_Str()[0] == '*')
@@ -112,20 +126,20 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 				else {
 					if (filename.has_parent_path())
 						normal = filename.parent_path().string() + "/" + normal.C_Str();
-					material->SetParameter("NormalTexture", scene->DeviceManager()->AssetDatabase()->LoadTexture(normal.C_Str(), false));
+					material->SetParameter("NormalTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(normal.C_Str(), false));
 				}
 			}
 
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
-			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), scene->DeviceManager(), aimesh, scale);
+			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(), aimesh, scale);
 
 			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
 			meshRenderer->Parent(nodeobj.get());
 			meshRenderer->Mesh(mesh);
 			meshRenderer->Material(material);
 
-			scene->AddObject(meshRenderer);
-			objects.push_back(meshRenderer.get());
+			mScene->AddObject(meshRenderer);
+			mObjects.push_back(meshRenderer.get());
 
 			//printf("%s: <%.2f, %.2f, %.2f> [%.2f, %.2f, %.2f]\n", node->mName.C_Str(), meshRenderer->Bounds().mCenter.x, meshRenderer->Bounds().mCenter.y, meshRenderer->Bounds().mCenter.z, meshRenderer->Bounds().mExtents.x, meshRenderer->Bounds().mExtents.y, meshRenderer->Bounds().mExtents.z);
 		}
@@ -133,13 +147,63 @@ void LoadScene(const filesystem::path& filename, Scene* scene, Shader* shader, v
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
 			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
 	}
+
+	return root;
+}
+void MeshViewer::SwitchScene(Object* s) {
+	for (Object* o : mSceneRoots)
+		o->mEnabled = (o == s);
+	AABB aabb = s->BoundsHeirarchy();
+	auto cameraControl = mScene->PluginManager()->GetPlugin<CameraControl>();
+	cameraControl->CameraDistance(aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+	cameraControl->CameraPivot()->LocalPosition(aabb.mCenter);
 }
 
 bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
 	Shader* pbrshader  = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/pbr.shader");
-	//LoadScene("Assets/SanMiguel/SanMiguel.gltf", scene, pbrshader, mObjects);
+	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
+	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
+	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
+	fontMat->SetParameter("Texture", font->Texture());
+
+	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("PointCloudUI", vec2(.3f, .6f));
+	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
+	canvas->AddElement(layout);
+	mScene->AddObject(canvas);
+	mObjects.push_back(canvas.get());
+
+	layout->Extent(1.f, 1.f, 0.f, 0.f);
+
+	vector<filesystem::path> datasets {
+		"Assets/bunny.obj",
+		"Assets/dragon.obj",
+		"Assets/bear.obj"
+	};
+
+	for (const auto& c : datasets) {
+		printf("Loading %s ... ", c.string().c_str());
+		Object* o = LoadScene(c, pbrshader);
+		if (!o) { printf("Failed!\n"); continue; }
+		printf("Done.\n");
+		mSceneRoots.push_back(o);
+
+		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
+		canvas->AddElement(btn);
+		layout->AddChild(btn.get());
+		btn->Font(font);
+		btn->Material(fontMat);
+		btn->Extent(1, 1.f / datasets.size(), 0, 0);
+		btn->Text(c.filename().string());
+
+		printf("<%.2f,%.2f>\t<%.2f,%.2f,%.2f>\n", btn->AbsoluteExtent().x, btn->AbsoluteExtent().y, btn->AbsolutePosition().x, btn->AbsolutePosition().y, btn->AbsolutePosition().z);
+
+		canvas->Parent(mScene->Cameras()[0]);
+		canvas->LocalPosition(0.f, 0.f, .1f);
+	}
+
+	SwitchScene(mSceneRoots[0]);
 
 	return true;
 }

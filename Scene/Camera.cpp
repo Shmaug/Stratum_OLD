@@ -252,6 +252,7 @@ void Camera::EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferInde
 	// resolve or copy render target to target window
 	if (mTargetWindow) {
 		PROFILER_BEGIN("Resolve/Copy RenderTarget");
+		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy");
 		ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
 		VkImageMemoryBarrier barrier = {};
@@ -305,6 +306,7 @@ void Camera::EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferInde
 			0, nullptr,
 			1, &barrier
 		);
+		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
 }

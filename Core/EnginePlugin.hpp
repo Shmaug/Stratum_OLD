@@ -12,7 +12,7 @@ class CommandBuffer;
 class DeviceManager;
 class Scene;
 
-class PLUGIN_EXPORT EnginePlugin {
+class EnginePlugin {
 public:
 	inline virtual ~EnginePlugin() {}
 	

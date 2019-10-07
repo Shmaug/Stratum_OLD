@@ -19,17 +19,12 @@
 #include <unordered_map>
 
 #include <Core/DeviceManager.hpp>
+#include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
 #include <Scene/Scene.hpp>
 #include <ThirdParty/json11.h>
 #include <Util/Util.hpp>
 #include <Util/Profiler.hpp>
-
-#ifdef WINDOWS
-typedef EnginePlugin* (__cdecl* CreatePluginProc)(void);
-#else
-static_assert(false, "Not implemented!");
-#endif
 
 using namespace std;
 
@@ -37,14 +32,20 @@ using namespace std;
 #ifdef _DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void* pUserData) {
 	#ifdef WINDOWS
-	OutputDebugString(pCallbackData->pMessageIdName);
-	OutputDebugString(": ");
-	OutputDebugString(pCallbackData->pMessage);
-	OutputDebugString("\n");
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN);
 	#endif
-	cerr << pCallbackData->pMessageIdName << ": " << pCallbackData->pMessage << endl;
-	if (strcmp(pCallbackData->pMessage, "Added messenger") != 0 && strcmp(pCallbackData->pMessage, "Destroyed messenger\n") != 0)
+
+	printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+	
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+		#ifdef WINDOWS
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		#endif
 		throw runtime_error(pCallbackData->pMessage);
+	}
 	return VK_FALSE;
 }
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
@@ -70,69 +71,12 @@ class VkCAVE {
 private:
 	DeviceManager* mDeviceManager;
 	InputManager* mInputManager;
+	PluginManager* mPluginManager;
 	Scene* mScene;
 
 	#ifdef _DEBUG
 	VkDebugUtilsMessengerEXT mDebugMessenger;
 	#endif
-
-	#ifdef WINDOWS
-	vector<HMODULE> mPluginModules;
-	#else
-	static_assert(false, "Not implemented!");
-	#endif
-
-	void LoadPlugins() {
-		for (const auto& p : filesystem::directory_iterator("Plugins")) {
-			#ifdef WINDOWS
-			// load plugin DLLs
-			if (wcscmp(p.path().extension().c_str(), L".dll") == 0) {
-				printf("Loading %S ... ", p.path().c_str());
-				HMODULE m = LoadLibraryW(p.path().c_str());
-				if (m == NULL) {
-					fprintf(stderr, "Failed to load library!\n");
-					continue;
-				}
-				CreatePluginProc proc = (CreatePluginProc)GetProcAddress(m, "CreatePlugin");
-				if (proc == NULL) {
-					fprintf(stderr, "Failed to find create function!\n");
-					if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
-					continue;
-				}
-				EnginePlugin* plugin = proc();
-				if (plugin == nullptr) {
-					fprintf(stderr, "Failed to call CreatePlugin!\n");
-					if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
-					continue;
-				}
-				mScene->mPlugins.push_back(plugin);
-				mPluginModules.push_back(m);
-				printf("Done\n");
-			}
-			#else
-			static_assert(false, "Not implemented!");
-			#endif
-		}
-
-		sort(mScene->mPlugins.begin(), mScene->mPlugins.end(), [](const auto& a, const auto& b) {
-			return a->Priority() < b->Priority();
-		});
-
-		for (const auto& p : mScene->mPlugins)
-			p->Init(mScene);
-	}
-	void UnloadPlugins() {
-		for (auto& p : mScene->mPlugins)
-			safe_delete(p);
-		mScene->mPlugins.clear();
-		#ifdef WINDOWS
-		for (const auto& m : mPluginModules)
-			if (!FreeLibrary(m))
-				cerr << "Failed to unload plugin module" << endl;
-		#else
-		static_assert(false, "Not implemented!");
-		#endif
-	}
 
 	void Render(FrameTime* frameTime, uint32_t backBufferIndex, vector<shared_ptr<Fence>>& fences) {
 		PROFILER_BEGIN("Sort Cameras");
@@ -176,16 +120,17 @@ public:
 		mDeviceManager->CreateInstance();
 
 		mInputManager = new InputManager();
+		mPluginManager = new PluginManager();
 		
 		#ifdef _DEBUG
 		if (config->mDebugMessenger) {
-			VkDebugUtilsMessengerCreateInfoEXT dCreateInfo = {};
-			dCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-			dCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-			dCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-			dCreateInfo.pfnUserCallback = DebugCallback;
+			VkDebugUtilsMessengerCreateInfoEXT msgr = {};
+			msgr.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+			msgr.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			msgr.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+			msgr.pfnUserCallback = DebugCallback;
 			printf("Creating debug messenger... ");
-			VkResult result = CreateDebugUtilsMessengerEXT(mDeviceManager->Instance(), &dCreateInfo, nullptr, &mDebugMessenger);
+			VkResult result = CreateDebugUtilsMessengerEXT(mDeviceManager->Instance(), &msgr, nullptr, &mDebugMessenger);
 			if (result == VK_SUCCESS)
 				printf("Success.\n");
 			else {
@@ -208,7 +153,7 @@ public:
 		mDeviceManager->Initialize(displays);
 		printf("Done.\n");
 
-		mScene = new Scene(mDeviceManager, mInputManager);
+		mScene = new Scene(mDeviceManager, mInputManager, mPluginManager);
 
 		printf("Creating %d window cameras... ", (int)displays.size());
 		for (uint32_t i = 0; i < displays.size(); i++) {
@@ -227,7 +172,7 @@ public:
 	}
 
 	VkCAVE* Loop() {
-		LoadPlugins();
+		mPluginManager->LoadPlugins(mScene);
 
 		chrono::high_resolution_clock clock;
 		auto start = clock.now();
@@ -291,7 +236,7 @@ public:
 		for (uint32_t i = 0; i < mDeviceManager->DeviceCount(); i++)
 			mDeviceManager->GetDevice(i)->FlushCommandBuffers();
 
-		UnloadPlugins();
+		mPluginManager->UnloadPlugins();
 
 		return this;
 	}
@@ -381,7 +326,6 @@ int main(int argc, char* argv[]) {
 	{ 
 		#ifdef WINDOWS
 		WSADATA wsaData;
-
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 			cerr << "WSAStartup failed" << endl;
 		#endif

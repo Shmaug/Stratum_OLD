@@ -3,9 +3,7 @@
 
 #pragma render_queue 5000
 #pragma cull false
-#pragma zwrite false
 #pragma blend_fac src_alpha inv_src_alpha
-
 #pragma static_sampler Sampler
 
 #include <shadercompat.h>
@@ -65,7 +63,6 @@ v2f vsmain(uint id : SV_VertexId) {
 
 fs_out fsmain(v2f i) {
 	float4 color = Texture.SampleLevel(Sampler, i.texcoord, 0);
-	
 	fs_out o;
 	o.color = color;
 	o.depthNormal = float4(i.normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);

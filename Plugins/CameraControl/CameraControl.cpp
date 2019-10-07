@@ -8,7 +8,7 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mCameraDistance(3), mCameraEuler(vec3(0, 0, 0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(vec3(0, 0, 0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
 CameraControl::~CameraControl() {
 	mScene->RemoveObject(mCameraPivot.get());
 	mScene->RemoveObject(mFpsText.get());
@@ -31,14 +31,37 @@ bool CameraControl::Init(Scene* scene) {
 	mFpsText->Font(font);
 	mFpsText->Material(fontMat);
 	mFpsText->Text("0 fps");
-	mFpsText->VerticalAnchor(Top);
+	mFpsText->VerticalAnchor(Maximum);
+	mFpsText->HorizontalAnchor(Minimum);
 
 	scene->AddObject(mFpsText);
 	scene->AddObject(mCameraPivot = make_shared<Object>("CameraPivot"));
+
+	Camera* c = mScene->Cameras()[0];
+	mFpsText->Parent(c);
+	float d = c->Near() + .001f;
+	float x = c->Near() * tanf(c->FieldOfView() * .5f * c->Aspect());
+	float y = c->Near() * tanf(c->FieldOfView() * .5f);
+	mFpsText->LocalPosition(-x, y, d);
+	mFpsText->TextScale(d * .015f);
+
+	for (auto& camera : mScene->Cameras()) {
+		camera->Parent(mCameraPivot.get());
+		camera->LocalPosition(0, 0, -mCameraDistance);
+	}
+
 	return true;
 }
 
 void CameraControl::Update(const FrameTime& frameTime) {
+	Camera* c = mScene->Cameras()[0];
+	mFpsText->Parent(c);
+	float d = c->Near() + .001f;
+	float x = c->Near() * tanf(c->FieldOfView() * .5f * c->Aspect());
+	float y = c->Near() * tanf(c->FieldOfView() * .5f);
+	mFpsText->LocalPosition(-x, y, d);
+	mFpsText->TextScale(d * .015f);
+
 	mCameraDistance = gmax(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);
 
 	vec3 md = vec3(mInput->CursorDelta(), 0);
@@ -59,15 +82,9 @@ void CameraControl::Update(const FrameTime& frameTime) {
 			mCameraPivot->LocalRotation(mCameraEuler);
 		}
 	}
-
-	for (auto& camera : mScene->Cameras()) {
-		camera->Parent(mCameraPivot.get());
-		camera->LocalPosition(0, 0, -mCameraDistance);
-
-		mFpsText->Parent(camera);
-		mFpsText->LocalPosition(camera->WorldToObject() * vec4(camera->ClipToWorld(vec4(-1.f + .01f / camera->Aspect(), -.99f, 0.001f, 1)), 1));
-		mFpsText->TextScale(camera->Near() * .015f);
-	}
+	for (uint32_t i = 0; i < mCameraPivot->ChildCount(); i++)
+		if (Camera* c = dynamic_cast<Camera*>(mCameraPivot->Child(i)))
+			c->LocalPosition(0, 0, -mCameraDistance);
 
 	mFrameTimeAccum += frameTime.mDeltaTime;
 	mFrameCount++;

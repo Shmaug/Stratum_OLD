@@ -49,6 +49,7 @@ if(WIN32)
 	set(WINSDK_VERSION "10.0.18362.0")
 	# Link Windows SDK
 	# This should happen automatically...
+	# Some devices don't have registry access so this doesn't happen?
 	include_directories(
 		"$ENV{WinSDK}/Include/${WINSDK_VERSION}/um"
 		"$ENV{WinSDK}/Include/${WINSDK_VERSION}/ucrt"
@@ -110,6 +111,7 @@ add_library(Engine SHARED
 	"Core/DescriptorSet.cpp"
 	"Core/Device.cpp"
 	"Core/DeviceManager.cpp"
+	"Core/PluginManager.cpp"
 	"Core/RenderPass.cpp"
 	"Core/Sampler.cpp"
 	"Core/Socket.cpp"

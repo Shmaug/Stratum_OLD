@@ -3,6 +3,19 @@
 #include <glm/glm.hpp>
 #include <Util/Util.hpp>
 
+#ifdef _DEBUG
+#define ENABLE_CMD_REGION
+#endif
+
+#ifdef ENABLE_CMD_REGION
+#define BEGIN_CMD_REGION(cmd, label) cmd->BeginLabel(label)
+#define BEGIN_CMD_REGION_COLOR(cmd, label, color) cmd->BeginLabel(label, color)
+#define END_CMD_REGION(cmd) cmd->EndLabel()
+#else
+#define BEGIN_CMD_REGION(cmd, label)
+#define END_CMD_REGION(cmd)
+#endif
+
 class Device;
 class Material;
 class RenderPass;
@@ -24,6 +37,11 @@ class CommandBuffer {
 public:
 	ENGINE_EXPORT ~CommandBuffer();
 	inline operator VkCommandBuffer() const { return mCommandBuffer; }
+
+	#ifdef ENABLE_CMD_REGION
+	ENGINE_EXPORT void BeginLabel(const std::string& label, const vec4& color = vec4(1,1,1,0));
+	ENGINE_EXPORT void EndLabel();
+	#endif
 
 	ENGINE_EXPORT void Reset(const std::string& name = "Command Buffer");
 

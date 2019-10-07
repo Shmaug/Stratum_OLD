@@ -23,9 +23,7 @@ DeviceManager::~DeviceManager() {
 VkPhysicalDevice DeviceManager::GetPhysicalDevice(uint32_t index, const vector<const char*>& extensions) const {
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
-
 	if (deviceCount == 0) return VK_NULL_HANDLE;
-
 	vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
 
@@ -74,7 +72,7 @@ void DeviceManager::CreateInstance() {
 
 	vector<const char*> instanceExtensions {
 		#ifdef _DEBUG
-		VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 		#endif
 	};
 	
@@ -133,7 +131,7 @@ void DeviceManager::CreateInstance() {
 
 void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 	vector<const char*> deviceExtensions {
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME // needed to obtain a swapchain
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME, // needed to obtain a swapchain
 	};
 
 	vector<const char*> validationLayers {
