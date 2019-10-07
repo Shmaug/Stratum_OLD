@@ -145,7 +145,7 @@ bool PointCloud::Init(Scene* scene) {
 	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
 	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
-	fontMat->SetParameter("Texture", font->Texture());
+	fontMat->SetParameter("MainTexture", font->Texture());
 
 	vector<string> datasets {
 		"Assets/bunny.obj",

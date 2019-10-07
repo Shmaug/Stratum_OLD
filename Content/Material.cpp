@@ -1,5 +1,6 @@
 #include <Content/Material.hpp>
 #include <Shaders/shadercompat.h>
+#include <Scene/Camera.hpp>
 
 using namespace std;
 
@@ -95,6 +96,11 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
+
+	if (renderPass->Camera()) {
+		VkDescriptorSet camds = *renderPass->Camera()->DescriptorSet(backBufferIndex);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
+	}
 
 	// set push constant parameters
 	for (auto& m : mParameters) {
