@@ -9,7 +9,7 @@
 
 using namespace std;
 
-TextRenderer::TextRenderer(const string& name) : Renderer(name), mVisible(true), mTextScale(1.f), mHorizontalAnchor(Left), mVerticalAnchor(Top) {}
+TextRenderer::TextRenderer(const string& name) : Renderer(name), mVisible(true), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle) {}
 TextRenderer::~TextRenderer() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
@@ -17,6 +17,7 @@ TextRenderer::~TextRenderer() {
 			safe_delete(d.second.mDescriptorSets[i]);
 			safe_delete(d.second.mGlyphBuffers[i]);
 		}
+		safe_delete(d.second.mDirty);
 		safe_delete(d.second.mGlyphBuffers);
 		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
@@ -45,7 +46,7 @@ uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 void TextRenderer::Text(const string& text) {
 	mText = text;
 	for (auto& d : mDeviceData)
-		d.second.mDirty = true;
+		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
 void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
@@ -54,11 +55,12 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
-		d.mDirty = true;
 		d.mGlyphCount = 0;
+		d.mDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mGlyphBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mObjectBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
 		d.mDescriptorSets = new DescriptorSet * [commandBuffer->Device()->MaxFramesInFlight()];
+		memset(d.mDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
@@ -66,9 +68,9 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
-	if (data.mDirty) {
+	if (data.mDirty[backBufferIndex]) {
 		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
-		data.mDirty = false;
+		data.mDirty[backBufferIndex] = false;
 	}
 
 	if (!data.mGlyphCount) return;

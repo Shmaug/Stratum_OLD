@@ -4,8 +4,8 @@
 
 using namespace std;
 
-UIElement::UIElement(const string& name, UICanvas* canvas)
-	: mName(name), mCanvas(canvas), mParent(nullptr), mPosition({}), mExtent({}), mAbsolutePosition({}), mAbsoluteExtent({}), mTransformDirty(true) {}
+UIElement::UIElement(const string& name)
+	: mName(name), mCanvas(nullptr), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(vec3()), mAbsoluteExtent(vec2()), mTransformDirty(true), mVisible(true) {}
 UIElement::~UIElement() {}
 
 bool UIElement::Parent(UIElement* p) {

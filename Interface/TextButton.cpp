@@ -11,42 +11,44 @@
 
 using namespace std;
 
-TextButton::TextButton(const string& name, UICanvas* canvas)
-	: UIElement(name, canvas), mTextScale(1.f), mHorizontalAnchor(Left), mVerticalAnchor(Top) {}
+TextButton::TextButton(const string& name)
+	: UIElement(name), mTextScale(.00015f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle) {}
 TextButton::~TextButton() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
 			safe_delete(d.second.mObjectBuffers[i]);
 			safe_delete(d.second.mDescriptorSets[i]);
+			safe_delete(d.second.mGlyphBuffers[i]);
 		}
-		safe_delete(d.second.mGlyphBuffer);
+		safe_delete(d.second.mDirty);
+		safe_delete(d.second.mGlyphBuffers);
 		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
 	}
 }
 
-void TextButton::BuildText(Device* device, DeviceData& d) {
+uint32_t TextButton::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
-	vector<TextGlyph> glyphs;
-	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, glyphs, mHorizontalAnchor, mVerticalAnchor);
+	mTempGlyphs.clear();
+	mTempGlyphs.reserve(mText.length());
+	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
 	PROFILER_END;
 
-	if (glyphCount == 0) return;
+	if (glyphCount == 0) return 0;
 
-	PROFILER_BEGIN("Upload Text");
-	if (d.mGlyphBuffer && d.mGlyphCount < glyphCount)
-		safe_delete(d.mGlyphBuffer);
-	if (!d.mGlyphBuffer)
-		d.mGlyphBuffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	d.mGlyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-	d.mGlyphCount = glyphCount;
+	PROFILER_BEGIN("Upload");
+	if (buffer && buffer->Size() < glyphCount * sizeof(TextGlyph))
+		safe_delete(buffer);
+	if (!buffer)
+		buffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	buffer->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
 	PROFILER_END;
+	return glyphCount;
 }
-
 void TextButton::Text(const string& text) {
 	mText = text;
 	for (auto& d : mDeviceData)
-		d.second.mDirty = true;
+		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
 void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
@@ -55,20 +57,22 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
-		d.mDirty = true;
-		d.mGlyphBuffer = nullptr;
 		d.mGlyphCount = 0;
-		d.mObjectBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
+		d.mDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
+		d.mGlyphBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
+		d.mObjectBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
+		d.mDescriptorSets = new DescriptorSet * [commandBuffer->Device()->MaxFramesInFlight()];
+		memset(d.mDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
+		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
 	}
 
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
-	if (data.mDirty) {
-		BuildText(commandBuffer->Device(), data);
-		data.mDirty = false;
+	if (data.mDirty[backBufferIndex]) {
+		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
+		data.mDirty[backBufferIndex] = false;
 	}
 
 	if (!data.mGlyphCount) return;
@@ -85,19 +89,39 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 		data.mDescriptorSets[backBufferIndex]->CreateUniformBufferDescriptor(data.mObjectBuffers[backBufferIndex], OBJECT_BUFFER_BINDING);
 	}
-	data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffer, BINDING_START + 2);
+
+	auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
+	if (bindings.count("Glyphs"))
+		data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
+
+	vec3 offset = AbsolutePosition();
+	switch (mHorizontalAnchor) {
+	case Minimum:
+		offset.x = -AbsoluteExtent().x;
+		break;
+	case Maximum:
+		offset.x = AbsoluteExtent().x;
+		break;
+	}
+	switch (mVerticalAnchor) {
+	case Minimum:
+		offset.y = -AbsoluteExtent().y;
+		break;
+	case Maximum:
+		offset.y = AbsoluteExtent().y;
+		break;
+	}
+	offset.z = AbsolutePosition().z;
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
-	objbuffer->WorldToObject = Canvas()->WorldToObject();
+	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld() * translate(mat4(1), offset);
+	objbuffer->WorldToObject = Canvas()->WorldToObject() * translate(mat4(1), -offset);
 
 	VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex);
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_CAMERA, 1, &camds, 0, nullptr);
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-
-	vkCmdPushConstants(*commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float), &mVerticalOffset);
 
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 }

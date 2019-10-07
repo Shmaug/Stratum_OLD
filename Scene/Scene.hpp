@@ -3,8 +3,8 @@
 #include <memory>
 
 #include <Content/Material.hpp>
-#include <Core/EnginePlugin.hpp>
 #include <Core/DeviceManager.hpp>
+#include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Object.hpp>
@@ -12,8 +12,14 @@
 #include <Util/Util.hpp>
 
 class VkCAVE;
-class EnginePlugin;
+class PluginManager;
 
+/*
+Holds scene Objects. In general, plugins will add objects during their lifetime,
+and remove objects during or at the end of their lifetime.
+This makes the shared_ptr destroy when the plugin removes the object, allowing the plugin's module
+to free the memory.
+*/
 class Scene {
 public:
 	ENGINE_EXPORT ~Scene();
@@ -27,24 +33,16 @@ public:
 
 	inline ::DeviceManager* DeviceManager() const { return mDeviceManager; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
-
-	template<class T>
-	inline T* GetPlugin() {
-		for (EnginePlugin* p : mPlugins)
-			if (T* t = dynamic_cast<T*>(p))
-				return t;
-		return nullptr;
-	}
+	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 
 private:
 	friend class VkCAVE;
-	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::InputManager* iputManager);
-
+	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::InputManager* iputManager, ::PluginManager* pluginManager);
 
 	::InputManager* mInputManager;
 	::DeviceManager* mDeviceManager;
+	::PluginManager* mPluginManager;
 	std::vector<std::shared_ptr<Object>> mObjects;
 	std::vector<Camera*> mCameras;
 	std::vector<Renderer*> mRenderers;
-	std::vector<EnginePlugin*> mPlugins;
 };

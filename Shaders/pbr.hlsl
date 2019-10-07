@@ -173,14 +173,11 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 	clip(col.a - .5);
 
 	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
-	bump.xy = bump.xy * 2 - 1;
-	bump.xyz = normalize(bump.xyz);
+	bump.xyz = bump.xyz * 2 - 1;
 
-	float3 normal = normalize(i.normal);
+	float3 normal = normalize(front ? i.normal : -i.normal);
 	float3 tangent = normalize(i.tangent);
 	float3 bitangent = normalize(cross(i.normal, i.tangent));
-
-	if (!front) normal = -normal;
 
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 
@@ -201,7 +198,7 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
 
 	fs_out o;
-	o.color = float4(eval, col.a);
+	o.color = float4(normal, col.a);
 	o.depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
 	return o;
 }

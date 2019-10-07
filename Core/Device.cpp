@@ -13,6 +13,8 @@ Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector
 
 	#ifdef _DEBUG
 	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
+	CmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
+	CmdEndDebugUtilsLabelEXT   = (PFN_vkCmdEndDebugUtilsLabelEXT)  vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
 	#endif
 
 	mPhysicalDevice = physicalDevice;

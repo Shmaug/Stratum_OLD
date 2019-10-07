@@ -195,7 +195,7 @@ float Font::Kerning(uint32_t from, uint32_t to) const {
 	return mGlyphs[from].mKerning[to];
 };
 
-uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyphs, HorizontalTextAnchor horizontalAnchor, VerticalTextAnchor verticalAnchor) const {
+uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyphs, TextAnchor horizontalAnchor, TextAnchor verticalAnchor) const {
 	glyphs.resize(str.size());
 
 	vec2 p(0);
@@ -216,14 +216,14 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 
 		float x = 0.f;
 		switch (horizontalAnchor) {
-		case Left:
+		case Minimum:
 			lineMin = 0;
 			lineMax = 0;
 			return;
-		case Center:
+		case Middle:
 			x = (lineMax + lineMin) * .5f;
 			break;
-		case Right:
+		case Maximum:
 			x = lineMax;
 			break;
 		}
@@ -267,13 +267,13 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 
 	float verticalOffset = 0;
 	switch (verticalAnchor) {
-	case Bottom:
+	case Minimum:
 		verticalOffset = (p.y - ly) * scale;
 		break;
 	case Middle:
 		verticalOffset = (p.y - ly) * scale * .5f;
 		break;
-	case Top:
+	case Maximum:
 		verticalOffset = -ly * scale;
 		break;
 	}

@@ -9,6 +9,8 @@ struct UDim2 {
 	vec2 mScale;
 	// World-space offset
 	vec2 mOffset;
+	UDim2() : mScale(vec2()), mOffset(vec2()) {}
+	UDim2(const vec2& scale, const vec2& offset) : mScale(scale), mOffset(offset) {}
 };
 
 class UIElement {
@@ -16,7 +18,7 @@ public:
 	bool mVisible;
 	const std::string mName;
 
-	ENGINE_EXPORT UIElement(const std::string& name, UICanvas* mCanvas);
+	ENGINE_EXPORT UIElement(const std::string& name);
 	ENGINE_EXPORT ~UIElement();
 
 	inline UIElement* Parent() const { return mParent; }
@@ -37,7 +39,9 @@ public:
 
 	// Top-left corner, relative to canvas
 	inline void Position(const UDim2& p) { mPosition = p; Dirty(); }
+	inline void Position(float sx, float sy, float ox, float oy) { mPosition.mScale.x = sx; mPosition.mScale.y = sy; mPosition.mOffset.x = ox; mPosition.mOffset.y = oy; Dirty(); }
 	inline void Extent(const UDim2& s) { mExtent = s; Dirty(); }
+	inline void Extent(float sx, float sy, float ox, float oy) { mExtent.mScale.x = sx; mExtent.mScale.y = sy; mExtent.mOffset.x = ox; mExtent.mOffset.y = oy; Dirty(); }
 	inline void Depth(float d) { mDepth = d; Dirty(); }
 
 	// Top-left corner, relative to canvas

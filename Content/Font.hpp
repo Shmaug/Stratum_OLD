@@ -22,11 +22,8 @@ struct TextGlyph {
 	vec2 mUV;
 	vec2 mUVSize;
 };
-enum HorizontalTextAnchor {
-	Left, Center, Right
-};
-enum VerticalTextAnchor {
-	Top, Middle, Bottom
+enum TextAnchor {
+	Minimum, Middle, Maximum
 };
 
 class AssetDatabase;
@@ -43,7 +40,7 @@ public:
 	ENGINE_EXPORT const FontGlyph* Glyph(uint32_t c) const;
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
-	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyph, HorizontalTextAnchor horizontalAnchor = Left, VerticalTextAnchor verticalAnchor = Bottom) const;
+	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
 
 	inline float PixelSize() const { return mPixelSize; };
 	inline float LineSpacing() const { return mLineSpace; };
