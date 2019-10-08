@@ -165,11 +165,11 @@ bool MeshViewer::Init(Scene* scene) {
 
 	Shader* pbrshader  = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/pbr.shader");
 	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
+	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
 
-	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("PointCloudUI", vec2(.3f, .6f));
+	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("MeshViewerPanel", vec2(.1f, 1.f));
 	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
 	canvas->AddElement(layout);
 	mScene->AddObject(canvas);
@@ -190,6 +190,9 @@ bool MeshViewer::Init(Scene* scene) {
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
 
+		float mx = gmax(gmax(o->BoundsHeirarchy().mExtents.x, o->BoundsHeirarchy().mExtents.y), o->BoundsHeirarchy().mExtents.z);
+		o->LocalScale(1.f / mx);
+
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
 		canvas->AddElement(btn);
 		layout->AddChild(btn.get());
@@ -197,12 +200,10 @@ bool MeshViewer::Init(Scene* scene) {
 		btn->Material(fontMat);
 		btn->Extent(1, 1.f / datasets.size(), 0, 0);
 		btn->Text(c.filename().string());
-
-		printf("<%.2f,%.2f>\t<%.2f,%.2f,%.2f>\n", btn->AbsoluteExtent().x, btn->AbsoluteExtent().y, btn->AbsolutePosition().x, btn->AbsolutePosition().y, btn->AbsolutePosition().z);
-
-		canvas->Parent(mScene->Cameras()[0]);
-		canvas->LocalPosition(0.f, 0.f, .1f);
+		btn->TextScale(btn->AbsoluteExtent().y * .3f);
 	}
+	layout->UpdateLayout();
+	canvas->LocalPosition(-1.f, .5f, 0.f);
 
 	SwitchScene(mSceneRoots[0]);
 
