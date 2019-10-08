@@ -12,7 +12,7 @@
 using namespace std;
 
 TextButton::TextButton(const string& name)
-	: UIElement(name), mTextScale(.00015f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle) {}
+	: UIElement(name), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle) {}
 TextButton::~TextButton() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {

@@ -41,10 +41,14 @@ public:
 
 	inline void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
 	inline void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
+	inline void LocalScale(float x) { mLocalScale.x = x; mLocalScale.y = x; mLocalScale.z = x; Dirty(); }
 
 	ENGINE_EXPORT bool EnabledHeirarchy();
 	ENGINE_EXPORT virtual AABB Bounds();
 	ENGINE_EXPORT virtual AABB BoundsHeirarchy();
+
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* colorMaterial) {};
+
 
 private:
 	friend class Scene;

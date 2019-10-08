@@ -70,7 +70,7 @@ bool Starmap::Init(Scene* scene, DeviceManager* deviceManager) {
 	mScene = scene;
 
 	Shader* fontshader = deviceManager->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = deviceManager->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24.f, 1.f / 24.f);
+	Font* font = deviceManager->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
 
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("Texture", font->Texture());

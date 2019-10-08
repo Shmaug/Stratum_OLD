@@ -27,8 +27,8 @@ Mesh* AssetDatabase::LoadMesh(const std::string& filename, float scale) {
 	if (!asset) asset = new Mesh(filename, mDeviceManager, filename, scale);
 	return (Mesh*)asset;
 }
-Font* AssetDatabase::LoadFont(const std::string& filename, float pixelSize, float scale) {
-	Asset*& asset = mAssets[filename];
-	if (!asset) asset = new Font(filename, mDeviceManager, filename, pixelSize, scale);
+Font* AssetDatabase::LoadFont(const std::string& filename, uint32_t pixelHeight) {
+	Asset*& asset = mAssets[filename + to_string(pixelHeight)];
+	if (!asset) asset = new Font(filename, mDeviceManager, filename, (float)pixelHeight, 1.f / pixelHeight);
 	return (Font*)asset;
 }
