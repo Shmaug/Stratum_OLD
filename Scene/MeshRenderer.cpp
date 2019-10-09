@@ -1,8 +1,7 @@
-#include <glm/gtx/quaternion.hpp>
-
 #include <Core/DescriptorSet.hpp>
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/Camera.hpp>
+#include <Scene/Scene.hpp>
 
 #include <Shaders/shadercompat.h>
 
@@ -30,8 +29,8 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
-		d.mObjectBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
+		d.mObjectBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
+		d.mDescriptorSets = new DescriptorSet * [commandBuffer->Device()->MaxFramesInFlight()];
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
 	}
@@ -42,10 +41,17 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 		data.mObjectBuffers[backBufferIndex] = new Buffer(mName + " ObjectBuffer", commandBuffer->Device(), sizeof(ObjectBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		data.mObjectBuffers[backBufferIndex]->Map();
 	}
+	auto shader = material->GetShader(commandBuffer->Device());
 	if (!data.mDescriptorSets[backBufferIndex]) {
-		auto shader = material->GetShader(commandBuffer->Device());
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 		data.mDescriptorSets[backBufferIndex]->CreateUniformBufferDescriptor(data.mObjectBuffers[backBufferIndex], OBJECT_BUFFER_BINDING);
+	}
+	if (shader->mDescriptorBindings.count("Lights"))
+		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(Scene()->LightBuffer(commandBuffer->Device(), backBufferIndex), shader->mDescriptorBindings.at("Lights").second.binding);
+	if (shader->mPushConstants.count("LightCount")) {
+		uint32_t lc = Scene()->Lights().size();
+		auto range = shader->mPushConstants.at("LightCount");
+		vkCmdPushConstants(*commandBuffer, layout, range.stageFlags, range.offset, range.size, &lc);
 	}
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();

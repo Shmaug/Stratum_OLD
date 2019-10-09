@@ -205,6 +205,24 @@ bool MeshViewer::Init(Scene* scene) {
 	layout->UpdateLayout();
 	canvas->LocalPosition(-1.f, .5f, 0.f);
 
+	shared_ptr<Light> light0 = make_shared<Light>("Point");
+	light0->Type(Point);
+	light0->Intensity(100.f);
+	light0->Range(5.f);
+	light0->Color(float3(1.f, .5f, .5f));
+	light0->LocalPosition(.75f, .5f, 0);
+	mObjects.push_back(light0.get());
+	mScene->AddObject(light0);
+
+	shared_ptr<Light> light1 = make_shared<Light>("Spot");
+	light1->Type(Point);
+	light1->Intensity(100.f);
+	light1->Range(5.f);
+	light1->LocalPosition(.5f, 1.f, .5f);
+	light1->LocalRotation(quaternion(radians(float3(45.f, 0, 45.f))));
+	mObjects.push_back(light1.get());
+	mScene->AddObject(light1);
+
 	SwitchScene(mSceneRoots[0]);
 
 	return true;

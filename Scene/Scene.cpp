@@ -7,8 +7,14 @@ using namespace std;
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager) {}
 Scene::~Scene(){
+	for (auto& kp : mLightBuffers) {
+		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++)
+			safe_delete(kp.second[i]);
+		safe_delete_array(kp.second);
+	}
 	mCameras.clear();
 	mRenderers.clear();
+	mLights.clear();
 	mObjects.clear();
 }
 
@@ -32,15 +38,26 @@ void Scene::Update(const FrameTime& frameTime) {
 void Scene::AddObject(shared_ptr<Object> object) {
 	mObjects.push_back(object);
 	object->mScene = this;
-	
+
+	if (auto l = dynamic_cast<Light*>(object.get()))
+		mLights.push_back(l);
 	if (auto c = dynamic_cast<Camera*>(object.get()))
 		mCameras.push_back(c);
-
 	if (auto r = dynamic_cast<Renderer*>(object.get()))
 		mRenderers.push_back(r);
 }
 void Scene::RemoveObject(Object* object) {
 	if (!object) return;
+
+	if (auto l = dynamic_cast<Light*>(object))
+		for (auto it = mLights.begin(); it != mLights.end();) {
+			if (*it == l) {
+				it = mLights.erase(it);
+				break;
+			} else
+				it++;
+		}
+
 	if (auto c = dynamic_cast<Camera*>(object))
 		for (auto it = mCameras.begin(); it != mCameras.end();) {
 			if (*it == c) {
@@ -74,8 +91,31 @@ void Scene::RemoveObject(Object* object) {
 void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
 	camera->PreRender();
 
+	if (mLightBuffers.count(commandBuffer->Device()) == 0) {
+		Buffer** b = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
+		memset(b, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
+		mLightBuffers.emplace(commandBuffer->Device(), b);
+	}
+
+	Buffer*& lb = mLightBuffers.at(commandBuffer->Device())[backBufferIndex];
+	if (lb && lb->Size() < mLights.size() * sizeof(GPULight))
+		safe_delete(lb);
+	if (!lb) {
+		lb = new Buffer("Light Buffer", commandBuffer->Device(), mLights.size() * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		lb->Map();
+	}
+	GPULight* lights = (GPULight*)lb->MappedData();
+	for (uint32_t i = 0; i < mLights.size(); i++) {
+		lights[i].WorldPosition = mLights[i]->WorldPosition();
+		lights[i].Range = mLights[i]->Range();
+		lights[i].Color = mLights[i]->Color() * mLights[i]->Intensity();
+		lights[i].Angle = mLights[i]->SpotAngle();
+		lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, 1);
+		lights[i].Type = mLights[i]->Type();
+	}
+
 	PROFILER_BEGIN("Sort");
-	sort(mRenderers.begin(), mRenderers.end(), [](const auto& a, const auto& b) {
+	sort(mRenderers.begin(), mRenderers.end(), [](Renderer* a, Renderer* b) {
 		return a->RenderQueue() < b->RenderQueue();
 	});
 	PROFILER_END;

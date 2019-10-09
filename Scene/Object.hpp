@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Core/CommandBuffer.hpp>
-#include <Math/Geometry.hpp>
 #include <Util/Util.hpp>
 
 class Camera;
@@ -14,6 +13,8 @@ public:
 
 	ENGINE_EXPORT Object(const std::string& name);
 	ENGINE_EXPORT ~Object();
+
+	inline ::Scene* Scene() const { return mScene; }
 
 	inline Object* Parent() const { return mParent; }
 	ENGINE_EXPORT bool Parent(Object* obj);
@@ -48,8 +49,8 @@ public:
 
 
 private:
-	friend class Scene;
-	Scene* mScene;
+	friend class ::Scene;
+	::Scene* mScene;
 
 	bool mTransformDirty;
 	float3 mLocalPosition;

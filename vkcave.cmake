@@ -33,7 +33,6 @@ include_directories(
 	"$ENV{VULKAN_SDK}/include"
 	"$ENV{SPIRV_CROSS_HOME}/include"
 	"$ENV{GLFW_HOME}/include"
-	"$ENV{GLM_HOME}/include"
 	"$ENV{ASSIMP_HOME}/include" )
 
 if(WIN32)

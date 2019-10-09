@@ -37,6 +37,13 @@ void UICanvas::Dirty() {
 		e->Dirty();
 }
 
+uint32_t UICanvas::RenderQueue() {
+	uint32_t q = 0;
+	for (auto e : mElements)
+		q = max(q, e->RenderQueue());
+	return q;
+}
+
 void UICanvas::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
 	for (auto e : mElements)
 		e->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);

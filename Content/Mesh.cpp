@@ -104,12 +104,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 				mn = vertex.position;
 				mx = vertex.position;
 			} else {
-				mn.x = fminf(vertex.position.x, mn.x);
-				mn.y = fminf(vertex.position.y, mn.y);
-				mn.z = fminf(vertex.position.z, mn.z);
-				mx.x = fmaxf(vertex.position.x, mx.x);
-				mx.y = fmaxf(vertex.position.y, mx.y);
-				mx.z = fmaxf(vertex.position.z, mx.z);
+				mn = vmin(vertex.position, mn);
+				mx = vmax(vertex.position, mx);
 			}
 
 			vertices.push_back(vertex);
@@ -237,17 +233,17 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 	float3 mn, mx;
 
 	// append vertices, keep track of bounding box
-	for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+	for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
 		Vertex& vertex = vertices[i];
 
-		vertex.position = { (float)mesh->mVertices[i].x, (float)mesh->mVertices[i].y, (float)mesh->mVertices[i].z };
-		if (mesh->HasNormals()) vertex.normal = { (float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z };
+		vertex.position = float3((float)mesh->mVertices[i].x, (float)mesh->mVertices[i].y, (float)mesh->mVertices[i].z);
+		if (mesh->HasNormals()) vertex.normal = float3((float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z);
 		if (mesh->HasTangentsAndBitangents()) {
-			vertex.tangent = { (float)mesh->mTangents[i].x, (float)mesh->mTangents[i].y, (float)mesh->mTangents[i].z, 1.f };
+			vertex.tangent = float4((float)mesh->mTangents[i].x, (float)mesh->mTangents[i].y, (float)mesh->mTangents[i].z, 1.f);
 			float3 bt = float3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
 			vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
 		}
-		if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
+		if (mesh->HasTextureCoords(0)) vertex.uv = float2((float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y);
 		vertex.position *= scale;
 
 		if (i == 0) {

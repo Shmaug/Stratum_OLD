@@ -14,17 +14,17 @@ struct AABB {
 	AABB(const float3& center, const float3& extents) : mCenter(center), mExtents(extents) {}
 	AABB(const AABB& aabb) : mCenter(aabb.mCenter), mExtents(aabb.mExtents) {}
 	AABB(const AABB& aabb, const float4x4& transform) {
-		float3 mn = mCenter - mExtents;
-		float3 mx = mCenter + mExtents;
+		float3 mn = aabb.mCenter - aabb.mExtents;
+		float3 mx = aabb.mCenter + aabb.mExtents;
 		float3 corners[8] {
-			mx,
-			float3(mn.x, mx.y, mx.z),
-			float3(mx.x, mx.y, mn.z),
-			float3(mn.x, mx.y, mn.z),
-			float3(mx.x, mn.y, mx.z),
-			float3(mn.x, mn.y, mx.z),
-			float3(mx.x, mn.y, mn.z),
-			mn,
+			mx,							// 1,1,1
+			float3(mn.x, mx.y, mx.z),	// 0,1,1
+			float3(mx.x, mx.y, mn.z),	// 1,1,0
+			float3(mn.x, mx.y, mn.z),	// 0,1,0
+			float3(mx.x, mn.y, mx.z),	// 1,0,1
+			float3(mn.x, mn.y, mx.z),	// 0,0,1
+			float3(mx.x, mn.y, mn.z),	// 1,0,0
+			mn,							// 0,0,0
 		};
 
 		for (uint32_t i = 0; i < 8; i++)
@@ -88,14 +88,14 @@ struct AABB {
 		float3 mn = mCenter - mExtents;
 		float3 mx = mCenter + mExtents;
 		float3 corners[8]{
-			mx,
-			float3(mn.x, mx.y, mx.z),
-			float3(mx.x, mx.y, mn.z),
-			float3(mn.x, mx.y, mn.z),
-			float3(mx.x, mn.y, mx.z),
-			float3(mn.x, mn.y, mx.z),
-			float3(mx.x, mn.y, mn.z),
-			mn,
+			mx,							// 1,1,1
+			float3(mn.x, mx.y, mx.z),	// 0,1,1
+			float3(mx.x, mx.y, mn.z),	// 1,1,0
+			float3(mn.x, mx.y, mn.z),	// 0,1,0
+			float3(mx.x, mn.y, mx.z),	// 1,0,1
+			float3(mn.x, mn.y, mx.z),	// 0,0,1
+			float3(mx.x, mn.y, mn.z),	// 1,0,0
+			mn,							// 0,0,0
 		};
 
 		for (uint32_t i = 0; i < 8; i++)
@@ -103,7 +103,6 @@ struct AABB {
 
 		mn = corners[0];
 		mx = corners[0];
-
 		for (uint32_t i = 1; i < 8; i++) {
 			mn = vmin(mn, corners[i]);
 			mx = vmax(mx, corners[i]);

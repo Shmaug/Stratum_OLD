@@ -14,6 +14,7 @@
 
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
+[[vk::binding(BINDING_START + 4, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t3);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
@@ -26,7 +27,8 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
-}
+	uint LightCount;
+};
 
 struct v2f {
 	float4 position : SV_Position;
@@ -40,17 +42,12 @@ struct fs_out {
 	float4 depthNormal : SV_Target1;
 };
 
-float microfacetDistribution(float roughness, float NdotH) {
+float MicrofacetDistribution(float roughness, float NdotH) {
 	float roughness2 = roughness * roughness;
 	float f = (NdotH * roughness2 - NdotH) * NdotH + 1;
 	return roughness2 / (PI * f * f + 1e-7);
 }
 float OneMinusReflectivityFromMetallic(float metallic) {
-	// We'll need oneMinusReflectivity, so
-	//   1-reflectivity = 1-lerp(dielectricSpec, 1, metallic) = lerp(1-dielectricSpec, 0, metallic)
-	// store (1-dielectricSpec) in unity_ColorSpaceDielectricSpec.a, then
-	//   1-reflectivity = lerp(alpha, 0, metallic) = alpha + metallic*(0 - alpha) =
-	//                  = alpha - metallic * alpha
 	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
 	return oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
 }
@@ -72,9 +69,6 @@ float pow5(float x) {
 	return x2 * x2 * x;
 }
 
-float PerceptualRoughnessToRoughness(float perceptualRoughness) {
-	return perceptualRoughness * perceptualRoughness;
-}
 float3 FresnelTerm(float3 F0, float cosA) {
 	return F0 + (1 - F0) * pow5(1 - cosA);
 }
@@ -118,12 +112,12 @@ float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 vie
 	// HACK: theoretically we should divide diffuseTerm by Pi and not multiply specularTerm!
 	// BUT 1) that will make shader look significantly darker than Legacy ones
 	// and 2) on engine side "Non-important" lights have to be divided by Pi too in cases when they are injected into ambient SH
-	float roughness = PerceptualRoughnessToRoughness(material.perceptualRoughness);
+	float roughness = material.perceptualRoughness * material.perceptualRoughness;
 
 	// GGX with roughtness to 0 would mean no specular at all, using max(roughness, 0.002) here to match HDrenderloop roughtness remapping.
 	roughness = max(roughness, 0.002);
 	float V = SmithJointGGXVisibilityTerm(nl, nv, roughness);
-	float D = microfacetDistribution(nh, roughness);
+	float D = MicrofacetDistribution(nh, roughness);
 
 	float specularTerm = V * D * PI; // Torrance-Sparrow model, Fresnel is applied later
 
@@ -141,7 +135,7 @@ float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 vie
 	return material.diffuseColor * diffuseTerm + specularTerm * FresnelTerm(material.specularColor, lh);
 }
 float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float3 diffuseLight, float3 specularLight) {
-	float roughness = PerceptualRoughnessToRoughness(material.perceptualRoughness);
+	float roughness = material.perceptualRoughness * material.perceptualRoughness;
 	roughness = max(roughness, 0.002);
 
 	// surfaceReduction = Int D(NdotH) * NdotH * Id(NdotL>0) dH = 1/(roughness^2+1)
@@ -187,16 +181,31 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 	material.perceptualRoughness = Roughness;
 	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
 
-	float3 view = Camera.Position - i.worldPos.xyz;
+	float3 view = Camera.Position - i.worldPos;
 	float depth = length(view);
 	view /= depth;
 
 	float3 eval = 0;
 	float3 reflection = normalize(reflect(-view, normal));
-	float3 diffuseLight = 0.5;// SampleBackground(reflection, 1).rgb;
-	float3 specularLight = SampleBackground(reflection, material.perceptualRoughness).rgb;
 
-	eval += ShadePoint(material, normalize(float3(.5, 1, .25)), normal, view);
+	for (uint l = 0; l < LightCount; l++) {
+		float3 toLight = Lights[l].Direction;
+		float attenuation = 1;
+		if (Lights[l].Type > LIGHT_SUN) {
+			toLight = Lights[l].WorldPosition - i.worldPos;
+			attenuation = dot(toLight, toLight);
+			toLight /= sqrt(attenuation);
+			attenuation = 1 / (1 + attenuation);
+			if (Lights[l].Type == LIGHT_SPOT) {
+
+			}
+			break;
+		}
+		eval += attenuation * Lights[l].Color * ShadePoint(material, toLight, normal, view);
+	}
+
+	float3 diffuseLight = 0.15;// SampleBackground(reflection, 1).rgb;
+	float3 specularLight = SampleBackground(reflection, material.perceptualRoughness).rgb;
 	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
 
 	fs_out o;

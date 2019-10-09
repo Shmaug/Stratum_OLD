@@ -327,7 +327,6 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 	file.read(reinterpret_cast<char*>(&mRasterizationState.polygonMode), sizeof(VkPolygonMode));
 	file.read(reinterpret_cast<char*>(&mBlendState), sizeof(VkPipelineColorBlendAttachmentState));
 	file.read(reinterpret_cast<char*>(&mDepthStencilState), sizeof(VkPipelineDepthStencilStateCreateInfo));
-
 }
 Shader::~Shader() {
 	for (auto& d : mDeviceData) {
