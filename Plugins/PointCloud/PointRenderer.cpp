@@ -26,11 +26,11 @@ void PointRenderer::Points(const vector<Point>& points) {
 	mPoints = points;
 	if (!points.size()) return;
 
-	vec3 mn = vec3(points[0].mPosition);
-	vec3 mx = vec3(points[0].mPosition);
+	float3 mn = points[0].mPosition.xyz;
+	float3 mx = points[0].mPosition.xyz;
 	for (uint32_t i = 1; i < points.size(); i++) {
-		mn = gmin(vec3(points[i].mPosition), mn);
-		mx = gmax(vec3(points[i].mPosition), mx);
+		mn = vmin(points[i].mPosition.xyz, mn);
+		mx = vmax(points[i].mPosition.xyz, mx);
 	}
 	mPointAABB = AABB((mn + mx) * .5f, (mx - mn) * .5f);
 

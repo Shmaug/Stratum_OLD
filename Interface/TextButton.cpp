@@ -94,7 +94,7 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 	if (bindings.count("Glyphs"))
 		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
 
-	vec3 offset = AbsolutePosition();
+	float3 offset = AbsolutePosition();
 	switch (mHorizontalAnchor) {
 	case Minimum:
 		offset.x = -AbsoluteExtent().x;
@@ -114,8 +114,8 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 	offset.z = AbsolutePosition().z;
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld() * translate(mat4(1), offset);
-	objbuffer->WorldToObject = Canvas()->WorldToObject() * translate(mat4(1), -offset);
+	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld() * translate(offset);
+	objbuffer->WorldToObject = Canvas()->WorldToObject() * translate(-offset);
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);

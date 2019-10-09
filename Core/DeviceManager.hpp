@@ -13,8 +13,8 @@ public:
 		int mMonitor;
 		int mDevice;
 
-		vec3 mCameraPos;
-		vec3 mCameraRot;
+		float3 mCameraPos;
+		float3 mCameraRot;
 		float mCameraFov;
 		float mCameraNear;
 		float mCameraFar;

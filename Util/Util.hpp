@@ -10,6 +10,8 @@
 #include <string>
 #include <iostream>
 
+#include <Math/Geometry.hpp>
+
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)
@@ -24,20 +26,6 @@ static_assert(false, "Not implemented!");
 
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
-
-#define gmin glm::min
-#define gmax glm::max
-#define gclamp glm::clamp
-
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-using namespace glm;
-
-template <class T>
-inline void hash_combine(std::size_t& seed, const T& v) {
-	std::hash<T> hasher;
-	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
 
 struct SwapChainSupportDetails {
 	VkSurfaceCapabilitiesKHR mCapabilities;

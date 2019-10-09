@@ -14,13 +14,6 @@ else()
 	# https://www.glfw.org/download.html
 endif()
 
-if(DEFINED ENV{GLM_HOME})
-    message(STATUS "Found GLM_HOME")
-else()
-    message(FATAL_ERROR "Error: GLM_HOME not set!")
-	# https://github.com/g-truc/glm/releases
-endif()
-
 if(DEFINED ENV{ASSIMP_HOME})
     message(STATUS "Found ASSIMP_HOME")
 else()
@@ -68,14 +61,8 @@ if(WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26812 /wd26451") # unscoped enum, arithmetic overflow
 endif()
 
-# GLM and GLFW defines
-add_definitions(
-	-DGLM_FORCE_RADIANS
-	-DGLM_FORCE_DEPTH_ZERO_TO_ONE
-	-DGLM_FORCE_LEFT_HANDED
-	-DGLM_FORCE_SSE2
-	-DGLM_ENABLE_EXPERIMENTAL
-	-DGLFW_INCLUDE_VULKAN )
+# GLFW defines
+add_definitions(-DGLFW_INCLUDE_VULKAN)
 
 function(link_plugin TARGET_NAME)
 	if(WIN32)

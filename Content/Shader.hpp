@@ -49,7 +49,7 @@ class ComputeShader : public ShaderVariant {
 public:
 	std::string mEntryPoint;
 	VkPipelineShaderStageCreateInfo mStage;
-	ivec3 mWorkgroupSize;
+	uint3 mWorkgroupSize;
 	VkPipeline mPipeline;
 
 	inline ComputeShader() : ShaderVariant() { mPipeline = VK_NULL_HANDLE;  mStage = {}; mWorkgroupSize = {}; }

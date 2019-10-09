@@ -18,17 +18,17 @@ public:
 	inline bool KeyDown(int key) { return mCurrent.mKeys[key] == GLFW_PRESS; }
 	inline bool KeyUp(int key) { return mCurrent.mKeys[key] == GLFW_RELEASE; }
 
-	inline vec2 ScrollDelta() const { return mCurrent.mScrollDelta; }
-	inline vec2 CursorPos() const { return mCurrent.mCursorPos; }
-	inline vec2 CursorDelta() const { return mCurrent.mCursorPos - mLast.mCursorPos; }
+	inline float2 ScrollDelta() const { return mCurrent.mScrollDelta; }
+	inline float2 CursorPos() const { return mCurrent.mCursorPos; }
+	inline float2 CursorDelta() const { return mCurrent.mCursorPos - mLast.mCursorPos; }
 
 	ENGINE_EXPORT void NextFrame() override;
 
 private:
 	friend class Window;
 	struct State {
-		vec2 mCursorPos;
-		vec2 mScrollDelta;
+		float2 mCursorPos;
+		float2 mScrollDelta;
 		std::unordered_map<int, int> mMouseButtons;
 		std::unordered_map<int, int> mKeys;
 	};

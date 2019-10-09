@@ -3,24 +3,24 @@
 #include <Content/Asset.hpp>
 #include <Content/Texture.hpp>
 #include <Util/Util.hpp>
-#include <Util/Geometry.hpp>
+#include <Math/Geometry.hpp>
 
 struct FontGlyph {
 	char mCharacter;
 	float mAdvance;
 	float mVertOffset;
-	vec2 mSize;
+	float2 mSize;
 
-	vec2 mUV;
-	vec2 mUVSize;
+	float2 mUV;
+	float2 mUVSize;
 
 	float mKerning[0xFF];
 };
 struct TextGlyph {
-	vec2 mPosition;
-	vec2 mSize;
-	vec2 mUV;
-	vec2 mUVSize;
+	float2 mPosition;
+	float2 mSize;
+	float2 mUV;
+	float2 mUVSize;
 };
 enum TextAnchor {
 	Minimum, Middle, Maximum

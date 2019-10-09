@@ -162,7 +162,7 @@ public:
 			auto w = mDeviceManager->GetWindow(i);
 			auto camera = make_shared<Camera>("Camera", w);
 			camera->LocalPosition(displays[i].mCameraPos);
-			camera->LocalRotation(quat(radians(displays[i].mCameraRot)));
+			camera->LocalRotation(quaternion(radians(displays[i].mCameraRot)));
 			camera->FieldOfView(radians(displays[i].mCameraFov));
 			camera->Near(displays[i].mCameraNear);
 			camera->Far(displays[i].mCameraFar);

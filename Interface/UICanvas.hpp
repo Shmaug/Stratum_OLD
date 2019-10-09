@@ -10,14 +10,14 @@ class UIElement;
 // Acts as a graph of UIElements
 class UICanvas : public Renderer {
 public:
-	ENGINE_EXPORT UICanvas(const std::string& name, const vec2& extent);
+	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();
 
 	ENGINE_EXPORT void AddElement(std::shared_ptr<UIElement> element);
 	ENGINE_EXPORT void RemoveElement(UIElement* element);
 
-	inline vec2 Extent(const vec2& size) { mExtent = size; Dirty(); }
-	inline vec2 Extent() const { return mExtent; }
+	inline float2 Extent(const float2& size) { mExtent = size; Dirty(); }
+	inline float2 Extent() const { return mExtent; }
 
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }
 
@@ -28,7 +28,7 @@ public:
 private:
 	bool mVisible;
 	AABB mAABB;
-	vec2 mExtent;
+	float2 mExtent;
 	std::vector<std::shared_ptr<UIElement>> mElements;
 
 protected:

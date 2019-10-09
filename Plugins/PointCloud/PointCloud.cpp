@@ -75,7 +75,7 @@ Object* PointCloud::LoadScene(const filesystem::path& filename, float scale) {
 		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
 		nodeobj->Parent(nodepair.second);
 		nodeobj->LocalPosition(t.x, t.y, t.z);
-		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
+		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
 		mScene->AddObject(nodeobj);
@@ -91,11 +91,11 @@ Object* PointCloud::LoadScene(const filesystem::path& filename, float scale) {
 			if (pts.size() != aimesh->mNumVertices) {
 				pts.resize(aimesh->mNumVertices);
 				for (uint32_t i = 0; i < aimesh->mNumVertices; i++) {
-					memcpy(&pts[i].mPosition, &aimesh->mVertices[i], sizeof(vec3));
+					memcpy(&pts[i].mPosition, &aimesh->mVertices[i], sizeof(float3));
 					if (aimesh->HasVertexColors(0))
-						memcpy(&pts[i].mColor, &aimesh->mColors[0][i], sizeof(vec3));
+						memcpy(&pts[i].mColor, &aimesh->mColors[0][i], sizeof(float3));
 					else
-						memset(&pts[i].mColor, 1.f, sizeof(vec3));
+						pts[i].mColor = 1;
 				}
 			}
 

@@ -25,8 +25,8 @@ public:
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
-	ENGINE_EXPORT vec4 WorldToClip(vec3 worldPos);
-	ENGINE_EXPORT vec3 ClipToWorld(vec3 clipPos);
+	ENGINE_EXPORT float4 WorldToClip(float3 worldPos);
+	ENGINE_EXPORT float3 ClipToWorld(float3 clipPos);
 
 	inline uint32_t RenderPriority() const { return mRenderPriority; }
 	inline void RenderPriority(uint32_t x) { mRenderPriority = x; }
@@ -41,15 +41,15 @@ public:
 	inline float Near() const { return mNear; }
 	inline float Far() const { return mFar; }
 	inline float FieldOfView() const { return mFieldOfView; }
-	inline vec4 PerspectiveBounds() const { return mPerspectiveBounds; }
+	inline float4 PerspectiveBounds() const { return mPerspectiveBounds; }
 	inline uint32_t PixelWidth()  const { return mPixelWidth;  }
 	inline uint32_t PixelHeight() const { return mPixelHeight; }
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 
 	inline void Near(float n) { mNear = n; mMatricesDirty = true; }
 	inline void Far (float f) { mFar = f;  mMatricesDirty = true; }
-	inline void FieldOfView(float f) { mPerspectiveBounds = vec4(0.f); mFieldOfView = f; mMatricesDirty = true; }
-	inline void PerspectiveBounds(const vec4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; mMatricesDirty = true; }
+	inline void FieldOfView(float f) { mPerspectiveBounds = float4(0.f); mFieldOfView = f; mMatricesDirty = true; }
+	inline void PerspectiveBounds(const float4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; mMatricesDirty = true; }
 	inline void PixelWidth (uint32_t w) { mPixelWidth  = w; DirtyFramebuffers(); mMatricesDirty = true; }
 	inline void PixelHeight(uint32_t h) { mPixelHeight = h; DirtyFramebuffers(); mMatricesDirty = true; }
 	inline void SampleCount(VkSampleCountFlagBits s) { mSampleCount = s; DirtyFramebuffers(); }
@@ -60,9 +60,9 @@ public:
 	inline Buffer* UniformBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mUniformBuffer; }
 	inline ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDescriptorSet; }
 
-	inline mat4 View() { UpdateMatrices(); return mView; }
-	inline mat4 Projection() { UpdateMatrices(); return mProjection; }
-	inline mat4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
+	inline float4x4 View() { UpdateMatrices(); return mView; }
+	inline float4x4 Projection() { UpdateMatrices(); return mProjection; }
+	inline float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
 
 private:
 	uint32_t mRenderPriority;
@@ -80,12 +80,12 @@ private:
 	uint32_t mPixelWidth;
 	uint32_t mPixelHeight;
 	VkSampleCountFlagBits mSampleCount;
-	vec4 mPerspectiveBounds;
+	float4 mPerspectiveBounds;
 
-	mat4 mView;
-	mat4 mProjection;
-	mat4 mViewProjection;
-	mat4 mInvViewProjection;
+	float4x4 mView;
+	float4x4 mProjection;
+	float4x4 mViewProjection;
+	float4x4 mInvViewProjection;
 	bool mMatricesDirty;
 
 	VkViewport mViewport;

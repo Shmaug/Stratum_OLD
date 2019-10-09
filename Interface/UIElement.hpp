@@ -6,11 +6,11 @@ class UICanvas;
 
 struct UDim2 {
 	// Relative to parent
-	vec2 mScale;
+	float2 mScale;
 	// World-space offset
-	vec2 mOffset;
-	UDim2() : mScale(vec2()), mOffset(vec2()) {}
-	UDim2(const vec2& scale, const vec2& offset) : mScale(scale), mOffset(offset) {}
+	float2 mOffset;
+	UDim2() : mScale(float2()), mOffset(float2()) {}
+	UDim2(const float2& scale, const float2& offset) : mScale(scale), mOffset(offset) {}
 };
 
 class UIElement {
@@ -45,9 +45,9 @@ public:
 	inline void Depth(float d) { mDepth = d; Dirty(); }
 
 	// Top-left corner, relative to canvas
-	inline vec3 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }
+	inline float3 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }
 	// Relative to canvas
-	inline vec2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
+	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
 	// Relative to canvas
 	inline virtual AABB AbsoluteBounds() { UpdateTransform(); return mAbsoluteAABB; }
 
@@ -68,9 +68,9 @@ private:
 	float mDepth;
 
 	// Top-left corner, relative to parent
-	vec3 mAbsolutePosition;
+	float3 mAbsolutePosition;
 	// Relative to canvas
-	vec2 mAbsoluteExtent;
+	float2 mAbsoluteExtent;
 	// Relative to canvas
 	AABB mAbsoluteAABB;
 

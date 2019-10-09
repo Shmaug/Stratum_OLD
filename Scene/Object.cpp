@@ -7,9 +7,9 @@ using namespace std;
 
 Object::Object(const string& name)
 	: mName(name), mParent(nullptr),
-	mLocalPosition(vec3()), mLocalRotation(quat(1.f, 0.f, 0.f, 0.f)), mLocalScale(vec3(1.f, 1.f, 1.f)),
-	mWorldPosition(vec3()), mWorldRotation(quat(1.f, 0.f, 0.f, 0.f)),
-	mObjectToWorld(mat4(1.f)), mWorldToObject(mat4(1.f)), mTransformDirty(true), mEnabled(true) {
+	mLocalPosition(float3()), mLocalRotation(quaternion(0, 0, 0, 1)), mLocalScale(float3(1)),
+	mWorldPosition(float3()), mWorldRotation(quaternion(0, 0, 0, 1)),
+	mObjectToWorld(float4x4(1)), mWorldToObject(float4x4(1)), mTransformDirty(true), mEnabled(true) {
 	Dirty();
 }
 Object::~Object() {
@@ -22,12 +22,12 @@ Object::~Object() {
 bool Object::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
-	mObjectToWorld = translate(mat4(1.f), mLocalPosition) * toMat4(mLocalRotation) * scale(mat4(1.f), mLocalScale);
+	mObjectToWorld = translate(mLocalPosition) * float4x4(mLocalRotation) * scale(mLocalScale);
 
 	if (mParent) {
 		mObjectToWorld = mParent->ObjectToWorld() * mObjectToWorld;
 
-		mWorldPosition = mParent->mObjectToWorld * vec4(mLocalPosition, 1.f);
+		mWorldPosition = (mParent->mObjectToWorld * float4(mLocalPosition, 1.f)).xyz;
 		mWorldRotation = mParent->mWorldRotation * mLocalRotation;
 	} else {
 		mWorldPosition = mLocalPosition;
@@ -72,7 +72,7 @@ void Object::Dirty() {
 }
 
 AABB Object::Bounds() {
-	return AABB(WorldPosition(), vec3());
+	return AABB(WorldPosition(), float3());
 }
 
 AABB Object::BoundsHeirarchy() {

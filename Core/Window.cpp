@@ -160,8 +160,8 @@ GLFWmonitor* Window::GetCurrentMonitor(int& x, int& y, int& w, int& h) const {
 		mh = mode->height;
 
 		overlap =
-			gmax(0, gmin(wx + ww, mx + mw) - gmax(wx, mx)) *
-			gmax(0, gmin(wy + wh, my + mh) - gmax(wy, my));
+			max(0, min(wx + ww, mx + mw) - max(wx, mx)) *
+			max(0, min(wy + wh, my + mh) - max(wy, my));
 
 		if (bestoverlap < overlap) {
 			bestoverlap = overlap;

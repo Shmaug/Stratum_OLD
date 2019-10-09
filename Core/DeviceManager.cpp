@@ -161,7 +161,7 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 		auto w = new Window(mInstance, "VkCAVE " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
 		if (!mDevices[deviceIndex]) mDevices[deviceIndex] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, deviceIndex);
 		w->CreateSwapchain(mDevices[deviceIndex]);
-		minImageCount = gmin(minImageCount, w->mImageCount);
+		minImageCount = min(minImageCount, w->mImageCount);
 		mWindows.push_back(w);
 	}
 

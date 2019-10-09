@@ -17,10 +17,10 @@
 using namespace std;
 
 struct Vertex {
-	vec3 position;
-	vec3 normal;
-	vec4 tangent;
-	vec2 uv;
+	float3 position;
+	float3 normal;
+	float4 tangent;
+	float2 uv;
 
 	static const ::VertexInput VertexInput;
 };
@@ -71,7 +71,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 	vector<Vertex> vertices;
 	vector<uint16_t> indices16;
 	vector<uint32_t> indices32;
-	vec3 mn, mx;
+	float3 mn, mx;
 
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
 	if (!scene) throw runtime_error("Failed to load " + filename);
@@ -94,8 +94,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 			if (mesh->HasNormals()) vertex.normal = { (float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z };
 			if (mesh->HasTangentsAndBitangents()) {
 				vertex.tangent = { (float)mesh->mTangents[i].x, (float)mesh->mTangents[i].y, (float)mesh->mTangents[i].z, 1.f };
-				vec3 bt = vec3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
-				vertex.tangent.w = dot(cross((vec3)vertex.tangent, vertex.normal), bt) > 0.f ? 1.f : -1.f;
+				float3 bt = float3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
+				vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
 			}
 			if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
 			vertex.position *= scale;
@@ -174,7 +174,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
 	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
 	
-	vec3 mn, mx;
+	float3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
 		uint32_t index;
 		if (mIndexType == VK_INDEX_TYPE_UINT32)
@@ -182,12 +182,12 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, c
 		else
 			index = ((uint16_t*)indices)[i];
 
-		const vec3& pos = *(vec3*)((uint8_t*)vertices + vertexSize * index);
+		const float3& pos = *(float3*)((uint8_t*)vertices + vertexSize * index);
 		if (i == 0)
 			mn = mx = pos;
 		else {
-			mn = min(pos, mn);
-			mx = max(pos, mn);
+			mn = vmin(pos, mn);
+			mx = vmax(pos, mn);
 		}
 	}
 
@@ -204,7 +204,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, c
 Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
 	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
 
-	vec3 mn, mx;
+	float3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
 		uint32_t index;
 		if (mIndexType == VK_INDEX_TYPE_UINT32)
@@ -212,12 +212,12 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 		else
 			index = ((uint16_t*)indices)[i];
 
-		const vec3& pos = *(vec3*)((uint8_t*)vertices + vertexSize * index);
+		const float3& pos = *(float3*)((uint8_t*)vertices + vertexSize * index);
 		if (i == 0)
 			mn = mx = pos;
 		else {
-			mn = min(pos, mn);
-			mx = max(pos, mn);
+			mn = vmin(pos, mn);
+			mx = vmax(pos, mn);
 		}
 	}
 
@@ -234,7 +234,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 	vector<Vertex> vertices(mesh->mNumVertices);
 	memset(vertices.data(), 0, sizeof(Vertex) * mesh->mNumVertices);
 
-	vec3 mn, mx;
+	float3 mn, mx;
 
 	// append vertices, keep track of bounding box
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
@@ -244,8 +244,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 		if (mesh->HasNormals()) vertex.normal = { (float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z };
 		if (mesh->HasTangentsAndBitangents()) {
 			vertex.tangent = { (float)mesh->mTangents[i].x, (float)mesh->mTangents[i].y, (float)mesh->mTangents[i].z, 1.f };
-			vec3 bt = vec3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
-			vertex.tangent.w = dot(cross((vec3)vertex.tangent, vertex.normal), bt) > 0.f ? 1.f : -1.f;
+			float3 bt = float3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
+			vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
 		}
 		if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
 		vertex.position *= scale;
@@ -254,12 +254,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 			mn = vertex.position;
 			mx = vertex.position;
 		} else {
-			mn.x = fminf(vertex.position.x, mn.x);
-			mn.y = fminf(vertex.position.y, mn.y);
-			mn.z = fminf(vertex.position.z, mn.z);
-			mx.x = fmaxf(vertex.position.x, mx.x);
-			mx.y = fmaxf(vertex.position.y, mx.y);
-			mx.z = fmaxf(vertex.position.z, mx.z);
+			mn = vmin(mn, vertex.position);
+			mx = vmax(mx, vertex.position);
 		}
 	}
 

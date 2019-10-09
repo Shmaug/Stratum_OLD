@@ -1,10 +1,7 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-
 #include <Core/CommandBuffer.hpp>
-#include <Util/Geometry.hpp>
+#include <Math/Geometry.hpp>
 #include <Util/Util.hpp>
 
 class Camera;
@@ -25,19 +22,19 @@ public:
 	inline uint32_t ChildCount() const { return (uint32_t)mChildren.size(); }
 	inline Object* Child(uint32_t index) const { return mChildren[index]; }
 
-	inline vec3 WorldPosition() { UpdateTransform(); return mWorldPosition; }
-	inline quat WorldRotation() { UpdateTransform(); return mWorldRotation; }
+	inline float3 WorldPosition() { UpdateTransform(); return mWorldPosition; }
+	inline quaternion WorldRotation() { UpdateTransform(); return mWorldRotation; }
 
-	inline vec3 LocalPosition() { UpdateTransform(); return mLocalPosition; }
-	inline quat LocalRotation() { UpdateTransform(); return mLocalRotation; }
-	inline vec3 LocalScale() { UpdateTransform(); return mLocalScale; }
+	inline float3 LocalPosition() { UpdateTransform(); return mLocalPosition; }
+	inline quaternion LocalRotation() { UpdateTransform(); return mLocalRotation; }
+	inline float3 LocalScale() { UpdateTransform(); return mLocalScale; }
 
-	inline mat4 ObjectToWorld() { UpdateTransform(); return mObjectToWorld; }
-	inline mat4 WorldToObject() { UpdateTransform(); return mWorldToObject; }
+	inline float4x4 ObjectToWorld() { UpdateTransform(); return mObjectToWorld; }
+	inline float4x4 WorldToObject() { UpdateTransform(); return mWorldToObject; }
 
-	inline void LocalPosition(const vec3& p) { mLocalPosition = p; Dirty(); }
-	inline void LocalRotation(const quat& r) { mLocalRotation = r; Dirty(); }
-	inline void LocalScale(const vec3& s) { mLocalScale = s; Dirty(); }
+	inline void LocalPosition(const float3& p) { mLocalPosition = p; Dirty(); }
+	inline void LocalRotation(const quaternion& r) { mLocalRotation = r; Dirty(); }
+	inline void LocalScale(const float3& s) { mLocalScale = s; Dirty(); }
 
 	inline void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
 	inline void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
@@ -55,14 +52,14 @@ private:
 	Scene* mScene;
 
 	bool mTransformDirty;
-	vec3 mLocalPosition;
-	quat mLocalRotation;
-	vec3 mLocalScale;
-	mat4 mObjectToWorld;
-	mat4 mWorldToObject;
+	float3 mLocalPosition;
+	quaternion mLocalRotation;
+	float3 mLocalScale;
+	float4x4 mObjectToWorld;
+	float4x4 mWorldToObject;
 
-	vec3 mWorldPosition;
-	quat mWorldRotation;
+	float3 mWorldPosition;
+	quaternion mWorldRotation;
 
 	Object* mParent;
 	std::vector<Object*> mChildren;

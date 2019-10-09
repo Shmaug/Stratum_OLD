@@ -76,13 +76,13 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 			}
 		};
 		auto& evalPushConstants = [&](const unordered_map<string, VkPushConstantRange>& pushConstants, vector<VkPushConstantRange>& constants) {
-			unordered_map<VkShaderStageFlags, uvec2> ranges;
+			unordered_map<VkShaderStageFlags, uint2> ranges;
 			for (const auto& b : pushConstants) {
 				if (ranges.count(b.second.stageFlags) == 0)
-					ranges[b.second.stageFlags] = uvec2(b.second.offset, b.second.offset + b.second.size);
+					ranges[b.second.stageFlags] = uint2(b.second.offset, b.second.offset + b.second.size);
 				else {
-					ranges[b.second.stageFlags].x = gmin(ranges[b.second.stageFlags].x, b.second.offset);
-					ranges[b.second.stageFlags].y = gmax(ranges[b.second.stageFlags].y, b.second.offset + b.second.size);
+					ranges[b.second.stageFlags].x = min(ranges[b.second.stageFlags].x, b.second.offset);
+					ranges[b.second.stageFlags].y = max(ranges[b.second.stageFlags].y, b.second.offset + b.second.size);
 				}
 			}
 			for (const auto& r : ranges) {
@@ -104,7 +104,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 			vector<unordered_map<string, VkPushConstantRange>> pushConstants(kernelc);
 			vector<vector<string>> staticSamplers(kernelc);
 
-			vector<ivec3> workgroupSizes(kernelc);
+			vector<uint3> workgroupSizes(kernelc);
 			for (unsigned int i = 0; i < kernelc; i++) {
 				string entryp;
 				uint32_t entryplen;
@@ -120,7 +120,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				spirv.resize(spirvSize);
 				file.read(reinterpret_cast<char*>(spirv.data()), spirvSize * sizeof(uint32_t));
 
-				file.read(reinterpret_cast<char*>(&workgroupSizes[i]), sizeof(ivec3));
+				file.read(reinterpret_cast<char*>(&workgroupSizes[i]), sizeof(uint3));
 
 				readBindingsAndPushConstants(descriptorBindings[i], pushConstants[i], staticSamplers[i]);
 			}
