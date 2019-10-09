@@ -1,0 +1,95 @@
+set(CMAKE_CXX_STANDARD 17)
+
+# Check for dependencies
+if(DEFINED ENV{VULKAN_SDK})
+    message(STATUS "Found VULKAN_SDK")
+else()
+    message(FATAL_ERROR "Error: VULKAN_SDK not set!")
+endif()
+
+if(DEFINED ENV{GLFW_HOME})
+    message(STATUS "Found GLFW_HOME")
+else()
+    message(FATAL_ERROR "Error: GLFW_HOME not set!")
+	# https://www.glfw.org/download.html
+endif()
+
+if(DEFINED ENV{GLM_HOME})
+    message(STATUS "Found GLM_HOME")
+else()
+    message(FATAL_ERROR "Error: GLM_HOME not set!")
+	# https://github.com/g-truc/glm/releases
+endif()
+
+if(DEFINED ENV{ASSIMP_HOME})
+    message(STATUS "Found ASSIMP_HOME")
+else()
+    message(FATAL_ERROR "Error: ASSIMP_HOME not set!")
+	# http://www.assimp.org/index.php/downloads
+endif()
+
+if(DEFINED ENV{SPIRV_CROSS_HOME})
+    message(STATUS "Found SPIRV_CROSS_HOME")
+else()
+    message(FATAL_ERROR "Error: SPIRV_CROSS_HOME not set!")
+	# https://github.com/KhronosGroup/SPIRV-Cross
+endif()
+
+# Include dependencies
+include_directories(
+	"$ENV{VULKAN_SDK}/include"
+	"$ENV{SPIRV_CROSS_HOME}/include"
+	"$ENV{GLFW_HOME}/include"
+	"$ENV{GLM_HOME}/include"
+	"$ENV{ASSIMP_HOME}/include" )
+
+if(WIN32)
+	add_definitions(-DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+
+	# Link vulkan and assimp
+	link_libraries(
+		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
+		"$ENV{ASSIMP_HOME}/lib/x64/assimp-vc140-mt.lib" )
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		link_libraries("$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib")
+	endif()
+
+	# Link GLFW
+	if (MSVC)
+		if (MSVC_TOOLSET_VERSION MATCHES 141)
+			link_libraries("$ENV{GLFW_HOME}/lib-vc2017/glfw3.lib")
+		else()
+			link_libraries("$ENV{GLFW_HOME}/lib-vc2019/glfw3.lib")
+		endif()
+	else()
+		link_libraries("$ENV{GLFW_HOME}/lib-mingw-w64/libglfw3.a")
+	endif()
+
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26812 /wd26451") # unscoped enum, arithmetic overflow
+endif()
+
+# GLM and GLFW defines
+add_definitions(
+	-DGLM_FORCE_RADIANS
+	-DGLM_FORCE_DEPTH_ZERO_TO_ONE
+	-DGLM_FORCE_LEFT_HANDED
+	-DGLM_FORCE_SSE2
+	-DGLM_ENABLE_EXPERIMENTAL
+	-DGLFW_INCLUDE_VULKAN )
+
+function(link_plugin TARGET_NAME)
+	if(WIN32)
+		target_link_libraries(${TARGET_NAME} "${PROJECT_BINARY_DIR}/lib/Engine.lib")
+	elseif(UNIX)
+		message(FATAL_ERROR "Error: Not implemented!")
+	else()
+		message(FATAL_ERROR "Error: Not implemented!")
+	endif(WIN32)
+
+	set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/Plugins")
+	set_target_properties(${TARGET_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/Plugins")
+	set_target_properties(${TARGET_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/Plugins")
+
+	add_dependencies(VkCave ${TARGET_NAME})
+	add_dependencies(${TARGET_NAME} Engine)
+endfunction()

@@ -95,6 +95,13 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 		mFrameData[i].mDepthNormalBuffer = nullptr;
 		mFrameData[i].mDepthBuffer = nullptr;
 	}
+
+	mViewport.x = 0;
+	mViewport.y = 0;
+	mViewport.width = (float)mPixelWidth;
+	mViewport.height = (float)mPixelHeight;
+	mViewport.minDepth = 0.f;
+	mViewport.maxDepth = 1.f;
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
@@ -188,6 +195,13 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 		mFrameData[i].mDepthNormalBuffer = nullptr;
 		mFrameData[i].mDepthBuffer = nullptr;
 	}
+
+	mViewport.x = 0;
+	mViewport.y = 0;
+	mViewport.width = (float)mPixelWidth;
+	mViewport.height = (float)mPixelHeight;
+	mViewport.minDepth = 0.f;
+	mViewport.maxDepth = 1.f;
 }
 Camera::~Camera() {
 	vkDestroyDescriptorSetLayout(*mDevice, mDescriptorSetLayout, nullptr);
@@ -213,12 +227,19 @@ vec3 Camera::ClipToWorld(vec3 clipPos) {
 	return wp / wp.w;
 }
 
-void Camera::PreRender(){
+void Camera::PreRender() {
 	if (mTargetWindow && (mPixelWidth != mTargetWindow->BackBufferSize().width || mPixelHeight != mTargetWindow->BackBufferSize().height)) {
 		mPixelWidth = mTargetWindow->BackBufferSize().width;
 		mPixelHeight = mTargetWindow->BackBufferSize().height;
 		DirtyFramebuffers();
 		mMatricesDirty = true;
+
+		mViewport.x = 0;
+		mViewport.y = 0;
+		mViewport.width = (float)mPixelWidth;
+		mViewport.height = (float)mPixelHeight;
+		mViewport.minDepth = 0.f;
+		mViewport.maxDepth = 1.f;
 	}
 }
 void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
@@ -240,8 +261,7 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 	};
 	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, 3);
 
-	VkViewport vp{ 0, 0, (float)mPixelWidth, (float)mPixelHeight, 0, 1.f };
-	vkCmdSetViewport(*commandBuffer, 0, 1, &vp);
+	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 
 	VkRect2D scissor{ {0, 0}, { mPixelWidth, mPixelHeight } };
 	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
@@ -322,11 +342,11 @@ bool Camera::UpdateFramebuffer(uint32_t backBufferIndex) {
 	safe_delete(mFrameData[backBufferIndex].mDepthNormalBuffer);
 	safe_delete(mFrameData[backBufferIndex].mDepthBuffer);
 
-	VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-	fd.mColorBuffer = new Texture(mName + "ColorBuffer", mDevice, mPixelWidth, mPixelHeight, mRenderFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	fd.mDepthNormalBuffer = new Texture(mName + "DepthNormalBuffer", mDevice, mPixelWidth, mPixelHeight, VK_FORMAT_R8G8B8A8_UNORM, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	fd.mDepthBuffer = new Texture(mName + "DepthBuffer", mDevice, mPixelWidth, mPixelHeight, mDepthFormat , mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	fd.mColorBuffer = new Texture(mName + "ColorBuffer", mDevice, mPixelWidth, mPixelHeight, 1, mRenderFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	fd.mDepthNormalBuffer = new Texture(mName + "DepthNormalBuffer", mDevice, mPixelWidth, mPixelHeight, 1, VK_FORMAT_R8G8B8A8_UNORM, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	fd.mDepthBuffer = new Texture(mName + "DepthBuffer", mDevice, mPixelWidth, mPixelHeight, 1, mDepthFormat , mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	VkImageView views[]{
 		fd.mColorBuffer->View(mDevice),

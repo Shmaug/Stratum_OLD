@@ -72,6 +72,7 @@ private:
 	DeviceManager* mDeviceManager;
 	InputManager* mInputManager;
 	PluginManager* mPluginManager;
+	AssetManager* mAssetManager;
 	Scene* mScene;
 
 	#ifdef _DEBUG
@@ -121,6 +122,7 @@ public:
 
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
+		mAssetManager = new AssetManager(mDeviceManager);
 		
 		#ifdef _DEBUG
 		if (config->mDebugMessenger) {
@@ -153,7 +155,7 @@ public:
 		mDeviceManager->Initialize(displays);
 		printf("Done.\n");
 
-		mScene = new Scene(mDeviceManager, mInputManager, mPluginManager);
+		mScene = new Scene(mDeviceManager, mAssetManager, mInputManager, mPluginManager);
 
 		printf("Creating %d window cameras... ", (int)displays.size());
 		for (uint32_t i = 0; i < displays.size(); i++) {
@@ -248,6 +250,7 @@ public:
 		if (mDebugMessenger != VK_NULL_HANDLE) DestroyDebugUtilsMessengerEXT(mDeviceManager->Instance(), mDebugMessenger, nullptr);
 		#endif
 
+		safe_delete(mAssetManager);
 		safe_delete(mInputManager);
 		safe_delete(mDeviceManager);
 	}

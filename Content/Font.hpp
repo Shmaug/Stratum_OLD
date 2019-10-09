@@ -26,8 +26,6 @@ enum TextAnchor {
 	Minimum, Middle, Maximum
 };
 
-class AssetDatabase;
-
 class Font : public Asset {
 public:
 
@@ -48,7 +46,7 @@ public:
 	inline float Descender() const { return mDescender; };
 
 private:
-	friend class AssetDatabase;
+	friend class AssetManager;
 	ENGINE_EXPORT Font(const std::string& name, DeviceManager* deviceManager, const std::string& filename, float pixelSize, float scale);
 
 	float mPixelSize;

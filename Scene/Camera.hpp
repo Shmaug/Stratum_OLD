@@ -34,6 +34,9 @@ public:
 	inline bool RenderDepthNormals() const { return mRenderDepthNormals; }
 	inline void RenderDepthNormals(bool x) { mRenderDepthNormals = x; }
 
+	inline void Viewport(const VkViewport& v) { mViewport = v; }
+	inline VkViewport Viewport() const { return mViewport; }
+
 	inline float Aspect() const { return (float)mPixelWidth / (float)mPixelHeight; }
 	inline float Near() const { return mNear; }
 	inline float Far() const { return mFar; }
@@ -84,6 +87,8 @@ private:
 	mat4 mViewProjection;
 	mat4 mInvViewProjection;
 	bool mMatricesDirty;
+
+	VkViewport mViewport;
 
 	Window* mTargetWindow;
 	::Device* mDevice;

@@ -4,16 +4,7 @@
 
 #include "DicomVis.hpp"
 
-#ifdef WINDOWS
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "netapi32.lib")
-#pragma comment(lib, "iphlpapi.lib")
-#endif
-
 #include <thread>
-
-#include <dcmtk/dcmimgle/dcmimage.h>
-#include <dcmtk/dcmdata/dctk.h>
 
 #define THREAD_COUNT 1
 
@@ -22,15 +13,13 @@ using namespace std;
 ENGINE_PLUGIN(DicomVis)
 
 DicomVis::DicomVis() : mScene(nullptr) {}
-DicomVis::~DicomVis() {
-
-}
+DicomVis::~DicomVis() {}
 
 bool DicomVis::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
+	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
+	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
 
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
@@ -45,7 +34,6 @@ void DicomVis::Update(const FrameTime& frameTime) {
 
 shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size, DeviceManager* devices) {
 	struct Slice {
-		DicomImage* mImage;
 		float mLocation;
 		vec3 mSize;
 	};
@@ -58,33 +46,7 @@ shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size, Dev
 	size = vec3(0, 0, 0);
 
 	for (uint32_t i = 0; i < (int)files.size(); i++) {
-		DcmFileFormat fileFormat;
-		if (!fileFormat.loadFile(files[i].c_str()).good()) continue;
-		DcmDataset* dataset = fileFormat.getDataset();
-
-		double x, sx, sy, th;
-		if (!dataset->findAndGetFloat64(DCM_PixelSpacing, sx, 0).good()) continue;
-		if (!dataset->findAndGetFloat64(DCM_PixelSpacing, sy, 1).good()) continue;
-		if (!dataset->findAndGetFloat64(DCM_SliceThickness, th, 0).good()) continue;
-		if (!dataset->findAndGetFloat64(DCM_SliceLocation, x, 0).good()) continue;
-
-		vec3 sz = vec3((float)sx, (float)sy, (float)th) * .001f;
-
-		DicomImage* img = new DicomImage(files[i].c_str());
-		if (img->getStatus() != EIS_Normal) {
-			safe_delete(img);
-			continue;
-		}
-		if (!img) continue;
-		slices.push_back({ img, (float)x * .001f, sz });
-
-		size.x = gmax(size.x, sz.x * img->getWidth());
-		size.y = gmax(size.y, sz.y * img->getHeight());
-		size.x += sz.z;
-
-		w = gmax(w, (uint32_t)img->getWidth());
-		w = gmax(h, (uint32_t)img->getHeight());
-		d++;
+		
 	}
 
 	std::sort(slices.begin(), slices.end(), [](const Slice& a, const Slice& b) {

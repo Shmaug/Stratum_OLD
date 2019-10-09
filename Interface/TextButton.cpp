@@ -92,7 +92,7 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 
 	auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
 	if (bindings.count("Glyphs"))
-		data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
+		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
 
 	vec3 offset = AbsolutePosition();
 	switch (mHorizontalAnchor) {

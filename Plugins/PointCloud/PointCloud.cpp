@@ -127,9 +127,9 @@ void PointCloud::SwitchScene(Object* s) {
 bool PointCloud::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* pointShader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/points.shader");
+	Shader* pointShader = mScene->AssetManager()->LoadShader("Shaders/points.shader");
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
-	mPointMaterial->SetParameter("Noise", scene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/rgbanoise.png", false));
+	mPointMaterial->SetParameter("Noise", mScene->AssetManager()->LoadTexture("Assets/rgbanoise.png", false));
 	mPointMaterial->SetParameter("Time", 0.f);
 	mPointMaterial->SetParameter("PointSize", mPointSize);
 

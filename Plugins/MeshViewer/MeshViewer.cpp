@@ -45,9 +45,9 @@ MeshViewer::~MeshViewer() {
 }
 
 Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, float scale) {
-	Texture* brdfTexture  = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/BrdfLut.png", false);
-	Texture* whiteTexture = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/white.png");
-	Texture* bumpTexture  = mScene->DeviceManager()->AssetDatabase()->LoadTexture("Assets/bump.png", false);
+	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
+	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
+	Texture* bumpTexture  = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
 
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
@@ -118,7 +118,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				else {
 					if (filename.has_parent_path())
 						diffuse = filename.parent_path().string() + "/" + diffuse.C_Str();
-					material->SetParameter("MainTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(diffuse.C_Str()));
+					material->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture(diffuse.C_Str()));
 				}
 
 				if (normal == aiString("") || normal.C_Str()[0] == '*')
@@ -126,7 +126,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				else {
 					if (filename.has_parent_path())
 						normal = filename.parent_path().string() + "/" + normal.C_Str();
-					material->SetParameter("NormalTexture", mScene->DeviceManager()->AssetDatabase()->LoadTexture(normal.C_Str(), false));
+					material->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture(normal.C_Str(), false));
 					material->EnableKeyword("NORMAL_MAP");
 				}
 			}
@@ -163,9 +163,9 @@ void MeshViewer::SwitchScene(Object* s) {
 bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
-	Shader* pbrshader  = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/pbr.shader");
-	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
+	Shader* pbrshader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
+	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
+	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
 

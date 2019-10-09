@@ -21,8 +21,8 @@ bool CameraControl::Init(Scene* scene) {
 
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
-	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
+	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
+	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
 
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());

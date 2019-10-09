@@ -65,8 +65,6 @@ public:
 	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM);
 };
 
-class AssetDatabase;
-
 class Shader : public Asset {
 public:
 	const std::string mName;
@@ -79,7 +77,7 @@ public:
 	inline uint32_t RenderQueue() const { return mRenderQueue; }
 
 private:
-	friend class AssetDatabase;
+	friend class AssetManager;
 	ENGINE_EXPORT Shader(const std::string& name, DeviceManager* devices, const std::string& filename);
 
 	friend class GraphicsShader;

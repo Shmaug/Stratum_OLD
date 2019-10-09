@@ -10,7 +10,6 @@
 #include <string>
 #include <iostream>
 
-
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)

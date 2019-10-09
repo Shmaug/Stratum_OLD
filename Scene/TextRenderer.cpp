@@ -90,7 +90,7 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
 	if (bindings.count("Glyphs"))
-		data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
+		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
 	objbuffer->ObjectToWorld = ObjectToWorld();

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Content/AssetDatabase.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
 #include <Util/Util.hpp>
@@ -34,8 +33,6 @@ public:
 
 	inline VkInstance Instance() const { return mInstance; }
 
-	inline ::AssetDatabase* AssetDatabase() const { return mAssetDatabase; }
-
 	inline uint32_t DeviceCount() const { return (uint32_t)mDevices.size(); }
 	inline Device* GetDevice(uint32_t index) const { return mDevices[index]; }
 
@@ -52,8 +49,6 @@ private:
 
 	std::vector<Device*> mDevices;
 	std::vector<Window*> mWindows;
-
-	::AssetDatabase* mAssetDatabase;
 
 	uint32_t mMaxFramesInFlight;
 
