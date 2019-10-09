@@ -6,8 +6,6 @@
 #include <Core/DeviceManager.hpp>
 #include <Util/Util.hpp>
 
-class AssetDatabase;
-
 class Texture : public Asset {
 public:
 	const std::string mName;
@@ -17,11 +15,11 @@ public:
 		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	ENGINE_EXPORT Texture(const std::string& name, DeviceManager* devices,
-		uint32_t width, uint32_t height, VkFormat format,
+		uint32_t width, uint32_t height, uint32_t depth, VkFormat format,
 		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	ENGINE_EXPORT Texture(const std::string& name, Device* device,
-		uint32_t width, uint32_t height, VkFormat format,
+		uint32_t width, uint32_t height, uint32_t depth, VkFormat format,
 		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	ENGINE_EXPORT ~Texture() override;
@@ -39,7 +37,7 @@ public:
 	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout newLayout, CommandBuffer* commandBuffer);
 
 private:
-	friend class AssetDatabase;
+	friend class AssetManager;
 	ENGINE_EXPORT Texture(const std::string& name, DeviceManager* devices, const std::string& filename, bool srgb = true);
 
 	uint32_t mWidth;

@@ -1,4 +1,4 @@
-#include <Content/AssetDatabase.hpp>
+#include <Content/AssetManager.hpp>
 #include <Content/Font.hpp>
 #include <Content/Mesh.hpp>
 #include <Content/Texture.hpp>
@@ -6,28 +6,28 @@
 
 using namespace std;
 
-AssetDatabase::AssetDatabase(DeviceManager* deviceManager) : mDeviceManager(deviceManager) {}
-AssetDatabase::~AssetDatabase() {
+AssetManager::AssetManager(DeviceManager* deviceManager) : mDeviceManager(deviceManager) {}
+AssetManager::~AssetManager() {
 	for (auto& asset : mAssets)
 		delete asset.second;
 }
 
-Shader* AssetDatabase::LoadShader(const std::string& filename) {
+Shader* AssetManager::LoadShader(const std::string& filename) {
 	Asset*& asset = mAssets[filename];
 	if (!asset) asset = new Shader(filename, mDeviceManager, filename);
 	return (Shader*)asset;
 }
-Texture* AssetDatabase::LoadTexture(const std::string& filename, bool srgb) {
+Texture* AssetManager::LoadTexture(const std::string& filename, bool srgb) {
 	Asset*& asset = mAssets[filename];
 	if (!asset) asset = new Texture(filename, mDeviceManager, filename, srgb);
 	return (Texture*)asset;
 }
-Mesh* AssetDatabase::LoadMesh(const std::string& filename, float scale) {
+Mesh* AssetManager::LoadMesh(const std::string& filename, float scale) {
 	Asset*& asset = mAssets[filename];
 	if (!asset) asset = new Mesh(filename, mDeviceManager, filename, scale);
 	return (Mesh*)asset;
 }
-Font* AssetDatabase::LoadFont(const std::string& filename, uint32_t pixelHeight) {
+Font* AssetManager::LoadFont(const std::string& filename, uint32_t pixelHeight) {
 	Asset*& asset = mAssets[filename + to_string(pixelHeight)];
 	if (!asset) asset = new Font(filename, mDeviceManager, filename, (float)pixelHeight, 1.f / pixelHeight);
 	return (Font*)asset;

@@ -3,10 +3,9 @@
 
 using namespace std;
 
-DeviceManager::DeviceManager() : mInstance(VK_NULL_HANDLE), mAssetDatabase(nullptr), mGLFWInitialized(false), mMaxFramesInFlight(0) {}
+DeviceManager::DeviceManager()
+	: mInstance(VK_NULL_HANDLE), mGLFWInitialized(false), mMaxFramesInFlight(0) {}
 DeviceManager::~DeviceManager() {
-	safe_delete(mAssetDatabase);
-
 	if (mGLFWInitialized) glfwTerminate();
 
 	for (auto& w : mWindows)
@@ -168,8 +167,6 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 	for (const auto& device : mDevices)
 		device->mMaxFramesInFlight = minImageCount;
-
-	mAssetDatabase = new ::AssetDatabase(this);
 }
 
 bool DeviceManager::PollEvents() const {

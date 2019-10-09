@@ -11,9 +11,9 @@ class Shader;
 class Texture;
 class DeviceManager;
 
-class AssetDatabase {
+class AssetManager {
 public:
-	ENGINE_EXPORT ~AssetDatabase();
+	ENGINE_EXPORT ~AssetManager();
 
 	ENGINE_EXPORT Shader*	LoadShader	(const std::string& filename);
 	ENGINE_EXPORT Texture*	LoadTexture	(const std::string& filename, bool srgb = true);
@@ -21,8 +21,8 @@ public:
 	ENGINE_EXPORT Font*		LoadFont	(const std::string& filename, uint32_t pixelHeight);
 
 private:
-	friend class DeviceManager;
-	ENGINE_EXPORT AssetDatabase(DeviceManager* deviceManager);
+	friend class VkCAVE;
+	ENGINE_EXPORT AssetManager(DeviceManager* deviceManager);
 
 	DeviceManager* mDeviceManager;
 	std::unordered_map<std::string, Asset*> mAssets;

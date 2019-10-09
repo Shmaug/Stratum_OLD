@@ -71,7 +71,7 @@ private:
 bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& output, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint, unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& descriptorBindings, unordered_map<string, VkPushConstantRange>& pushConstants) {
 	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
 	
-	printf("%s", result.GetErrorMessage().c_str());
+	cerr << result.GetErrorMessage().c_str() << endl;
 
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:

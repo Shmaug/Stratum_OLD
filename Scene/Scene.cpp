@@ -4,8 +4,8 @@
 
 using namespace std;
 
-Scene::Scene(::DeviceManager* deviceManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mDeviceManager(deviceManager), mInputManager(inputManager), mPluginManager(pluginManager) {}
+Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
+	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager) {}
 Scene::~Scene(){
 	mCameras.clear();
 	mRenderers.clear();

@@ -8,8 +8,6 @@
 
 #include <assimp/mesh.h>
 
-class AssetDatabase;
-
 class Mesh : public Asset {
 public:
 	struct MaterialData {
@@ -40,7 +38,7 @@ public:
 	inline void Bounds(const AABB& b) { mBounds = b; }
 
 private:
-	friend class AssetDatabase;
+	friend class AssetManager;
 	ENGINE_EXPORT Mesh(const std::string& name, ::DeviceManager* devices, const std::string& filename, float scale = 1.f);
 
 	const ::VertexInput* mVertexInput;

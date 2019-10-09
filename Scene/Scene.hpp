@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include <Content/AssetManager.hpp>
 #include <Content/Material.hpp>
 #include <Core/DeviceManager.hpp>
 #include <Core/PluginManager.hpp>
@@ -31,14 +32,16 @@ public:
 
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
+	inline ::AssetManager* AssetManager() const { return mAssetManager; }
 	inline ::DeviceManager* DeviceManager() const { return mDeviceManager; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 
 private:
 	friend class VkCAVE;
-	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::InputManager* iputManager, ::PluginManager* pluginManager);
+	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* iputManager, ::PluginManager* pluginManager);
 
+	::AssetManager* mAssetManager;
 	::InputManager* mInputManager;
 	::DeviceManager* mDeviceManager;
 	::PluginManager* mPluginManager;

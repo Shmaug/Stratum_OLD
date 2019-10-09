@@ -188,8 +188,8 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 		f->Wait();
 
 }
-Texture::Texture(const string& name, DeviceManager* devices, uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
-	: mName(name), mWidth(width), mHeight(height), mDepth(1), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
+Texture::Texture(const string& name, DeviceManager* devices, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
 	
 	for (uint32_t i = 0; i < devices->DeviceCount(); i++)
 		mDeviceData.emplace(devices->GetDevice(i), DeviceData());
@@ -202,8 +202,8 @@ Texture::Texture(const string& name, DeviceManager* devices, uint32_t width, uin
 		aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
 	CreateImageView(aspect);
 }
-Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
-	: mName(name), mWidth(width), mHeight(height), mDepth(1), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
+Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
 
 	mDeviceData.emplace(device, DeviceData());
 	CreateImage();
@@ -310,7 +310,7 @@ void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
 void Texture::CreateImage() {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.imageType = mDepth > 1 ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
 	imageInfo.extent.width = mWidth;
 	imageInfo.extent.height = mHeight;
 	imageInfo.extent.depth = mDepth;

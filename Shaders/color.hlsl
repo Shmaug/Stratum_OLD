@@ -16,6 +16,6 @@ float4 vsmain([[vk::location(0)]] float3 vertex : POSITION) : SV_Position {
 	return mul(Camera.ViewProjection, mul(Object.ObjectToWorld, float4(vertex, 1.0)));
 }
 
-fs_out fsmain(float4 position : SV_Position) : SV_Target0 {
+float4 fsmain(float4 position : SV_Position) : SV_Target0 {
 	return Color;
 }

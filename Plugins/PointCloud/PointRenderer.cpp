@@ -86,7 +86,7 @@ void PointRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuff
 	if (data.mDescriptorDirty[backBufferIndex]) {
 		auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
 		if (bindings.count("Points")) {
-			data.mDescriptorSets[backBufferIndex]->CreateSRVBufferDescriptor(data.mPointBuffer, bindings.at("Points").second.binding);
+			data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mPointBuffer, bindings.at("Points").second.binding);
 			data.mDescriptorDirty[backBufferIndex] = false;
 		}
 	}
