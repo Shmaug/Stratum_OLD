@@ -9,8 +9,8 @@ public:
 	#pragma pack(push)
 	#pragma pack(1)
 	struct Point {
-		vec4 mPosition;
-		vec4 mColor;
+		float4 mPosition;
+		float4 mColor;
 	};
 	#pragma pack(pop)
 
@@ -47,5 +47,5 @@ private:
 
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 protected:
-	ENGINE_EXPORT virtual bool UpdateTransform() override;
+	PLUGIN_EXPORT virtual bool UpdateTransform() override;
 };

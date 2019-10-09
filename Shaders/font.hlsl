@@ -3,6 +3,7 @@
 
 #pragma render_queue 5000
 #pragma cull false
+#pragma zwrite false
 #pragma blend_fac src_alpha inv_src_alpha
 #pragma static_sampler Sampler
 

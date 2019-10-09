@@ -2,7 +2,7 @@
 
 #include <Content/Asset.hpp>
 #include <Core/Buffer.hpp>
-#include <Util/Geometry.hpp>
+#include <Math/Geometry.hpp>
 #include <Core/DeviceManager.hpp>
 #include <Util/Util.hpp>
 

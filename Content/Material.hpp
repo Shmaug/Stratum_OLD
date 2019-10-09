@@ -16,9 +16,9 @@ typedef std::variant<
 	Texture*,
 	Sampler*,
 	float,
-	vec2,
-	vec3,
-	vec4
+	float2,
+	float3,
+	float4
 > MaterialParameter;
 
 class Material {

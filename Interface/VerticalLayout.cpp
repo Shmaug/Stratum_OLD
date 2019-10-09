@@ -12,7 +12,7 @@ bool VerticalLayout::AddChild(UIElement* e) {
 }
 
 void VerticalLayout::UpdateLayout() {
-	vec2 c = vec2(1.f, 0);
+	float2 c = float2(1, 0);
 	for (uint32_t i = 0; i < ChildCount(); i++) {
 		UIElement* e = Child(i);
 		UDim2 p = e->Position();

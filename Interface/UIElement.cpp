@@ -5,7 +5,7 @@
 using namespace std;
 
 UIElement::UIElement(const string& name)
-	: mName(name), mCanvas(nullptr), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(vec3()), mAbsoluteExtent(vec2()), mTransformDirty(true), mVisible(true) {}
+	: mName(name), mCanvas(nullptr), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(float3()), mAbsoluteExtent(float2()), mTransformDirty(true), mVisible(true) {}
 UIElement::~UIElement() {}
 
 bool UIElement::Parent(UIElement* p) {
@@ -36,14 +36,14 @@ bool UIElement::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
 	if (mParent) {
-		mAbsolutePosition = mParent->AbsolutePosition() + vec3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsolutePosition = mParent->AbsolutePosition() + float3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, mDepth);
 		mAbsoluteExtent   = mParent->AbsoluteExtent() * mExtent.mScale + mExtent.mOffset;
 	} else {
-		mAbsolutePosition = vec3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsolutePosition = float3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, mDepth);
 		mAbsoluteExtent = mCanvas->Extent() * mExtent.mScale + mExtent.mOffset;
 	}
 
-	mAbsoluteAABB = AABB(mAbsolutePosition + vec3(mAbsoluteExtent, 0), vec3(mAbsoluteExtent, UI_THICKNESS));
+	mAbsoluteAABB = AABB(mAbsolutePosition + float3(mAbsoluteExtent, 0), float3(mAbsoluteExtent, UI_THICKNESS));
 	for (UIElement*& e : mChildren)
 		mAbsoluteAABB.Encapsulate(e->AbsoluteBounds());
 

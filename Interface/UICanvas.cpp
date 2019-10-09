@@ -5,7 +5,7 @@
 
 using namespace std;
 
-UICanvas::UICanvas(const string& name, const vec2& extent) : Renderer(name), mVisible(true), mExtent(extent) {};
+UICanvas::UICanvas(const string& name, const float2& extent) : Renderer(name), mVisible(true), mExtent(extent) {};
 UICanvas::~UICanvas() {}
 
 void UICanvas::AddElement(std::shared_ptr<UIElement> element) {
@@ -25,7 +25,7 @@ void UICanvas::RemoveElement(UIElement* element) {
 
 bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(vec3(0), vec3(mExtent, UI_THICKNESS * .5f));
+	mAABB = AABB(float3(0), float3(mExtent, UI_THICKNESS * .5f));
 	for (auto e : mElements)
 		mAABB.Encapsulate(e->AbsoluteBounds());
 	mAABB *= ObjectToWorld();

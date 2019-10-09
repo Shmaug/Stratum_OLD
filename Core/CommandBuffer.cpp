@@ -43,13 +43,10 @@ CommandBuffer::~CommandBuffer() {
 }
 
 #ifdef ENABLE_CMD_REGION
-void CommandBuffer::BeginLabel(const string& text, const vec4& color) {
+void CommandBuffer::BeginLabel(const string& text, const float4& color) {
 	VkDebugUtilsLabelEXT label = {};
 	label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
-	label.color[0] = color.r;
-	label.color[1] = color.g;
-	label.color[2] = color.b;
-	label.color[3] = color.a;
+	memcpy(label.color, &color, sizeof(color));
 	label.pLabelName = text.c_str();
 	mDevice->CmdBeginDebugUtilsLabelEXT(mCommandBuffer, &label);
 }

@@ -234,7 +234,7 @@ VkCompareOp atocmp(const string& str) {
 		return VK_COMPARE_OP_NEVER;
 	else if (str == "always")
 		return VK_COMPARE_OP_ALWAYS;
-	return VK_COMPARE_OP_LESS_OR_EQUAL;
+	return VK_COMPARE_OP_MAX_ENUM;
 }
 VkBlendOp atoblend(const string& str) {
 	if (str == "add")
@@ -247,7 +247,7 @@ VkBlendOp atoblend(const string& str) {
 		return VK_BLEND_OP_MIN;
 	else if (str == "max")
 		return VK_BLEND_OP_MAX;
-	return VK_BLEND_OP_ADD;
+	return VK_BLEND_OP_MAX_ENUM;
 }
 VkBlendFactor atofac(const string& str) {
 	if (str == "zero")
@@ -289,7 +289,7 @@ VkBlendFactor atofac(const string& str) {
 	else if (str == "inv_src1_alpha")
 		return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
 
-	return VK_BLEND_FACTOR_ONE;
+	return VK_BLEND_FACTOR_MAX_ENUM;
 }
 
 bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
@@ -350,93 +350,105 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 						++it;
 					}
 				} else if (*it == "vertex") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					stages[shaderc_vertex_shader] = *it;
 
 				} else if (*it == "fragment") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					stages[shaderc_fragment_shader] = *it;
 
 				} else if (*it == "geometry") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					stages[shaderc_geometry_shader] = *it;
 
 				} else if (*it == "tess_control") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					stages[shaderc_tess_control_shader] = *it;
 
 				} else if (*it == "tess_evaluation") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					stages[shaderc_tess_evaluation_shader] = *it;
 
 				} else if (*it == "kernel") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					kernels.push_back(*it);
 				} else if (*it == "static_sampler") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					staticSamplers.push_back(*it);
 
 				}else if (*it == "render_queue"){
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					renderQueue = atoi((*it).c_str());
 
 				} else if (*it == "zwrite") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					if (*it == "true")
 						depthStencilState.depthWriteEnable = VK_TRUE;
 					else if (*it == "false")
 						depthStencilState.depthWriteEnable = VK_FALSE;
+					else
+						return false;
 
 				} else if (*it == "ztest") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					if (*it == "true")
 						depthStencilState.depthTestEnable = VK_TRUE;
 					else if (*it == "false")
 						depthStencilState.depthTestEnable = VK_FALSE;
+					else
+						return false;
 
 				} else if (*it == "depth_op") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					depthStencilState.depthCompareOp = atocmp(*it);
-
+					if (depthStencilState.depthCompareOp == VK_COMPARE_OP_MAX_ENUM) return false;
 				} else if (*it == "cull") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					if (*it == "front")
 						cullMode = VK_CULL_MODE_FRONT_BIT;
 					else if (*it == "back")
 						cullMode = VK_CULL_MODE_BACK_BIT;
 					else if (*it == "false")
 						cullMode = VK_CULL_MODE_NONE;
+					else
+						return false;
 
 				} else if (*it == "fill") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					if (*it == "solid")
 						fillMode = VK_POLYGON_MODE_FILL;
 					else if (*it == "line")
 						fillMode = VK_POLYGON_MODE_LINE;
 					else if (*it == "point")
 						fillMode = VK_POLYGON_MODE_POINT;
+					else
+						return false;
 
 				} else if (*it == "blend") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					if (*it == "true")
 						blendState.blendEnable = VK_TRUE;
 					else if (*it == "false")
 						blendState.blendEnable = VK_FALSE;
+					else
+						return false;
 
 				} else if (*it == "blend_op") {
 					blendState.blendEnable = VK_TRUE;
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					blendState.colorBlendOp = atoblend(*it);
+					if (blendState.colorBlendOp == VK_COMPARE_OP_MAX_ENUM) return false;
 
 				} else if (*it == "blend_fac") {
 					blendState.blendEnable = VK_TRUE;
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					blendState.srcColorBlendFactor = atofac(*it);
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					blendState.dstColorBlendFactor = atofac(*it);
+					if (blendState.dstColorBlendFactor == VK_BLEND_FACTOR_MAX_ENUM) return false;
 
 				} else if (*it == "colormask") {
-					if (++it == words.end()) break;
+					if (++it == words.end()) return false;
 					blendState.colorWriteMask = 0;
 					for (auto& c : *it)
 						if (c == 'r')
@@ -447,6 +459,8 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 							blendState.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
 						else if (c == 'a')
 							blendState.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+						else
+							return false;
 
 				}
 				break;

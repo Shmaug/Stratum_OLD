@@ -108,24 +108,24 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 		if (variant->mPushConstants.count(m.first) == 0) continue;
 		auto& range = variant->mPushConstants.at(m.first);
 
-		vec4 value(0);
+		float4 value(0);
 
 		switch (m.second.index()) {
 		case 4:
 			if (range.size != sizeof(float)) continue;
-			value = vec4(get<float>(m.second), 0, 0, 0);
+			value = float4(get<float>(m.second), 0, 0, 0);
 			break;
 		case 5:
-			if (range.size != sizeof(vec2)) continue;
-			value = vec4(get<vec2>(m.second), 0, 0);
+			if (range.size != sizeof(float2)) continue;
+			value = float4(get<float2>(m.second), 0, 0);
 			break;
 		case 6:
-			if (range.size != sizeof(vec3)) continue;
-			value = vec4(get<vec3>(m.second), 0);
+			if (range.size != sizeof(float3)) continue;
+			value = float4(get<float3>(m.second), 0);
 			break;
 		case 7:
-			if (range.size != sizeof(vec4)) continue;
-			value = get<vec4>(m.second);
+			if (range.size != sizeof(float4)) continue;
+			value = get<float4>(m.second);
 			break;
 		}
 

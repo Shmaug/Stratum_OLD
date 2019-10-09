@@ -19,7 +19,7 @@ public:
 private:
 	Scene* mScene;
 	float mCameraDistance;
-	vec3 mCameraEuler;
+	float3 mCameraEuler;
 
 	MouseKeyboardInput* mInput;
 

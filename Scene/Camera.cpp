@@ -12,12 +12,12 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mRenderFormat(renderFormat),
 	mDepthFormat(depthFormat),
 	mOrthographic(false), mOrthographicSize(0),
-	mFieldOfView(radians(70.f)), mPerspectiveBounds(vec4(0.f)),
+	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
 	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
 	mRenderPriority(0),
-	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mInvViewProjection(mat4(1.f)) {
+	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	#pragma region create renderpass
 	vector<VkAttachmentDescription> attachments(3);
@@ -110,12 +110,12 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	mRenderFormat(targetWindow->Format().format),
 	mDepthFormat(depthFormat),
 	mOrthographic(false), mOrthographicSize(0),
-	mFieldOfView(radians(70.f)), mPerspectiveBounds(vec4(0.f)),
+	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
 	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
 	mRenderPriority(0),
-	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mInvViewProjection(mat4(1.f)) {
+	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	mTargetWindow->mTargetCamera = this;
 
@@ -217,14 +217,14 @@ Camera::~Camera() {
 	safe_delete(mFrameData);
 }
 
-vec4 Camera::WorldToClip(vec3 worldPos) {
+float4 Camera::WorldToClip(float3 worldPos) {
 	UpdateMatrices();
-	return mViewProjection * vec4(worldPos, 1);
+	return mViewProjection * float4(worldPos, 1);
 }
-vec3 Camera::ClipToWorld(vec3 clipPos) {
+float3 Camera::ClipToWorld(float3 clipPos) {
 	UpdateMatrices();
-	vec4 wp = mInvViewProjection * vec4(clipPos, 1);
-	return wp / wp.w;
+	float4 wp = mInvViewProjection * float4(clipPos, 1);
+	return wp.xyz / wp.w;
 }
 
 void Camera::PreRender() {
@@ -249,10 +249,10 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 
 	CameraBuffer* buf = (CameraBuffer*)mFrameData[backBufferIndex].mUniformBuffer->MappedData();
 	buf->ViewProjection = ViewProjection();
-	buf->Viewport = vec4((float)mPixelWidth, (float)mPixelHeight, mNear, mFar);
+	buf->Viewport = float4((float)mPixelWidth, (float)mPixelHeight, mNear, mFar);
 	buf->Position = WorldPosition();
-	buf->Right = WorldRotation() * vec3(1, 0, 0);
-	buf->Up = WorldRotation() * vec3(0, 1, 0);
+	buf->Right = WorldRotation() * float3(1, 0, 0);
+	buf->Up = WorldRotation() * float3(0, 1, 0);
 	
 	VkClearValue clearValues[]{
 		{ .0f, .0f, .0f, 0.f },
@@ -372,21 +372,21 @@ bool Camera::UpdateFramebuffer(uint32_t backBufferIndex) {
 bool Camera::UpdateMatrices() {
 	if (!mMatricesDirty) return false;
 
-	vec3 up = WorldRotation() * vec3(0.f, 1.f, 0.f);
-	vec3 fwd = WorldRotation() * vec3(0.f, 0.f, 1.f);
+	float3 up = WorldRotation() * float3(0, 1, 0);
+	float3 fwd = WorldRotation() * float3(0, 0, 1);
 
-	mView = lookAt(WorldPosition(), WorldPosition() + fwd, up);
+	mView = float4x4::Look(WorldPosition(), fwd, up);
 
 	float aspect = Aspect();
 
 	if (mOrthographic)
-		mProjection = ortho(-mOrthographicSize / aspect, mOrthographicSize / aspect, -mOrthographicSize, mOrthographicSize, mNear, mFar);
+		mProjection = float4x4::Orthographic(-mOrthographicSize / aspect, mOrthographicSize / aspect, -mOrthographicSize, mOrthographicSize, mNear, mFar);
 	else {
 		if (mFieldOfView)
-			mProjection = perspective(mFieldOfView, aspect, mNear, mFar);
+			mProjection = float4x4::PerspectiveFov(mFieldOfView, aspect, mNear, mFar);
 		else {
-			vec4 s = mPerspectiveBounds * mNear;
-			mProjection = frustum(s.x, s.y, s.z, s.w, mNear, mFar);
+			float4 s = mPerspectiveBounds * mNear;
+			mProjection = float4x4::PerspectiveBounds(s.x, s.y, s.z, s.w, mNear, mFar);
 		}
 	}
 

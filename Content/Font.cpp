@@ -1,10 +1,8 @@
 #include <Content/Font.hpp>
 
 #include <ThirdParty/stb_truetype.h>
-#include <glm/glm.hpp>
 
 using namespace std;
-using namespace glm;
 
 Font::Font(const string& name, DeviceManager* deviceManager, const string& filename, float pixelSize, float scale)
 	: mName(name), mTexture(nullptr), mPixelSize(pixelSize), mAscender(0), mDescender(0), mLineSpace(0) {
@@ -51,7 +49,7 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 		unsigned char* data = stbtt_GetCodepointBitmapSubpixel(&font, fontScale, fontScale, 0, 0, c, &w, &h, &x, &y);
 		
 		g.mVertOffset = -ymin * scale;
-		g.mSize = vec2((float)w, -(float)h) * scale;
+		g.mSize = float2((float)w, -(float)h) * scale;
 		g.mAdvance = advance * fontScale * scale;
 
 		w += PADDING;
@@ -59,7 +57,7 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 		bitmaps.push_back({ data, (uint32_t)c, {{ 0, 0 }, { (uint32_t)w, (uint32_t)h } } });
 
 		area += w * h;
-		maxWidth = gmax(maxWidth, (uint32_t)w);
+		maxWidth = max(maxWidth, (uint32_t)w);
 
 		for (uint32_t c2 = 0; c2 < 0xFF; c2++)
 			g.mKerning[c2] = stbtt_GetCodepointKernAdvance(&font, c, c2) * fontScale * scale;
@@ -76,10 +74,10 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 	// slightly adjusted for sub-100% space utilization
 	// start with a single empty space, unbounded at the bottom
 	deque<VkRect2D> spaces {
-		{ { PADDING, PADDING }, { gmax((uint32_t)ceilf(sqrtf(area / 0.95f)), maxWidth), 0xFFFFFFFF } }
+		{ { PADDING, PADDING }, { max((uint32_t)ceilf(sqrtf(area / 0.95f)), maxWidth), 0xFFFFFFFF } }
 	};
 
-	uvec2 packedSize(0);
+	uint2 packedSize(0);
 
 	for (GlyphBitmap& box : bitmaps) {
 		// look through spaces backwards so that we check smaller spaces first
@@ -96,7 +94,7 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 			// |         space |
 			// |_______________|
 			box.rect.offset = space.offset;
-			packedSize = max(packedSize, uvec2(space.offset.x + box.rect.extent.width, space.offset.y + box.rect.extent.height));
+			packedSize = vmax(packedSize, uint2(space.offset.x + box.rect.extent.width, space.offset.y + box.rect.extent.height));
 
 			if (box.rect.extent.width == space.extent.width && box.rect.extent.height == space.extent.height) {
 				spaces.erase(spaces.begin() + i);
@@ -167,8 +165,8 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 		p.rect.extent.width -= PADDING;
 		p.rect.extent.height -= PADDING;
 
-		mGlyphs[p.glyph].mUV = vec2(p.rect.offset.x, p.rect.offset.y) / vec2(packedSize);
-		mGlyphs[p.glyph].mUVSize = vec2(p.rect.extent.width, p.rect.extent.height) / vec2(packedSize);
+		mGlyphs[p.glyph].mUV = float2((float)p.rect.offset.x, (float)p.rect.offset.y) / float2(packedSize);
+		mGlyphs[p.glyph].mUVSize = float2((float)p.rect.extent.width, (float)p.rect.extent.height) / float2(packedSize);
 
 		for (uint32_t x = 0; x < p.rect.extent.width; x++)
 			for (uint32_t y = 0; y < p.rect.extent.height; y++) {
@@ -198,7 +196,7 @@ float Font::Kerning(uint32_t from, uint32_t to) const {
 uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyphs, TextAnchor horizontalAnchor, TextAnchor verticalAnchor) const {
 	glyphs.resize(str.size());
 
-	vec2 p(0);
+	float2 p(0);
 
 	const FontGlyph* prev = nullptr;
 
@@ -248,13 +246,13 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 
 		if (prev) p.x += prev->mKerning[str[i]];
 
-		glyphs[glyphCount].mPosition = (p + vec2(0, glyph->mVertOffset)) * scale;
+		glyphs[glyphCount].mPosition = (p + float2(0, glyph->mVertOffset)) * scale;
 		glyphs[glyphCount].mSize = glyph->mSize * scale;
 		glyphs[glyphCount].mUV = glyph->mUV;
 		glyphs[glyphCount].mUVSize = glyph->mUVSize;
 
-		lineMin = gmin(lineMin, glyphs[glyphCount].mPosition.x);
-		lineMax = gmax(lineMax, glyphs[glyphCount].mPosition.x + glyphs[glyphCount].mSize.x);
+		lineMin = fminf(lineMin, glyphs[glyphCount].mPosition.x);
+		lineMax = fmaxf(lineMax, glyphs[glyphCount].mPosition.x + glyphs[glyphCount].mSize.x);
 
 		glyphCount++;
 		p.x += glyph->mAdvance;
@@ -278,15 +276,15 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 		break;
 	}
 
-	vec2 mn(0);
-	vec2 mx(0);
+	float2 mn(0);
+	float2 mx(0);
 	for (uint32_t i = 0; i < glyphCount; i++) {
 		glyphs[i].mPosition.y += verticalOffset;
-		mn = gmin(mn, glyphs[i].mPosition);
-		mx = gmax(mx, glyphs[i].mPosition + glyphs[i].mSize);
+		mn = vmin(mn, glyphs[i].mPosition);
+		mx = vmax(mx, glyphs[i].mPosition + glyphs[i].mSize);
 	}
 
-	aabb = AABB(vec3((mn + mx) * .5f, 0), vec3((mx - mn) * .5f, 0));
+	aabb = AABB(float3((mn + mx) * .5f, 0), float3((mx - mn) * .5f, 0));
 
 	return glyphCount;
 }

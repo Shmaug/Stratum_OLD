@@ -1,6 +1,4 @@
 #pragma once
-
-#include <glm/glm.hpp>
 #include <Util/Util.hpp>
 
 #ifdef _DEBUG
@@ -39,7 +37,7 @@ public:
 	inline operator VkCommandBuffer() const { return mCommandBuffer; }
 
 	#ifdef ENABLE_CMD_REGION
-	ENGINE_EXPORT void BeginLabel(const std::string& label, const vec4& color = vec4(1,1,1,0));
+	ENGINE_EXPORT void BeginLabel(const std::string& label, const float4& color = float4(1,1,1,0));
 	ENGINE_EXPORT void EndLabel();
 	#endif
 

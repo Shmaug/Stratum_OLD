@@ -75,7 +75,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
 		nodeobj->Parent(nodepair.second);
 		nodeobj->LocalPosition(t.x, t.y, t.z);
-		nodeobj->LocalRotation(quat(r.w, r.x, r.y, r.z));
+		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
 		nodeobj->LocalScale(s.x, s.y, s.z);
 
 		mScene->AddObject(nodeobj);
@@ -109,7 +109,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				material = make_shared<Material>(matname.C_Str(), shader);
 				material->CullMode(cullMode);
 				material->SetParameter("BrdfTexture", brdfTexture);
-				material->SetParameter("Color", vec4(color.r, color.g, color.b, 1.f));
+				material->SetParameter("Color", float4(color.r, color.g, color.b, 1));
 				material->SetParameter("Metallic", metallic);
 				material->SetParameter("Roughness", roughness);
 
@@ -169,7 +169,7 @@ bool MeshViewer::Init(Scene* scene) {
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
 
-	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("MeshViewerPanel", vec2(.1f, 1.f));
+	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("MeshViewerPanel", float2(.1f, 1.f));
 	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
 	canvas->AddElement(layout);
 	mScene->AddObject(canvas);
@@ -190,7 +190,7 @@ bool MeshViewer::Init(Scene* scene) {
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
 
-		float mx = gmax(gmax(o->BoundsHeirarchy().mExtents.x, o->BoundsHeirarchy().mExtents.y), o->BoundsHeirarchy().mExtents.z);
+		float mx = fmaxf(fmaxf(o->BoundsHeirarchy().mExtents.x, o->BoundsHeirarchy().mExtents.y), o->BoundsHeirarchy().mExtents.z);
 		o->LocalScale(1.f / mx);
 
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");

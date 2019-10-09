@@ -8,7 +8,7 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(vec3(0, 0, 0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {}
 CameraControl::~CameraControl() {
 	mScene->RemoveObject(mCameraPivot.get());
 	mScene->RemoveObject(mFpsText.get());
@@ -62,14 +62,14 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	mFpsText->LocalPosition(-x, y, d);
 	mFpsText->TextScale(d * .015f);
 
-	mCameraDistance = gmax(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);
+	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);
 
-	vec3 md = vec3(mInput->CursorDelta(), 0);
+	float3 md = float3(mInput->CursorDelta(), 0);
 	if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
 		md.x = -md.x;
 		md = md * .0005f * mCameraDistance;
 	} else
-		md = vec3(md.y, md.x, 0) * .005f;
+		md = float3(md.y, md.x, 0) * .005f;
 
 	if (mInput->MouseButtonDown(1)) { // right mouse
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
@@ -77,9 +77,9 @@ void CameraControl::Update(const FrameTime& frameTime) {
 			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
 		else {
 			mCameraEuler += md;
-			mCameraEuler.x = gclamp(mCameraEuler.x, -pi<float>() * .5f, pi<float>() * .5f);
+			mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
 			// rotate camera
-			mCameraPivot->LocalRotation(mCameraEuler);
+			mCameraPivot->LocalRotation(quaternion(mCameraEuler));
 		}
 	}
 	for (uint32_t i = 0; i < mCameraPivot->ChildCount(); i++)
