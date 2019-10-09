@@ -1,3 +1,9 @@
+#pragma once
+
+#ifdef __cplusplus
+#define uint uint32_t
+#endif
+
 #define PER_CAMERA 0
 #define PER_MATERIAL 1
 #define PER_OBJECT 2
@@ -5,6 +11,10 @@
 #define CAMERA_BUFFER_BINDING 0
 #define OBJECT_BUFFER_BINDING 1
 #define BINDING_START 2
+
+#define LIGHT_SUN 0
+#define LIGHT_POINT 1
+#define LIGHT_SPOT 2
 
 struct CameraBuffer {
 	float4x4 ViewProjection;
@@ -19,3 +29,16 @@ struct ObjectBuffer {
 	float4x4 ObjectToWorld;
 	float4x4 WorldToObject;
 };
+
+struct GPULight {
+	float3 WorldPosition;
+	float Range;
+	float3 Direction;
+	float Angle;
+	float3 Color;
+	uint Type;
+};
+
+#ifdef __cplusplus
+#undef uint
+#endif

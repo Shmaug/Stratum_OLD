@@ -23,6 +23,7 @@ public:
 
 	inline void Visible(bool v) { mVisible = v; };
 	inline virtual bool Visible() override { return mVisible && EnabledHeirarchy(); };
+	ENGINE_EXPORT virtual uint32_t RenderQueue() override;
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) override;
 
 private:

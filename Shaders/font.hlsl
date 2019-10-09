@@ -66,6 +66,6 @@ fs_out fsmain(v2f i) {
 	float4 color = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
 	fs_out o;
 	o.color = color;
-	o.depthNormal = float4(i.normal * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
+	o.depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 	return o;
 }

@@ -1,6 +1,4 @@
 #include <Scene/Object.hpp>
-
-#include <glm/gtx/quaternion.hpp>
 #include <Scene/Camera.hpp>
 
 using namespace std;

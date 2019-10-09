@@ -12,7 +12,6 @@ inline void hash_combine(std::size_t& seed, const T& v) {
 
 #pragma pack(push)
 #pragma pack(1)
-
 struct int2 {
 	int32_t x, y;
 
@@ -1118,7 +1117,10 @@ inline float dot(const float2& a, const float2& b) {
 }
 
 inline float3 cross(const float3& a, const float3& b) {
-	return float3(a.y * b.z - b.y * a.z, a.z * b.x - b.z * a.x, a.x * b.y - a.y * b.x);
+	return float3(
+		a.y * b.z - b.y * a.z,
+		a.z * b.x - b.z * a.x,
+		a.x * b.y - b.x * a.y);
 }
 
 inline float length(const float2& v) {
@@ -1455,33 +1457,34 @@ struct float4x4 {
 	inline float4 operator*(const float4& v) const {
 		float4 Mov0(v[0]);
 		float4 Mov1(v[1]);
-		float4 Mul0 = operator[](0) * Mov0;
-		float4 Mul1 = operator[](1) * Mov1;
+		float4 Mul0 = (*this)[0] * Mov0;
+		float4 Mul1 = (*this)[1] * Mov1;
 		float4 Add0 = Mul0 + Mul1;
 		float4 Mov2(v[2]);
 		float4 Mov3(v[3]);
-		float4 Mul2 = operator[](2) * Mov2;
-		float4 Mul3 = operator[](3) * Mov3;
+		float4 Mul2 = (*this)[2] * Mov2;
+		float4 Mul3 = (*this)[3] * Mov3;
 		float4 Add1 = Mul2 + Mul3;
 		float4 Add2 = Add0 + Add1;
 		return Add2;
 	}
 	inline float4x4 operator*(const float4x4& m) const {
-		float4 a0 = operator[](0);
-		float4 a1 = operator[](1);
-		float4 a2 = operator[](2);
-		float4 a3 = operator[](3);
+		float4 SrcA0 = (*this)[0];
+		float4 SrcA1 = (*this)[1];
+		float4 SrcA2 = (*this)[2];
+		float4 SrcA3 = (*this)[3];
 
-		float4 b0 = m[0];
-		float4 b1 = m[1];
-		float4 b2 = m[2];
-		float4 b3 = m[3];
+		float4 SrcB0 = m[0];
+		float4 SrcB1 = m[1];
+		float4 SrcB2 = m[2];
+		float4 SrcB3 = m[3];
 
-		return float4x4(
-			a0 * b0[0] + a1 * b0[1] + a2 * b0[2] + a3 * b0[3],
-			a0 * b1[0] + a1 * b1[1] + a2 * b1[2] + a3 * b1[3],
-			a0 * b2[0] + a1 * b2[1] + a2 * b2[2] + a3 * b2[3],
-			a0 * b3[0] + a1 * b3[1] + a2 * b3[2] + a3 * b3[3] );
+		float4x4 Result;
+		Result[0] = SrcA0 * SrcB0[0] + SrcA1 * SrcB0[1] + SrcA2 * SrcB0[2] + SrcA3 * SrcB0[3];
+		Result[1] = SrcA0 * SrcB1[0] + SrcA1 * SrcB1[1] + SrcA2 * SrcB1[2] + SrcA3 * SrcB1[3];
+		Result[2] = SrcA0 * SrcB2[0] + SrcA1 * SrcB2[1] + SrcA2 * SrcB2[2] + SrcA3 * SrcB2[3];
+		Result[3] = SrcA0 * SrcB3[0] + SrcA1 * SrcB3[1] + SrcA2 * SrcB3[2] + SrcA3 * SrcB3[3];
+		return Result;
 	}
 	inline float4x4 operator*=(const float4x4& m) {
 		*this = operator*(m);
@@ -1603,7 +1606,7 @@ inline float4x4 scale(const float3& v) {
 
 inline quaternion inverse(const quaternion& q) {
 	float s = 1.f / dot(q.xyzw, q.xyzw);
-	return quaternion(-q.x, -q.y, -q.z, q.w) / s;
+	return quaternion(-q.x, -q.y, -q.z, q.w) * s;
 }
 
 namespace std {

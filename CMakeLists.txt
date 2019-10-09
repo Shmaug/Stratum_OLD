@@ -31,6 +31,7 @@ add_library(Engine SHARED
 	"Interface/UICanvas.cpp"
 	"Interface/VerticalLayout.cpp"
 	"Scene/Camera.cpp"
+	"Scene/Light.cpp"
 	"Scene/MeshRenderer.cpp"
 	"Scene/Scene.cpp"
 	"Scene/Object.cpp"

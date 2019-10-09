@@ -1,5 +1,3 @@
-#include <glm/gtx/quaternion.hpp>
-
 #include <Core/DescriptorSet.hpp>
 #include <Scene/Camera.hpp>
 #include <Shaders/shadercompat.h>
