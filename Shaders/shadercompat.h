@@ -1,6 +1,5 @@
-#pragma once
-
 #ifdef __cplusplus
+#pragma once
 #define uint uint32_t
 #endif
 
@@ -32,11 +31,12 @@ struct ObjectBuffer {
 
 struct GPULight {
 	float3 WorldPosition;
-	float Range;
+	float InvSqrRange;
 	float3 Direction;
-	float Angle;
+	float SpotAngleScale;
 	float3 Color;
 	uint Type;
+	float SpotAngleOffset;
 };
 
 #ifdef __cplusplus

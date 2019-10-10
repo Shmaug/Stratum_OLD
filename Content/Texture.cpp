@@ -102,6 +102,7 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 
 	for (uint32_t i = 0; i < devices->DeviceCount(); i++)
 		mDeviceData.emplace(devices->GetDevice(i), DeviceData());
+
 	CreateImage();
 	CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 	
@@ -126,7 +127,7 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 		uploadBuffers.push_back(uploadBuffer);
 
 		auto commandBuffer = devices->GetDevice(i)->GetCommandBuffer();
-		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+		TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
 		vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer.get(), d.mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 		GenerateMipMaps(commandBuffer.get());
 		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer));
@@ -174,13 +175,13 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 		uploadBuffers.push_back(uploadBuffer);
 
 		auto commandBuffer = devices->GetDevice(i)->GetCommandBuffer();
-		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+		TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
 		vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer.get(), d.mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 		if (mipLevels == 0)
 			GenerateMipMaps(commandBuffer.get());
 		else
-			TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+			TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer));
 	}
@@ -301,10 +302,6 @@ void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
 		0, nullptr,
 		0, nullptr,
 		1, &barrier);
-
-	d.mLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	d.mAcessFlags = barrier.dstAccessMask;
-	d.mStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 }
 
 void Texture::CreateImage() {
@@ -338,7 +335,6 @@ void Texture::CreateImage() {
 		ThrowIfFailed(vkAllocateMemory(*d.first, &allocInfo, nullptr, &d.second.mImageMemory));
 		d.first->SetObjectName(d.second.mImageMemory, mName + " Memory");
 		vkBindImageMemory(*d.first, d.second.mImage, d.second.mImageMemory, 0);
-		d.second.mLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	}
 }
 
@@ -359,12 +355,12 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	}
 }
 
-void Texture::TransitionImageLayout(VkImageLayout newLayout, CommandBuffer* commandBuffer) {
+void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer) {
+	if (oldLayout == newLayout) return;
 	auto& d = mDeviceData.at(commandBuffer->Device());
-	if (d.mLayout == newLayout) return;
 	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = d.mLayout;
+	barrier.oldLayout = oldLayout;
 	barrier.newLayout = newLayout;
 	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -381,9 +377,9 @@ void Texture::TransitionImageLayout(VkImageLayout newLayout, CommandBuffer* comm
 	barrier.subresourceRange.levelCount = mMipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
 	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 	VkPipelineStageFlags destinationStage;
-	barrier.srcAccessMask = d.mAcessFlags;
 
 	switch (newLayout) {
 	case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
@@ -411,14 +407,10 @@ void Texture::TransitionImageLayout(VkImageLayout newLayout, CommandBuffer* comm
 	}
 
 	vkCmdPipelineBarrier(*commandBuffer,
-		d.mStageFlags, destinationStage,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, destinationStage,
 		0,
 		0, nullptr,
 		0, nullptr,
 		1, &barrier
 	);
-
-	d.mLayout = newLayout;
-	d.mAcessFlags = barrier.dstAccessMask;
-	d.mStageFlags = destinationStage;
 }

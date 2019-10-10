@@ -91,10 +91,6 @@ float SmithJointGGXVisibilityTerm(float NdotL, float NdotV, float roughness) {
 	return 0.5f / (lambdaV + lambdaL + 1e-5f);
 }
 
-float3 SampleBackground(float3 D, float roughness) {
-	return .5;
-}
-
 float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 viewDir) {
 	float3 halfDir = normalize(light + viewDir);
 
@@ -193,19 +189,24 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 		float attenuation = 1;
 		if (Lights[l].Type > LIGHT_SUN) {
 			toLight = Lights[l].WorldPosition - i.worldPos;
-			attenuation = dot(toLight, toLight);
-			toLight /= sqrt(attenuation);
-			attenuation = 1 / (1 + attenuation);
-			if (Lights[l].Type == LIGHT_SPOT) {
+			float d2 = dot(toLight, toLight);
+			toLight /= sqrt(d2);
 
+			attenuation = 1 / max(d2, .0001);
+			float f = d2 * Lights[l].InvSqrRange;
+			f = saturate(1 - f * f);
+			attenuation *= f * f;
+
+			if (Lights[l].Type == LIGHT_SPOT) {
+				float a = saturate(dot(toLight, Lights[l].Direction) * Lights[l].SpotAngleScale + Lights[l].SpotAngleOffset);
+				attenuation *= a * a;
 			}
-			break;
 		}
 		eval += attenuation * Lights[l].Color * ShadePoint(material, toLight, normal, view);
 	}
 
-	float3 diffuseLight = 0.15;// SampleBackground(reflection, 1).rgb;
-	float3 specularLight = SampleBackground(reflection, material.perceptualRoughness).rgb;
+	float3 diffuseLight = 0.025;
+	float3 specularLight = .1f;
 	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
 
 	fs_out o;

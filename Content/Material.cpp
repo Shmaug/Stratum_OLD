@@ -76,13 +76,13 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 
 			switch (m.second.index()) {
 			case 0:
-				data.mDescriptorSets[backBufferIndex]->CreateTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), bindings.second.binding);
+				data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), bindings.second.binding);
 				break;
 			case 1:
 				data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), bindings.second.binding);
 				break;
 			case 2:
-				data.mDescriptorSets[backBufferIndex]->CreateTextureDescriptor(get<Texture*>(m.second), bindings.second.binding);
+				data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<Texture*>(m.second), bindings.second.binding);
 				break;
 			case 3:
 				data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<Sampler*>(m.second), bindings.second.binding);

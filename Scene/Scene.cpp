@@ -89,8 +89,7 @@ void Scene::RemoveObject(Object* object) {
 }
 
 void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
-	camera->PreRender();
-
+	PROFILER_BEGIN("Gather Lights");
 	if (mLightBuffers.count(commandBuffer->Device()) == 0) {
 		Buffer** b = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		memset(b, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
@@ -106,13 +105,18 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	}
 	GPULight* lights = (GPULight*)lb->MappedData();
 	for (uint32_t i = 0; i < mLights.size(); i++) {
+		float cosInner = cosf(mLights[i]->InnerSpotAngle());
+		float cosOuter = cosf(mLights[i]->OuterSpotAngle());
+
 		lights[i].WorldPosition = mLights[i]->WorldPosition();
-		lights[i].Range = mLights[i]->Range();
+		lights[i].InvSqrRange = 1.f / (mLights[i]->Range() * mLights[i]->Range());
 		lights[i].Color = mLights[i]->Color() * mLights[i]->Intensity();
-		lights[i].Angle = mLights[i]->SpotAngle();
-		lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, 1);
+		lights[i].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
+		lights[i].SpotAngleOffset = -cosOuter * lights[i].SpotAngleScale;
+		lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, -1);
 		lights[i].Type = mLights[i]->Type();
 	}
+	PROFILER_END;
 
 	PROFILER_BEGIN("Sort");
 	sort(mRenderers.begin(), mRenderers.end(), [](Renderer* a, Renderer* b) {
@@ -120,6 +124,8 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	});
 	PROFILER_END;
 
+	camera->PreRender();
+	
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
 		p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
@@ -145,4 +151,6 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	for (const auto& p : mPluginManager->Plugins())
 		p->PostRender(frameTime, camera, commandBuffer, backBufferIndex);
 	PROFILER_END;
+
+	camera->PostRender(commandBuffer, backBufferIndex);
 }

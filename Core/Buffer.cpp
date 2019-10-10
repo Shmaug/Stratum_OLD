@@ -17,7 +17,7 @@ Buffer::Buffer(const std::string& name, Device* device, const void* data, VkDevi
 }
 Buffer::Buffer(const Buffer& src)
 	: mName(src.mName), mDevice(src.mDevice), mSize(0), mUsageFlags(src.mUsageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT), mMemoryFlags(src.mMemoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
-	*this = src;
+	CopyFrom(src);
 }
 Buffer::~Buffer() {
 	if (mMappedData) Unmap();
@@ -47,11 +47,11 @@ void Buffer::Upload(const void* data, VkDeviceSize size) {
 		Buffer uploadBuffer(mName + " upload", mDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		memcpy(uploadBuffer.Map(), data, size);
 		uploadBuffer.Unmap();
-		*this = uploadBuffer;
+		CopyFrom(uploadBuffer);
 	}
 }
 
-Buffer& Buffer::operator=(const Buffer& other) {
+void Buffer::CopyFrom(const Buffer& other) {
 	if (mMappedData) Unmap();
 	if (mSize != other.mSize) {
 		if (mBuffer) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
@@ -65,8 +65,6 @@ Buffer& Buffer::operator=(const Buffer& other) {
 	copyRegion.size = mSize;
 	vkCmdCopyBuffer(*commandBuffer, other.mBuffer, mBuffer, 1, &copyRegion);
 	mDevice->Execute(commandBuffer)->Wait();
-
-	return *this;
 }
 
 void Buffer::Allocate(){

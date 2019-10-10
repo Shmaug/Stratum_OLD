@@ -37,14 +37,6 @@ bool CameraControl::Init(Scene* scene) {
 	scene->AddObject(mFpsText);
 	scene->AddObject(mCameraPivot = make_shared<Object>("CameraPivot"));
 
-	Camera* c = mScene->Cameras()[0];
-	mFpsText->Parent(c);
-	float d = c->Near() + .001f;
-	float x = c->Near() * tanf(c->FieldOfView() * .5f * c->Aspect());
-	float y = c->Near() * tanf(c->FieldOfView() * .5f);
-	mFpsText->LocalPosition(-x, y, d);
-	mFpsText->TextScale(d * .015f);
-
 	for (auto& camera : mScene->Cameras()) {
 		camera->Parent(mCameraPivot.get());
 		camera->LocalPosition(0, 0, -mCameraDistance);
@@ -57,9 +49,9 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	Camera* c = mScene->Cameras()[0];
 	mFpsText->Parent(c);
 	float d = c->Near() + .001f;
-	float x = c->Near() * tanf(c->FieldOfView() * .5f * c->Aspect());
-	float y = c->Near() * tanf(c->FieldOfView() * .5f);
-	mFpsText->LocalPosition(-x, y, d);
+	float y = d * tanf(c->FieldOfView() * .5f);
+	float x = y * c->Aspect();
+	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 10.f / c->PixelHeight()), d);
 	mFpsText->TextScale(d * .015f);
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);

@@ -15,7 +15,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
@@ -113,7 +113,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
@@ -242,10 +242,73 @@ void Camera::PreRender() {
 		mViewport.maxDepth = 1.f;
 	}
 }
-void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
-	UpdateFramebuffer(backBufferIndex);
+void Camera::PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
+	// resolve or copy render target to target window
+	if (mTargetWindow) {
+		PROFILER_BEGIN("Resolve/Copy RenderTarget");
+		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy");
+		ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
-	mFrameData[backBufferIndex].mColorBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+		VkImageMemoryBarrier barrier = {};
+		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barrier.image = mTargetWindow->CurrentBackBuffer();
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barrier.subresourceRange.baseMipLevel = 0;
+		barrier.subresourceRange.levelCount = 1;
+		barrier.subresourceRange.baseArrayLayer = 0;
+		barrier.subresourceRange.layerCount = 1;
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier
+		);
+
+		if (mSampleCount == VK_SAMPLE_COUNT_1_BIT) {
+			VkImageCopy region = {};
+			region.extent = { mPixelWidth, mPixelHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdCopyImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		} else {
+			VkImageResolve region = {};
+			region.extent = { mPixelWidth, mPixelHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdResolveImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
+
+		swap(barrier.oldLayout, barrier.newLayout);
+		swap(barrier.srcAccessMask, barrier.dstAccessMask);
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &barrier );
+		END_CMD_REGION(commandBuffer);
+		PROFILER_END;
+	}
+}
+void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	if (UpdateFramebuffer(backBufferIndex)) {
+		mFrameData[backBufferIndex].mColorBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+		mFrameData[backBufferIndex].mDepthNormalBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+		mFrameData[backBufferIndex].mDepthBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
+	}
 
 	CameraBuffer* buf = (CameraBuffer*)mFrameData[backBufferIndex].mUniformBuffer->MappedData();
 	buf->ViewProjection = ViewProjection();
@@ -268,67 +331,6 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 }
 void Camera::EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	vkCmdEndRenderPass(*commandBuffer);
-
-	// resolve or copy render target to target window
-	if (mTargetWindow) {
-		PROFILER_BEGIN("Resolve/Copy RenderTarget");
-		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy");
-		ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
-
-		VkImageMemoryBarrier barrier = {};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = mTargetWindow->CurrentBackBuffer();
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
-
-		if (mSampleCount == VK_SAMPLE_COUNT_1_BIT) {
-			VkImageCopy region = {};
-			region.extent = { mPixelWidth, mPixelHeight, 1 };
-			region.dstSubresource.layerCount = 1;
-			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.srcSubresource.layerCount = 1;
-			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdCopyImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), ColorBuffer(backBufferIndex)->Layout(mDevice),
-				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		} else {
-			VkImageResolve region = {};
-			region.extent = { mPixelWidth, mPixelHeight, 1 };
-			region.dstSubresource.layerCount = 1;
-			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.srcSubresource.layerCount = 1;
-			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdResolveImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), ColorBuffer(backBufferIndex)->Layout(mDevice),
-				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		}
-
-		swap(barrier.oldLayout, barrier.newLayout);
-		swap(barrier.srcAccessMask, barrier.dstAccessMask);
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
-		END_CMD_REGION(commandBuffer);
-		PROFILER_END;
-	}
 }
 
 bool Camera::UpdateFramebuffer(uint32_t backBufferIndex) {

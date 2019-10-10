@@ -21,9 +21,10 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 	ENGINE_EXPORT void PreRender();
-	inline ::RenderPass* RenderPass() const { return mRenderPass; }
+	ENGINE_EXPORT void PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 
 	ENGINE_EXPORT float4 WorldToClip(float3 worldPos);
 	ENGINE_EXPORT float3 ClipToWorld(float3 clipPos);

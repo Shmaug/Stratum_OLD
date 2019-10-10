@@ -19,9 +19,11 @@ public:
 
 	inline void* MappedData() const { return mMappedData; }
 
+	inline VkDeviceMemory Memory() const { return mMemory; }
 	inline VkDeviceSize Size() const { return mSize; }
 
-	ENGINE_EXPORT Buffer& operator=(const Buffer& other);
+	ENGINE_EXPORT void CopyFrom(const Buffer& other);
+	Buffer& operator=(const Buffer& other) = delete;
 
 	inline operator VkBuffer() const { return mBuffer; }
 
