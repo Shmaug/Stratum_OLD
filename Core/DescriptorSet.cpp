@@ -43,9 +43,9 @@ void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, uint32_t bindi
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDescriptorPool->Device(), 1, &write, 0, nullptr);
 }
-void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t binding) {
+void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {
 	VkDescriptorImageInfo info = {};
-	info.imageLayout = texture->Layout(mDescriptorPool->Device());
+	info.imageLayout = layout;
 	info.imageView = texture->View(mDescriptorPool->Device());
 	info.sampler = VK_NULL_HANDLE;
 
@@ -59,9 +59,9 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t bi
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDescriptorPool->Device(), 1, &write, 0, nullptr);
 }
-void DescriptorSet::CreateTextureDescriptor(Texture* texture, uint32_t binding) {
+void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {
 	VkDescriptorImageInfo info = {};
-	info.imageLayout = texture->Layout(mDescriptorPool->Device());
+	info.imageLayout = layout;
 	info.imageView = texture->View(mDescriptorPool->Device());
 	info.sampler = VK_NULL_HANDLE;
 

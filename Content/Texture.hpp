@@ -32,9 +32,8 @@ public:
 
 	inline VkImage Image(Device* device) const { return mDeviceData.at(device).mImage; }
 	inline VkImageView View(Device* device) const { return mDeviceData.at(device).mView; }
-	inline VkImageLayout Layout(Device* device) const { return mDeviceData.at(device).mLayout; }
 
-	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout newLayout, CommandBuffer* commandBuffer);
+	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 
 private:
 	friend class AssetManager;
@@ -55,10 +54,7 @@ private:
 		VkImage mImage;
 		VkImageView mView;
 		VkDeviceMemory mImageMemory;
-		VkImageLayout mLayout;
-		VkAccessFlags mAcessFlags;
-		VkPipelineStageFlags mStageFlags;
-		inline DeviceData() : mImage(VK_NULL_HANDLE), mView(VK_NULL_HANDLE), mImageMemory(VK_NULL_HANDLE), mLayout(VK_IMAGE_LAYOUT_UNDEFINED), mAcessFlags(0), mStageFlags(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) {}
+		inline DeviceData() : mImage(VK_NULL_HANDLE), mView(VK_NULL_HANDLE), mImageMemory(VK_NULL_HANDLE) {}
 	};
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 
