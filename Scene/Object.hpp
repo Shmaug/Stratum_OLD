@@ -17,8 +17,8 @@ public:
 	inline ::Scene* Scene() const { return mScene; }
 
 	inline Object* Parent() const { return mParent; }
-	ENGINE_EXPORT bool Parent(Object* obj);
-	ENGINE_EXPORT virtual bool AddChild(Object* obj);
+	ENGINE_EXPORT void Parent(Object* obj);
+	ENGINE_EXPORT void AddChild(Object* obj);
 
 	inline uint32_t ChildCount() const { return (uint32_t)mChildren.size(); }
 	inline Object* Child(uint32_t index) const { return mChildren[index]; }

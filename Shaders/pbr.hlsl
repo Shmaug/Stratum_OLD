@@ -2,6 +2,7 @@
 #pragma fragment fsmain
 
 #pragma multi_compile NORMAL_MAP
+#pragma multi_compile TWO_SIDED
 
 #pragma render_queue 1000
 
@@ -10,24 +11,29 @@
 #include <shadercompat.h>
 
 #define PI 3.1415926535897932
+#define INV_PI 0.31830988618
 #define unity_ColorSpaceDielectricSpec float4(0.04, 0.04, 0.04, 1.0 - 0.04) // standard dielectric reflectivity coef at incident angle (= 4%)
 
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
-[[vk::binding(BINDING_START + 4, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t3);
+[[vk::binding(BINDING_START + 5, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t3);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
 [[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t0);
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t1);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t2);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t3);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
 	float Metallic;
 	float Roughness;
 	uint LightCount;
+#ifdef NORMAL_MAP
+	float BumpStrength;
+#endif
 };
 
 struct v2f {
@@ -57,13 +63,6 @@ float3 DiffuseAndSpecularFromMetallic(float3 albedo, float metallic, out float3 
 	return albedo * oneMinusReflectivity;
 }
 
-struct MaterialInfo {
-	float3 diffuseColor;
-	float3 specularColor;
-	float perceptualRoughness;
-	float oneMinusReflectivity;
-};
-
 float pow5(float x) {
 	float x2 = x * x;
 	return x2 * x2 * x;
@@ -91,55 +90,39 @@ float SmithJointGGXVisibilityTerm(float NdotL, float NdotV, float roughness) {
 	return 0.5f / (lambdaV + lambdaL + 1e-5f);
 }
 
+struct MaterialInfo {
+	float3 diffuseColor;
+	float3 specularColor;
+	float perceptualRoughness;
+	float roughness;
+	float oneMinusReflectivity;
+	float nv;
+};
+
 float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 viewDir) {
 	float3 halfDir = normalize(light + viewDir);
 
-	float nv = abs(dot(normal, viewDir));
 	float nl = saturate(dot(normal, light));
 	float nh = saturate(dot(normal, halfDir));
 
 	float lv = saturate(dot(light, viewDir));
 	float lh = saturate(dot(light, halfDir));
 
-	// Diffuse term
-	float diffuseTerm = DisneyDiffuse(nv, nl, lh, material.perceptualRoughness) * nl;
+	float diffuseTerm = DisneyDiffuse(material.nv, nl, lh, material.perceptualRoughness) * nl;
 
-	// Specular term
-	// HACK: theoretically we should divide diffuseTerm by Pi and not multiply specularTerm!
-	// BUT 1) that will make shader look significantly darker than Legacy ones
-	// and 2) on engine side "Non-important" lights have to be divided by Pi too in cases when they are injected into ambient SH
-	float roughness = material.perceptualRoughness * material.perceptualRoughness;
-
-	// GGX with roughtness to 0 would mean no specular at all, using max(roughness, 0.002) here to match HDrenderloop roughtness remapping.
-	roughness = max(roughness, 0.002);
-	float V = SmithJointGGXVisibilityTerm(nl, nv, roughness);
-	float D = MicrofacetDistribution(nh, roughness);
+	float V = SmithJointGGXVisibilityTerm(nl, material.nv, material.roughness);
+	float D = MicrofacetDistribution(nh, material.roughness);
 
 	float specularTerm = V * D * PI; // Torrance-Sparrow model, Fresnel is applied later
-
-	// specularTerm * nl can be NaN on Metal in some cases, use max() to make sure it's a sane value
 	specularTerm = max(0, specularTerm * nl);
-
-	// surfaceReduction = Int D(NdotH) * NdotH * Id(NdotL>0) dH = 1/(roughness^2+1)
-	float surfaceReduction = 1.0 / (roughness * roughness + 1.0); // fade \in [0.5;1]
-
-
-	// To provide true Lambert lighting, we need to be able to kill specular completely.
 	specularTerm *= any(material.specularColor) ? 1.0 : 0.0;
 
-	float grazingTerm = saturate((1 - material.perceptualRoughness) + (1 - material.oneMinusReflectivity));
 	return material.diffuseColor * diffuseTerm + specularTerm * FresnelTerm(material.specularColor, lh);
 }
 float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float3 diffuseLight, float3 specularLight) {
-	float roughness = material.perceptualRoughness * material.perceptualRoughness;
-	roughness = max(roughness, 0.002);
-
-	// surfaceReduction = Int D(NdotH) * NdotH * Id(NdotL>0) dH = 1/(roughness^2+1)
-	float surfaceReduction = 1.0 / (roughness * roughness + 1.0); // fade \in [0.5;1]
-
-	float nv = abs(dot(normal, viewDir));
+	float surfaceReduction = 1.0 / (material.roughness * material.roughness + 1.0);
 	float grazingTerm = saturate((1 - material.perceptualRoughness) + (1 - material.oneMinusReflectivity));
-	return material.diffuseColor * diffuseLight + surfaceReduction * specularLight * FresnelLerp(material.specularColor, grazingTerm, nv);
+	return material.diffuseColor * diffuseLight + surfaceReduction * specularLight * FresnelLerp(material.specularColor, grazingTerm, material.nv);
 }
 
 v2f vsmain(
@@ -160,29 +143,35 @@ v2f vsmain(
 	return o;
 }
 
-fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
+fs_out fsmain(v2f i) {
 	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
 	clip(col.a - .5);
-
-	float3 normal = normalize(front ? i.normal : -i.normal);
-	#ifdef NORMAL_MAP
-	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
-	bump.xyz = bump.xyz * 2 - 1;
-	float3 tangent = normalize(i.tangent);
-	float3 bitangent = normalize(cross(i.normal, i.tangent));
-	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
-	#endif
-
-	MaterialInfo material;
-	material.perceptualRoughness = Roughness;
-	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
 
 	float3 view = Camera.Position - i.worldPos;
 	float depth = length(view);
 	view /= depth;
 
+	float3 normal = normalize(i.normal);
+#ifdef TWO_SIDED
+	if (dot(normal, view) < 0) normal = -normal;
+#endif
+
+	#ifdef NORMAL_MAP
+	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
+	bump.xyz = bump.xyz * 2 - 1;
+	float3 tangent = normalize(i.tangent);
+	float3 bitangent = normalize(cross(i.normal, i.tangent));
+	bump.xy *= BumpStrength;
+	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
+	#endif
+
+	MaterialInfo material;
+	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
+	material.perceptualRoughness = Roughness * .9;
+	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
+	material.nv = abs(dot(normal, view));
+
 	float3 eval = 0;
-	float3 reflection = normalize(reflect(-view, normal));
 
 	for (uint l = 0; l < LightCount; l++) {
 		float3 toLight = Lights[l].Direction;
@@ -205,9 +194,14 @@ fs_out fsmain(v2f i, bool front : SV_IsFrontFace) {
 		eval += attenuation * Lights[l].Color * ShadePoint(material, toLight, normal, view);
 	}
 
-	float3 diffuseLight = 0.025;
-	float3 specularLight = .1f;
-	eval += ShadeIndirect(material, normal, view, diffuseLight, specularLight);
+	float3 reflection = normalize(reflect(-view, normal));
+
+	uint texWidth, texHeight, numMips;
+	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	float2 uv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
+	float3 specularLight = EnvironmentTexture.SampleLevel(Sampler, uv, saturate(material.perceptualRoughness) * numMips).rgb;
+	
+	eval += ShadeIndirect(material, normal, view, .1, specularLight);
 
 	fs_out o;
 	o.color = float4(eval, col.a);

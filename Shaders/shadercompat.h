@@ -37,6 +37,7 @@ struct GPULight {
 	float3 Color;
 	uint Type;
 	float SpotAngleOffset;
+	float3 pad;
 };
 
 #ifdef __cplusplus

@@ -68,9 +68,10 @@ private:
 	unordered_map<string, string> mFullPaths;
 };
 
-bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& output, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint, unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& descriptorBindings, unordered_map<string, VkPushConstantRange>& pushConstants) {
-	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
+bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& output, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint,
+	unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& descriptorBindings, unordered_map<string, VkPushConstantRange>& pushConstants) {
 	
+	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
 	cerr << result.GetErrorMessage().c_str() << endl;
 
 	switch (result.GetCompilationStatus()) {
@@ -480,7 +481,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 			uint32_t klen = (uint32_t)kw.length();
 			output.write(reinterpret_cast<const char*>(&klen), sizeof(uint32_t));
 			output.write(kw.c_str(), klen);
-			options.AddMacroDefinition(kw);
+			variantOptions.AddMacroDefinition(kw);
 		}
 
 		unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>> descriptorBindings;

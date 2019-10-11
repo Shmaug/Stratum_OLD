@@ -1,6 +1,6 @@
 #pragma once
 
-#define PROFILER_ENABLE
+//#define PROFILER_ENABLE
 
 #ifdef PROFILER_ENABLE
 #define PROFILER_BEGIN(label) Profiler::BeginSample(label, false)
@@ -33,7 +33,7 @@ public:
 	ENGINE_EXPORT static void FrameStart();
 	ENGINE_EXPORT static void FrameEnd();
 
-	ENGINE_EXPORT static void PrintLastFrame(char* buffer, std::size_t size);
+	ENGINE_EXPORT static void PrintLastFrame(std::ostream& stream);
 
 private:
 	static const std::chrono::high_resolution_clock mTimer;

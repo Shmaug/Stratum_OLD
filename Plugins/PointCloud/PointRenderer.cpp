@@ -17,7 +17,16 @@ PointRenderer::~PointRenderer() {
 		safe_delete_array(d.second.mDescriptorDirty);
 		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
+		safe_delete_array(d.second.mUniformDirty);
 	}
+}
+
+bool PointRenderer::UpdateTransform() {
+	if (!Object::UpdateTransform()) return false;
+	mAABB = AABB(mPointAABB, ObjectToWorld());
+	for (auto& d : mDeviceData)
+		memset(d.second.mUniformDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
+	return true;
 }
 
 void PointRenderer::Points(const vector<Point>& points) {
@@ -56,9 +65,11 @@ void PointRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuff
 		d.mDescriptorDirty = new bool[fc];
 		d.mPointsDirty = true;
 		d.mPointBuffer = nullptr;
+		d.mUniformDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * fc);
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * fc);
 		memset(d.mDescriptorDirty, true, sizeof(bool) * fc);
+		memset(d.mUniformDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
 	}
 
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
@@ -89,18 +100,15 @@ void PointRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuff
 		}
 	}
 
-	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = ObjectToWorld();
-	objbuffer->WorldToObject = WorldToObject();
+	if (data.mUniformDirty[backBufferIndex]) {
+		ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
+		objbuffer->ObjectToWorld = ObjectToWorld();
+		objbuffer->WorldToObject = WorldToObject();
+		data.mUniformDirty[backBufferIndex] = false;
+	}
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 
 	vkCmdDraw(*commandBuffer, 6 * mPoints.size(), 1, 0, 0);
-}
-
-bool PointRenderer::UpdateTransform() {
-	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(mPointAABB, ObjectToWorld());
-	return true;
 }

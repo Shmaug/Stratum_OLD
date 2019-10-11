@@ -42,7 +42,9 @@ private:
 
 ENGINE_PLUGIN(PointCloud)
 
-PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mPointSize(0.005f), mAnimStart(0) {}
+PointCloud::PointCloud() : mScene(nullptr), mCameraControl(nullptr), mPointSize(0.005f), mAnimStart(0) {
+	mEnabled = true;
+}
 PointCloud::~PointCloud() {
 	for (Object* p : mObjects)
 		mScene->RemoveObject(p);

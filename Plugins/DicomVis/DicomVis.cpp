@@ -12,7 +12,9 @@ using namespace std;
 
 ENGINE_PLUGIN(DicomVis)
 
-DicomVis::DicomVis() : mScene(nullptr) {}
+DicomVis::DicomVis() : mScene(nullptr) {
+	mEnabled = true;
+}
 DicomVis::~DicomVis() {}
 
 bool DicomVis::Init(Scene* scene) {

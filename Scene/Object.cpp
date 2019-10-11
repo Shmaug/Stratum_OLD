@@ -20,7 +20,7 @@ Object::~Object() {
 bool Object::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
-	mObjectToWorld = translate(mLocalPosition) * float4x4(mLocalRotation) * scale(mLocalScale);
+	mObjectToWorld = float4x4::Translate(mLocalPosition) * float4x4(mLocalRotation) * float4x4::Scale(mLocalScale);
 
 	if (mParent) {
 		mObjectToWorld = mParent->ObjectToWorld() * mObjectToWorld;
@@ -38,13 +38,23 @@ bool Object::UpdateTransform() {
 	return true;
 }
 
-bool Object::AddChild(Object* c) {
+void Object::AddChild(Object* c) {
+	if (c->mParent == this) return;
+
+	if (c->mParent)
+		for (auto it = c->mParent->mChildren.begin(); it != c->mParent->mChildren.end();)
+			if (*it == c)
+				it = c->mParent->mChildren.erase(it);
+			else
+				it++;
+
 	mChildren.push_back(c);
-	return true;
+	c->mParent = this;
+	c->Dirty();
 }
 
-bool Object::Parent(Object* p) {
-	if (mParent == p) return true;
+void Object::Parent(Object* p) {
+	if (mParent == p) return;
 
 	if (mParent)
 		for (auto it = mParent->mChildren.begin(); it != mParent->mChildren.end();)
@@ -53,14 +63,9 @@ bool Object::Parent(Object* p) {
 			else
 				it++;
 
+	if (p) p->mChildren.push_back(this);
 	mParent = p;
-	if (p && !p->AddChild(this)) {
-		mParent = nullptr;
-		Dirty();
-		return false;
-	}
 	Dirty();
-	return true;
 }
 
 void Object::Dirty() {

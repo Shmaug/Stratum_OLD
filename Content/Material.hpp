@@ -31,7 +31,8 @@ public:
 
 	ENGINE_EXPORT GraphicsShader* GetShader(Device* device);
 
-	inline uint32_t RenderQueue() const { return Shader()->RenderQueue(); }
+	inline void RenderQueue(uint32_t q) { mRenderQueueOverride = q; }
+	inline uint32_t RenderQueue() const { return (mRenderQueueOverride == ~0) ? Shader()->RenderQueue() : mRenderQueueOverride; }
 
 	inline VkCullModeFlags CullMode() const { return mCullMode; }
 
@@ -50,6 +51,8 @@ private:
 	std::variant<::Shader*, std::shared_ptr<::Shader>> mShader;
 	std::set<std::string> mShaderKeywords;
 	VkCullModeFlags mCullMode;
+
+	uint32_t mRenderQueueOverride;
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 
