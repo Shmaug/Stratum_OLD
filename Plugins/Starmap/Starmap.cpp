@@ -9,7 +9,9 @@ using namespace std;
 
 ENGINE_PLUGIN(Starmap)
 
-Starmap::Starmap() : mScene(nullptr), mRunning(false), mTelnetClient(nullptr) {}
+Starmap::Starmap() : mScene(nullptr), mRunning(false), mTelnetClient(nullptr) {
+	mEnabled = true;
+}
 Starmap::~Starmap() {
 	mRunning = false;
 	if (mLoadThread.joinable()) mLoadThread.join();

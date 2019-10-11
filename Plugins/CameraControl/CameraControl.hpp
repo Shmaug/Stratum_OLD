@@ -14,7 +14,9 @@ public:
 
 	inline void CameraDistance(float d) { mCameraDistance = d; }
 	inline float CameraDistance() const { return mCameraDistance; }
-	inline Object* CameraPivot() const { return mCameraPivot.get(); }
+	inline float3 CameraEuler() const { return mCameraEuler; }
+	inline void CameraEuler(const float3& e) { mCameraEuler = e; }
+	inline Object* CameraPivot() const { return mCameraPivot; }
 
 private:
 	Scene* mScene;
@@ -23,8 +25,8 @@ private:
 
 	MouseKeyboardInput* mInput;
 
-	std::shared_ptr<TextRenderer> mFpsText;
-	std::shared_ptr<Object> mCameraPivot;
+	TextRenderer* mFpsText;
+	Object* mCameraPivot;
 
 	float mFrameTimeAccum;
 	float mFps;

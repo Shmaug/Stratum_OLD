@@ -21,17 +21,20 @@ Scene::~Scene(){
 void Scene::Update(const FrameTime& frameTime) {
 	PROFILER_BEGIN("Pre Update");
 	for (const auto& p : mPluginManager->Plugins())
-		p->PreUpdate(frameTime);
+		if (p->mEnabled)
+			p->PreUpdate(frameTime);
 	PROFILER_END;
 
 	PROFILER_BEGIN("Update");
 	for (const auto& p : mPluginManager->Plugins())
-		p->Update(frameTime);
+		if (p->mEnabled)
+			p->Update(frameTime);
 	PROFILER_END;
 
 	PROFILER_BEGIN("Post Update");
 	for (const auto& p : mPluginManager->Plugins())
-		p->PostUpdate(frameTime);
+		if (p->mEnabled)
+			p->PostUpdate(frameTime);
 	PROFILER_END;
 }
 
@@ -78,8 +81,8 @@ void Scene::RemoveObject(Object* object) {
 
 	for (auto it = mObjects.begin(); it != mObjects.end();)
 		if (it->get() == object) {
-			for (auto& c : object->mChildren)
-				c->Parent(object->mParent);
+			while (object->mChildren.size())
+				object->mChildren[0]->Parent(object->mParent);
 			object->Parent(nullptr);
 			object->mScene = nullptr;
 			it = mObjects.erase(it);
@@ -128,7 +131,8 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
-		p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
+		if (p->mEnabled)
+			p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
 	PROFILER_END;
 
 	PROFILER_BEGIN("Draw");
@@ -136,11 +140,9 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	camera->BeginRenderPass(commandBuffer, backBufferIndex);
 	for (const auto& r : mRenderers)
 		if (r->Visible()) {
-			PROFILER_BEGIN("Draw " + r->mName);
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
 			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
 			END_CMD_REGION(commandBuffer);
-			PROFILER_END;
 		}
 	camera->EndRenderPass(commandBuffer, backBufferIndex);
 	END_CMD_REGION(commandBuffer);
@@ -149,7 +151,8 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	// Post Render
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
-		p->PostRender(frameTime, camera, commandBuffer, backBufferIndex);
+		if (p->mEnabled)
+			p->PostRender(frameTime, camera, commandBuffer, backBufferIndex);
 	PROFILER_END;
 
 	camera->PostRender(commandBuffer, backBufferIndex);

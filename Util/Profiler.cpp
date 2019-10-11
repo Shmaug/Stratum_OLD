@@ -1,5 +1,7 @@
 #include <Util/Profiler.hpp>
 
+#include <sstream>
+
 using namespace std;
 
 ProfilerSample  Profiler::mFrames[PROFILER_FRAME_COUNT];
@@ -39,15 +41,14 @@ void Profiler::FrameEnd() {
 	mCurrentFrame++;
 }
 
-void PrintSample(char* buffer, size_t size, size_t& c, ProfilerSample* s, uint32_t tabLevel) {
+void PrintSample(ostream& stream, ProfilerSample* s, uint32_t tabLevel) {
 	for (uint32_t i = 0; i < tabLevel; i++)
-		c += sprintf_s(buffer + c, size - c, "  ");
+		stream << "  ";
 
-	c += sprintf_s(buffer + c, size - c, "%s: %.2fms\n", s->mLabel.c_str(), s->mTime.count() * 1e-6);
+	stream << s->mLabel << ": " << (s->mTime.count() * 1e-6) << endl;
 	for (auto& pc : s->mChildren)
-		PrintSample(buffer, size, c, &pc, tabLevel + 1);
+		PrintSample(stream, &pc, tabLevel + 1);
 }
-void Profiler::PrintLastFrame(char* buffer, size_t size) {
-	size_t c = 0;
-	PrintSample(buffer, size, c, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 1);
+void Profiler::PrintLastFrame(ostream& stream) {
+	PrintSample(stream, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 1);
 }

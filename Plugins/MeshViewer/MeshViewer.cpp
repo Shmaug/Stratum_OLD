@@ -38,7 +38,25 @@ private:
 
 ENGINE_PLUGIN(MeshViewer)
 
-MeshViewer::MeshViewer() : mScene(nullptr) {}
+const ::VertexInput CubeVertexInput {
+	{
+		0, // binding
+		sizeof(float3), // stride
+		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+	},
+	{
+		{
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			0 // offset
+		}
+	}
+};
+
+MeshViewer::MeshViewer() : mScene(nullptr) {
+	mEnabled = true;
+}
 MeshViewer::~MeshViewer() {
 	for (Object* obj : mObjects)
 		mScene->RemoveObject(obj);
@@ -47,7 +65,8 @@ MeshViewer::~MeshViewer() {
 Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, float scale) {
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
-	Texture* bumpTexture  = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
+	Texture* bumpTexture = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
+	Texture* environment  = mScene->AssetManager()->LoadTexture("Assets/venice_sunset_8k.hdr", false);
 
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
@@ -58,6 +77,8 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 	queue<pair<aiNode*, Object*>> nodes;
 	nodes.push(make_pair(aiscene->mRootNode, nullptr));
 	Object* root = nullptr;
+
+	uint32_t renderQueueOffset = 0;
 
 	while(!nodes.empty()) {
 		pair<aiNode*, Object*> nodepair = nodes.front();
@@ -91,7 +112,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 			shared_ptr<Material>& material = materials[aimesh->mMaterialIndex];
 			if (!material) {
 				VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-				int twoSided;
+				bool twoSided;
 				aiColor3D color;
 				aiString matname;
 				float metallic, roughness;
@@ -100,6 +121,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0;
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .8f;
 				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
+
 
 				aiString diffuse, normal, metalroughness;
 				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &diffuse);
@@ -112,6 +134,8 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 				material->SetParameter("Color", float4(color.r, color.g, color.b, 1));
 				material->SetParameter("Metallic", metallic);
 				material->SetParameter("Roughness", roughness);
+				material->SetParameter("EnvironmentTexture", environment);
+				if (twoSided) material->EnableKeyword("TWO_SIDED");
 
 				if (diffuse == aiString("") || diffuse.C_Str()[0] == '*')
 					material->SetParameter("MainTexture", whiteTexture);
@@ -129,6 +153,9 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 					material->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture(normal.C_Str(), false));
 					material->EnableKeyword("NORMAL_MAP");
 				}
+
+				material->RenderQueue(material->RenderQueue() + renderQueueOffset);
+				renderQueueOffset++;
 			}
 
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
@@ -141,8 +168,6 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 
 			mScene->AddObject(meshRenderer);
 			mObjects.push_back(meshRenderer.get());
-
-			//printf("%s: <%.2f, %.2f, %.2f> [%.2f, %.2f, %.2f]\n", node->mName.C_Str(), meshRenderer->Bounds().mCenter.x, meshRenderer->Bounds().mCenter.y, meshRenderer->Bounds().mCenter.z, meshRenderer->Bounds().mExtents.x, meshRenderer->Bounds().mExtents.y, meshRenderer->Bounds().mExtents.z);
 		}
 
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
@@ -155,32 +180,58 @@ void MeshViewer::SwitchScene(Object* s) {
 	for (Object* o : mSceneRoots)
 		o->mEnabled = (o == s);
 	AABB aabb = s->BoundsHeirarchy();
+
 	auto cameraControl = mScene->PluginManager()->GetPlugin<CameraControl>();
-	cameraControl->CameraDistance(aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-	cameraControl->CameraPivot()->LocalPosition(aabb.mCenter);
+	cameraControl->CameraDistance(.1f);// aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
+	cameraControl->CameraEuler(radians(float3(5, 150, 0)));
+	cameraControl->CameraPivot()->LocalPosition(aabb.mCenter + float3(0, 0, -.05f));
 }
 
 bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
+	float3 cubeVerts[8] {
+		float3(-1, -1, -1),
+		float3( 1, -1, -1),
+		float3(-1, -1,  1),
+		float3( 1, -1,  1),
+		float3(-1,  1, -1),
+		float3( 1,  1, -1),
+		float3(-1,  1,  1),
+		float3( 1,  1,  1),
+	};
+	uint16_t cubeIndices[36]{
+		2,7,6,2,3,7,
+		0,1,2,2,1,3,
+		1,5,7,7,3,1,
+		4,5,1,4,1,0,
+		6,4,2,4,0,2,
+		4,7,5,4,6,7
+	};
+	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
+	skyboxMat->SetParameter("EnvironmentTexture", mScene->AssetManager()->LoadTexture("Assets/venice_sunset_8k.hdr", false));
+	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
+	skybox->Mesh(make_shared<Mesh>("Cube", scene->DeviceManager(), cubeVerts, cubeIndices, 8, sizeof(float3), 36, &CubeVertexInput, VK_INDEX_TYPE_UINT16));
+	skybox->Material(skyboxMat);
+
+	mObjects.push_back(skybox.get());
+	mScene->AddObject(skybox);
+
 	Shader* pbrshader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
-	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
 	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
-	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
+	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", mScene->AssetManager()->LoadShader("Shaders/font.shader"));
 	fontMat->SetParameter("MainTexture", font->Texture());
 
 	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("MeshViewerPanel", float2(.1f, 1.f));
 	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
 	canvas->AddElement(layout);
-	mScene->AddObject(canvas);
-	mObjects.push_back(canvas.get());
+	//mScene->AddObject(canvas);
+	//mObjects.push_back(canvas.get());
 
 	layout->Extent(1.f, 1.f, 0.f, 0.f);
 
 	vector<filesystem::path> datasets {
-		"Assets/bunny.obj",
-		"Assets/dragon.obj",
-		"Assets/bear.obj"
+		"C:/Users/thedstro/Desktop/SanMiguel/SanMiguel.gltf"
 	};
 
 	for (const auto& c : datasets) {
@@ -205,26 +256,13 @@ bool MeshViewer::Init(Scene* scene) {
 	layout->UpdateLayout();
 	canvas->LocalPosition(-1.f, .5f, 0.f);
 
-	shared_ptr<Light> light0 = make_shared<Light>("Point");
-	light0->Type(Point);
-	light0->Intensity(1.f);
-	light0->Range(5.f);
-	light0->Color(float3(1.f, .25f, .25f));
-	light0->LocalPosition(.75f, .5f, -.5f);
+	shared_ptr<Light> light0 = make_shared<Light>("Sun");
+	light0->Type(Sun);
+	light0->Intensity(1.5f);
+	light0->Color(float3(1.f, 1.f, .95f));
+	light0->LocalRotation(quaternion(radians(float3(75.f, 45.f, 0))));
 	mObjects.push_back(light0.get());
 	mScene->AddObject(light0);
-
-	shared_ptr<Light> light1 = make_shared<Light>("Spot");
-	light1->Type(Spot);
-	light1->InnerSpotAngle(radians(15.f));
-	light1->OuterSpotAngle(radians(20.f));
-	light1->Intensity(1.f);
-	light1->Range(5.f);
-	light1->LocalPosition(0.f, 2.f, 0.f);
-	light0->Color(float3(.25f, 1.f, .25f));
-	light1->LocalRotation(quaternion(radians(float3(90.f, 0, 0.f))));
-	mObjects.push_back(light1.get());
-	mScene->AddObject(light1);
 
 	SwitchScene(mSceneRoots[0]);
 

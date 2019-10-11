@@ -5,7 +5,7 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM) {}
+	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mRenderQueueOverride(~0){}
 Material::Material(const string& name, shared_ptr<::Shader> shader) : mName(name), mShader(shader), mIsBound(false) {}
 Material::~Material(){
 	for (auto& d : mDeviceData) {

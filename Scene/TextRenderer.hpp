@@ -50,6 +50,7 @@ private:
 		Buffer** mGlyphBuffers;
 		bool* mDirty;
 		uint32_t mGlyphCount;
+		bool* mUniformDirty;
 	};
 
 	std::vector<TextGlyph> mTempGlyphs;

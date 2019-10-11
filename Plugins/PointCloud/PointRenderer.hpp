@@ -38,6 +38,7 @@ private:
 		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
 		bool* mDescriptorDirty;
+		bool* mUniformDirty;
 	};
 
 	AABB mPointAABB;

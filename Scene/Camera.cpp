@@ -2,7 +2,7 @@
 #include <Shaders/shadercompat.h>
 
 #include <Util/Profiler.hpp>
-
+ 
 using namespace std;
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat)

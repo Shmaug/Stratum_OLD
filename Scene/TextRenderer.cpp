@@ -19,7 +19,16 @@ TextRenderer::~TextRenderer() {
 		safe_delete(d.second.mGlyphBuffers);
 		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
+		safe_delete_array(d.second.mUniformDirty);
 	}
+}
+
+bool TextRenderer::UpdateTransform() {
+	if (!Object::UpdateTransform()) return false;
+	mAABB = AABB(mTextAABB, ObjectToWorld());
+	for (auto& d : mDeviceData)
+		memset(d.second.mUniformDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
+	return true;
 }
 
 uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
@@ -58,10 +67,12 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 		d.mGlyphBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mObjectBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
 		d.mDescriptorSets = new DescriptorSet * [commandBuffer->Device()->MaxFramesInFlight()];
+		d.mUniformDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
 		memset(d.mDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
+		memset(d.mUniformDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
 	}
 
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
@@ -90,18 +101,15 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	if (bindings.count("Glyphs"))
 		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
 
-	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = ObjectToWorld();
-	objbuffer->WorldToObject = WorldToObject();
+	if (data.mUniformDirty[backBufferIndex]) {
+		ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
+		objbuffer->ObjectToWorld = ObjectToWorld();
+		objbuffer->WorldToObject = WorldToObject();
+		data.mUniformDirty[backBufferIndex] = false;
+	}
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
-}
-
-bool TextRenderer::UpdateTransform() {
-	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(mTextAABB, ObjectToWorld());
-	return true;
 }

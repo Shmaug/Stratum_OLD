@@ -14,6 +14,8 @@ class Scene;
 
 class EnginePlugin {
 public:
+	bool mEnabled;
+
 	inline virtual ~EnginePlugin() {}
 	
 	inline virtual bool Init(Scene* scene) { return true; }
