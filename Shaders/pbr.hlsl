@@ -43,11 +43,6 @@ struct v2f {
 	float3 worldPos : TEXCOORD0;
 	float2 texcoord : TEXCOORD1;
 };
-struct fs_out {
-	float4 color : SV_Target0;
-	float4 depthNormal : SV_Target1;
-};
-
 float MicrofacetDistribution(float roughness, float NdotH) {
 	float roughness2 = roughness * roughness;
 	float f = (NdotH * roughness2 - NdotH) * NdotH + 1;
@@ -143,7 +138,10 @@ v2f vsmain(
 	return o;
 }
 
-fs_out fsmain(v2f i) {
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1) {
+
 	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
 	clip(col.a - .5);
 
@@ -203,8 +201,6 @@ fs_out fsmain(v2f i) {
 	
 	eval += ShadeIndirect(material, normal, view, .1, specularLight);
 
-	fs_out o;
-	o.color = float4(eval, col.a);
-	o.depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
-	return o;
+	color = float4(eval, col.a);
+	depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
 }

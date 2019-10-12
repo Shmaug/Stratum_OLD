@@ -35,10 +35,7 @@ struct v2f {
 	float3 center : TEXCOORD1;
 };
 struct fs_out {
-	float4 color : SV_Target0;
-	float4 depthNormal : SV_Target1;
-	uint coverage : SV_Coverage;
-	float depth : SV_Depth;
+	
 };
 
 v2f vsmain(uint id : SV_VertexId) {
@@ -70,7 +67,12 @@ v2f vsmain(uint id : SV_VertexId) {
 	return o;
 }
 
-fs_out fsmain(v2f i) {
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1,
+	inout uint coverage : SV_Coverage,
+	out float depth : SV_Depth ) {
+
 	float3 qp = Camera.Position - i.center;
 	float a = dot(i.rd, i.rd);
 	float b = dot(qp, i.rd);
@@ -84,8 +86,6 @@ fs_out fsmain(v2f i) {
 	float3 p = Camera.Position + i.rd * t;
 	float3 normal = normalize(p - i.center);
 
-	fs_out o;
-	o.color = i.color * dot(normal, -normalize(i.rd));
-	o.depthNormal = float4(normal * .5 + .5, length(i.rd) / Camera.Viewport.w);
-	return o;
+	color = i.color * dot(normal, -normalize(i.rd));
+	depthNormal = float4(normal * .5 + .5, length(i.rd) / Camera.Viewport.w);
 }

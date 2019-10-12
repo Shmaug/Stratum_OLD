@@ -66,7 +66,7 @@ Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, 
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
 	Texture* bumpTexture = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
-	Texture* environment  = mScene->AssetManager()->LoadTexture("Assets/venice_sunset_8k.hdr", false);
+	Texture* environment  = mScene->AssetManager()->LoadTexture("Assets/daytime.hdr", false);
 
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
@@ -209,7 +209,7 @@ bool MeshViewer::Init(Scene* scene) {
 		4,7,5,4,6,7
 	};
 	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
-	skyboxMat->SetParameter("EnvironmentTexture", mScene->AssetManager()->LoadTexture("Assets/venice_sunset_8k.hdr", false));
+	skyboxMat->SetParameter("EnvironmentTexture", mScene->AssetManager()->LoadTexture("Assets/daytime.hdr", false));
 	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
 	skybox->Mesh(make_shared<Mesh>("Cube", scene->DeviceManager(), cubeVerts, cubeIndices, 8, sizeof(float3), 36, &CubeVertexInput, VK_INDEX_TYPE_UINT16));
 	skybox->Material(skyboxMat);
@@ -231,7 +231,7 @@ bool MeshViewer::Init(Scene* scene) {
 	layout->Extent(1.f, 1.f, 0.f, 0.f);
 
 	vector<filesystem::path> datasets {
-		"C:/Users/thedstro/Desktop/SanMiguel/SanMiguel.gltf"
+		"Assets/bunny.obj"
 	};
 
 	for (const auto& c : datasets) {
