@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ThirdParty/GLFW/glfw3.h>
+#include <GLFW/glfw3.h>
 
 #include <Content/Texture.hpp>
 #include <Core/CommandBuffer.hpp>
