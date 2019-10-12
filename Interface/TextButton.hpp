@@ -7,6 +7,8 @@
 #include <Core/Buffer.hpp>
 #include <Core/DescriptorSet.hpp>
 
+#include <cstring>
+
 class TextButton : public UIElement {
 public:
 	ENGINE_EXPORT TextButton(const std::string& name);

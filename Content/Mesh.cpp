@@ -7,10 +7,10 @@
 #include <Core/Device.hpp>
 #include <Util/Util.hpp>
 
-#include <assimp/scene.h>
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/material.h>
+#include <ThirdParty/assimp/scene.h>
+#include <ThirdParty/assimp/cimport.h>
+#include <ThirdParty/assimp/postprocess.h>
+#include <ThirdParty/assimp/material.h>
 
 #pragma warning(disable:26451)
 

@@ -99,7 +99,7 @@ void DeviceManager::CreateInstance() {
 	for (const VkLayerProperties& layer : availableLayers)
 		availableLayerSet.insert(layer.layerName);
 
-	for (auto& it = validationLayers.begin(); it != validationLayers.end();) {
+	for (auto it = validationLayers.begin(); it != validationLayers.end();) {
 		if (availableLayerSet.count(*it))
 			it++;
 		else {

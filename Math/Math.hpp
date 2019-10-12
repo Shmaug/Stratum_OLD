@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <math.h>
 
 #define PI 3.1415926535897932384626433832795f
 
@@ -233,7 +234,6 @@ struct int3 {
 struct int4 {
 	union {
 		struct { int32_t x, y, z, w; };
-		struct { int2 xy; int2 zw; };
 		int3 xyz;
 	};
 
@@ -580,7 +580,6 @@ struct uint3 {
 struct uint4 {
 	union {
 		struct { uint32_t x, y, z, w; };
-		struct { uint2 xy; uint2 zw; };
 		uint3 xyz;
 	};
 
@@ -909,8 +908,6 @@ struct float4 {
 	union {
 		struct { float x, y, z, w; };
 		struct { float r, g, b, a; };
-		struct { float2 xy; float2 zw; };
-		struct { float2 rg; float2 ba; };
 		float3 xyz;
 		float3 rgb;
 	};

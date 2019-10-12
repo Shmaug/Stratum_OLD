@@ -1,6 +1,7 @@
 #include <Content/Font.hpp>
-
 #include <ThirdParty/stb_truetype.h>
+
+#include <cstring>
 
 using namespace std;
 

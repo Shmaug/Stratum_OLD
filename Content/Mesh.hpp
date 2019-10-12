@@ -6,7 +6,7 @@
 #include <Core/DeviceManager.hpp>
 #include <Util/Util.hpp>
 
-#include <assimp/mesh.h>
+#include <ThirdParty/assimp/mesh.h>
 
 class Mesh : public Asset {
 public:

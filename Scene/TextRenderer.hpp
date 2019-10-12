@@ -10,6 +10,8 @@
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
+#include <cstring>
+
 class TextRenderer : public Renderer {
 public:
 	bool mVisible;

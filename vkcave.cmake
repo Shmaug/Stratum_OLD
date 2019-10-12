@@ -74,6 +74,7 @@ elseif (UNIX)
 		link_libraries("$ENV{VULKAN_SDK}/lib/libVkLayer_utils.a")
 	endif()
 else()
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lstdc++fs")
 	message(FATAL_ERROR "Error: Not implemented!")
 endif()
 

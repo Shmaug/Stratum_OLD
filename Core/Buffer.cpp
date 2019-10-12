@@ -2,6 +2,8 @@
 #include <Core/Buffer.hpp>
 #include <Util/Util.hpp>
 
+#include <cstring>
+
 using namespace std;
 
 Buffer::Buffer(const std::string& name, Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)

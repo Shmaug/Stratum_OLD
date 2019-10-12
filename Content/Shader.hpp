@@ -9,6 +9,7 @@
 #include <Core/RenderPass.hpp>
 
 class Shader;
+
 struct PipelineInstance {
 	VkRenderPass mRenderPass;
 	const VertexInput* mVertexInput;

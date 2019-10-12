@@ -1,6 +1,5 @@
 #pragma once 
 
-#include <vulkan/vulkan.h>
 #include <stdexcept>
 #include <algorithm>
 #include <optional>
@@ -9,6 +8,9 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <memory>
+
+#include <vulkan/vulkan.h>
 
 #include <Math/Geometry.hpp>
 
@@ -21,7 +23,13 @@
 #define PLUGIN_EXPORT __declspec(dllexport)
 #endif
 #else
-static_assert(false, "Not implemented!");
+#ifdef ENGINE_CORE
+#define ENGINE_EXPORT
+#define PLUGIN_EXPORT
+#else
+#define ENGINE_EXPORT
+#define PLUGIN_EXPORT
+#endif
 #endif
 
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
