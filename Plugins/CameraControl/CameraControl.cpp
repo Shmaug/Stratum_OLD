@@ -27,14 +27,14 @@ bool CameraControl::Init(Scene* scene) {
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
 
-	//shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
-	//fpsText->Font(font);
-	//fpsText->Material(fontMat);
-	//fpsText->Text("0 fps");
-	//fpsText->VerticalAnchor(Maximum);
-	//fpsText->HorizontalAnchor(Minimum);
-	//mScene->AddObject(fpsText);
-	//mFpsText = fpsText.get();
+	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
+	fpsText->Font(font);
+	fpsText->Material(fontMat);
+	fpsText->Text("");
+	fpsText->VerticalAnchor(Maximum);
+	fpsText->HorizontalAnchor(Minimum);
+	mScene->AddObject(fpsText);
+	mFpsText = fpsText.get();
 
 	shared_ptr<Object> cameraPivot = make_shared<Object>("CameraPivot");
 	mScene->AddObject(cameraPivot);
@@ -49,13 +49,13 @@ bool CameraControl::Init(Scene* scene) {
 }
 
 void CameraControl::Update(const FrameTime& frameTime) {
-	//Camera* c = mScene->Cameras()[0];
-	//mFpsText->Parent(c);
-	//float d = c->Near() + .001f;
-	//float y = d * tanf(c->FieldOfView() * .5f);
-	//float x = y * c->Aspect();
-	//mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 10.f / c->PixelHeight()), d);
-	//mFpsText->TextScale(d * .015f);
+	Camera* c = mScene->Cameras()[0];
+	mFpsText->Parent(c);
+	float d = c->Near() + .001f;
+	float y = d * tanf(c->FieldOfView() * .5f);
+	float x = y * c->Aspect();
+	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 10.f / c->PixelHeight()), d);
+	mFpsText->TextScale(d * .015f);
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);
 
@@ -87,8 +87,8 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		mFps = mFrameCount / mFrameTimeAccum;
 		mFrameTimeAccum -= 1.f;
 		mFrameCount = 0;
-		//char buf[256];
-		//sprintf_s(buf, 256, "%.2f fps\n", mFps);
-		//mFpsText->Text(buf);
+		char buf[256];
+		sprintf(buf, "%.2f fps\n", mFps);
+		mFpsText->Text(buf);
 	}
 }

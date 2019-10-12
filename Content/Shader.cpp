@@ -4,14 +4,11 @@
 
 using namespace std;
 
-bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
-	return rhs.mRenderPass == mRenderPass &&
-		((!rhs.mVertexInput && !mVertexInput) || (rhs.mVertexInput && mVertexInput && *rhs.mVertexInput == *mVertexInput)) &&
-		mTopology == rhs.mTopology &&
-		mCullMode == rhs.mCullMode;
-}
+void ReadBindingsAndPushConstants(ifstream& file,
+	unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& destBindings,
+	unordered_map<string, VkPushConstantRange>& destPushConstants,
+	vector<string>& destStaticSamplers) {
 
-void ReadBindingsAndPushConstants(ifstream& file, unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& destBindings, unordered_map<string, VkPushConstantRange>& destPushConstants, vector<string>& destStaticSamplers) {
 	uint32_t bc;
 	file.read(reinterpret_cast<char*>(&bc), sizeof(uint32_t));
 	for (uint32_t j = 0; j < bc; j++) {
@@ -47,9 +44,12 @@ void ReadBindingsAndPushConstants(ifstream& file, unordered_map<string, pair<uin
 		file.read(reinterpret_cast<char *>(&binding.stageFlags), sizeof(VkShaderStageFlagBits));
 	}
 }
-void EvalPushConstants(ifstream& file, const unordered_map<string, VkPushConstantRange>& pushConstants, vector<VkPushConstantRange>& constants) {
+void EvalPushConstants(ifstream& file,
+	const unordered_map<string, VkPushConstantRange>& pushConstants,
+	vector<VkPushConstantRange>& constants) {
+
 	unordered_map<VkShaderStageFlags, uint2> ranges;
-	for (const auto &b : pushConstants) 
+	for (const auto &b : pushConstants) {
 		if (ranges.count(b.second.stageFlags) == 0)
 			ranges[b.second.stageFlags] = uint2(b.second.offset, b.second.offset + b.second.size);
 		else {
@@ -63,6 +63,13 @@ void EvalPushConstants(ifstream& file, const unordered_map<string, VkPushConstan
 		constants.back().offset = r.second.x;
 		constants.back().size = r.second.y - r.second.x;
 	}
+}
+
+bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
+	return rhs.mRenderPass == mRenderPass &&
+		((!rhs.mVertexInput && !mVertexInput) || (rhs.mVertexInput && mVertexInput && *rhs.mVertexInput == *mVertexInput)) &&
+		mTopology == rhs.mTopology &&
+		mCullMode == rhs.mCullMode;
 }
 
 Shader::Shader(const string& name, ::DeviceManager* devices, const string& filename)
@@ -181,7 +188,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 					}
 
 					vector<VkPushConstantRange> constants;
-					EvalPushConstants(cv->mPushConstants, constants);
+					EvalPushConstants(file, cv->mPushConstants, constants);
 
 					VkPipelineLayoutCreateInfo layout = {};
 					layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -232,7 +239,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				file.read(reinterpret_cast<char*>(spirv.data()), spirvSize * sizeof(uint32_t));
 			}
 
-			ReadBindingsAndPushConstants(file, descriptorBindings, pushConstants, staticSamplers, pushConstants);
+			ReadBindingsAndPushConstants(file, descriptorBindings, pushConstants, staticSamplers);
 
 			for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
 				Device* device = devices->GetDevice(i);
@@ -290,7 +297,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				}
 
 				vector<VkPushConstantRange> constants;
-				EvalPushConstants(file, gv->mPushConstants, constants, pushConstants);
+				EvalPushConstants(file, gv->mPushConstants, constants);
 
 				VkPipelineLayoutCreateInfo layout = {};
 				layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

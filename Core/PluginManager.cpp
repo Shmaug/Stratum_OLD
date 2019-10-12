@@ -84,10 +84,10 @@ void PluginManager::UnloadPlugins() {
 	#ifdef WINDOWS
 	for (const auto& m : mPluginModules)
 		if (!FreeLibrary(m))
-			fprintf("Failed to unload plugin module\n");
+			fprintf(stderr, "Failed to unload plugin module\n");
 	#else
 	for (const auto& m : mPluginModules)
 		if (dlclose(m) != 0)
-			fprintf("Failed to unload plugin library\n");
+			fprintf(stderr, "Failed to unload plugin library\n");
 	#endif
 }

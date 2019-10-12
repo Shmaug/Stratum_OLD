@@ -38,7 +38,7 @@ public:
 		string& data = mFiles[fullpath];
 		if (data.empty() && !ReadFile(fullpath, data)) {
 			char* err = new char[128];
-			sprintf_s(err, 128, "Failed to read include file: %s while compiling %s\n", fullpath.c_str(), requesting_source);
+			sprintf(err, "Failed to read include file: %s while compiling %s\n", fullpath.c_str(), requesting_source);
 
 			response->source_name = "";
 			response->source_name_length = 0;
