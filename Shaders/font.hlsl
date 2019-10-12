@@ -31,10 +31,6 @@ struct v2f {
 	float2 texcoord : TEXCOORD0;
 	float3 worldPos : TEXCOORD1;
 };
-struct fs_out {
-	float4 color : SV_Target0;
-	float4 depthNormal : SV_Target1;
-};
 
 v2f vsmain(uint id : SV_VertexId) {
 	v2f o;
@@ -62,10 +58,10 @@ v2f vsmain(uint id : SV_VertexId) {
 	return o;
 }
 
-fs_out fsmain(v2f i) {
-	float4 color = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
-	fs_out o;
-	o.color = color;
-	o.depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
-	return o;
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1 ) {
+
+	color = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
+	depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 }
