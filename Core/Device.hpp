@@ -3,6 +3,7 @@
 #include <queue>
 #include <mutex>
 #include <unordered_map>
+#include <thread>
 
 #include <Core/CommandBuffer.hpp>
 #include <Util/Util.hpp>

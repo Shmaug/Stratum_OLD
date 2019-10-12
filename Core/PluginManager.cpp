@@ -6,7 +6,7 @@ using namespace std;
 #ifdef WINDOWS
 typedef EnginePlugin* (__cdecl* CreatePluginProc)(void);
 #else
-static_assert(false, "Not implemented!");
+typedef EnginePlugin* (CreatePluginProc)(void);
 #endif
 
 PluginManager::~PluginManager() {
@@ -28,7 +28,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			}
 			CreatePluginProc proc = (CreatePluginProc)GetProcAddress(m, "CreatePlugin");
 			if (proc == NULL) {
-				fprintf(stderr, "Failed to find create function!\n");
+				fprintf(stderr, "Failed to find CreatePlugin!\n");
 				if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
 				continue;
 			}
@@ -43,7 +43,29 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			printf("Done\n");
 		}
 		#else
-		static_assert(false, "Not implemented!");
+		if (wcscmp(p.path().extension().c_str(), L".so") == 0) {
+			void* handle = dlopen(p.path().c_str(), RTLD_LAZY);
+			if(handle == nullptr) {
+				fprintf(stderr, "Failed to load library!\n");
+				continue;
+			}
+
+			CreatePluginProc proc = (CreatePluginProc)dlsym(handle, "CreatePlugin");
+			if (proc == nullptr) {
+				fprintf(stderr, "Failed to find CreatePlugin!\n");
+				if (dlclose(handle) != 0) fprintf(stderr, "Failed to free library!\n");
+				continue;
+			}
+			EnginePlugin* plugin = proc();
+			if (plugin == nullptr) {
+				fprintf(stderr, "Failed to call CreatePlugin!\n");
+				if (dlclose(handle) != 0) fprintf(stderr, "Failed to free library!\n");
+				continue;
+			}
+			mPlugins.push_back(plugin);
+			mPluginModules.push_back(m);
+			printf("Done\n");
+		}
 		#endif
 	}
 
@@ -62,8 +84,10 @@ void PluginManager::UnloadPlugins() {
 	#ifdef WINDOWS
 	for (const auto& m : mPluginModules)
 		if (!FreeLibrary(m))
-			cerr << "Failed to unload plugin module" << endl;
+			fprintf("Failed to unload plugin module\n");
 	#else
-	static_assert(false, "Not implemented!");
+	for (const auto& m : mPluginModules)
+		if (dlclose(m) != 0)
+			fprintf("Failed to unload plugin library\n");
 	#endif
 }

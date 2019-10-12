@@ -33,7 +33,7 @@ private:
 	#ifdef WINDOWS
 	std::vector<HMODULE> mPluginModules;
 	#else
-	static_assert(false, "Not implemented!");
+	std::vector<void*> mPluginModules;
 	#endif
 
 	std::vector<EnginePlugin*> mPlugins;

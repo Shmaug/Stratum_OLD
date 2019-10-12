@@ -10,7 +10,7 @@
 using namespace std;
 
 Texture::Texture(const string& name, ::DeviceManager* devices, const string& filename, bool srgb) : mName(name) {
-	void* pixels = nullptr;
+	uint8_t* pixels = nullptr;
 	uint32_t size = 0;
 	int32_t x, y, channels;
 	stbi_info(filename.c_str(), &x, &y, &channels);
@@ -49,13 +49,13 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 
 	if (!pixels) {
 		if (!srgb && stbi_is_16_bit(filename.c_str())) {
-			pixels = stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
+			pixels = (uint8_t*)stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
 			size = 2;
 		} else if (!srgb && stbi_is_hdr(filename.c_str())) {
-			pixels = stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
+			pixels = (uint8_t*)stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
 			size = 4;
 		} else {
-			pixels = stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
+			pixels = (uint8_t*)stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
 			size = 1;
 		}
 		if (!pixels) throw runtime_error("Failed to load image");
@@ -74,7 +74,6 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 		cachew.write(reinterpret_cast<const char*>(&imgsize), sizeof(uint64_t));
 		cachew.write((const char*)pixels, imgsize);
 	}
-
 
 	if (srgb) {
 		const VkFormat formatMap[4] {
@@ -138,7 +137,7 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 	if (stbifree)
 		stbi_image_free(pixels);
 	else
-		delete[] pixels;
+		safe_delete_array(pixels);
 
 	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), dataSize / 1000.f);
 }

@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 #include <Input/InputDevice.hpp>
-#include <glfw/glfw3.h>
+#include <ThirdParty/GLFW/glfw3.h>
 
 class Window;
 

@@ -46,7 +46,7 @@ private:
 	friend class CommandBuffer;
 	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
-	inline Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
+	inline ::Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
 
 	std::variant<::Shader*, std::shared_ptr<::Shader>> mShader;
 	std::set<std::string> mShaderKeywords;

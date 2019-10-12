@@ -1,5 +1,7 @@
 #include <Content/Shader.hpp>
 
+#include <string>
+
 using namespace std;
 
 bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
@@ -7,6 +9,60 @@ bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
 		((!rhs.mVertexInput && !mVertexInput) || (rhs.mVertexInput && mVertexInput && *rhs.mVertexInput == *mVertexInput)) &&
 		mTopology == rhs.mTopology &&
 		mCullMode == rhs.mCullMode;
+}
+
+void ReadBindingsAndPushConstants(ifstream& file, unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& destBindings, unordered_map<string, VkPushConstantRange>& destPushConstants, vector<string>& destStaticSamplers) {
+	uint32_t bc;
+	file.read(reinterpret_cast<char*>(&bc), sizeof(uint32_t));
+	for (uint32_t j = 0; j < bc; j++) {
+		string name;
+		uint32_t nlen;
+		file.read(reinterpret_cast<char *>(&nlen), sizeof(uint32_t));
+		name.resize(nlen);
+		file.read(const_cast<char *>(name.data()), nlen);
+
+		auto &binding = destBindings[name];
+		file.read(reinterpret_cast<char *>(&binding.first), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.second.binding), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.second.descriptorCount), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.second.descriptorType), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.second.stageFlags), sizeof(VkShaderStageFlagBits));
+		uint32_t static_sampler;
+		file.read(reinterpret_cast<char *>(&static_sampler), sizeof(uint32_t));
+		if (static_sampler)
+			destStaticSamplers.push_back(name);
+	}
+
+	file.read(reinterpret_cast<char *>(&bc), sizeof(uint32_t));
+	for (unsigned int j = 0; j < bc; j++) {
+		string name;
+		uint32_t nlen;
+		file.read(reinterpret_cast<char *>(&nlen), sizeof(uint32_t));
+		name.resize(nlen);
+		file.read(const_cast<char *>(name.data()), nlen);
+
+		auto &binding = destPushConstants[name];
+		file.read(reinterpret_cast<char *>(&binding.offset), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.size), sizeof(uint32_t));
+		file.read(reinterpret_cast<char *>(&binding.stageFlags), sizeof(VkShaderStageFlagBits));
+	}
+}
+void EvalPushConstants(ifstream& file, const unordered_map<string, VkPushConstantRange>& pushConstants, vector<VkPushConstantRange>& constants) {
+	unordered_map<VkShaderStageFlags, uint2> ranges;
+	for (const auto &b : pushConstants) 
+		if (ranges.count(b.second.stageFlags) == 0)
+			ranges[b.second.stageFlags] = uint2(b.second.offset, b.second.offset + b.second.size);
+		else {
+			ranges[b.second.stageFlags].x = min(ranges[b.second.stageFlags].x, b.second.offset);
+			ranges[b.second.stageFlags].y = max(ranges[b.second.stageFlags].y, b.second.offset + b.second.size);
+		}
+	}
+	for (auto r : ranges) {
+		constants.push_back({});
+		constants.back().stageFlags = r.first;
+		constants.back().offset = r.second.x;
+		constants.back().size = r.second.y - r.second.x;
+	}
 }
 
 Shader::Shader(const string& name, ::DeviceManager* devices, const string& filename)
@@ -39,60 +95,6 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 		vector<string> entryPoints;
 		vector<vector<uint32_t>> modules;
 
-		auto& readBindingsAndPushConstants = [&](unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& destBindings, unordered_map<string, VkPushConstantRange>& destPushConstants, vector<string>& destStaticSamplers) {
-			uint32_t bc;
-			file.read(reinterpret_cast<char*>(&bc), sizeof(uint32_t));
-			for (unsigned int j = 0; j < bc; j++) {
-				string name;
-				uint32_t nlen;
-				file.read(reinterpret_cast<char*>(&nlen), sizeof(uint32_t));
-				name.resize(nlen);
-				file.read(const_cast<char*>(name.data()), nlen);
-
-				auto& binding = destBindings[name];
-				file.read(reinterpret_cast<char*>(&binding.first), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.second.binding), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.second.descriptorCount), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.second.descriptorType), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.second.stageFlags), sizeof(VkShaderStageFlagBits));
-				uint32_t static_sampler;
-				file.read(reinterpret_cast<char*>(&static_sampler), sizeof(uint32_t));
-				if (static_sampler)
-					destStaticSamplers.push_back(name);
-			}
-
-			file.read(reinterpret_cast<char*>(&bc), sizeof(uint32_t));
-			for (unsigned int j = 0; j < bc; j++) {
-				string name;
-				uint32_t nlen;
-				file.read(reinterpret_cast<char*>(&nlen), sizeof(uint32_t));
-				name.resize(nlen);
-				file.read(const_cast<char*>(name.data()), nlen);
-
-				auto& binding = destPushConstants[name];
-				file.read(reinterpret_cast<char*>(&binding.offset), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.size), sizeof(uint32_t));
-				file.read(reinterpret_cast<char*>(&binding.stageFlags), sizeof(VkShaderStageFlagBits));
-			}
-		};
-		auto& evalPushConstants = [&](const unordered_map<string, VkPushConstantRange>& pushConstants, vector<VkPushConstantRange>& constants) {
-			unordered_map<VkShaderStageFlags, uint2> ranges;
-			for (const auto& b : pushConstants) {
-				if (ranges.count(b.second.stageFlags) == 0)
-					ranges[b.second.stageFlags] = uint2(b.second.offset, b.second.offset + b.second.size);
-				else {
-					ranges[b.second.stageFlags].x = min(ranges[b.second.stageFlags].x, b.second.offset);
-					ranges[b.second.stageFlags].y = max(ranges[b.second.stageFlags].y, b.second.offset + b.second.size);
-				}
-			}
-			for (const auto& r : ranges) {
-				constants.push_back({});
-				constants.back().stageFlags = r.first;
-				constants.back().offset = r.second.x;
-				constants.back().size = r.second.y - r.second.x;
-			}
-		};
-
 		uint32_t is_compute;
 		file.read(reinterpret_cast<char*>(&is_compute), sizeof(uint32_t));
 		if (is_compute) {
@@ -122,7 +124,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 				file.read(reinterpret_cast<char*>(&workgroupSizes[i]), sizeof(uint3));
 
-				readBindingsAndPushConstants(descriptorBindings[i], pushConstants[i], staticSamplers[i]);
+				ReadBindingsAndPushConstants(file, descriptorBindings[i], pushConstants[i], staticSamplers[i]);
 			}
 
 			for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
@@ -179,7 +181,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 					}
 
 					vector<VkPushConstantRange> constants;
-					evalPushConstants(cv->mPushConstants, constants);
+					EvalPushConstants(cv->mPushConstants, constants);
 
 					VkPipelineLayoutCreateInfo layout = {};
 					layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -230,7 +232,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				file.read(reinterpret_cast<char*>(spirv.data()), spirvSize * sizeof(uint32_t));
 			}
 
-			readBindingsAndPushConstants(descriptorBindings, pushConstants, staticSamplers);
+			ReadBindingsAndPushConstants(file, descriptorBindings, pushConstants, staticSamplers, pushConstants);
 
 			for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
 				Device* device = devices->GetDevice(i);
@@ -244,7 +246,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				gv->mDescriptorBindings = descriptorBindings;
 				gv->mPushConstants = pushConstants;
 
-				for (unsigned int j = 0; j < modules.size(); j++) {
+				for (uint32_t j = 0; j < modules.size(); j++) {
 					gv->mEntryPoints[j] = entryPoints[j];
 					gv->mStages[j] = stages[j];
 					gv->mStages[j].pName = gv->mEntryPoints[j].c_str();
@@ -277,7 +279,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				}
 
 				gv->mDescriptorSetLayouts.resize(bindings.size());
-				for (unsigned int b = 0; b < bindings.size(); b++) {
+				for (uint32_t b = 0; b < bindings.size(); b++) {
 					VkDescriptorSetLayoutCreateInfo descriptorSetLayout = {};
 					descriptorSetLayout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 					descriptorSetLayout.bindingCount = (uint32_t)bindings[b].size();
@@ -288,7 +290,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				}
 
 				vector<VkPushConstantRange> constants;
-				evalPushConstants(gv->mPushConstants, constants);
+				EvalPushConstants(file, gv->mPushConstants, constants, pushConstants);
 
 				VkPipelineLayoutCreateInfo layout = {};
 				layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
