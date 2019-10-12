@@ -1,4 +1,4 @@
-﻿cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required (VERSION 2.8)
 
 include(vkcave.cmake)
 include(shaders.cmake)
@@ -70,7 +70,11 @@ if(WIN32)
 	configure_file("$ENV{ASSIMP_HOME}/bin/x64/assimp-vc140-mt.dll" "${PROJECT_BINARY_DIR}/bin/assimp-vc140-mt.dll" COPYONLY)
 	configure_file("$ENV{VULKAN_SDK}/shaderc/install/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 elseif(UNIX)
-    message(FATAL_ERROR "Error: Not implemented!")
+	# Link shaderc and spirv-cross to ShaderCompiler
+	target_link_libraries(ShaderCompiler
+		"$ENV{VULKAN_SDK}/lib/libshaderc_shared.so"
+		"$ENV{VULKAN_SDK}/lib/libspirv-cross-core.a" )
+	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/lib/Engine.a")
 else()
     message(FATAL_ERROR "Error: Not implemented!")
 endif(WIN32)
