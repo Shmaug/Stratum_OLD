@@ -34,8 +34,12 @@ v2f vsmain([[vk::location(0)]] float3 vertex : POSITION ) {
 	return o;
 }
 
-float4 fsmain(v2f i) : SV_Target0{
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1) {
+
 	float3 view = normalize(i.viewRay);
 	float2 uv = float2(atan2(view.z, view.x) * INV_PI * .5 + .5, acos(view.y) * INV_PI);
-	return float4(pow(EnvironmentTexture.SampleLevel(Sampler, uv, 0).rgb, 1 / 2.2), 1);
+	color = float4(pow(EnvironmentTexture.SampleLevel(Sampler, uv, 0).rgb, 1 / 2.2), 1);
+	depthNormal = float4(0,0,0,Camera.Viewport.w);
 }
