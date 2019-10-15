@@ -33,13 +33,14 @@ void PluginManager::LoadPlugins(Scene* scene) {
 				fprintf(stderr, "Failed to load library!\n");
 				continue;
 			}
-			void* proc = (CreatePluginProc)GetProcAddress(m, "CreatePlugin");
-			if (proc == NULL) {
+			EnginePlugin* (*fptr)(void);
+			*(void**)(&fptr) = (void*)GetProcAddress(m, "CreatePlugin");
+			if (fptr == NULL) {
 				fprintf(stderr, "Failed to find CreatePlugin!\n");
 				if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
 				continue;
 			}
-			EnginePlugin* plugin = proc();
+			EnginePlugin* plugin = (*fptr)();
 			if (plugin == nullptr) {
 				fprintf(stderr, "Failed to call CreatePlugin!\n");
 				if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
@@ -58,15 +59,14 @@ void PluginManager::LoadPlugins(Scene* scene) {
 				printf("Failed to load: %s\n", err);
 				continue;
 			}
-			void* func = dlsym(handle, "CreatePlugin");
-			if (func == nullptr) {
+			EnginePlugin* (*fptr)(void);
+			*(void**)(&fptr) = dlsym(handle, "CreatePlugin");
+			if (fptr == nullptr) {
 				char* err = dlerror();
 				printf("Failed to find CreatePlugin: %s\n", err);
 				if (dlclose(handle) != 0) cerr << "Failed to free library! " << dlerror() << endl;
 				continue;
 			}
-			EnginePlugin* (*fptr)(void);
-			*(void**)(&fptr) = func;
 			EnginePlugin* plugin = (*fptr)();
 			if (plugin == nullptr) {
 				printf("Failed to create plugin\n");
