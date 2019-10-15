@@ -67,10 +67,9 @@ if(WIN32)
 		"${CMAKE_SOURCE_DIR}/ThirdParty/SPIRV-Cross/lib/spirv-cross-core.lib" )
 
 	# Link engine to VkCave
-	target_link_libraries(VkCave"${PROJECT_BINARY_DIR}/lib/Engine.lib" "Ws2_32.lib" )
+	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/lib/Engine.lib" "Ws2_32.lib" )
 
-	# Copy required DLLs to output folder
-	configure_file("$ENV{ASSIMP_HOME}/bin/x64/assimp-vc140-mt.dll" "${PROJECT_BINARY_DIR}/bin/assimp-vc140-mt.dll" COPYONLY)
+	# Copy shaderc dll
 	configure_file("$ENV{VULKAN_SDK}/shaderc/install/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 elseif(UNIX)
 	# Link shaderc and spirv-cross to ShaderCompiler
