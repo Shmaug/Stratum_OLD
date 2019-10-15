@@ -27,6 +27,11 @@
 
 #include <ThirdParty/json11.h>
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-local-addr"
+#endif
+
 namespace json11 {
 
 static const int max_depth = 200;
@@ -755,3 +760,7 @@ bool Json::has_shape(const shape & types, string & err) const {
 }
 
 } // namespace json11
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif

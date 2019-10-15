@@ -9,7 +9,7 @@ using namespace std;
 Fence::Fence(Device* device) : mDevice(device) {
 	VkFenceCreateInfo fenceInfo = {};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	ThrowIfFailed(vkCreateFence(*mDevice, &fenceInfo, nullptr, &mFence));
+	ThrowIfFailed(vkCreateFence(*mDevice, &fenceInfo, nullptr, &mFence), "vkCreateFence failed");
 }
 Fence::~Fence() {
 	vkDestroyFence(*mDevice, mFence, nullptr);
@@ -31,7 +31,7 @@ CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const 
 	allocInfo.commandPool = mCommandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
-	ThrowIfFailed(vkAllocateCommandBuffers(*mDevice, &allocInfo, &mCommandBuffer));
+	ThrowIfFailed(vkAllocateCommandBuffers(*mDevice, &allocInfo, &mCommandBuffer), "vkAllocateCommandBuffers failed");
 
 	mCompletionFence = make_shared<Fence>(device);
 

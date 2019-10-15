@@ -90,14 +90,20 @@ Window::Window(VkInstance instance, const string& title, MouseKeyboardInput* inp
 		auto monitor = monitors[monitorIndex];
 		auto mode = glfwGetVideoMode(monitor);
 
+		#ifdef WINDOWS
 		int mx, my;
 		glfwGetMonitorPos(monitor, &mx, &my);
-
 		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_FALSE);
 		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_TRUE);
 		glfwSetWindowPos(mWindow, mx, my);
 		glfwSetWindowSize(mWindow, mode->width, mode->height);
-
+		#else
+		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
+		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
+		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
+		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+		#endif
+		
 		mFullscreen = true;
 	}
 }
@@ -137,14 +143,13 @@ void Window::Present(const vector<shared_ptr<Fence>>& fences) {
 	mFrameData[mCurrentBackBufferIndex].mFences = fences;
 }
 
-GLFWmonitor* Window::GetCurrentMonitor(int& x, int& y, int& w, int& h) const {
+GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
 	int nmonitors, i;
 	int wx, wy, ww, wh;
 	int mx, my, mw, mh;
 	int overlap, bestoverlap;
 	GLFWmonitor* bestmonitor;
 	GLFWmonitor** monitors;
-	const GLFWvidmode* mode;
 
 	bestoverlap = 0;
 	bestmonitor = NULL;
@@ -154,10 +159,10 @@ GLFWmonitor* Window::GetCurrentMonitor(int& x, int& y, int& w, int& h) const {
 	monitors = glfwGetMonitors(&nmonitors);
 
 	for (i = 0; i < nmonitors; i++) {
-		mode = glfwGetVideoMode(monitors[i]);
+		const GLFWvidmode* modei = glfwGetVideoMode(monitors[i]);
 		glfwGetMonitorPos(monitors[i], &mx, &my);
-		mw = mode->width;
-		mh = mode->height;
+		mw = modei->width;
+		mh = modei->height;
 
 		overlap =
 			max(0, min(wx + ww, mx + mw) - max(wx, mx)) *
@@ -166,10 +171,7 @@ GLFWmonitor* Window::GetCurrentMonitor(int& x, int& y, int& w, int& h) const {
 		if (bestoverlap < overlap) {
 			bestoverlap = overlap;
 			bestmonitor = monitors[i];
-			x = mx;
-			y = my;
-			w = mw;
-			h = mh;
+			*mode = modei;
 		}
 	}
 
@@ -180,18 +182,30 @@ void Window::Fullscreen(bool fs) {
 	if (fs) {
 		mWindowedRect = mClientRect;
 
-		int x, y, w, h;
-		GetCurrentMonitor(x, y, w, h);
+		const GLFWvidmode* mode;
+		GLFWmonitor* monitor = GetCurrentMonitor(&mode);
 
+		#ifdef WINDOWS
 		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_FALSE);
 		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_TRUE);
-
 		glfwSetWindowPos(mWindow, x, y);
 		glfwSetWindowSize(mWindow, w, h);
+		#else
+		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
+		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
+		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
+		glfwSetWindowAttrib(mWindow, GLFW_REFRESH_RATE, mode->refreshRate);
+		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+		#endif
 		mFullscreen = true;
-	} else {
+	} else
+	{
+		#ifdef WINDOWS
 		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_TRUE);
 		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_FALSE);
+		#else
+		glfwSetWindowMonitor(mWindow, nullptr, 0, 0, mWindowedRect.extent.width, mWindowedRect.extent.height, GLFW_DONT_CARE);
+		#endif
 
 		glfwSetWindowPos(mWindow, mWindowedRect.offset.x, mWindowedRect.offset.y);
 		glfwSetWindowSize(mWindow, mWindowedRect.extent.width, mWindowedRect.extent.height);
@@ -269,7 +283,7 @@ void Window::CreateSwapchain(::Device* device) {
 	createInfo.presentMode = presentMode;
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
-	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain));
+	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain), "vkCreateSwapchainKHR failed");
 	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain");
 	#pragma endregion
 
@@ -329,12 +343,12 @@ void Window::CreateSwapchain(::Device* device) {
 		createInfo.subresourceRange.levelCount = 1;
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
-		ThrowIfFailed(vkCreateImageView(*mDevice, &createInfo, nullptr, &mFrameData[i].mSwapchainImageView));
+		ThrowIfFailed(vkCreateImageView(*mDevice, &createInfo, nullptr, &mFrameData[i].mSwapchainImageView), "vkCreateImageView failed for swapchain");
 		mDevice->SetObjectName(mFrameData[i].mSwapchainImageView, mTitle + " Image View " + to_string(i));
 
 		VkSemaphoreCreateInfo semaphoreInfo = {};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		ThrowIfFailed(vkCreateSemaphore(*mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]));
+		ThrowIfFailed(vkCreateSemaphore(*mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]), "vkCreateSemaphore failed for swapchain");
 		mDevice->SetObjectName(mImageAvailableSemaphores[i], mTitle + " Image Available Semaphore " + to_string(i));
 	}
 

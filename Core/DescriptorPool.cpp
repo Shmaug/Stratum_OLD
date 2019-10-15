@@ -20,7 +20,7 @@ DescriptorPool::DescriptorPool(const string& name, ::Device* device) : mDevice(d
 	poolInfo.pPoolSizes = type_count;
 	poolInfo.maxSets = 10000;
 
-	ThrowIfFailed(vkCreateDescriptorPool(*mDevice, &poolInfo, nullptr, &mDescriptorPool));
+	ThrowIfFailed(vkCreateDescriptorPool(*mDevice, &poolInfo, nullptr, &mDescriptorPool), "vkCreateDescriptorPool failed");
 	mDevice->SetObjectName(mDescriptorPool, name);
 }
 
@@ -35,11 +35,11 @@ VkDescriptorSet DescriptorPool::AllocateDescriptorSet(VkDescriptorSetLayout layo
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &layout;
 	VkDescriptorSet descriptorSet;
-	ThrowIfFailed(vkAllocateDescriptorSets(*mDevice, &allocInfo, &descriptorSet));
+	ThrowIfFailed(vkAllocateDescriptorSets(*mDevice, &allocInfo, &descriptorSet), "vkAllocateDescriptorSets failed");
 	mAllocatedDescriptorCount++;
 	return descriptorSet;
 }
 void DescriptorPool::FreeDescriptorSet(VkDescriptorSet descriptorSet) {
-	ThrowIfFailed(vkFreeDescriptorSets(*mDevice, mDescriptorPool, 1, &descriptorSet));
+	ThrowIfFailed(vkFreeDescriptorSets(*mDevice, mDescriptorPool, 1, &descriptorSet), "vkFreeDescriptorSets failed");
 	mAllocatedDescriptorCount--;
 }

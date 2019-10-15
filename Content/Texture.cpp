@@ -320,7 +320,7 @@ void Texture::CreateImage() {
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	for (auto& d : mDeviceData) {
-		ThrowIfFailed(vkCreateImage(*d.first, &imageInfo, nullptr, &d.second.mImage));
+		ThrowIfFailed(vkCreateImage(*d.first, &imageInfo, nullptr, &d.second.mImage), "vkCreateImage failed for " + mName);
 		d.first->SetObjectName(d.second.mImage, mName);
 
 		VkMemoryRequirements memRequirements;
@@ -331,7 +331,7 @@ void Texture::CreateImage() {
 		allocInfo.allocationSize = memRequirements.size;
 		allocInfo.memoryTypeIndex = d.first->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
 
-		ThrowIfFailed(vkAllocateMemory(*d.first, &allocInfo, nullptr, &d.second.mImageMemory));
+		ThrowIfFailed(vkAllocateMemory(*d.first, &allocInfo, nullptr, &d.second.mImageMemory), "vkAllocateMemory failed for " + mName);
 		d.first->SetObjectName(d.second.mImageMemory, mName + " Memory");
 		vkBindImageMemory(*d.first, d.second.mImage, d.second.mImageMemory, 0);
 	}
@@ -349,7 +349,7 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	viewInfo.subresourceRange.layerCount = 1;
 	for (auto& d : mDeviceData) {
 		viewInfo.image = d.second.mImage;
-		ThrowIfFailed(vkCreateImageView(*d.first, &viewInfo, nullptr, &d.second.mView));
+		ThrowIfFailed(vkCreateImageView(*d.first, &viewInfo, nullptr, &d.second.mView), "vkCreateImageView failed for " + mName);
 		d.first->SetObjectName(d.second.mView, mName + " View");
 	}
 }

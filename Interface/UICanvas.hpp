@@ -16,7 +16,7 @@ public:
 	ENGINE_EXPORT void AddElement(std::shared_ptr<UIElement> element);
 	ENGINE_EXPORT void RemoveElement(UIElement* element);
 
-	inline float2 Extent(const float2& size) { mExtent = size; Dirty(); }
+	inline void Extent(const float2& size) { mExtent = size; Dirty(); }
 	inline float2 Extent() const { return mExtent; }
 
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }

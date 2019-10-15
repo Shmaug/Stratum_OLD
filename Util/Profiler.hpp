@@ -20,7 +20,7 @@
 struct ProfilerSample {
 	std::string mLabel;
 	ProfilerSample* mParent;
-	std::chrono::time_point<std::chrono::steady_clock> mStartTime;
+	std::chrono::high_resolution_clock::time_point mStartTime;
 	std::chrono::nanoseconds mTime;
 	std::vector<ProfilerSample> mChildren;
 };

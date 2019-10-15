@@ -13,10 +13,17 @@
 
 #include <chrono>
 #include <iostream>
-#include <filesystem>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
+
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 #include <Core/DeviceManager.hpp>
 #include <Core/PluginManager.hpp>
@@ -119,7 +126,6 @@ public:
 		printf("Initializing...\n");
 		mDeviceManager = new DeviceManager();
 		mDeviceManager->CreateInstance();
-
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
 		mAssetManager = new AssetManager(mDeviceManager);
@@ -333,7 +339,7 @@ int main(int argc, char* argv[]) {
 			cerr << "WSAStartup failed" << endl;
 		#endif
 
-		char* file = "config.json";
+		const char* file = "config.json";
 
 		if (argc > 1) file = argv[1];
 

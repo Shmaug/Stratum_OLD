@@ -103,21 +103,23 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (lb && lb->Size() < mLights.size() * sizeof(GPULight))
 		safe_delete(lb);
 	if (!lb) {
-		lb = new Buffer("Light Buffer", commandBuffer->Device(), mLights.size() * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		lb = new Buffer("Light Buffer", commandBuffer->Device(), max(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
-	GPULight* lights = (GPULight*)lb->MappedData();
-	for (uint32_t i = 0; i < mLights.size(); i++) {
-		float cosInner = cosf(mLights[i]->InnerSpotAngle());
-		float cosOuter = cosf(mLights[i]->OuterSpotAngle());
+	if (mLights.size()){
+		GPULight* lights = (GPULight*)lb->MappedData();
+		for (uint32_t i = 0; i < mLights.size(); i++) {
+			float cosInner = cosf(mLights[i]->InnerSpotAngle());
+			float cosOuter = cosf(mLights[i]->OuterSpotAngle());
 
-		lights[i].WorldPosition = mLights[i]->WorldPosition();
-		lights[i].InvSqrRange = 1.f / (mLights[i]->Range() * mLights[i]->Range());
-		lights[i].Color = mLights[i]->Color() * mLights[i]->Intensity();
-		lights[i].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
-		lights[i].SpotAngleOffset = -cosOuter * lights[i].SpotAngleScale;
-		lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, -1);
-		lights[i].Type = mLights[i]->Type();
+			lights[i].WorldPosition = mLights[i]->WorldPosition();
+			lights[i].InvSqrRange = 1.f / (mLights[i]->Range() * mLights[i]->Range());
+			lights[i].Color = mLights[i]->Color() * mLights[i]->Intensity();
+			lights[i].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
+			lights[i].SpotAngleOffset = -cosOuter * lights[i].SpotAngleScale;
+			lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, -1);
+			lights[i].Type = mLights[i]->Type();
+		}
 	}
 	PROFILER_END;
 
