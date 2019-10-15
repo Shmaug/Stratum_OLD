@@ -39,7 +39,6 @@ private:
 	Scene* mScene;
 
 	Object* LoadScene(const fs::path& filename, Shader* shader, float scale = .05f);
-	void SwitchScene(Object* s);
 }; 
 
 ENGINE_PLUGIN(MeshViewer)
@@ -182,16 +181,6 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, float sc
 
 	return root;
 }
-void MeshViewer::SwitchScene(Object* s) {
-	for (Object* o : mSceneRoots)
-		o->mEnabled = (o == s);
-	AABB aabb = s->BoundsHeirarchy();
-
-	auto cameraControl = mScene->PluginManager()->GetPlugin<CameraControl>();
-	cameraControl->CameraDistance(.1f);// aabb.mExtents.y / tanf(mScene->Cameras()[0]->FieldOfView() * .5f));
-	cameraControl->CameraEuler(radians(float3(5, 150, 0)));
-	cameraControl->CameraPivot()->LocalPosition(aabb.mCenter + float3(0, 0, -.05f));
-}
 
 bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
@@ -236,11 +225,15 @@ bool MeshViewer::Init(Scene* scene) {
 
 	layout->Extent(1.f, 1.f, 0.f, 0.f);
 
-	vector<fs::path> datasets {
-		"Assets/bunny.obj"
+	vector<fs::path> datasets{
+		"Assets/bunny.obj",
+		"Assets/bear.obj",
+		"Assets/dragon.obj",
 	};
 
-	for (const auto& c : datasets) {
+	float x = -(float)datasets.size() * .5f;
+
+	for (const fs::path& c : datasets) {
 		printf("Loading %s ... ", c.string().c_str());
 		Object* o = LoadScene(c, pbrshader);
 		if (!o) { printf("Failed!\n"); continue; }
@@ -249,6 +242,9 @@ bool MeshViewer::Init(Scene* scene) {
 
 		float mx = fmaxf(fmaxf(o->BoundsHeirarchy().mExtents.x, o->BoundsHeirarchy().mExtents.y), o->BoundsHeirarchy().mExtents.z);
 		o->LocalScale(1.f / mx);
+
+		o->LocalPosition(x * 1.5f, 0, 0);
+		x += 1.f;
 
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
 		canvas->AddElement(btn);
