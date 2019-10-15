@@ -51,7 +51,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 		#ifdef WINDOWS
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 		#endif
-		throw runtime_error(pCallbackData->pMessage);
+		if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+			throw runtime_error(pCallbackData->pMessage);
 	}
 	return VK_FALSE;
 }

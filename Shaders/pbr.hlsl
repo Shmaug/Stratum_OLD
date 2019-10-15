@@ -1,7 +1,8 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
-#pragma multi_compile NORMAL_MAP
+#pragma multi_compile NORMAL_MAP 
+#pragma multi_compile COLOR_MAP
 #pragma multi_compile TWO_SIDED
 
 #pragma render_queue 1000
@@ -38,10 +39,14 @@
 
 struct v2f {
 	float4 position : SV_Position;
-	float3 normal : NORMAL;
-	float4 tangent : TANGENT;
 	float3 worldPos : TEXCOORD0;
+	float3 normal : NORMAL;
+#ifdef NORMAL_MAP
+	float4 tangent : TANGENT;
+#endif
+#if defined(NORMAL_MAP) || defined(COLOR_MAP)
 	float2 texcoord : TEXCOORD1;
+#endif
 };
 float MicrofacetDistribution(float roughness, float NdotH) {
 	float roughness2 = roughness * roughness;
@@ -123,8 +128,13 @@ float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float
 v2f vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
 	[[vk::location(1)]] float3 normal : NORMAL,
+#ifdef NORMAL_MAP
 	[[vk::location(2)]] float4 tangent : TANGENT,
-	[[vk::location(3)]] float2 texcoord : TEXCOORD0 ) {
+#endif
+#if defined(NORMAL_MAP) || defined(COLOR_MAP)
+	[[vk::location(3)]] float2 texcoord : TEXCOORD0
+#endif
+	) {
 	v2f o;
 	
 	float4 wp = mul(Object.ObjectToWorld, float4(vertex, 1.0));
@@ -132,18 +142,25 @@ v2f vsmain(
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
 	o.normal = mul(float4(normal, 1), Object.WorldToObject).xyz;
+	#ifdef NORMAL_MAP
 	o.tangent = mul(tangent, Object.WorldToObject) * tangent.w;
+	#endif
+	#if defined(NORMAL_MAP) || defined(COLOR_MAP)
 	o.texcoord = texcoord;
-
+	#endif
 	return o;
 }
 
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
-
+	
+	#ifdef COLOR_MAP
 	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
 	clip(col.a - .5);
+	#else
+	float4 col = Color;
+	#endif
 
 	float3 view = Camera.Position - i.worldPos;
 	float depth = length(view);

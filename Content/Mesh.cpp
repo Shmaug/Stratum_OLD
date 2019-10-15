@@ -58,6 +58,22 @@ const ::VertexInput Vertex::VertexInput {
 	}
 };
 
+const ::VertexInput CubeVertexInput{
+	{
+		0, // binding
+		sizeof(float3), // stride
+		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+	},
+	{
+		{
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			0 // offset
+		}
+	}
+};
+
 struct VertexWeight {
 	uint16_t indices[4];
 	float weights[4];
@@ -308,6 +324,40 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 		else
 			d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 	}
+}
+
+Mesh* Mesh::CreatePlane(const string& name, DeviceManager* devices, float s) {
+	const Vertex verts[4]{
+		{ float3(-s, -s, 0), float3(0,0,1), float4(1,0,0,1), float2(0,0) },
+		{ float3( s, -s, 0), float3(0,0,1), float4(1,0,0,1), float2(1,0) },
+		{ float3(-s,  s, 0), float3(0,0,1), float4(1,0,0,1), float2(0,1) },
+		{ float3( s,  s, 0), float3(0,0,1), float4(1,0,0,1), float2(1,1) }
+	};
+	const uint16_t indices[6]{
+		0,2,1,2,3,1,
+	};
+	return new Mesh(name, devices, verts, indices, 8, sizeof(Vertex), 6, &Vertex::VertexInput, VK_INDEX_TYPE_UINT16);
+}
+Mesh* Mesh::CreateCube(const string& name, DeviceManager* devices, float r) {
+	float3 verts[8]{
+		float3(-r, -r, -r),
+		float3( r, -r, -r),
+		float3(-r, -r,  r),
+		float3( r, -r,  r),
+		float3(-r,  r, -r),
+		float3( r,  r, -r),
+		float3(-r,  r,  r),
+		float3( r,  r,  r),
+	};
+	uint16_t indices[36]{
+		2,7,6,2,3,7,
+		0,1,2,2,1,3,
+		1,5,7,7,3,1,
+		4,5,1,4,1,0,
+		6,4,2,4,0,2,
+		4,7,5,4,6,7
+	};
+	return new Mesh(name, devices, verts, indices, 8, sizeof(Vertex), 36, &CubeVertexInput, VK_INDEX_TYPE_UINT16);
 }
 
 Mesh::~Mesh() {}
