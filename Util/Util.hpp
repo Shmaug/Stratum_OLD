@@ -149,11 +149,45 @@ inline static bool HasStencilComponent(VkFormat format) {
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-inline void ThrowIfFailed(VkResult result) {
-	if (result != VK_SUCCESS) throw std::runtime_error("Assertion failed!");
-}
-inline void ThrowIfFalse(bool result) {
-	if (!result) throw std::runtime_error("Assertion failed!");
+inline void ThrowIfFailed(VkResult result, const std::string& message){
+	if (result != VK_SUCCESS){
+		const char* code = "<unknown>";
+		switch (result) {
+			case VK_NOT_READY: code = "VK_NOT_READY"; break;
+			case VK_TIMEOUT: code = "VK_TIMEOUT"; break;
+			case VK_EVENT_SET: code = "VK_EVENT_SET"; break;
+			case VK_EVENT_RESET: code = "VK_EVENT_RESET"; break;
+			case VK_INCOMPLETE: code = "VK_INCOMPLETE"; break;
+			case VK_ERROR_OUT_OF_HOST_MEMORY: code = "VK_ERROR_OUT_OF_HOST_MEMORY"; break;
+			case VK_ERROR_OUT_OF_DEVICE_MEMORY: code = "VK_ERROR_OUT_OF_DEVICE_MEMORY"; break;
+			case VK_ERROR_INITIALIZATION_FAILED: code = "VK_ERROR_INITIALIZATION_FAILED"; break;
+			case VK_ERROR_DEVICE_LOST: code = "VK_ERROR_DEVICE_LOST"; break;
+			case VK_ERROR_MEMORY_MAP_FAILED: code = "VK_ERROR_MEMORY_MAP_FAILED"; break;
+			case VK_ERROR_LAYER_NOT_PRESENT: code = "VK_ERROR_LAYER_NOT_PRESENT"; break;
+			case VK_ERROR_EXTENSION_NOT_PRESENT: code = "VK_ERROR_EXTENSION_NOT_PRESENT"; break;
+			case VK_ERROR_FEATURE_NOT_PRESENT: code = "VK_ERROR_FEATURE_NOT_PRESENT"; break;
+			case VK_ERROR_INCOMPATIBLE_DRIVER: code = "VK_ERROR_INCOMPATIBLE_DRIVER"; break;
+			case VK_ERROR_TOO_MANY_OBJECTS : code = "VK_ERROR_TOO_MANY_OBJECTS "; break;
+			case VK_ERROR_FORMAT_NOT_SUPPORTED : code = "VK_ERROR_FORMAT_NOT_SUPPORTED "; break;
+			case VK_ERROR_FRAGMENTED_POOL : code = "VK_ERROR_FRAGMENTED_POOL "; break;
+			case VK_ERROR_OUT_OF_POOL_MEMORY: code = "VK_ERROR_OUT_OF_POOL_MEMORY"; break;
+			case VK_ERROR_INVALID_EXTERNAL_HANDLE: code = "VK_ERROR_INVALID_EXTERNAL_HANDLE"; break;
+			case VK_ERROR_SURFACE_LOST_KHR: code = "VK_ERROR_SURFACE_LOST_KHR"; break;
+			case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: code = "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR"; break;
+			case VK_ERROR_OUT_OF_DATE_KHR: code = "VK_ERROR_OUT_OF_DATE_KHR"; break;
+			case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: code = "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR"; break;
+			case VK_ERROR_VALIDATION_FAILED_EXT: code = "VK_ERROR_VALIDATION_FAILED_EXT"; break;
+			case VK_ERROR_INVALID_SHADER_NV: code = "VK_ERROR_INVALID_SHADER_NV"; break;
+			case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: code = "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT"; break;
+			case VK_ERROR_FRAGMENTATION_EXT: code = "VK_ERROR_FRAGMENTATION_EXT"; break;
+			case VK_ERROR_NOT_PERMITTED_EXT: code = "VK_ERROR_NOT_PERMITTED_EXT"; break;
+			case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: code = "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT"; break;
+			case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: code = "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT"; break;
+		}
+
+		std::cerr << code << ": " << message << std::endl;
+		throw std::runtime_error(code + (": " + message));
+	}
 }
 
 inline VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDevice) {

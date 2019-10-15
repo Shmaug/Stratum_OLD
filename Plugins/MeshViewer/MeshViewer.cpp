@@ -16,7 +16,13 @@
 #include <assimp/material.h>
 #include <assimp/pbrmaterial.h>
 
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
 #include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 using namespace std;
 
@@ -32,7 +38,7 @@ private:
 	vector<Object*> mSceneRoots;
 	Scene* mScene;
 
-	Object* LoadScene(const filesystem::path& filename, Shader* shader, float scale = .05f);
+	Object* LoadScene(const fs::path& filename, Shader* shader, float scale = .05f);
 	void SwitchScene(Object* s);
 }; 
 
@@ -62,7 +68,7 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-Object* MeshViewer::LoadScene(const filesystem::path& filename, Shader* shader, float scale) {
+Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, float scale) {
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
 	Texture* bumpTexture = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
@@ -230,7 +236,7 @@ bool MeshViewer::Init(Scene* scene) {
 
 	layout->Extent(1.f, 1.f, 0.f, 0.f);
 
-	vector<filesystem::path> datasets {
+	vector<fs::path> datasets {
 		"Assets/bunny.obj"
 	};
 

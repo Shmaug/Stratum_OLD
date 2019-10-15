@@ -22,7 +22,10 @@ Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector
 	mPhysicalDeviceIndex = physicalDeviceIndex;
 
 	#pragma region get queue info
-	ThrowIfFalse(FindQueueFamilies(mPhysicalDevice, surface, mGraphicsQueueFamily, mPresentQueueFamily));
+	if (!FindQueueFamilies(mPhysicalDevice, surface, mGraphicsQueueFamily, mPresentQueueFamily)){
+		cerr << "Failed to find queue families!" << endl;
+		throw runtime_error("Failed to find queue families!");
+	}
 	set<uint32_t> uniqueQueueFamilies{ mGraphicsQueueFamily, mPresentQueueFamily };
 
 	vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -50,7 +53,7 @@ Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector
 	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 	createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
 	createInfo.ppEnabledLayerNames = validationLayers.data();
-	ThrowIfFailed(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice));
+	ThrowIfFailed(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice), "vkCreateDevice failed");
 
 	VkPhysicalDeviceProperties properties = {};
 	vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
@@ -120,7 +123,7 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		poolInfo.queueFamilyIndex = mGraphicsQueueFamily;
 		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		ThrowIfFailed(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &commandPool));
+		ThrowIfFailed(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &commandPool), "vkCreateCommandPool failed");
 		SetObjectName(commandPool, name + " Graphics Command Pool");
 	}
 
@@ -144,14 +147,14 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	beginInfo.pInheritanceInfo = nullptr; // Optional
-	ThrowIfFailed(vkBeginCommandBuffer(commandBuffer->mCommandBuffer, &beginInfo));
+	ThrowIfFailed(vkBeginCommandBuffer(commandBuffer->mCommandBuffer, &beginInfo), "vkBeginCommandBuffer failed");
 
 	return commandBuffer;
 }
 
 shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer) {
 	lock_guard lock(mCommandPoolMutex);
-	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer));
+	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer), "vkEndCommandBuffer failed");
 
 	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 

@@ -1,12 +1,19 @@
 #include <Core/PluginManager.hpp>
+
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
 #include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 using namespace std;
 
 #ifdef WINDOWS
 typedef EnginePlugin* (__cdecl* CreatePluginProc)(void);
 #else
-typedef EnginePlugin* (CreatePluginProc)(void);
+#include <dlfcn.h>
 #endif
 
 PluginManager::~PluginManager() {
@@ -16,7 +23,7 @@ PluginManager::~PluginManager() {
 void PluginManager::LoadPlugins(Scene* scene) {
 	UnloadPlugins();
 
-	for (const auto& p : filesystem::directory_iterator("Plugins")) {
+	for (const auto& p : fs::directory_iterator("Plugins")) {
 		#ifdef WINDOWS
 		// load plugin DLLs
 		if (wcscmp(p.path().extension().c_str(), L".dll") == 0) {
@@ -26,7 +33,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 				fprintf(stderr, "Failed to load library!\n");
 				continue;
 			}
-			CreatePluginProc proc = (CreatePluginProc)GetProcAddress(m, "CreatePlugin");
+			void* proc = (CreatePluginProc)GetProcAddress(m, "CreatePlugin");
 			if (proc == NULL) {
 				fprintf(stderr, "Failed to find CreatePlugin!\n");
 				if (!FreeLibrary(m)) fprintf(stderr, "Failed to unload %S\n", p.path().c_str());
@@ -43,27 +50,31 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			printf("Done\n");
 		}
 		#else
-		if (wcscmp(p.path().extension().c_str(), L".so") == 0) {
-			void* handle = dlopen(p.path().c_str(), RTLD_LAZY);
-			if(handle == nullptr) {
-				fprintf(stderr, "Failed to load library!\n");
+		if (strcmp(p.path().extension().c_str(), ".so") == 0) {
+			printf("Loading %s ... ", p.path().c_str());
+			void* handle = dlopen(p.path().c_str(), RTLD_NOW);
+			if (handle == nullptr) {
+				char* err = dlerror();
+				printf("Failed to load: %s\n", err);
 				continue;
 			}
-
-			CreatePluginProc proc = (CreatePluginProc)dlsym(handle, "CreatePlugin");
-			if (proc == nullptr) {
-				fprintf(stderr, "Failed to find CreatePlugin!\n");
-				if (dlclose(handle) != 0) fprintf(stderr, "Failed to free library!\n");
+			void* func = dlsym(handle, "CreatePlugin");
+			if (func == nullptr) {
+				char* err = dlerror();
+				printf("Failed to find CreatePlugin: %s\n", err);
+				if (dlclose(handle) != 0) cerr << "Failed to free library! " << dlerror() << endl;
 				continue;
 			}
-			EnginePlugin* plugin = proc();
+			EnginePlugin* (*fptr)(void);
+			*(void**)(&fptr) = func;
+			EnginePlugin* plugin = (*fptr)();
 			if (plugin == nullptr) {
-				fprintf(stderr, "Failed to call CreatePlugin!\n");
-				if (dlclose(handle) != 0) fprintf(stderr, "Failed to free library!\n");
+				printf("Failed to create plugin\n");
+				if (dlclose(handle) != 0) cerr << "Failed to free library! " << dlerror() << endl;
 				continue;
 			}
 			mPlugins.push_back(plugin);
-			mPluginModules.push_back(m);
+			mPluginModules.push_back(handle);
 			printf("Done\n");
 		}
 		#endif

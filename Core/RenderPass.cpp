@@ -14,7 +14,7 @@ RenderPass::RenderPass(const string& name, ::Device* device, const std::vector<V
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = (uint32_t)subpasses.size();
 	renderPassInfo.pSubpasses = subpasses.data();
-	ThrowIfFailed(vkCreateRenderPass(*mDevice, &renderPassInfo, nullptr, &mRenderPass));
+	ThrowIfFailed(vkCreateRenderPass(*mDevice, &renderPassInfo, nullptr, &mRenderPass), "vkCreateRenderPass failed");
 	mDevice->SetObjectName(mRenderPass, mName + " RenderPass");
 }
 RenderPass::RenderPass(const string& name, ::Camera* camera, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)

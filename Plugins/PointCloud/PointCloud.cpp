@@ -1,6 +1,13 @@
 #include <Core/EnginePlugin.hpp>
 #include <iterator>
+
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
 #include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 #include <Interface/UICanvas.hpp>
 #include <Interface/VerticalLayout.hpp>
@@ -32,7 +39,7 @@ private:
 	vector<Object*> mSceneRoots;
 
 	void SwitchScene(Object* s);
-	Object* LoadScene(const filesystem::path& filename, float scale = .05f);
+	Object* LoadScene(const fs::path& filename, float scale = .05f);
 
 	Scene* mScene;
 	float mPointSize;
@@ -50,7 +57,7 @@ PointCloud::~PointCloud() {
 		mScene->RemoveObject(p);
 }
 
-Object* PointCloud::LoadScene(const filesystem::path& filename, float scale) {
+Object* PointCloud::LoadScene(const fs::path& filename, float scale) {
 	unordered_map<uint32_t, vector<PointRenderer::Point>> points;
 
 	const aiScene* aiscene = aiImportFile(filename.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);

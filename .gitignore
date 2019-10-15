@@ -1,7 +1,8 @@
-.vs/
-.vscode/
-build/
-install/
+.vs
+.vscode
+build
+install
+bin
 CMakeSettings.json
 CMakeCache.txt
 CMakeFiles

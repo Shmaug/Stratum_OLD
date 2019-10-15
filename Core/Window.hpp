@@ -86,5 +86,5 @@ private:
 	ENGINE_EXPORT void CreateSwapchain(::Device* device);
 	ENGINE_EXPORT void DestroySwapchain();
 
-	ENGINE_EXPORT GLFWmonitor* GetCurrentMonitor(int& x, int& y, int& w, int& h) const;
+	ENGINE_EXPORT GLFWmonitor* GetCurrentMonitor(const GLFWvidmode** mode) const;
 };

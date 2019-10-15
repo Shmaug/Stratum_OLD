@@ -90,21 +90,27 @@ void DeviceManager::CreateInstance() {
 		#endif
 	};
 
-	uint32_t layerCount;
-	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-	vector<VkLayerProperties> availableLayers(layerCount);
-	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+	#ifdef _DEBUG
+	printf("Finding debug layer support...\n", *it);
+	#endif
+	
+	if (validationLayers.size()) {
+		uint32_t layerCount;
+		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+		vector<VkLayerProperties> availableLayers(layerCount);
+		vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-	set<string> availableLayerSet;
-	for (const VkLayerProperties& layer : availableLayers)
-		availableLayerSet.insert(layer.layerName);
+		set<string> availableLayerSet;
+		for (const VkLayerProperties& layer : availableLayers)
+			availableLayerSet.insert(layer.layerName);
 
-	for (auto it = validationLayers.begin(); it != validationLayers.end();) {
-		if (availableLayerSet.count(*it))
-			it++;
-		else {
-			printf("Removing unsupported layer: %s\n", *it);
-			it = validationLayers.erase(it);
+		for (auto it = validationLayers.begin(); it != validationLayers.end();) {
+			if (availableLayerSet.count(*it))
+				it++;
+			else {
+				printf("Removing unsupported layer: %s\n", *it);
+				it = validationLayers.erase(it);
+			}
 		}
 	}
 
@@ -124,7 +130,7 @@ void DeviceManager::CreateInstance() {
 	createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
 	createInfo.ppEnabledLayerNames = validationLayers.data();
 	printf("Creating vulkan instance... ");
-	ThrowIfFailed(vkCreateInstance(&createInfo, nullptr, &mInstance));
+	ThrowIfFailed(vkCreateInstance(&createInfo, nullptr, &mInstance), "vkCreateInstance failed");
 	printf("Done.\n");
 }
 

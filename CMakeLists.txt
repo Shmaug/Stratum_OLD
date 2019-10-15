@@ -38,19 +38,22 @@ add_library(Engine SHARED
 	"Scene/TextRenderer.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Profiler.cpp" )
-target_compile_definitions(Engine PUBLIC -DENGINE_CORE)
+target_compile_definitions(Engine PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
 set_target_properties(Engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/")
 
 # Build shader compiler
 add_executable(ShaderCompiler "shadercompiler.cpp")
+target_compile_definitions(ShaderCompiler PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
+target_include_directories(ShaderCompiler PUBLIC "${CMAKE_SOURCE_DIR}/ThirdParty/SPIRV-Cross/include" )
 set_target_properties(ShaderCompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(ShaderCompiler PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(ShaderCompiler PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/")
 
 # Build main executable
 add_executable(VkCave "vkcave.cpp" "ThirdParty/json11.cpp")
+target_compile_definitions(VkCave PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
 set_target_properties(VkCave PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(VkCave PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(VkCave PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/")
@@ -61,10 +64,10 @@ if(WIN32)
 	# Link shaderc and spirv-cross to ShaderCompiler
 	target_link_libraries(ShaderCompiler
 		"$ENV{VULKAN_SDK}/shaderc/install/lib/shaderc_shared.lib"
-		"$ENV{SPIRV_CROSS_HOME}/lib/spirv-cross-core.lib" )
+		"${CMAKE_SOURCE_DIR}/ThirdParty/SPIRV-Cross/lib/spirv-cross-core.lib" )
 
 	# Link engine to VkCave
-	target_link_libraries(VkCave "Ws2_32.lib" "${PROJECT_BINARY_DIR}/lib/Engine.lib")
+	target_link_libraries(VkCave"${PROJECT_BINARY_DIR}/lib/Engine.lib" "Ws2_32.lib" )
 
 	# Copy required DLLs to output folder
 	configure_file("$ENV{ASSIMP_HOME}/bin/x64/assimp-vc140-mt.dll" "${PROJECT_BINARY_DIR}/bin/assimp-vc140-mt.dll" COPYONLY)
@@ -72,9 +75,11 @@ if(WIN32)
 elseif(UNIX)
 	# Link shaderc and spirv-cross to ShaderCompiler
 	target_link_libraries(ShaderCompiler
-		"$ENV{VULKAN_SDK}/lib/libshaderc_shared.so"
-		"$ENV{VULKAN_SDK}/lib/libspirv-cross-core.a" )
-	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/lib/Engine.a")
+		"$ENV{VULKAN_SDK}/lib/libshaderc_combined.a"
+		"${CMAKE_SOURCE_DIR}/ThirdParty/SPIRV-Cross/libspirv-cross.a" )
+	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/bin/libEngine.so")
+	target_link_libraries(ShaderCompiler stdc++fs)
+	target_link_libraries(VkCave stdc++fs)
 else()
     message(FATAL_ERROR "Error: Not implemented!")
 endif(WIN32)

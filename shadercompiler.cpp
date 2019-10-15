@@ -12,16 +12,22 @@
 
 #include <chrono>
 #include <iostream>
-#include <filesystem>
 #include <sstream>
 #include <unordered_map>
+
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 #include <Util/Util.hpp>
 #include <shaderc/shaderc.hpp>
 #include <spirv_cross/spirv_cross.hpp>
 
 using namespace std;
-using namespace filesystem;
 using namespace shaderc;
 
 CompileOptions options;
@@ -29,7 +35,7 @@ CompileOptions options;
 class Includer : public CompileOptions::IncluderInterface {
 public:
 	virtual shaderc_include_result* GetInclude(const char* requested_source, shaderc_include_type type, const char* requesting_source, size_t include_depth) override {
-		auto src = absolute(requesting_source).parent_path();
+		auto src = fs::absolute(requesting_source).parent_path();
 
 		string fullpath = src.generic_u8string() + "/" + requested_source;
 
@@ -59,7 +65,7 @@ public:
 		return response;
 	}
 	virtual void ReleaseInclude(shaderc_include_result* data) override {
-		if (data->user_data) delete[] data->user_data;
+		if (data->user_data) delete[] (char*)data->user_data;
 		delete data;
 	}
 
@@ -201,7 +207,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 
 		if (vkstage == VK_SHADER_STAGE_COMPUTE_BIT) {
 			uint32_t workgroupSize[3]{ 0,0,0 };
-			auto& entryPoints = comp.get_entry_points_and_stages();
+			auto entryPoints = comp.get_entry_points_and_stages();
 			for (const auto& e : entryPoints) {
 				if (e.name == entryPoint) {
 					auto& ep = comp.get_entry_point(e.name, e.execution_model);
@@ -438,7 +444,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					blendState.blendEnable = VK_TRUE;
 					if (++it == words.end()) return false;
 					blendState.colorBlendOp = atoblend(*it);
-					if (blendState.colorBlendOp == VK_COMPARE_OP_MAX_ENUM) return false;
+					if (blendState.colorBlendOp == VK_BLEND_OP_MAX_ENUM) return false;
 
 				} else if (*it == "blend_fac") {
 					blendState.blendEnable = VK_TRUE;
