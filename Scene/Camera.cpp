@@ -328,6 +328,8 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 
 	VkRect2D scissor{ {0, 0}, { mPixelWidth, mPixelHeight } };
 	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
+
+	vkCmdSetLineWidth(*commandBuffer, 1.0f);
 }
 void Camera::EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	vkCmdEndRenderPass(*commandBuffer);

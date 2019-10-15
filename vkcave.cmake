@@ -23,18 +23,15 @@ if(WIN32)
 	# Link vulkan and assimp
 	link_libraries(
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"${CMAKE_SOURCE_DIR}/ThirdParty/glfw/lib/glfw3.lib" )
+		"${CMAKE_SOURCE_DIR}/ThirdParty/glfw/lib/glfw3.lib"
+		"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/assimp.lib"
+		"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/IrrXML.lib" )
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		link_libraries(
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/assimp-vc142-mtd.lib"
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/zlibstaticd.lib"
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/IrrXMLd.lib"
-			"$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib")
+			"$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib"
+			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/zlibstaticd.lib" )
 	else()
-		link_libraries(
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/assimp-vc142-mtd.lib"
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/zlibstatic.lib"
-			"${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/IrrXML.lib")
+		link_libraries("${CMAKE_SOURCE_DIR}/ThirdParty/assimp/lib/zlibstatic.lib")
 	endif()
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26812 /wd26451") # unscoped enum, arithmetic overflow
