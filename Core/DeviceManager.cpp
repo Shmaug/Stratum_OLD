@@ -91,7 +91,7 @@ void DeviceManager::CreateInstance() {
 	};
 
 	#ifdef _DEBUG
-	printf("Finding debug layer support...\n", *it);
+	printf("Initializing with validation layers\n");
 	#endif
 	
 	if (validationLayers.size()) {
