@@ -89,20 +89,11 @@ Window::Window(VkInstance instance, const string& title, MouseKeyboardInput* inp
 	if (monitorIndex > -1 && monitorIndex < monitorCount) {
 		auto monitor = monitors[monitorIndex];
 		auto mode = glfwGetVideoMode(monitor);
-
-		#ifdef WINDOWS
-		int mx, my;
-		glfwGetMonitorPos(monitor, &mx, &my);
-		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_FALSE);
-		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_TRUE);
-		glfwSetWindowPos(mWindow, mx, my);
-		glfwSetWindowSize(mWindow, mode->width, mode->height);
-		#else
+		
 		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
 		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
 		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
 		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-		#endif
 		
 		mFullscreen = true;
 	}
@@ -185,27 +176,15 @@ void Window::Fullscreen(bool fs) {
 		const GLFWvidmode* mode;
 		GLFWmonitor* monitor = GetCurrentMonitor(&mode);
 
-		#ifdef WINDOWS
-		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_FALSE);
-		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_TRUE);
-		glfwSetWindowPos(mWindow, x, y);
-		glfwSetWindowSize(mWindow, w, h);
-		#else
 		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
 		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
 		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
 		glfwSetWindowAttrib(mWindow, GLFW_REFRESH_RATE, mode->refreshRate);
 		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-		#endif
+
 		mFullscreen = true;
-	} else
-	{
-		#ifdef WINDOWS
-		glfwSetWindowAttrib(mWindow, GLFW_DECORATED, GLFW_TRUE);
-		glfwSetWindowAttrib(mWindow, GLFW_MAXIMIZED, GLFW_FALSE);
-		#else
+	} else {
 		glfwSetWindowMonitor(mWindow, nullptr, 0, 0, mWindowedRect.extent.width, mWindowedRect.extent.height, GLFW_DONT_CARE);
-		#endif
 
 		glfwSetWindowPos(mWindow, mWindowedRect.offset.x, mWindowedRect.offset.y);
 		glfwSetWindowSize(mWindow, mWindowedRect.extent.width, mWindowedRect.extent.height);
