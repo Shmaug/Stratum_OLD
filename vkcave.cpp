@@ -36,7 +36,7 @@ namespace fs = std::filesystem;
 using namespace std;
 
 // Debug messenger functions
-#ifdef _DEBUG
+#ifdef ENABLE_DEBUG_LAYERS
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void* pUserData) {
 	#ifdef WINDOWS
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
@@ -83,7 +83,7 @@ private:
 	AssetManager* mAssetManager;
 	Scene* mScene;
 
-	#ifdef _DEBUG
+	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsMessengerEXT mDebugMessenger;
 	#endif
 
@@ -120,7 +120,7 @@ private:
 
 public:
 	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr)
-#ifdef _DEBUG
+#ifdef ENABLE_DEBUG_LAYERS
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
 	{
@@ -131,7 +131,7 @@ public:
 		mPluginManager = new PluginManager();
 		mAssetManager = new AssetManager(mDeviceManager);
 		
-		#ifdef _DEBUG
+		#ifdef ENABLE_DEBUG_LAYERS
 		if (config->mDebugMessenger) {
 			VkDebugUtilsMessengerCreateInfoEXT msgr = {};
 			msgr.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -253,7 +253,7 @@ public:
 	~VkCAVE() {
 		safe_delete(mScene);
 
-		#ifdef _DEBUG
+		#ifdef ENABLE_DEBUG_LAYERS
 		if (mDebugMessenger != VK_NULL_HANDLE) DestroyDebugUtilsMessengerEXT(mDeviceManager->Instance(), mDebugMessenger, nullptr);
 		#endif
 

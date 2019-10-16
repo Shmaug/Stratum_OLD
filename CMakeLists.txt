@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.8)
 
-option(VKCAVE_HOME "Directory of VkCave" "VKCAVE_HOME_NOT_FOUND")
 option(ENABLE_DEBUG_LAYERS "Enable debug layers?" TRUE)
+set(VKCAVE_HOME ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "Directory of VkCave")
 
 include(vkcave.cmake)
 
