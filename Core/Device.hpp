@@ -66,7 +66,7 @@ private:
 	std::unordered_map<std::thread::id, VkCommandPool> mCommandPools;
 	std::unordered_map<VkCommandPool, std::queue<std::shared_ptr<CommandBuffer>>> mCommandBuffers;
 
-	#ifdef _DEBUG
+	#ifdef ENABLE_DEBUG_LAYERS
 	PFN_vkSetDebugUtilsObjectNameEXT SetDebugUtilsObjectNameEXT;
 	PFN_vkCmdBeginDebugUtilsLabelEXT CmdBeginDebugUtilsLabelEXT;
 	PFN_vkCmdEndDebugUtilsLabelEXT CmdEndDebugUtilsLabelEXT;

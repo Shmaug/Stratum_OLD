@@ -70,7 +70,7 @@ void DeviceManager::CreateInstance() {
 	}
 
 	vector<const char*> instanceExtensions {
-		#ifdef _DEBUG
+		#ifdef ENABLE_DEBUG_LAYERS
 		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 		#endif
 	};
@@ -84,13 +84,13 @@ void DeviceManager::CreateInstance() {
 		instanceExtensions.push_back(glfwExtensions[i]);
 
 	vector<const char*> validationLayers {
-		#ifdef _DEBUG
+		#ifdef ENABLE_DEBUG_LAYERS
 		"VK_LAYER_KHRONOS_validation",
 		"VK_LAYER_LUNARG_standard_validation",
 		#endif
 	};
 
-	#ifdef _DEBUG
+	#ifdef ENABLE_DEBUG_LAYERS
 	printf("Initializing with validation layers\n");
 	#endif
 	
@@ -140,7 +140,7 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 	};
 
 	vector<const char*> validationLayers {
-		#ifdef _DEBUG
+		#ifdef ENABLE_DEBUG_LAYERS
 		"VK_LAYER_KHRONOS_validation",
 		"VK_LAYER_RENDERDOC_Capture",
 		#endif
@@ -164,7 +164,7 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
 
-		auto w = new Window(mInstance, "VkCAVE " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
+		auto w = new Window(mInstance, "VkCave " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
 		if (!mDevices[deviceIndex]) mDevices[deviceIndex] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, deviceIndex);
 		w->CreateSwapchain(mDevices[deviceIndex]);
 		minImageCount = min(minImageCount, w->mImageCount);

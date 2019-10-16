@@ -1,11 +1,7 @@
 #pragma once
 #include <Util/Util.hpp>
 
-#ifdef _DEBUG
-#define ENABLE_CMD_REGION
-#endif
-
-#ifdef ENABLE_CMD_REGION
+#ifdef ENABLE_DEBUG_LAYERS
 #define BEGIN_CMD_REGION(cmd, label) cmd->BeginLabel(label)
 #define BEGIN_CMD_REGION_COLOR(cmd, label, color) cmd->BeginLabel(label, color)
 #define END_CMD_REGION(cmd) cmd->EndLabel()
@@ -36,7 +32,7 @@ public:
 	ENGINE_EXPORT ~CommandBuffer();
 	inline operator VkCommandBuffer() const { return mCommandBuffer; }
 
-	#ifdef ENABLE_CMD_REGION
+	#ifdef ENABLE_DEBUG_LAYERS
 	ENGINE_EXPORT void BeginLabel(const std::string& label, const float4& color = float4(1,1,1,0));
 	ENGINE_EXPORT void EndLabel();
 	#endif
