@@ -181,8 +181,6 @@ inline void ThrowIfFailed(VkResult result, const std::string& message){
 			case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: code = "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT"; break;
 			case VK_ERROR_FRAGMENTATION_EXT: code = "VK_ERROR_FRAGMENTATION_EXT"; break;
 			case VK_ERROR_NOT_PERMITTED_EXT: code = "VK_ERROR_NOT_PERMITTED_EXT"; break;
-			case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: code = "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT"; break;
-			case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: code = "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT"; break;
 		}
 
 		std::cerr << code << ": " << message << std::endl;

@@ -3,6 +3,16 @@
 #include <cassert>
 #include <math.h>
 
+#ifdef vmin
+#undef vmin
+#endif
+#ifdef vmax
+#undef vmax
+#endif
+#ifdef vabs
+#undef vabs
+#endif
+
 #define PI 3.1415926535897932384626433832795f
 
 template <class T>
@@ -1678,77 +1688,77 @@ namespace std {
 	};
 }
 
-#pragma region min, max, clamp
-inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b; }
-inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b; }
-inline int32_t clamp(int32_t x, int32_t l, int32_t h) { return max(min(x, l), h); }
-inline int32_t abs(int32_t a) { return a < 0 ? -a : a; }
+#pragma region vmin, vmax, vclamp
+inline int32_t vmin(int32_t a, int32_t b) { return a < b ? a : b; }
+inline int32_t vmax(int32_t a, int32_t b) { return a > b ? a : b; }
+inline int32_t vclamp(int32_t x, int32_t l, int32_t h) { return vmax(vmin(x, l), h); }
+inline int32_t vabs(int32_t a) { return a < 0 ? -a : a; }
 inline int2 vmin(const int2& a, const int2& b) {
-	return int2(min(a.x, b.x), min(a.y, b.y));
+	return int2(vmin(a.x, b.x), vmin(a.y, b.y));
 }
 inline int3 vmin(const int3& a, const int3& b) {
-	return int3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z));
+	return int3(vmin(a.x, b.x), vmin(a.y, b.y), vmin(a.z, b.z));
 }
 inline int4 vmin(const int4& a, const int4& b) {
-	return int4(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w));
+	return int4(vmin(a.x, b.x), vmin(a.y, b.y), vmin(a.z, b.z), vmin(a.w, b.w));
 }
 inline int2 vmax(const int2& a, const int2& b) {
-	return int2(max(a.x, b.x), max(a.y, b.y));
+	return int2(vmax(a.x, b.x), vmax(a.y, b.y));
 }
 inline int3 vmax(const int3& a, const int3& b) {
-	return int3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z));
+	return int3(vmax(a.x, b.x), vmax(a.y, b.y), vmax(a.z, b.z));
 }
 inline int4 vmax(const int4& a, const int4& b) {
-	return int4(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w));
+	return int4(vmax(a.x, b.x), vmax(a.y, b.y), vmax(a.z, b.z), vmax(a.w, b.w));
 }
 inline int2 vclamp(const int2& v, const int2& l, const int2& h) {
-	return int2(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y));
+	return int2(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y));
 }
 inline int3 vclamp(const int3& v, const int3& l, const int3& h) {
-	return int3(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y), clamp(v.z, l.z, h.z));
+	return int3(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y), vclamp(v.z, l.z, h.z));
 }
 inline int4 vclamp(const int4& v, const int4& l, const int4& h) {
-	return int4(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y), clamp(v.z, l.z, h.z), clamp(v.w, l.w, h.w));
+	return int4(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y), vclamp(v.z, l.z, h.z), vclamp(v.w, l.w, h.w));
 }
 inline int2 vabs(const int2& a) {
-	return int2(abs(a.x), abs(a.y));
+	return int2(vabs(a.x), vabs(a.y));
 }
 inline int3 vabs(const int3& a) {
-	return int3(abs(a.x), abs(a.y), abs(a.z));
+	return int3(vabs(a.x), vabs(a.y), vabs(a.z));
 }
 inline int4 vabs(const int4& a) {
-	return int4(abs(a.x), abs(a.y), abs(a.z), abs(a.w));
+	return int4(vabs(a.x), vabs(a.y), vabs(a.z), vabs(a.w));
 }
 
-inline uint32_t min(uint32_t a, uint32_t b) { return a < b ? a : b; }
-inline uint32_t max(uint32_t a, uint32_t b) { return a > b ? a : b; }
-inline uint32_t clamp(uint32_t x, uint32_t l, uint32_t h) { return max(min(x, l), h); }
+inline uint32_t vmin(uint32_t a, uint32_t b) { return a < b ? a : b; }
+inline uint32_t vmax(uint32_t a, uint32_t b) { return a > b ? a : b; }
+inline uint32_t vclamp(uint32_t x, uint32_t l, uint32_t h) { return vmax(vmin(x, l), h); }
 inline uint2 vmin(const uint2& a, const uint2& b) {
-	return uint2(min(a.x, b.x), min(a.y, b.y));
+	return uint2(vmin(a.x, b.x), vmin(a.y, b.y));
 }
 inline uint3 vmin(const uint3& a, const uint3& b) {
-	return uint3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z));
+	return uint3(vmin(a.x, b.x), vmin(a.y, b.y), vmin(a.z, b.z));
 }
 inline uint4 vmin(const uint4& a, const uint4& b) {
-	return uint4(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w));
+	return uint4(vmin(a.x, b.x), vmin(a.y, b.y), vmin(a.z, b.z), vmin(a.w, b.w));
 }
 inline uint2 vmax(const uint2& a, const uint2& b) {
-	return uint2(max(a.x, b.x), max(a.y, b.y));
+	return uint2(vmax(a.x, b.x), vmax(a.y, b.y));
 }
 inline uint3 vmax(const uint3& a, const uint3& b) {
-	return uint3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z));
+	return uint3(vmax(a.x, b.x), vmax(a.y, b.y), vmax(a.z, b.z));
 }
 inline uint4 vmax(const uint4& a, const uint4& b) {
-	return uint4(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w));
+	return uint4(vmax(a.x, b.x), vmax(a.y, b.y), vmax(a.z, b.z), vmax(a.w, b.w));
 }
 inline uint2 vclamp(const uint2& v, const uint2& l, const uint2& h) {
-	return uint2(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y));
+	return uint2(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y));
 }
 inline uint3 vclamp(const uint3& v, const uint3& l, const uint3& h) {
-	return uint3(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y), clamp(v.z, l.z, h.z));
+	return uint3(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y), vclamp(v.z, l.z, h.z));
 }
 inline uint4 vclamp(const uint4& v, const uint4& l, const uint4& h) {
-	return uint4(clamp(v.x, l.x, h.x), clamp(v.y, l.y, h.y), clamp(v.z, l.z, h.z), clamp(v.w, l.w, h.w));
+	return uint4(vclamp(v.x, l.x, h.x), vclamp(v.y, l.y, h.y), vclamp(v.z, l.z, h.z), vclamp(v.w, l.w, h.w));
 }
 
 inline float fclampf(float x, float l, float h) {

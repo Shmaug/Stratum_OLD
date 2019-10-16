@@ -42,7 +42,7 @@ CommandBuffer::~CommandBuffer() {
 	vkFreeCommandBuffers(*mDevice, mCommandPool, 1, &mCommandBuffer);
 }
 
-#ifdef ENABLE_CMD_REGION
+#ifdef ENABLE_DEBUG_LAYERS
 void CommandBuffer::BeginLabel(const string& text, const float4& color) {
 	VkDebugUtilsLabelEXT label = {};
 	label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;

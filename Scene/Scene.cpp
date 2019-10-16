@@ -103,7 +103,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (lb && lb->Size() < mLights.size() * sizeof(GPULight))
 		safe_delete(lb);
 	if (!lb) {
-		lb = new Buffer("Light Buffer", commandBuffer->Device(), max(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		lb = new Buffer("Light Buffer", commandBuffer->Device(), vmax(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
 	if (mLights.size()){

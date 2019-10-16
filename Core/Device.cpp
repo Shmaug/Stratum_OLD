@@ -11,7 +11,7 @@ using namespace std;
 Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector<const char*> validationLayers, VkSurfaceKHR surface, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex)
 	: mInstance(instance), mGraphicsQueueFamily(0), mPresentQueueFamily(0) {
 
-	#ifdef _DEBUG
+	#ifdef ENABLE_DEBUG_LAYERS
 	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
 	CmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
 	CmdEndDebugUtilsLabelEXT   = (PFN_vkCmdEndDebugUtilsLabelEXT)  vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
@@ -93,7 +93,7 @@ void Device::FlushCommandBuffers() {
 }
 
 void Device::SetObjectName(void* object, string name) const {
-	#ifdef _DEBUG
+	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsObjectNameInfoEXT info = {};
 	info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
 	info.objectHandle = (uint64_t)object;

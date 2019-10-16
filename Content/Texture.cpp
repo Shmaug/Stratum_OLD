@@ -355,7 +355,6 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 }
 
 void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer) {
-	if (oldLayout == newLayout) return;
 	auto& d = mDeviceData.at(commandBuffer->Device());
 	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -400,6 +399,10 @@ void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLa
 	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		break;
+	case VK_IMAGE_LAYOUT_GENERAL:
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+		destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		break;
 	default:
 		throw invalid_argument("unsupported layout transition!");
