@@ -48,11 +48,24 @@ target_compile_definitions(Engine PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
 target_compile_definitions(ShaderCompiler PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
 target_compile_definitions(VkCave PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
 
-target_include_directories(VkCave PUBLIC "${VKCAVE_HOME}" "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
-target_include_directories(Engine PUBLIC "${VKCAVE_HOME}" "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
-target_include_directories(ShaderCompiler PUBLIC "${VKCAVE_HOME}" "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include")
+target_include_directories(VkCave PUBLIC
+	"${VKCAVE_HOME}"
+	"${VKCAVE_HOME}/ThirdParty/assimp/include"
+	"${VKCAVE_HOME}/ThirdParty/glfw/include" )
+target_include_directories(Engine PUBLIC
+	"${VKCAVE_HOME}"
+	"${VKCAVE_HOME}/ThirdParty/assimp/include"
+	"${VKCAVE_HOME}/ThirdParty/glfw/include" )
+target_include_directories(ShaderCompiler PUBLIC
+	"${VKCAVE_HOME}"
+	"${VKCAVE_HOME}/ThirdParty/shaderc/include"
+	"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/include")
 
 if(WIN32)
+	target_include_directories(VkCave PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
+	target_include_directories(Engine PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
+	target_include_directories(ShaderCompiler PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include")
+
 	set_target_properties(ShaderCompiler Engine VkCave PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS} /wd26451 /wd26812 /wd26451") # uninitialzed struct variable
 
 	target_compile_definitions(VkCave PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
@@ -93,28 +106,38 @@ if(WIN32)
 
 	configure_file("$ENV{VULKAN_SDK}/shaderc/install/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 else()
-	target_link_libraries(Engine stdc++fs)
-	target_link_libraries(VkCave stdc++fs)
-	target_link_libraries(ShaderCompiler stdc++fs)
-
-	# Link assimp and glfw
-	target_link_libraries(VkCave
-		"${PROJECT_BINARY_DIR}/bin/libEngine.so"
-		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libassimp.a"
-		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
-		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libIrrXML.a"
-		"${VKCAVE_HOME}/ThirdParty/glfw/lib64/libglfw3.a" )
-	if (${ENABLE_DEBUG_LAYERS})
-		target_link_libraries(VkCave "$ENV{VULKAN_SDK}/lib/libVkLayer_utils.a")
-		target_link_libraries(Engine "$ENV{VULKAN_SDK}/lib/libVkLayer_utils.a")
-	endif()
-
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lpthread -lX11")
-
-	# Link shaderc and spirv-cross to ShaderCompiler
+	target_link_directories(Engine PUBLIC "${VKCAVE_HOME}/ThirdParty/assimp/lib" "${VKCAVE_HOME}/ThirdParty/glfw/lib64")
+	target_link_directories(VkCave PUBLIC "${VKCAVE_HOME}/ThirdParty/assimp/lib" "${VKCAVE_HOME}/ThirdParty/glfw/lib64")
+	
 	target_link_libraries(ShaderCompiler
-		"$ENV{VULKAN_SDK}/lib/libshaderc_combined.a"
-		"${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/libspirv-cross.a" )
+		stdc++fs
+		pthread
+		"${VKCAVE_HOME}/ThirdParty/shaderc/lib64/libshaderc_combined.a"
+		"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/libspirv-cross.a" )
+
+	target_link_libraries(Engine
+		stdc++fs
+		pthread
+		X11
+		"libvulkan.so"
+		"libassimp.so"
+		"libzlibstatic.a"
+		"libIrrXML.a"
+		"libglfw3.a" )
+	target_link_libraries(VkCave
+		stdc++fs
+		pthread
+		X11
+		"libvulkan.so"
+		"libassimp.so"
+		"libzlibstatic.a"
+		"libIrrXML.a"
+		"libglfw3.a"
+		"${PROJECT_BINARY_DIR}/bin/libEngine.so" )
+	if (${ENABLE_DEBUG_LAYERS})
+		target_link_libraries(VkCave "libVkLayer_utils.so")
+		target_link_libraries(Engine "libVkLayer_utils.so")
+	endif()
 endif(WIN32)
 
 if (${ENABLE_DEBUG_LAYERS})

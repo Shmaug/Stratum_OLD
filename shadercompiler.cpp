@@ -25,7 +25,7 @@ namespace fs = std::filesystem;
 
 #include <Util/Util.hpp>
 #include <shaderc/shaderc.hpp>
-#include <spirv_cross/spirv_cross.hpp>
+#include <../spirv_cross.hpp>
 
 using namespace std;
 using namespace shaderc;
