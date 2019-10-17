@@ -3,6 +3,7 @@
 #include <Content/Material.hpp>
 #include <Core/Device.hpp>
 #include <Util/Util.hpp>
+#include <cstring>
 
 using namespace std;
 

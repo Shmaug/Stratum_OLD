@@ -1,9 +1,9 @@
 [submodule "ThirdParty/glfw"]
 	path = ThirdParty/glfw
 	url = https://github.com/glfw/glfw
-[submodule "ThirdParty/SPIRV-Cross"]
-	path = ThirdParty/SPIRV-Cross
-	url = https://github.com/KhronosGroup/SPIRV-Cross
 [submodule "ThirdParty/assimp"]
 	path = ThirdParty/assimp
 	url = https://github.com/assimp/assimp
+[submodule "ThirdParty/shaderc"]
+	path = ThirdParty/shaderc
+	url = https://github.com/google/shaderc

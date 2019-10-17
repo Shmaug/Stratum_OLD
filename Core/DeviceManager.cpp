@@ -1,6 +1,8 @@
 #include <Core/DeviceManager.hpp>
 #include <Util/Util.hpp>
 
+#include <GLFW/glfw3.h>
+
 using namespace std;
 
 DeviceManager::DeviceManager()
