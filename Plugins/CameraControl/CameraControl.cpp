@@ -1,6 +1,6 @@
 #include <thread>
 #include "CameraControl.hpp"
-
+#include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
 using namespace std;

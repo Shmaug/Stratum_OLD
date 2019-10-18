@@ -20,6 +20,7 @@ namespace fs = std::filesystem;
 #include <assimp/material.h>
 #include <assimp/pbrmaterial.h>
 
+#include <Scene/Scene.hpp>
 #include <Plugins/CameraControl/CameraControl.hpp>
 #include "PointRenderer.hpp"
 

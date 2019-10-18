@@ -23,6 +23,22 @@ This makes the shared_ptr destroy when the plugin removes the object, allowing t
 to free the memory.
 */
 class Scene {
+private:
+	friend class VkCAVE;
+	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
+
+	std::unordered_map<Device*, Buffer**> mLightBuffers;
+
+	::AssetManager* mAssetManager;
+	::DeviceManager* mDeviceManager;
+	::Gizmos* mGizmos;
+	::InputManager* mInputManager;
+	::PluginManager* mPluginManager;
+	std::vector<std::shared_ptr<Object>> mObjects;
+	std::vector<Light*> mLights;
+	std::vector<Camera*> mCameras;
+	std::vector<Renderer*> mRenderers;
+
 public:
 	ENGINE_EXPORT ~Scene();
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
@@ -40,20 +56,4 @@ public:
 	inline ::Gizmos* Gizmos() const { return mGizmos; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
-
-private:
-	friend class VkCAVE;
-	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* iputManager, ::PluginManager* pluginManager);
-
-	std::unordered_map<Device*, Buffer**> mLightBuffers;
-
-	::AssetManager* mAssetManager;
-	::DeviceManager* mDeviceManager;
-	::Gizmos* mGizmos;
-	::InputManager* mInputManager;
-	::PluginManager* mPluginManager;
-	std::vector<std::shared_ptr<Object>> mObjects;
-	std::vector<Light*> mLights;
-	std::vector<Camera*> mCameras;
-	std::vector<Renderer*> mRenderers;
 };

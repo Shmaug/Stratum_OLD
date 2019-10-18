@@ -88,6 +88,7 @@ void DeviceManager::CreateInstance() {
 	vector<const char*> validationLayers {
 		#ifdef ENABLE_DEBUG_LAYERS
 		"VK_LAYER_KHRONOS_validation",
+		"VK_LAYER_LUNARG_core_validation",
 		"VK_LAYER_LUNARG_standard_validation",
 		#endif
 	};

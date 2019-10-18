@@ -1,6 +1,7 @@
 #include <Core/EnginePlugin.hpp>
 #include <thread>
 
+#include <Scene/Scene.hpp>
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/TextRenderer.hpp>
 #include <Interface/UICanvas.hpp>
@@ -329,7 +330,7 @@ bool MeshViewer::Init(Scene* scene) {
 	};
 
 	float x = -(float)models.size() * .75f;
-
+	
 	for (const model& m : models) {
 		printf("Loading %s ... ", m.file.string().c_str());
 		Object* o = LoadObj(m.file, pbrshader, envTexture, 1, m.color, m.metallic, m.roughness);

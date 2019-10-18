@@ -1,6 +1,7 @@
 #include <Core/DescriptorSet.hpp>
 #include <Scene/Camera.hpp>
 #include <Shaders/shadercompat.h>
+#include <Scene/Scene.hpp>
 
 #include "PointRenderer.hpp"
 
