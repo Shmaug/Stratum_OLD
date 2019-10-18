@@ -8,13 +8,13 @@
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
 #include <Scene/Camera.hpp>
+#include <Scene/Gizmos.hpp>
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
 class VkCAVE;
-class PluginManager;
 
 /*
 Holds scene Objects. In general, plugins will add objects during their lifetime,
@@ -29,7 +29,7 @@ public:
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
-	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
+	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr, bool gizmos = false);
 
 	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
 	inline const std::vector<Light*>& Lights() const { return mLights; }
@@ -37,6 +37,7 @@ public:
 
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
 	inline ::DeviceManager* DeviceManager() const { return mDeviceManager; }
+	inline ::Gizmos* Gizmos() const { return mGizmos; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 
@@ -47,8 +48,9 @@ private:
 	std::unordered_map<Device*, Buffer**> mLightBuffers;
 
 	::AssetManager* mAssetManager;
-	::InputManager* mInputManager;
 	::DeviceManager* mDeviceManager;
+	::Gizmos* mGizmos;
+	::InputManager* mInputManager;
 	::PluginManager* mPluginManager;
 	std::vector<std::shared_ptr<Object>> mObjects;
 	std::vector<Light*> mLights;

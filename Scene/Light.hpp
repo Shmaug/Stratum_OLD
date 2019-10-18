@@ -41,6 +41,8 @@ public:
 	// Physical radius of the point/spot light
 	inline float Radius() const { return mRadius; }
 
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+
 	inline AABB Bounds() override {
 		switch (mType) {
 		case Point:

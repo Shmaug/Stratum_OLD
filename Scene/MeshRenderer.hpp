@@ -28,7 +28,10 @@ public:
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 	
-	inline AABB Bounds() override { UpdateTransform(); return mAABB; }
+	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
+	ENGINE_EXPORT virtual AABB BoundsHeirarchy() override;
+
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 private:
 	struct DeviceData {
