@@ -64,6 +64,7 @@ public:
 	inline float4x4 View() { UpdateMatrices(); return mView; }
 	inline float4x4 Projection() { UpdateMatrices(); return mProjection; }
 	inline float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
+	inline float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
 
 private:
 	uint32_t mRenderPriority;

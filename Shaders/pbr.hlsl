@@ -4,6 +4,7 @@
 #pragma multi_compile NORMAL_MAP 
 #pragma multi_compile COLOR_MAP
 #pragma multi_compile TWO_SIDED
+#pragma multi_compile VERTEX_COLORS
 
 #pragma render_queue 1000
 
@@ -31,6 +32,7 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
+	float EnvironmentStrength;
 	uint LightCount;
 #ifdef NORMAL_MAP
 	float BumpStrength;
@@ -41,6 +43,9 @@ struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD0;
 	float3 normal : NORMAL;
+#ifdef VERTEX_COLORS
+	float3 color : Color0;
+#endif
 #ifdef NORMAL_MAP
 	float4 tangent : TANGENT;
 #endif
@@ -48,18 +53,11 @@ struct v2f {
 	float2 texcoord : TEXCOORD1;
 #endif
 };
-float MicrofacetDistribution(float roughness, float NdotH) {
-	float roughness2 = roughness * roughness;
-	float f = (NdotH * roughness2 - NdotH) * NdotH + 1;
-	return roughness2 / (PI * f * f + 1e-7);
-}
-float OneMinusReflectivityFromMetallic(float metallic) {
-	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
-	return oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
-}
+
 float3 DiffuseAndSpecularFromMetallic(float3 albedo, float metallic, out float3 specColor, out float oneMinusReflectivity) {
 	specColor = lerp(unity_ColorSpaceDielectricSpec.rgb, albedo, metallic);
-	oneMinusReflectivity = OneMinusReflectivityFromMetallic(metallic);
+	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
+	oneMinusReflectivity = oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
 	return albedo * oneMinusReflectivity;
 }
 
@@ -68,6 +66,11 @@ float pow5(float x) {
 	return x2 * x2 * x;
 }
 
+float MicrofacetDistribution(float roughness, float NdotH) {
+	float roughness2 = roughness * roughness;
+	float f = (NdotH * roughness2 - NdotH) * NdotH + 1;
+	return roughness2 / (PI * f * f + 1e-7);
+}
 float3 FresnelTerm(float3 F0, float cosA) {
 	return F0 + (1 - F0) * pow5(1 - cosA);
 }
@@ -127,12 +130,15 @@ float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float
 
 v2f vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
-	[[vk::location(1)]] float3 normal : NORMAL,
+	[[vk::location(1)]] float3 normal : NORMAL
 #ifdef NORMAL_MAP
-	[[vk::location(2)]] float4 tangent : TANGENT,
+	,[[vk::location(2)]] float4 tangent : TANGENT
 #endif
 #if defined(NORMAL_MAP) || defined(COLOR_MAP)
-	[[vk::location(3)]] float2 texcoord : TEXCOORD0
+	,[[vk::location(3)]] float2 texcoord : TEXCOORD0
+#endif
+#ifdef VERTEX_COLORS
+	,[[vk::location(4)]] float3 color : COLOR0
 #endif
 	) {
 	v2f o;
@@ -167,9 +173,9 @@ void fsmain(v2f i,
 	view /= depth;
 
 	float3 normal = normalize(i.normal);
-#ifdef TWO_SIDED
+	#ifdef TWO_SIDED
 	if (dot(normal, view) < 0) normal = -normal;
-#endif
+	#endif
 
 	#ifdef NORMAL_MAP
 	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
@@ -182,7 +188,7 @@ void fsmain(v2f i,
 
 	MaterialInfo material;
 	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
-	material.perceptualRoughness = Roughness * .9;
+	material.perceptualRoughness = Roughness * .99;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	material.nv = abs(dot(normal, view));
 
@@ -214,9 +220,9 @@ void fsmain(v2f i,
 	uint texWidth, texHeight, numMips;
 	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
 	float2 uv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	float3 specularLight = EnvironmentTexture.SampleLevel(Sampler, uv, saturate(material.perceptualRoughness) * numMips).rgb;
+	float3 env = EnvironmentTexture.SampleLevel(Sampler, uv, saturate(material.perceptualRoughness) * numMips).rgb * EnvironmentStrength;
 	
-	eval += ShadeIndirect(material, normal, view, .1, specularLight);
+	eval += ShadeIndirect(material, normal, view, env, env);
 
 	color = float4(eval, col.a);
 	depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);

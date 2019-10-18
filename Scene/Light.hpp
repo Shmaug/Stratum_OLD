@@ -31,9 +31,9 @@ public:
 	inline void OuterSpotAngle(float a) { mOuterSpotAngle = a; }
 	inline float OuterSpotAngle() const { return mOuterSpotAngle; }
 
-	// Distance the light can travel
+	// Distance light travels
 	inline void Range(float r) { mRange = r; }
-	// Distance the light can travel
+	// Distance light travels
 	inline float Range() const { return mRange; }
 
 	// Physical radius of the point/spot light
@@ -46,7 +46,7 @@ public:
 		case Point:
 			return AABB(WorldPosition(), float3(mRange));
 		case Spot:
-			return AABB(float3(0, 0, mRange*.5f), float3(mRange * sin(float2(mOuterSpotAngle * .5f)), mRange * .5f)) * ObjectToWorld();
+			return AABB(float3(0, 0, mRange *.5f), float3(mRange * sin(float2(mOuterSpotAngle * .5f)), mRange * .5f)) * ObjectToWorld();
 		case Sun:
 			return AABB(float3(), float3(1e20f));
 		}
@@ -57,9 +57,8 @@ private:
 	float3 mColor;
 	float mIntensity;
 	LightType mType;
-	// Physical radius of the point/spot light
+	// Size of the Physical point/spot light
 	float mRadius;
-	// Distance the light can travel
 	float mRange;
 	float mInnerSpotAngle;
 	float mOuterSpotAngle;

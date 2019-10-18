@@ -75,7 +75,7 @@ if(WIN32)
 	target_link_libraries(ShaderCompiler
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
 		"$ENV{VULKAN_SDK}/shaderc/install/lib/shaderc_shared.lib"
-		"${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/lib/spirv-cross-core.lib" )
+		"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/lib/spirv-cross-core.lib" )
 
 	target_link_libraries(Engine
 		"Ws2_32.lib"

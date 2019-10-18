@@ -1592,7 +1592,6 @@ inline float4x4 transpose(float4x4& m) {
 		m.c4[0], m.c4[1], m.c4[2], m.c4[3] );
 }
 
-
 namespace std {
 	template<>
 	struct hash<int2> {
@@ -1801,3 +1800,16 @@ inline float4 vabs(const float4& a) {
 	return float4(fabsf(a.x), fabsf(a.y), fabsf(a.z), fabsf(a.w));
 }
 #pragma endregion
+
+inline float lerp(float a, float b, float t) {
+	return a + (b - a) * t;
+}
+inline float2 lerp(const float2& a, const float2& b, float t) {
+	return a + (b - a) * t;
+}
+inline float3 lerp(const float3& a, const float3& b, float t) {
+	return a + (b - a) * t;
+}
+inline float4 lerp(const float4& a, const float4& b, float t) {
+	return a + (b - a) * t;
+}
