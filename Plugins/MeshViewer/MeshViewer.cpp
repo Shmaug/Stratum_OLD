@@ -38,10 +38,41 @@ private:
 	vector<Object*> mSceneRoots;
 	Scene* mScene;
 
-	Object* LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale = .05f);
+	Object* LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale = .05f, const float3& col = float3(1, 1, 1), float metal = 0, float rough = 1, float enevStrength = 1);
+	Object* LoadObj(const fs::path& filename, Shader* shader, Texture* environment, float scale = .05f, const float3& col = float3(1,1,1), float metal=0, float rough=1, float enevStrength=1);
 }; 
 
 ENGINE_PLUGIN(MeshViewer)
+
+#pragma pack(push)
+#pragma pack(1)
+struct objvertex {
+	float3 position;
+	float3 normal;
+};
+#pragma pack(pop)
+
+const ::VertexInput ObjInput {
+	{
+		0, // binding
+		sizeof(objvertex), // stride
+		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+	},
+	{
+		{ // Position
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			0 // offset
+		},
+		{ // Normal
+			1, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			sizeof(float3) // offset
+		}
+	}
+};
 
 MeshViewer::MeshViewer() : mScene(nullptr) {
 	mEnabled = true;
@@ -51,7 +82,7 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale) {
+Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale, const float3& col, float metal, float rough, float enevStrength) {
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
 	Texture* bumpTexture  = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
@@ -109,7 +140,7 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture*
 				aimat->Get(AI_MATKEY_NAME, matname);
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS) color.r = color.g = color.b = 1;
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .8f;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = 1;
 				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
 
 				aiString diffuse, normal, metalroughness;
@@ -120,10 +151,11 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture*
 				material = make_shared<Material>(matname.C_Str(), shader);
 				material->CullMode(cullMode);
 				material->SetParameter("BrdfTexture", brdfTexture);
-				material->SetParameter("Color", float4(color.r, color.g, color.b, 1));
-				material->SetParameter("Metallic", metallic);
-				material->SetParameter("Roughness", roughness);
+				material->SetParameter("Color", float4(color.r * col.r, color.g * col.g, color.b * col.b, 1));
+				material->SetParameter("Metallic", metallic * metal);
+				material->SetParameter("Roughness", roughness * rough);
 				material->SetParameter("EnvironmentTexture", environment);
+				material->SetParameter("EnvironmentStrength", enevStrength);
 				if (twoSided) material->EnableKeyword("TWO_SIDED");
 
 				if (diffuse != aiString("") && diffuse.C_Str()[0] != '*') {
@@ -162,6 +194,77 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture*
 
 	return root;
 }
+Object* MeshViewer::LoadObj(const fs::path& filename, Shader* shader, Texture* environment, float scale, const float3& col, float metal, float rough, float enevStrength) {
+	shared_ptr<Material> mat = make_shared<Material>("Ground", shader);
+	mat->SetParameter("EnvironmentTexture", environment);
+	mat->SetParameter("EnvironmentStrength", enevStrength);
+	mat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+	mat->SetParameter("Color", col);
+	mat->SetParameter("Metallic", metal);
+	mat->SetParameter("Roughness", rough);
+	shared_ptr<MeshRenderer> obj = make_shared<MeshRenderer>(filename.string());
+	obj->Material(mat);
+
+	vector<objvertex> vertices;
+	vector<uint32_t> indices;
+	uint32_t a = 0;
+
+	objvertex cur;
+
+	ifstream file(filename);
+
+	string line;
+	while (getline(file, line)){
+		if (line[0] == 'v') {
+			if (line[1] == 'n') {
+				uint32_t i = 3;
+				size_t idx;
+				cur.normal.x = stof(string(line.data() + i), &idx);
+				i += idx + 1;
+				cur.normal.y = stof(string(line.data() + i), &idx);
+				i += idx + 1;
+				cur.normal.z = stof(string(line.data() + i), &idx);
+				i += idx + 1;
+				a++;
+			} else {
+				uint32_t i = 2;
+				size_t idx;
+				cur.position.x = stof(string(line.data() + i), &idx);
+				i += idx + 1;
+				cur.position.y = stof(string(line.data() + i), &idx);
+				i += idx + 1;
+				cur.position.z = stof(string(line.data() + i), &idx);
+				a++;
+			}
+			if (a == 2) {
+				vertices.push_back(cur);
+				memset(&cur, 0, sizeof(objvertex));
+				a = 0;
+			}
+		} else {
+			if (line[0] == 'f') {
+				uint32_t i = 2;
+				size_t idx;
+				uint32_t i0 = stoi(string(line.data() + i), &idx); i += idx + 2;
+				stoi(string(line.data() + i), &idx); i += idx + 1;
+				uint32_t i1 = stoi(string(line.data() + i), &idx); i += idx + 2;
+				stoi(string(line.data() + i), &idx); i += idx + 1;
+				uint32_t i2 = stoi(string(line.data() + i), &idx);
+
+				indices.push_back(i0);
+				indices.push_back(i1);
+				indices.push_back(i2);
+			}
+		}
+
+	}
+
+	obj->Mesh(make_shared<Mesh>(filename.string(), mScene->DeviceManager(), vertices.data(), indices.data(), vertices.size(), sizeof(objvertex), indices.size(), &ObjInput, VK_INDEX_TYPE_UINT32));
+
+	mObjects.push_back(obj.get());
+	mScene->AddObject(obj);
+	return obj.get();
+}
 
 bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
@@ -176,6 +279,8 @@ bool MeshViewer::Init(Scene* scene) {
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", mScene->AssetManager()->LoadShader("Shaders/font.shader"));
 	fontMat->SetParameter("MainTexture", font->Texture());
 
+	float enevStrength = .5f;
+
 	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
 	skyboxMat->SetParameter("EnvironmentTexture", envTexture);
 	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
@@ -186,6 +291,7 @@ bool MeshViewer::Init(Scene* scene) {
 
 	shared_ptr<Material> groundMat = make_shared<Material>("Ground", pbrshader);
 	groundMat->SetParameter("EnvironmentTexture", envTexture);
+	groundMat->SetParameter("EnvironmentStrength", enevStrength);
 	groundMat->SetParameter("MainTexture", whiteTexture);
 	groundMat->SetParameter("NormalTexture", bumpTexture);
 	groundMat->SetParameter("BrdfTexture", brdfTexture);
@@ -202,22 +308,27 @@ bool MeshViewer::Init(Scene* scene) {
 	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("MeshViewerPanel", float2(.1f, 1.f));
 	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
 	canvas->AddElement(layout);
-	//mScene->AddObject(canvas);
-	//mObjects.push_back(canvas.get());
 
 	layout->Extent(1.f, 1.f, 0.f, 0.f);
 
-	vector<fs::path> datasets{
-		"Assets/bunny.obj",
-		"Assets/bear.obj",
-		"Assets/dragon.obj",
+	struct model {
+		fs::path file;
+		float3 color;
+		float metallic;
+		float roughness;
 	};
 
-	float x = -(float)datasets.size() * .5f;
+	vector<model> models {
+		 { "Assets/bunny.obj", float3(.6f, .2f, .25f), 0.f, .95f },
+		 { "Assets/bear.obj", float3(.6f,.6f,.5f), 1.f, .6f },
+		 { "Assets/dragon.obj", float3(.4f, .6f, .5f), 1.f, .3f }
+	};
 
-	for (const fs::path& c : datasets) {
-		printf("Loading %s ... ", c.string().c_str());
-		Object* o = LoadScene(c, pbrshader, envTexture);
+	float x = -(float)models.size() * .5f;
+
+	for (const model& m : models) {
+		printf("Loading %s ... ", m.file.string().c_str());
+		Object* o = LoadObj(m.file, pbrshader, envTexture, 1, m.color, m.metallic, m.roughness);
 		if (!o) { printf("Failed!\n"); continue; }
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
@@ -225,7 +336,11 @@ bool MeshViewer::Init(Scene* scene) {
 		AABB aabb = o->BoundsHeirarchy();
 		float mx = fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z);
 		o->LocalScale(.5f / mx);
-		o->LocalPosition(float3(-x * 1.25f - aabb.mCenter.x, -aabb.mCenter.y + aabb.mExtents.y, -aabb.mCenter.z));
+
+		float3 offset = o->WorldPosition() - aabb.mCenter * .5f / mx;
+		offset.x += x;
+		offset.y += aabb.mExtents.y * .5f / mx;
+		o->LocalPosition(offset);
 		x += 1.f;
 
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
@@ -233,20 +348,36 @@ bool MeshViewer::Init(Scene* scene) {
 		layout->AddChild(btn.get());
 		btn->Font(font);
 		btn->Material(fontMat);
-		btn->Extent(1, 1.f / datasets.size(), 0, 0);
-		btn->Text(c.filename().string());
+		btn->Extent(1, 1.f / models.size(), 0, 0);
+		btn->Text(m.file.string());
 		btn->TextScale(btn->AbsoluteExtent().y * .3f);
 	}
 	layout->UpdateLayout();
 	canvas->LocalPosition(-1.f, .5f, 0.f);
 
 	shared_ptr<Light> light0 = make_shared<Light>("Sun");
-	light0->Type(Sun);
-	light0->Intensity(1.5f);
-	light0->Color(float3(1.f, 1.f, .95f));
-	light0->LocalRotation(quaternion(radians(float3(75.f, 45.f, 0))));
+	light0->Type(Spot);
+	light0->Intensity(10.f);
+	light0->InnerSpotAngle(radians(10.f));
+	light0->OuterSpotAngle(radians(15.f));
+	light0->Range(10.f);
+	light0->Color(float3(1.f, .7f, .5f));
+	light0->LocalRotation(quaternion(radians(float3(10.f, 45.f, 0))));
+	light0->LocalPosition(light0->LocalRotation()* float3(0, 0, -2));
 	mObjects.push_back(light0.get());
 	mScene->AddObject(light0);
+
+	shared_ptr<Light> light1 = make_shared<Light>("Point");
+	light1->Type(Point);
+	light1->Intensity(.8f);
+	light1->Range(5.f);
+	light1->LocalPosition(-1.5f, 1, -.5f);
+	light1->Color(float3(.2f, 1.f, 1.f));
+	mObjects.push_back(light1.get());
+	mScene->AddObject(light1);
+
+	//mScene->AddObject(canvas);
+	//mObjects.push_back(canvas.get());
 
 	return true;
 }

@@ -155,15 +155,9 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 	CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 
 	VkBufferImageCopy copyRegion = {};
-	copyRegion.bufferOffset = 0;
-	copyRegion.bufferRowLength = 0;
-	copyRegion.bufferImageHeight = 0;
 	copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	copyRegion.imageSubresource.mipLevel = 0;
-	copyRegion.imageSubresource.baseArrayLayer = 0;
 	copyRegion.imageSubresource.layerCount = 1;
-	copyRegion.imageOffset = { 0, 0, 0 };
-	copyRegion.imageExtent = { mWidth, mHeight, 1 };
+	copyRegion.imageExtent = { mWidth, mHeight, mDepth };
 
 	vector<shared_ptr<Buffer>> uploadBuffers;
 	vector<shared_ptr<Fence>> fences;
@@ -188,6 +182,47 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 		f->Wait();
 
 }
+Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(mipLevels), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
+	if (mipLevels == 0) {
+		mMipLevels = (uint32_t)std::floor(std::log2(std::max(mWidth, mHeight))) + 1;
+		mUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	}
+	mUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	mDeviceData.emplace(device, DeviceData());
+	CreateImage();
+	CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VkBufferImageCopy copyRegion = {};
+	copyRegion.bufferOffset = 0;
+	copyRegion.bufferRowLength = 0;
+	copyRegion.bufferImageHeight = 0;
+	copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.imageSubresource.mipLevel = 0;
+	copyRegion.imageSubresource.baseArrayLayer = 0;
+	copyRegion.imageSubresource.layerCount = 1;
+	copyRegion.imageOffset = { 0, 0, 0 };
+	copyRegion.imageExtent = { mWidth, mHeight, mDepth };
+
+	auto& d = mDeviceData.at(device);
+
+	Buffer* uploadBuffer = new Buffer(name + " Copy", device, pixels, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	auto commandBuffer = device->GetCommandBuffer();
+	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+	vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer, d.mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+	if (mipLevels == 0)
+		GenerateMipMaps(commandBuffer.get());
+	else
+		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+
+	device->Execute(commandBuffer)->Wait();
+
+	delete uploadBuffer;
+}
+
 Texture::Texture(const string& name, DeviceManager* devices, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
 	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
 	

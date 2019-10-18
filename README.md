@@ -11,10 +11,13 @@ Then, clone the submodules:
 
 git submodule update --init
 
+On Windows, the submodules need to be build from source.  Make sure each submodule's CMAKE_INSTALL_PREFIX is the same as the submodule's source directory.
+shaderc contains SPIRV-Cross in shaderc/third_party, this must be build from source as well. For linux: simply run make in shaderc/third_party/spirv_cross. On Windows, use cmake
+to build it into shaderc/third_party/spirv_cross.
 
-Use CMake to compile each submodule. Make sure each submodule's CMAKE_INSTALL_PREFIX is the same as the submodule's source directory.
+### CMake Settings
 
-For assimp:
+Assimp:
 
 CMAKE_DEBUG_POSTFIX=""
 
@@ -25,13 +28,6 @@ ASSIMP_BUILD_ZLIB=TRUE
 BUILD_SHARED_LIBS=FALSE
 
 
-For GLFW:
+GLFW:
 
 BUILD_SHARED_LIBS=FALSE
-
-
-For SPIRV-Cross:
-
-On CentOS, simply run "make", on Windows, build with CMake.
-
-On Windows, shaderc must be built manually. It can be found in VULKAN_SDK/shaderc. Simply use CMake to build it into VULKAN_SDK/shaderc.

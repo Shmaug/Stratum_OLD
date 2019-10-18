@@ -84,6 +84,7 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 		vkCmdPushConstants(*commandBuffer, layout, mLightCountRange.stageFlags, mLightCountRange.offset, mLightCountRange.size, &lc);
 	}
 
+	UpdateTransform();
 	if (data.mUniformDirty[backBufferIndex]) {
 		ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
 		objbuffer->ObjectToWorld = ObjectToWorld();
