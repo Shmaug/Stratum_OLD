@@ -6,10 +6,6 @@ else()
 	set (CMAKE_CXX_STANDARD 17)
 endif()
 
-if (NOT WIN32)
-	include(GNUInstallDirs)
-endif()
-
 function(link_plugin TARGET_NAME)
 	target_include_directories(${TARGET_NAME} PUBLIC
 		"${VKCAVE_HOME}"
@@ -22,7 +18,7 @@ function(link_plugin TARGET_NAME)
 		else()
 			message(FATAL_ERROR "Error: VULKAN_SDK not set!")
 		endif()
-
+		
 		target_include_directories(${TARGET_NAME} PUBLIC
 			"$ENV{VULKAN_SDK}/include"
 			"${VKCAVE_HOME}/ThirdParty/assimp/include"
@@ -47,21 +43,6 @@ function(link_plugin TARGET_NAME)
 		endif()
 
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26812 /wd26451") # unscoped enum, arithmetic overflow
-	else()
-		target_link_directories(${TARGET_NAME} PUBLIC "${VKCAVE_HOME}/ThirdParty/assimp/lib" "${VKCAVE_HOME}/ThirdParty/glfw/lib64")
-		target_link_libraries(${TARGET_NAME}
-			stdc++fs
-			pthread
-			X11
-			"${PROJECT_BINARY_DIR}/bin/libEngine.so"
-			"libvulkan.so"
-			"libassimp.so"
-			"libzlibstatic.a"
-			"libIrrXML.a"
-			"libglfw3.a" )
-		if (${ENABLE_DEBUG_LAYERS})
-			target_link_libraries(${TARGET_NAME} "libVkLayer_utils.so")
-		endif()
 	endif(WIN32)
 	
 	if (${ENABLE_DEBUG_LAYERS})

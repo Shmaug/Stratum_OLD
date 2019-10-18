@@ -4,7 +4,6 @@
 
 #include <Core/CommandBuffer.hpp>
 #include <Core/DeviceManager.hpp>
-#include <Scene/Scene.hpp>
 #include <Util/Util.hpp>
 
 class Camera;

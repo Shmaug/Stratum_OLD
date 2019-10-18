@@ -1,5 +1,6 @@
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/TextRenderer.hpp>
+#include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
 #include "Starmap.hpp"

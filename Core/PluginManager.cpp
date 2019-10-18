@@ -16,6 +16,8 @@ typedef EnginePlugin* (__cdecl* CreatePluginProc)(void);
 #include <dlfcn.h>
 #endif
 
+#include <cstring>
+
 PluginManager::~PluginManager() {
 	UnloadPlugins();
 }

@@ -63,9 +63,12 @@ target_include_directories(ShaderCompiler PUBLIC
 	"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/include")
 
 if(WIN32)
-	target_include_directories(VkCave PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
-	target_include_directories(Engine PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
-	target_include_directories(ShaderCompiler PUBLIC "$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include")
+	target_include_directories(VkCave PUBLIC
+		"$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
+	target_include_directories(Engine PUBLIC 
+		"$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/assimp/include" "${VKCAVE_HOME}/ThirdParty/glfw/include" )
+	target_include_directories(ShaderCompiler PUBLIC 
+		"$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include")
 
 	set_target_properties(ShaderCompiler Engine VkCave PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS} /wd26451 /wd26812 /wd26451") # uninitialzed struct variable
 
@@ -113,6 +116,7 @@ else()
 	target_link_libraries(ShaderCompiler
 		stdc++fs
 		pthread
+		"libvulkan.so.1"
 		"${VKCAVE_HOME}/ThirdParty/shaderc/lib64/libshaderc_combined.a"
 		"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/libspirv-cross.a" )
 
@@ -120,24 +124,20 @@ else()
 		stdc++fs
 		pthread
 		X11
-		"libvulkan.so"
+		"libvulkan.so.1"
 		"libassimp.so"
 		"libzlibstatic.a"
 		"libIrrXML.a"
 		"libglfw3.a" )
+	if (${ENABLE_DEBUG_LAYERS})
+		target_link_libraries(Engine "libVkLayer_utils.so")
+	endif()
+
 	target_link_libraries(VkCave
-		stdc++fs
-		pthread
-		X11
-		"libvulkan.so"
-		"libassimp.so"
-		"libzlibstatic.a"
-		"libIrrXML.a"
-		"libglfw3.a"
+		"libvulkan.so.1"
 		"${PROJECT_BINARY_DIR}/bin/libEngine.so" )
 	if (${ENABLE_DEBUG_LAYERS})
 		target_link_libraries(VkCave "libVkLayer_utils.so")
-		target_link_libraries(Engine "libVkLayer_utils.so")
 	endif()
 endif(WIN32)
 
