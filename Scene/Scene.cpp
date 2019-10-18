@@ -5,13 +5,16 @@
 using namespace std;
 
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager) {}
+	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager) {
+	mGizmos = new ::Gizmos(this);
+}
 Scene::~Scene(){
 	for (auto& kp : mLightBuffers) {
 		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++)
 			safe_delete(kp.second[i]);
 		safe_delete_array(kp.second);
 	}
+	safe_delete(mGizmos);
 	mCameras.clear();
 	mRenderers.clear();
 	mLights.clear();
@@ -91,7 +94,7 @@ void Scene::RemoveObject(Object* object) {
 			it++;
 }
 
-void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
+void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride, bool gizmos) {
 	PROFILER_BEGIN("Gather Lights");
 	if (mLightBuffers.count(commandBuffer->Device()) == 0) {
 		Buffer** b = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
@@ -146,9 +149,24 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
 			END_CMD_REGION(commandBuffer);
 		}
+
+	if (gizmos) {
+		PROFILER_BEGIN("Draw Gizmos");
+		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
+		for (const auto& r : mObjects)
+			if (r->EnabledHeirarchy()) {
+				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
+				r->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+				END_CMD_REGION(commandBuffer);
+			}
+		END_CMD_REGION(commandBuffer);
+		PROFILER_END;
+	}
+
 	camera->EndRenderPass(commandBuffer, backBufferIndex);
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
+
 
 	// Post Render
 	PROFILER_BEGIN("Post Render");

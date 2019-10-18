@@ -1,6 +1,9 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
+#pragma zwrite false
+#pragma blend_fac src_alpha inv_src_alpha
+
 #pragma render_queue 1000
 
 #include <shadercompat.h>

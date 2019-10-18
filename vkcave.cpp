@@ -82,6 +82,7 @@ private:
 	PluginManager* mPluginManager;
 	AssetManager* mAssetManager;
 	Scene* mScene;
+	bool mRenderGizmos;
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsMessengerEXT mDebugMessenger;
@@ -108,7 +109,7 @@ private:
 			}
 			PROFILER_END;
 
-			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex);
+			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex, nullptr, mRenderGizmos);
 		}
 		PROFILER_END;
 
@@ -119,7 +120,7 @@ private:
 	}
 
 public:
-	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr)
+	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr), mRenderGizmos(false)
 #ifdef ENABLE_DEBUG_LAYERS
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif

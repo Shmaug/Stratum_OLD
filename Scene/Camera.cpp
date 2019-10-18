@@ -15,7 +15,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
@@ -113,7 +113,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_1_BIT),
+	mSampleCount(VK_SAMPLE_COUNT_4_BIT),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 

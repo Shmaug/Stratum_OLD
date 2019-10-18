@@ -82,7 +82,7 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale, const float3& col, float metal, float rough, float enevStrength) {
+Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture* environment, float scale, const float3& col, float metal, float rough, float envStrength) {
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
 	Texture* bumpTexture  = mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
@@ -138,9 +138,13 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture*
 				aiString matname;
 				float metallic, roughness;
 				aimat->Get(AI_MATKEY_NAME, matname);
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS) color.r = color.g = color.b = 1;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = 1;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS) {
+					color.r = col.r;
+					color.g = col.g;
+					color.b = col.b;
+				}
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = metal;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = rough;
 				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
 
 				aiString diffuse, normal, metalroughness;
@@ -151,11 +155,11 @@ Object* MeshViewer::LoadScene(const fs::path& filename, Shader* shader, Texture*
 				material = make_shared<Material>(matname.C_Str(), shader);
 				material->CullMode(cullMode);
 				material->SetParameter("BrdfTexture", brdfTexture);
-				material->SetParameter("Color", float4(color.r * col.r, color.g * col.g, color.b * col.b, 1));
-				material->SetParameter("Metallic", metallic * metal);
-				material->SetParameter("Roughness", roughness * rough);
+				material->SetParameter("Color", float4(color.r, color.g, color.b, 1));
+				material->SetParameter("Metallic", metallic);
+				material->SetParameter("Roughness", roughness);
 				material->SetParameter("EnvironmentTexture", environment);
-				material->SetParameter("EnvironmentStrength", enevStrength);
+				material->SetParameter("EnvironmentStrength", envStrength);
 				if (twoSided) material->EnableKeyword("TWO_SIDED");
 
 				if (diffuse != aiString("") && diffuse.C_Str()[0] != '*') {
@@ -199,7 +203,7 @@ Object* MeshViewer::LoadObj(const fs::path& filename, Shader* shader, Texture* e
 	mat->SetParameter("EnvironmentTexture", environment);
 	mat->SetParameter("EnvironmentStrength", enevStrength);
 	mat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
-	mat->SetParameter("Color", col);
+	mat->SetParameter("Color", float4(col, 1));
 	mat->SetParameter("Metallic", metal);
 	mat->SetParameter("Roughness", rough);
 	shared_ptr<MeshRenderer> obj = make_shared<MeshRenderer>(filename.string());
@@ -223,17 +227,17 @@ Object* MeshViewer::LoadObj(const fs::path& filename, Shader* shader, Texture* e
 				i += idx + 1;
 				cur.normal.y = stof(string(line.data() + i), &idx);
 				i += idx + 1;
-				cur.normal.z = stof(string(line.data() + i), &idx);
+				cur.normal.z = -stof(string(line.data() + i), &idx);
 				i += idx + 1;
 				a++;
 			} else {
 				uint32_t i = 2;
 				size_t idx;
-				cur.position.x = stof(string(line.data() + i), &idx);
+				cur.position.x = stof(string(line.data() + i), &idx) * scale;
 				i += idx + 1;
-				cur.position.y = stof(string(line.data() + i), &idx);
+				cur.position.y = stof(string(line.data() + i), &idx) * scale;
 				i += idx + 1;
-				cur.position.z = stof(string(line.data() + i), &idx);
+				cur.position.z = -stof(string(line.data() + i), &idx) * scale;
 				a++;
 			}
 			if (a == 2) {
@@ -251,9 +255,9 @@ Object* MeshViewer::LoadObj(const fs::path& filename, Shader* shader, Texture* e
 				stoi(string(line.data() + i), &idx); i += idx + 1;
 				uint32_t i2 = stoi(string(line.data() + i), &idx);
 
-				indices.push_back(i0);
-				indices.push_back(i1);
-				indices.push_back(i2);
+				indices.push_back(i0 - 1);
+				indices.push_back(i1 - 1);
+				indices.push_back(i2 - 1);
 			}
 		}
 
@@ -324,7 +328,7 @@ bool MeshViewer::Init(Scene* scene) {
 		 { "Assets/dragon.obj", float3(.4f, .6f, .5f), 1.f, .3f }
 	};
 
-	float x = -(float)models.size() * .5f;
+	float x = -(float)models.size() * .75f;
 
 	for (const model& m : models) {
 		printf("Loading %s ... ", m.file.string().c_str());
@@ -334,14 +338,15 @@ bool MeshViewer::Init(Scene* scene) {
 		mSceneRoots.push_back(o);
 
 		AABB aabb = o->BoundsHeirarchy();
-		float mx = fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z);
-		o->LocalScale(.5f / mx);
+		o->LocalScale(.5f / fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z));
 
-		float3 offset = o->WorldPosition() - aabb.mCenter * .5f / mx;
+		aabb = o->BoundsHeirarchy();
+
+		float3 offset = o->WorldPosition() - aabb.mCenter;
 		offset.x += x;
-		offset.y += aabb.mExtents.y * .5f / mx;
+		offset.y += aabb.mExtents.y;
 		o->LocalPosition(offset);
-		x += 1.f;
+		x += .75f;
 
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
 		canvas->AddElement(btn);
@@ -376,8 +381,8 @@ bool MeshViewer::Init(Scene* scene) {
 	mObjects.push_back(light1.get());
 	mScene->AddObject(light1);
 
-	//mScene->AddObject(canvas);
-	//mObjects.push_back(canvas.get());
+	mScene->AddObject(canvas);
+	mObjects.push_back(canvas.get());
 
 	return true;
 }
