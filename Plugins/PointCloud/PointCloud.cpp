@@ -136,6 +136,7 @@ void PointCloud::SwitchScene(Object* s) {
 
 bool PointCloud::Init(Scene* scene) {
 	mScene = scene;
+	return true;
 
 	Shader* pointShader = mScene->AssetManager()->LoadShader("Shaders/points.shader");
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
@@ -156,11 +157,12 @@ bool PointCloud::Init(Scene* scene) {
 	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
 	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
+	*/
 
 	vector<string> datasets {
 		"Assets/bunny.obj",
-		//"Assets/dragon.obj",
-		//"Assets/bear.obj"
+		"Assets/dragon.obj",
+		"Assets/bear.obj"
 	};
 
 	for (const string& c : datasets) {
@@ -170,25 +172,31 @@ bool PointCloud::Init(Scene* scene) {
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
 		
-		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
-		canvas->AddElement(btn);
-		btn->Font(font);
-		btn->Material(fontMat);
-		btn->Extent(1, 0, 0, .1f);
-		btn->Text(c);
-		layout->AddChild(btn.get());
-
-		printf("<%.2f,%.2f>\t\<2f,%.2f,%.2f>\n", btn->AbsoluteExtent().x, btn->AbsoluteExtent().y, btn->AbsolutePosition().x, btn->AbsolutePosition().y, btn->AbsolutePosition().z);
+		//shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
+		//canvas->AddElement(btn);
+		//btn->Font(font);
+		//btn->Material(fontMat);
+		//btn->Extent(1, 0, 0, .1f);
+		//btn->Text(c);
+		//layout->AddChild(btn.get());
+		//printf("<%.2f,%.2f>\t<2f,%.2f,%.2f>\n", btn->AbsoluteExtent().x, btn->AbsoluteExtent().y, btn->AbsolutePosition().x, btn->AbsolutePosition().y, btn->AbsolutePosition().z);
 	}
 	
 	SwitchScene(mSceneRoots[0]);
-	*/
 
 	return true;
 }
 
 void PointCloud::Update(const FrameTime& frameTime) {
 	int idx = -1;
+
+	auto input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+
+	if (input->KeyDownFirst(GLFW_KEY_1)) idx = 0;
+	if (input->KeyDownFirst(GLFW_KEY_2)) idx = 1;
+	if (input->KeyDownFirst(GLFW_KEY_3)) idx = 2;
+	if (input->KeyDownFirst(GLFW_KEY_4)) idx = 3;
+	if (input->KeyDownFirst(GLFW_KEY_5)) idx = 4;
 
 	if (idx >= 0 && idx < mSceneRoots.size()) {
 		SwitchScene(mSceneRoots[idx]);

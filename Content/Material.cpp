@@ -17,24 +17,20 @@ Material::~Material(){
 }
 
 void Material::DisableKeyword(const string& kw) {
-	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mShaderKeywords.erase(kw);
 	for (auto& d : mDeviceData)
 		d.second.mShaderVariant = nullptr;
 }
 void Material::EnableKeyword(const string& kw) {
-	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mShaderKeywords.insert(kw);
 	for (auto& d : mDeviceData)
 		d.second.mShaderVariant = nullptr;
 }
 
 void Material::CullMode(VkCullModeFlags cullMode) {
-	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mCullMode = cullMode;
 }
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
-	if (mIsBound) throw runtime_error("Cannot change parameters of a bound material!");
 	mParameters[name] = param;
 	for (auto& d : mDeviceData)
 		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
