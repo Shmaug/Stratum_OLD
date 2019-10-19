@@ -32,7 +32,6 @@ struct AABB {
 
 		mn = corners[0];
 		mx = corners[0];
-
 		for (uint32_t i = 1; i < 8; i++) {
 			mn = vmin(mn, corners[i]);
 			mx = vmax(mx, corners[i]);

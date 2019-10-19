@@ -58,7 +58,7 @@ const ::VertexInput Vertex::VertexInput {
 	}
 };
 
-const ::VertexInput CubeVertexInput{
+const ::VertexInput Float3VertexInput{
 	{
 		0, // binding
 		sizeof(float3), // stride
@@ -199,7 +199,7 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, c
 			mn = mx = pos;
 		else {
 			mn = vmin(pos, mn);
-			mx = vmax(pos, mn);
+			mx = vmax(pos, mx);
 		}
 	}
 
@@ -229,7 +229,7 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 			mn = mx = pos;
 		else {
 			mn = vmin(pos, mn);
-			mx = vmax(pos, mn);
+			mx = vmax(pos, mx);
 		}
 	}
 
@@ -357,7 +357,7 @@ Mesh* Mesh::CreateCube(const string& name, DeviceManager* devices, float r) {
 		6,4,2,4,0,2,
 		4,7,5,4,6,7
 	};
-	return new Mesh(name, devices, verts, indices, 8, sizeof(Vertex), 36, &CubeVertexInput, VK_INDEX_TYPE_UINT16);
+	return new Mesh(name, devices, verts, indices, 8, sizeof(Vertex), 36, &Float3VertexInput, VK_INDEX_TYPE_UINT16);
 }
 
 Mesh::~Mesh() {}

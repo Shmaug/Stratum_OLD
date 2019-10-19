@@ -13,15 +13,19 @@
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
+	float3 Position;
+	float4 Rotation;
+	float3 Scale;
 }
 
 float4 vsmain([[vk::location(0)]] float3 vertex : POSITION) : SV_Position {
-	return mul(Camera.ViewProjection, mul(Object.ObjectToWorld, float4(vertex, 1.0)));
+	float3 vec = vertex * Scale;
+	vec = 2 * dot(Rotation.xyz, vec) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * vec + 2 * Rotation.w * cross(Rotation.xyz, vec);
+	vec += Position;
+	return mul(Camera.ViewProjection, float4(vec, 1));
 }
 
-void fsmain(float4 position : SV_Position,
-	out float4 color : SV_Target0,
-	out float4 depthNormal : SV_Target1) {
+void fsmain(out float4 color : SV_Target0, out float4 depthNormal : SV_Target1) {
 	color = Color;
 	depthNormal = float4(0, 0, 0, 1);
 }

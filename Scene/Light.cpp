@@ -8,5 +8,5 @@ Light::Light(const string& name)
 Light::~Light() {}
 
 void Light::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	Scene()->Gizmos()->DrawSphere(commandBuffer, WorldPosition(), Radius(), float4(Color(), 1));
+	Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), Radius(), camera->WorldRotation(), float4(Color(), 1));
 }

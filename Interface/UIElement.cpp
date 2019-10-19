@@ -44,7 +44,7 @@ bool UIElement::UpdateTransform() {
 	}
 
 	mAbsoluteAABB = AABB(mAbsolutePosition + float3(mAbsoluteExtent, 0), float3(mAbsoluteExtent, UI_THICKNESS));
-	for (UIElement*& e : mChildren)
+	for (UIElement* e : mChildren)
 		mAbsoluteAABB.Encapsulate(e->AbsoluteBounds());
 
 	mTransformDirty = false;

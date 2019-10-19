@@ -46,6 +46,9 @@ struct FrameTime {
 	float mDeltaTime;
 	uint32_t mFrameNumber;
 };
+
+// Defines a vertex input. Hashes itself once at creation, then remains immutable.
+// Note: Meshes store a pointer to one of these, but do not handle creation/deletion.
 struct VertexInput {
 public:
 	const VkVertexInputBindingDescription mBinding;

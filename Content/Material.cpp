@@ -62,43 +62,48 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 	auto variant = GetShader(renderPass->Device());
 	if (!variant) return VK_NULL_HANDLE;
 
-	auto& data = mDeviceData[commandBuffer->Device()];
-	if (!data.mDescriptorSets[backBufferIndex])
-		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerMaterial DescriptorSet", commandBuffer->Device()->DescriptorPool(), variant->mDescriptorSetLayouts[PER_MATERIAL]);
-
-	// set descriptor parameters
-	if (data.mDirty[backBufferIndex]) {
-		for (auto& m : mParameters) {
-			if (m.second.index() > 3) continue;
-			if (variant->mDescriptorBindings.count(m.first) == 0) continue;
-			auto& bindings = variant->mDescriptorBindings.at(m.first);
-			if (bindings.first != PER_MATERIAL) continue;
-
-			switch (m.second.index()) {
-			case 0:
-				data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), bindings.second.binding);
-				break;
-			case 1:
-				data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), bindings.second.binding);
-				break;
-			case 2:
-				data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<Texture*>(m.second), bindings.second.binding);
-				break;
-			case 3:
-				data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<Sampler*>(m.second), bindings.second.binding);
-				break;
-			}
-		}
-		data.mDirty[backBufferIndex] = false;
-	}
-
-	VkDescriptorSet matds = *data.mDescriptorSets[backBufferIndex];
 	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 
-	if (renderPass->Camera()) {
-		VkDescriptorSet camds = *renderPass->Camera()->DescriptorSet(backBufferIndex);
+	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL &&
+		variant->mDescriptorBindings.size()) {
+		auto& data = mDeviceData[commandBuffer->Device()];
+		if (!data.mDescriptorSets[backBufferIndex])
+			data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerMaterial DescriptorSet", commandBuffer->Device()->DescriptorPool(), variant->mDescriptorSetLayouts[PER_MATERIAL]);
+
+		// set descriptor parameters
+		if (data.mDirty[backBufferIndex]) {
+			for (auto& m : mParameters) {
+				if (m.second.index() > 3) continue;
+				if (variant->mDescriptorBindings.count(m.first) == 0) continue;
+				auto& bindings = variant->mDescriptorBindings.at(m.first);
+				if (bindings.first != PER_MATERIAL) continue;
+
+				switch (m.second.index()) {
+				case 0:
+					data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), bindings.second.binding);
+					break;
+				case 1:
+					data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), bindings.second.binding);
+					break;
+				case 2:
+					data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(get<Texture*>(m.second), bindings.second.binding);
+					break;
+				case 3:
+					data.mDescriptorSets[backBufferIndex]->CreateSamplerDescriptor(get<Sampler*>(m.second), bindings.second.binding);
+					break;
+				}
+			}
+			data.mDirty[backBufferIndex] = false;
+		}
+
+		VkDescriptorSet matds = *data.mDescriptorSets[backBufferIndex];
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
+	}
+	
+	if (renderPass->Camera() && variant->mDescriptorBindings.count("Camera")) {
+		auto binding = variant->mDescriptorBindings.at("Camera");
+		VkDescriptorSet camds = *renderPass->Camera()->DescriptorSet(backBufferIndex, binding.second.stageFlags);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
 

@@ -324,16 +324,16 @@ bool MeshViewer::Init(Scene* scene) {
 	};
 
 	vector<model> models {
-		 { "Assets/bunny.obj", float3(.6f, .2f, .25f), 0.f, .95f },
-		 { "Assets/bear.obj", float3(.6f,.6f,.5f), 1.f, .6f },
+		 { "Assets/bunny.obj",  float3(.6f, .2f, .25f), 0.f, .95f },
+		 { "Assets/bear.obj",   float3(.6f,.6f,.5f), 1.f, .6f },
 		 { "Assets/dragon.obj", float3(.4f, .6f, .5f), 1.f, .3f }
 	};
 
-	float x = -(float)models.size() * .75f;
+	float x = -(float)models.size() * 1.5f * .5f;
 	
 	for (const model& m : models) {
 		printf("Loading %s ... ", m.file.string().c_str());
-		Object* o = LoadObj(m.file, pbrshader, envTexture, 1, m.color, m.metallic, m.roughness);
+		Object* o = LoadScene(m.file, pbrshader, envTexture, 1, m.color, m.metallic, m.roughness);
 		if (!o) { printf("Failed!\n"); continue; }
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
@@ -347,7 +347,7 @@ bool MeshViewer::Init(Scene* scene) {
 		offset.x += x;
 		offset.y += aabb.mExtents.y;
 		o->LocalPosition(offset);
-		x += .75f;
+		x += 1.5f;
 
 		shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
 		canvas->AddElement(btn);
@@ -382,8 +382,8 @@ bool MeshViewer::Init(Scene* scene) {
 	mObjects.push_back(light1.get());
 	mScene->AddObject(light1);
 
-	mScene->AddObject(canvas);
-	mObjects.push_back(canvas.get());
+	//mScene->AddObject(canvas);
+	//mObjects.push_back(canvas.get());
 
 	return true;
 }

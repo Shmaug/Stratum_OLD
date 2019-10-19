@@ -1169,7 +1169,29 @@ struct quaternion {
 		z = c.x * c.y * s.z - s.x * s.y * c.z;
 		w = c.x * c.y * c.z + s.x * s.y * s.z;
 	};
+	inline quaternion(float angle, const float3& axis) {
+		float sn = sin(angle * .5f);
+    	float cs = cos(angle * .5f);
+		xyz = axis * sn;
+		w = cs;
+	};
+	// from-to rotation
+	// https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+	inline quaternion(const float3& v1, const float3& v2){
+		xyz = cross(v1, v2);
+		w = sqrtf(dot(v1, v1) * dot(v2, v2)) + dot(v1, v2);
+		xyzw /= length(xyzw);
+	}
 	inline quaternion() : quaternion(0, 0, 0, 1) {};
+
+	inline static quaternion LookAt(const float3& forward) {
+		quaternion q(-forward.y, forward.x, 0, length(forward) + forward.z);
+		return q / length(q.xyzw);
+	}
+
+	inline float3 forward() {
+		return 2 * z * xyz + float3(0, 0, w * w - dot(xyz, xyz)) + 2 * w * float3(y, -x, 0);
+	}
 
 	inline quaternion operator =(const quaternion& q) {
 		x = q.x;
@@ -1282,6 +1304,20 @@ struct float3x3 {
 		c3[0] = 2 * (qxz + qwy);
 		c3[1] = 2 * (qyz - qwx);
 		c3[2] = 1 - 2 * (qxx + qyy);
+	}
+
+	inline float3x3(float angle, const float3& axis){
+		float c, s;
+		sincosf(angle, &s, &c);
+
+		float t = 1 - c;
+		float x = axis.x;
+		float y = axis.y;
+		float z = axis.z;
+
+		c1 = { t * x * x + c,     t * x * y - s * z, t * x * z + s * y };
+		c2 = { t * x * y + s * z, t * y * y + c,     t * y * z - s * x };
+		c3 = { t * x * z - s * y, t * y * z + s * x, t * z * z + c };
 	}
 
 	inline float3& operator[](int i) {

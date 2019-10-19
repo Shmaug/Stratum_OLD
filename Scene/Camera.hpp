@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_map>
 #include <Content/Mesh.hpp>
 #include <Content/Texture.hpp>
 #include <Core/Buffer.hpp>
@@ -59,7 +60,7 @@ public:
 	inline Texture* DepthNormalBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthNormalBuffer; }
 	inline Texture* DepthBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthBuffer; }
 	inline Buffer* UniformBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mUniformBuffer; }
-	inline ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDescriptorSet; }
+	ENGINE_EXPORT ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stage);
 
 	inline float4x4 View() { UpdateMatrices(); return mView; }
 	inline float4x4 Projection() { UpdateMatrices(); return mProjection; }
@@ -95,8 +96,6 @@ private:
 	Window* mTargetWindow;
 	::Device* mDevice;
 
-	VkDescriptorSetLayout mDescriptorSetLayout;
-
 	struct FrameData {
 		Texture* mColorBuffer;
 		Texture* mDepthNormalBuffer;
@@ -105,7 +104,7 @@ private:
 		VkFramebuffer mFramebuffer;
 		bool mFramebufferDirty;
 		Buffer* mUniformBuffer;
-		::DescriptorSet* mDescriptorSet;
+		std::unordered_map<VkShaderStageFlags, std::pair<VkDescriptorSetLayout, ::DescriptorSet*>> mDescriptorSets;
 	};
 	FrameData* mFrameData;
 	::RenderPass* mRenderPass;

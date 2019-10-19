@@ -94,7 +94,7 @@ void Scene::RemoveObject(Object* object) {
 			it++;
 }
 
-void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride, bool gizmos) {
+void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
 	PROFILER_BEGIN("Gather Lights");
 	if (mLightBuffers.count(commandBuffer->Device()) == 0) {
 		Buffer** b = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
@@ -150,7 +150,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 			END_CMD_REGION(commandBuffer);
 		}
 
-	if (gizmos) {
+	if (mDrawGizmos) {
 		PROFILER_BEGIN("Draw Gizmos");
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		for (const auto& r : mObjects)
