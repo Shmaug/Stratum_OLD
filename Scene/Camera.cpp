@@ -239,7 +239,7 @@ Camera::~Camera() {
 		safe_delete(mFrameData[i].mDepthBuffer);
 		vkDestroyFramebuffer(*mDevice, mFrameData[i].mFramebuffer, nullptr);
 	}
-	safe_delete(mFrameData);
+	safe_delete_array(mFrameData);
 }
 
 float4 Camera::WorldToClip(float3 worldPos) {

@@ -1307,8 +1307,8 @@ struct float3x3 {
 	}
 
 	inline float3x3(float angle, const float3& axis){
-		float c, s;
-		sincosf(angle, &s, &c);
+		float c = cosf(angle);
+		float s = sinf(angle);
 
 		float t = 1 - c;
 		float x = axis.x;
