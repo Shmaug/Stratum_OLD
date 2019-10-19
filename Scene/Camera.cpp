@@ -7,7 +7,7 @@ using namespace std;
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
-	mRenderPass(VK_NULL_HANDLE), mDescriptorSetLayout(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
+	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
 	mMatricesDirty(true),
 	mRenderFormat(renderFormat),
 	mDepthFormat(depthFormat),
@@ -75,20 +75,32 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	binding.binding = CAMERA_BUFFER_BINDING;
 	binding.descriptorCount = 1;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkDescriptorSetLayoutCreateInfo dslayoutinfo = {};
 	dslayoutinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dslayoutinfo.bindingCount = 1;
 	dslayoutinfo.pBindings = &binding;
-	vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &mDescriptorSetLayout);
-	mDevice->SetObjectName(mDescriptorSetLayout, mName + " DescriptorSetLayout");
+
+	vector<VkShaderStageFlags> combos{
+		VK_SHADER_STAGE_VERTEX_BIT,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+	};
 
 	mFrameData = new FrameData[mDevice->MaxFramesInFlight()];
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
 		mFrameData[i].mUniformBuffer = new Buffer(mName + " Uniforms", device, sizeof(CameraBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mFrameData[i].mUniformBuffer->Map();
-		mFrameData[i].mDescriptorSet = new ::DescriptorSet(mName + " DescriptorSet", device->DescriptorPool(), mDescriptorSetLayout);
-		mFrameData[i].mDescriptorSet->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
+		
+		for (auto& s : combos) {
+			VkDescriptorSetLayout layout;
+			binding.stageFlags = s;
+			vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &layout);
+			mDevice->SetObjectName(layout, mName + " DescriptorSetLayout");
+			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), layout);
+			ds->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
+			mFrameData[i].mDescriptorSets.emplace(s, make_pair(layout, ds));
+		}
+
 		mFrameData[i].mFramebuffer = VK_NULL_HANDLE;
 		mFrameData[i].mFramebufferDirty = true;
 		mFrameData[i].mColorBuffer = nullptr;
@@ -105,7 +117,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
-	mRenderPass(VK_NULL_HANDLE), mDescriptorSetLayout(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
+	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
 	mMatricesDirty(true),
 	mRenderFormat(targetWindow->Format().format),
 	mDepthFormat(depthFormat),
@@ -175,20 +187,31 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	binding.binding = CAMERA_BUFFER_BINDING;
 	binding.descriptorCount = 1;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	VkDescriptorSetLayoutCreateInfo dslayoutinfo = {};
 	dslayoutinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	dslayoutinfo.bindingCount = 1;
 	dslayoutinfo.pBindings = &binding;
-	vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &mDescriptorSetLayout);
-	mDevice->SetObjectName(mDescriptorSetLayout, mName + " DescriptorSetLayout");
+
+	vector<VkShaderStageFlags> combos{
+		VK_SHADER_STAGE_VERTEX_BIT,
+		VK_SHADER_STAGE_FRAGMENT_BIT,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+	};
 
 	mFrameData = new FrameData[mDevice->MaxFramesInFlight()];
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
 		mFrameData[i].mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, sizeof(CameraBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mFrameData[i].mUniformBuffer->Map();
-		mFrameData[i].mDescriptorSet = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), mDescriptorSetLayout);
-		mFrameData[i].mDescriptorSet->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
+
+		for (auto& s : combos) {
+			VkDescriptorSetLayout layout;
+			binding.stageFlags = s;
+			vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &layout);
+			mDevice->SetObjectName(layout, mName + " DescriptorSetLayout");
+			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), layout);
+			ds->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
+			mFrameData[i].mDescriptorSets.emplace(s, make_pair(layout, ds));
+		}
 		mFrameData[i].mFramebuffer = VK_NULL_HANDLE;
 		mFrameData[i].mFramebufferDirty = true;
 		mFrameData[i].mColorBuffer = nullptr;
@@ -204,10 +227,12 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	mViewport.maxDepth = 1.f;
 }
 Camera::~Camera() {
-	vkDestroyDescriptorSetLayout(*mDevice, mDescriptorSetLayout, nullptr);
 	delete mRenderPass;
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
-		safe_delete(mFrameData[i].mDescriptorSet);
+		for (auto& s : mFrameData[i].mDescriptorSets) {
+			vkDestroyDescriptorSetLayout(*mDevice, s.second.first, nullptr);
+			safe_delete(s.second.second);
+		}
 		safe_delete(mFrameData[i].mUniformBuffer);
 		safe_delete(mFrameData[i].mColorBuffer);
 		safe_delete(mFrameData[i].mDepthNormalBuffer);
@@ -225,6 +250,10 @@ float3 Camera::ClipToWorld(float3 clipPos) {
 	UpdateMatrices();
 	float4 wp = mInvViewProjection * float4(clipPos, 1);
 	return wp.xyz / wp.w;
+}
+
+::DescriptorSet* Camera::DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stages) {
+	return mFrameData[backBufferIndex].mDescriptorSets.at(stages).second;
 }
 
 void Camera::PreRender() {

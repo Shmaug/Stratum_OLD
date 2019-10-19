@@ -43,6 +43,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
 	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN);
+	#else
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		printf("\x1B[31m");
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		printf("\x1B[33m");
 	#endif
 
 	printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
@@ -50,6 +55,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 	if (messageSeverity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)) {
 		#ifdef WINDOWS
 		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		#else
+		printf("\x1B[0m");
 		#endif
 		if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
 			throw runtime_error(pCallbackData->pMessage);
@@ -82,7 +89,6 @@ private:
 	PluginManager* mPluginManager;
 	AssetManager* mAssetManager;
 	Scene* mScene;
-	bool mRenderGizmos;
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsMessengerEXT mDebugMessenger;
@@ -109,7 +115,7 @@ private:
 			}
 			PROFILER_END;
 
-			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex, nullptr, mRenderGizmos);
+			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex, nullptr);
 		}
 		PROFILER_END;
 
@@ -120,7 +126,7 @@ private:
 	}
 
 public:
-	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr), mRenderGizmos(false)
+	VkCAVE(const Configuration* config) : mScene(nullptr), mDeviceManager(nullptr), mInputManager(nullptr)
 #ifdef ENABLE_DEBUG_LAYERS
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif

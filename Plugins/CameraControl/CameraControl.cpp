@@ -49,6 +49,9 @@ bool CameraControl::Init(Scene* scene) {
 }
 
 void CameraControl::Update(const FrameTime& frameTime) {
+	if (mInput->KeyDownFirst(GLFW_KEY_F1))
+		mScene->DrawGizmos(!mScene->DrawGizmos());
+	
 	Camera* c = mScene->Cameras()[0];
 	mFpsText->Parent(c);
 	float d = c->Near() + .001f;

@@ -38,6 +38,7 @@ private:
 	std::vector<Light*> mLights;
 	std::vector<Camera*> mCameras;
 	std::vector<Renderer*> mRenderers;
+	bool mDrawGizmos;
 
 public:
 	ENGINE_EXPORT ~Scene();
@@ -45,12 +46,14 @@ public:
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
-	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr, bool gizmos = false);
+	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
 	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
 	inline const std::vector<Light*>& Lights() const { return mLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
+	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
+	inline bool DrawGizmos() const { return mDrawGizmos; }
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
 	inline ::DeviceManager* DeviceManager() const { return mDeviceManager; }
 	inline ::Gizmos* Gizmos() const { return mGizmos; }
