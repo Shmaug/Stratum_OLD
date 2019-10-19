@@ -361,6 +361,9 @@ bool MeshViewer::Init(Scene* scene) {
 	layout->UpdateLayout();
 	canvas->LocalPosition(-1.f, .5f, 0.f);
 
+	//mScene->AddObject(canvas);
+	//mObjects.push_back(canvas.get());
+
 	shared_ptr<Light> light0 = make_shared<Light>("Sun");
 	light0->Type(Spot);
 	light0->Intensity(10.f);
@@ -381,9 +384,6 @@ bool MeshViewer::Init(Scene* scene) {
 	light1->Color(float3(.2f, 1.f, 1.f));
 	mObjects.push_back(light1.get());
 	mScene->AddObject(light1);
-
-	//mScene->AddObject(canvas);
-	//mObjects.push_back(canvas.get());
 
 	return true;
 }

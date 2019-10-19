@@ -40,6 +40,7 @@ CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const 
 	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
 }
 CommandBuffer::~CommandBuffer() {
+	if (mCurrentMaterial) mCurrentMaterial->mIsBound = false;
 	vkFreeCommandBuffers(*mDevice, mCommandPool, 1, &mCommandBuffer);
 }
 
@@ -83,6 +84,8 @@ void CommandBuffer::BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bu
 void CommandBuffer::EndRenderPass() {
 	mCurrentRenderPass = nullptr;
 	vkCmdEndRenderPass(*this);
+	if (mCurrentMaterial) mCurrentMaterial->mIsBound = false;
+	mCurrentMaterial = nullptr;
 }
 
 VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input, VkPrimitiveTopology topology) {
