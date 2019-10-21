@@ -78,8 +78,11 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 	unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& descriptorBindings, unordered_map<string, VkPushConstantRange>& pushConstants) {
 	
 	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
-	cerr << result.GetErrorMessage().c_str() << endl;
-
+	
+	string error = result.GetErrorMessage();
+	if (error.size()) {
+		cerr << error.c_str() << endl;
+	}
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:
 		VkShaderStageFlagBits vkstage;
@@ -243,60 +246,14 @@ VkCompareOp atocmp(const string& str) {
 		return VK_COMPARE_OP_ALWAYS;
 	return VK_COMPARE_OP_MAX_ENUM;
 }
-VkBlendOp atoblend(const string& str) {
-	if (str == "add")
-		return VK_BLEND_OP_ADD;
-	else if (str == "subtract")
-		return VK_BLEND_OP_SUBTRACT;
-	else if (str == "inv_subtract")
-		return VK_BLEND_OP_REVERSE_SUBTRACT;
-	else if (str == "min")
-		return VK_BLEND_OP_MIN;
-	else if (str == "max")
-		return VK_BLEND_OP_MAX;
-	return VK_BLEND_OP_MAX_ENUM;
-}
-VkBlendFactor atofac(const string& str) {
-	if (str == "zero")
-		return VK_BLEND_FACTOR_ZERO;
-	else if (str == "one")
-		return VK_BLEND_FACTOR_ONE;
-	else if (str == "src_color")
-		return VK_BLEND_FACTOR_SRC_COLOR;
-	else if (str == "inv_src_color")
-		return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-	else if (str == "dst_color")
-		return VK_BLEND_FACTOR_DST_COLOR;
-	else if (str == "inv_dst_color")
-		return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-	else if (str == "src_alpha")
-		return VK_BLEND_FACTOR_SRC_ALPHA;
-	else if (str == "inv_src_alpha")
-		return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	else if (str == "dst_alpha")
-		return VK_BLEND_FACTOR_DST_ALPHA;
-	else if (str == "inv_dst_alpha")
-		return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-	else if (str == "const_color")
-		return VK_BLEND_FACTOR_CONSTANT_COLOR;
-	else if (str == "inv_const_color")
-		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-	else if (str == "const_alpha")
-		return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-	else if (str == "inv_const_alpha")
-		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-	else if (str == "alpha_saturate")
-		return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
-	else if (str == "src1_color")
-		return VK_BLEND_FACTOR_SRC1_COLOR;
-	else if (str == "inv_src1_color")
-		return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
-	else if (str == "src1_alpha")
-		return VK_BLEND_FACTOR_SRC1_ALPHA;
-	else if (str == "inv_src1_alpha")
-		return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
-
-	return VK_BLEND_FACTOR_MAX_ENUM;
+BlendMode atoblend(const string& str) {
+	if (str == "alpha")
+		return Alpha;
+	else if (str == "add")
+		return Additive;
+	else if (str == "multiply")
+		return Multiply;
+	return Opaque;
 }
 
 bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
@@ -314,15 +271,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 
 	VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
 	VkPolygonMode fillMode = VK_POLYGON_MODE_FILL;
-	VkPipelineColorBlendAttachmentState blendState = {};
-	blendState.blendEnable = VK_FALSE;
-	blendState.colorBlendOp = VK_BLEND_OP_ADD;
-	blendState.alphaBlendOp = VK_BLEND_OP_ADD;
-	blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	BlendMode blendMode = Opaque;
 	VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
 	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencilState.depthTestEnable = VK_TRUE;
@@ -433,42 +382,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 
 				} else if (*it == "blend") {
 					if (++it == words.end()) return false;
-					if (*it == "true")
-						blendState.blendEnable = VK_TRUE;
-					else if (*it == "false")
-						blendState.blendEnable = VK_FALSE;
-					else
-						return false;
-
-				} else if (*it == "blend_op") {
-					blendState.blendEnable = VK_TRUE;
-					if (++it == words.end()) return false;
-					blendState.colorBlendOp = atoblend(*it);
-					if (blendState.colorBlendOp == VK_BLEND_OP_MAX_ENUM) return false;
-
-				} else if (*it == "blend_fac") {
-					blendState.blendEnable = VK_TRUE;
-					if (++it == words.end()) return false;
-					blendState.srcColorBlendFactor = atofac(*it);
-					if (++it == words.end()) return false;
-					blendState.dstColorBlendFactor = atofac(*it);
-					if (blendState.dstColorBlendFactor == VK_BLEND_FACTOR_MAX_ENUM) return false;
-
-				} else if (*it == "colormask") {
-					if (++it == words.end()) return false;
-					blendState.colorWriteMask = 0;
-					for (auto& c : *it)
-						if (c == 'r')
-							blendState.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
-						else if (c == 'g')
-							blendState.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-						else if (c == 'b')
-							blendState.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-						else if (c == 'a')
-							blendState.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-						else
-							return false;
-
+					blendMode = atoblend(*it);
 				}
 				break;
 			}
@@ -583,9 +497,8 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 	output.write(reinterpret_cast<const char*>(&renderQueue), sizeof(uint32_t));
 	output.write(reinterpret_cast<const char*>(&cullMode), sizeof(VkCullModeFlags));
 	output.write(reinterpret_cast<const char*>(&fillMode), sizeof(VkPolygonMode));
-	output.write(reinterpret_cast<const char*>(&blendState), sizeof(VkPipelineColorBlendAttachmentState));
+	output.write(reinterpret_cast<const char*>(&blendMode), sizeof(BlendMode));
 	output.write(reinterpret_cast<const char*>(&depthStencilState), sizeof(VkPipelineDepthStencilStateCreateInfo));
-
 	return true;
 }
 

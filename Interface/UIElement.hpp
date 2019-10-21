@@ -51,7 +51,6 @@ public:
 	// Relative to canvas
 	inline virtual AABB AbsoluteBounds() { UpdateTransform(); return mAbsoluteAABB; }
 
-	inline virtual uint32_t RenderQueue() { return 1000; }
 	virtual bool Visible() { return mVisible; }
 	virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {}
 	

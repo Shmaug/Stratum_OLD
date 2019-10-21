@@ -15,9 +15,10 @@ struct PipelineInstance {
 	const VertexInput* mVertexInput;
 	VkPrimitiveTopology mTopology;
 	VkCullModeFlags mCullMode;
+	BlendMode mBlendMode;
 
-	inline PipelineInstance(VkRenderPass renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode)
-		: mRenderPass(renderPass), mVertexInput(vertexInput), mTopology(topology), mCullMode(cullMode) {};
+	inline PipelineInstance(VkRenderPass renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode)
+		: mRenderPass(renderPass), mVertexInput(vertexInput), mTopology(topology), mCullMode(cullMode), mBlendMode(blendMode) {};
 
 	ENGINE_EXPORT bool operator==(const PipelineInstance& rhs) const;
 };
@@ -31,6 +32,7 @@ namespace std {
 			if (p.mVertexInput) hash_combine(h, *p.mVertexInput);
 			hash_combine(h, p.mTopology);
 			hash_combine(h, p.mCullMode);
+			hash_combine(h, p.mBlendMode);
 			return h;
 		}
 	};
@@ -63,7 +65,7 @@ public:
 	Shader* mShader;
 
 	inline GraphicsShader() : ShaderVariant() { mShader = nullptr; }
-	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM);
+	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM, BlendMode blendMode = Opaque);
 };
 
 class Shader : public Asset {
@@ -85,7 +87,7 @@ private:
 	std::set<std::string> mKeywords;
 
 	uint32_t mRenderQueue;
-	VkPipelineColorBlendAttachmentState mBlendState;
+	BlendMode mBlendMode;
 	VkPipelineViewportStateCreateInfo mViewportState;
 	VkPipelineRasterizationStateCreateInfo mRasterizationState;
 	VkPipelineDepthStencilStateCreateInfo mDepthStencilState;

@@ -22,9 +22,9 @@ bool CameraControl::Init(Scene* scene) {
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
-	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
+	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 24);
 
-	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
+	shared_ptr<Material> fontMat = make_shared<Material>("OpenSans", fontshader);
 	fontMat->SetParameter("MainTexture", font->Texture());
 
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
@@ -39,6 +39,7 @@ bool CameraControl::Init(Scene* scene) {
 	shared_ptr<Object> cameraPivot = make_shared<Object>("CameraPivot");
 	mScene->AddObject(cameraPivot);
 	mCameraPivot = cameraPivot.get();
+	mCameraPivot->LocalPosition(0, .5f, 0);
 
 	for (auto& camera : mScene->Cameras()) {
 		camera->Parent(mCameraPivot);

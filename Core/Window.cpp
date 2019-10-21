@@ -1,5 +1,6 @@
 #include <Core/Window.hpp>
 #include <Core/Device.hpp>
+#include <Scene/Camera.hpp>
 #include <Util/Profiler.hpp>
 #include <Util/Util.hpp>
 
@@ -30,10 +31,16 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 	win->mInput->mCurrent.mCursorPos.x = (float)x + win->ClientRect().offset.x;
 	win->mInput->mCurrent.mCursorPos.y = (float)y + win->ClientRect().offset.y;
+
+	if (win->mTargetCamera) {
+		float3 wp = win->mTargetCamera->ClipToWorld(float3(2.f * (float)x / win->ClientRect().offset.x - 1.f, 2.f * (float)y / win->ClientRect().offset.y - 1.f, 1.f));
+		win->mInput->mCurrent.mMousePointer.mWorldPosition = win->mTargetCamera->WorldPosition();
+		win->mInput->mCurrent.mMousePointer.mWorldRotation = quaternion::LookAt(wp - win->mTargetCamera->WorldPosition());
+	}
 }
 void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mCurrent.mMouseButtons[button] = action;
+	win->mInput->mCurrent.mMousePointer.mAxis[(uint32_t)button] = action;
 }
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
@@ -42,7 +49,7 @@ void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 }
 
 Window::Window(VkInstance instance, const string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex)
-	: mInstance(instance), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
+	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
 	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
 
@@ -227,12 +234,14 @@ void Window::CreateSwapchain(::Device* device) {
 
 	// find the best present mode
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	for (const auto& availablePresentMode : swapChainSupport.mPresentModes)
-		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-			presentMode = availablePresentMode;
-			break;
-		} else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-			presentMode = availablePresentMode;
+	if (!mFullscreen) {
+		for (const auto& availablePresentMode : swapChainSupport.mPresentModes)
+			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+				presentMode = availablePresentMode;
+				break;
+			} else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+				presentMode = availablePresentMode;
+	}
 
 	// find the preferrable number of back buffers
 	mImageCount = swapChainSupport.mCapabilities.minImageCount + 1;

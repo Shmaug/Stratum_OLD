@@ -366,8 +366,10 @@ int main(int argc, char* argv[]) {
 		#endif
 	}
 
-	#if defined(WINDOWS) && defined(_DEBUG)
+	#if defined(WINDOWS)// && defined(_DEBUG)
+	OutputDebugString("Dumping Memory Leaks...\n");
 	_CrtDumpMemoryLeaks();
+	OutputDebugString("Done\n");
 	#endif
 	return EXIT_SUCCESS;
 }

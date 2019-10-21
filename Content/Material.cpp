@@ -5,8 +5,9 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mRenderQueueOverride(~0){}
-Material::Material(const string& name, shared_ptr<::Shader> shader) : mName(name), mShader(shader), mIsBound(false) {}
+	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+Material::Material(const string& name, shared_ptr<::Shader> shader)
+	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::~Material(){
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
@@ -27,9 +28,6 @@ void Material::EnableKeyword(const string& kw) {
 		d.second.mShaderVariant = nullptr;
 }
 
-void Material::CullMode(VkCullModeFlags cullMode) {
-	mCullMode = cullMode;
-}
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
 	mParameters[name] = param;
 	for (auto& d : mDeviceData)
@@ -58,7 +56,7 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 	auto variant = GetShader(renderPass->Device());
 	if (!variant) return VK_NULL_HANDLE;
 
-	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode);
+	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode, mBlendMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL &&

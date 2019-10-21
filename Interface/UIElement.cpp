@@ -52,6 +52,7 @@ bool UIElement::UpdateTransform() {
 }
 
 void UIElement::Dirty() {
+	mCanvas->mSortedElementsDirty = true;
 	mTransformDirty = true;
 	for (const auto& o : mChildren)
 		o->Dirty();
