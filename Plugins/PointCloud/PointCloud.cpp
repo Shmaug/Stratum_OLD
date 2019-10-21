@@ -136,7 +136,6 @@ void PointCloud::SwitchScene(Object* s) {
 
 bool PointCloud::Init(Scene* scene) {
 	mScene = scene;
-	return true;
 
 	Shader* pointShader = mScene->AssetManager()->LoadShader("Shaders/points.shader");
 	mPointMaterial = make_shared<Material>("PointCloud", pointShader);
@@ -144,20 +143,7 @@ bool PointCloud::Init(Scene* scene) {
 	mPointMaterial->SetParameter("Time", 0.f);
 	mPointMaterial->SetParameter("PointSize", mPointSize);
 
-	/*
-	shared_ptr<UICanvas> canvas = make_shared<UICanvas>("PointCloudUI", vec2(1, 1));
-	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
-	canvas->AddElement(layout);
-	layout->Extent(1.f, 1.f, 0.f, 0.f);
-
-	mScene->AddObject(canvas);
-	mObjects.push_back(canvas.get());
-
-	Shader* fontshader = scene->DeviceManager()->AssetDatabase()->LoadShader("Shaders/font.shader");
-	Font* font = scene->DeviceManager()->AssetDatabase()->LoadFont("Assets/segoeui.ttf", 24);
-	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
-	fontMat->SetParameter("MainTexture", font->Texture());
-	*/
+	return true;
 
 	vector<string> datasets {
 		"Assets/bunny.obj",
@@ -172,14 +158,6 @@ bool PointCloud::Init(Scene* scene) {
 		printf("Done.\n");
 		mSceneRoots.push_back(o);
 		
-		//shared_ptr<TextButton> btn = make_shared<TextButton>("Button");
-		//canvas->AddElement(btn);
-		//btn->Font(font);
-		//btn->Material(fontMat);
-		//btn->Extent(1, 0, 0, .1f);
-		//btn->Text(c);
-		//layout->AddChild(btn.get());
-		//printf("<%.2f,%.2f>\t<2f,%.2f,%.2f>\n", btn->AbsoluteExtent().x, btn->AbsoluteExtent().y, btn->AbsolutePosition().x, btn->AbsolutePosition().y, btn->AbsolutePosition().z);
 	}
 	
 	SwitchScene(mSceneRoots[0]);
@@ -195,8 +173,6 @@ void PointCloud::Update(const FrameTime& frameTime) {
 	if (input->KeyDownFirst(GLFW_KEY_1)) idx = 0;
 	if (input->KeyDownFirst(GLFW_KEY_2)) idx = 1;
 	if (input->KeyDownFirst(GLFW_KEY_3)) idx = 2;
-	if (input->KeyDownFirst(GLFW_KEY_4)) idx = 3;
-	if (input->KeyDownFirst(GLFW_KEY_5)) idx = 4;
 
 	if (idx >= 0 && idx < mSceneRoots.size()) {
 		SwitchScene(mSceneRoots[idx]);

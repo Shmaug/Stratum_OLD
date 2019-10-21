@@ -22,7 +22,7 @@ const ::VertexInput Float3VertexInput{
 Gizmos::Gizmos(Scene* scene) {
 	mGizmoMaterial = new Material("Gizmo", scene->AssetManager()->LoadShader("Shaders/gizmo.shader"));
 	
-	const uint32_t CircleResolution = 36;
+	const uint32_t CircleResolution = 64;
 
 	float3 circleVerts[CircleResolution];
 	uint16_t circleIndices[CircleResolution*2];

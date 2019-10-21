@@ -4,7 +4,7 @@
 #pragma multi_compile NORMAL_MAP 
 #pragma multi_compile COLOR_MAP
 #pragma multi_compile TWO_SIDED
-#pragma multi_compile VERTEX_COLORS
+#pragma multi_compile EMISSION
 
 #pragma render_queue 1000
 
@@ -26,7 +26,8 @@
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t1);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t2);
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t3);
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t4);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -37,19 +38,19 @@
 #ifdef NORMAL_MAP
 	float BumpStrength;
 #endif
+#ifdef EMISSION
+	float3 Emission;
+#endif
 };
 
 struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD0;
 	float3 normal : NORMAL;
-#ifdef VERTEX_COLORS
-	float3 color : Color0;
-#endif
 #ifdef NORMAL_MAP
 	float4 tangent : TANGENT;
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	float2 texcoord : TEXCOORD1;
 #endif
 };
@@ -134,11 +135,8 @@ v2f vsmain(
 #ifdef NORMAL_MAP
 	,[[vk::location(2)]] float4 tangent : TANGENT
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	,[[vk::location(3)]] float2 texcoord : TEXCOORD0
-#endif
-#ifdef VERTEX_COLORS
-	,[[vk::location(4)]] float3 color : COLOR0
 #endif
 	) {
 	v2f o;
@@ -151,7 +149,7 @@ v2f vsmain(
 	#ifdef NORMAL_MAP
 	o.tangent = mul(tangent, Object.WorldToObject) * tangent.w;
 	#endif
-	#if defined(NORMAL_MAP) || defined(COLOR_MAP)
+	#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	o.texcoord = texcoord;
 	#endif
 	return o;
@@ -163,7 +161,6 @@ void fsmain(v2f i,
 	
 	#ifdef COLOR_MAP
 	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
-	clip(col.a - .5);
 	#else
 	float4 col = Color;
 	#endif
@@ -219,10 +216,14 @@ void fsmain(v2f i,
 
 	uint texWidth, texHeight, numMips;
 	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
-	float2 uv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	float3 env = EnvironmentTexture.SampleLevel(Sampler, uv, saturate(material.perceptualRoughness) * numMips).rgb * EnvironmentStrength;
+	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
+	float3 env = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb * EnvironmentStrength;
 	
 	eval += ShadeIndirect(material, normal, view, env, env);
+
+	#ifdef EMISSION
+	eval.rgb += Emission* EmissionTexture.Sample(Sampler, i.texcoord).rgb;
+	#endif
 
 	color = float4(eval, col.a);
 	depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);

@@ -48,6 +48,8 @@ public:
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
 	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
+	ENGINE_EXPORT void Raycast(const Ray& ray);
+
 	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
 	inline const std::vector<Light*>& Lights() const { return mLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }

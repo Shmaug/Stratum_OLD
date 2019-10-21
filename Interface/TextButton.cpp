@@ -74,8 +74,7 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
 		data.mDirty[backBufferIndex] = false;
 	}
-
-	if (!data.mGlyphCount) return;
+	if (data.mGlyphCount == 0) return;
 
 	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, nullptr);
 	if (!layout) return;
@@ -111,7 +110,7 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 		offset.y = AbsoluteExtent().y;
 		break;
 	}
-	offset.z = AbsolutePosition().z;
+	offset.z = 0;
 
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
 	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld() * float4x4::Translate(offset);

@@ -34,9 +34,11 @@ public:
 	inline void RenderQueue(uint32_t q) { mRenderQueueOverride = q; }
 	inline uint32_t RenderQueue() const { return (mRenderQueueOverride == ~0) ? Shader()->RenderQueue() : mRenderQueueOverride; }
 
+	inline void CullMode(VkCullModeFlags c) { mCullMode = c; }
 	inline VkCullModeFlags CullMode() const { return mCullMode; }
 
-	ENGINE_EXPORT void CullMode(VkCullModeFlags cullMode);
+	inline void BlendMode(::BlendMode c) { mBlendMode = c; }
+	inline ::BlendMode BlendMode() const { return mBlendMode; }
 
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
 	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
@@ -51,6 +53,7 @@ private:
 	std::variant<::Shader*, std::shared_ptr<::Shader>> mShader;
 	std::set<std::string> mShaderKeywords;
 	VkCullModeFlags mCullMode;
+	::BlendMode mBlendMode;
 
 	uint32_t mRenderQueueOverride;
 

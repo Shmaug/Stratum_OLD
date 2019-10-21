@@ -41,6 +41,7 @@ private:
 		Buffer** mBoundLightBuffers;
 	};
 
+	uint8_t mNeedsObjectData;
 	uint8_t mNeedsLightData;
 	VkPushConstantRange mLightCountRange;
 

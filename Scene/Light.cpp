@@ -8,5 +8,16 @@ Light::Light(const string& name)
 Light::~Light() {}
 
 void Light::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), Radius(), camera->WorldRotation(), float4(Color(), 1));
+	switch (mType) {
+	case LightType::Point:
+		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), Radius(), camera->WorldRotation(), float4(Color(), 1));
+		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), mRange, camera->WorldRotation(), float4(Color(), .5f));
+		break;
+
+	case LightType::Spot:
+		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), Radius(), WorldRotation(), float4(Color(), 1));
+		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition() + WorldRotation() * float3(0,0,mRange), mRange * tanf(mInnerSpotAngle * .5f), WorldRotation(), float4(Color(), 1));
+		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition() + WorldRotation() * float3(0,0,mRange), mRange * tanf(mOuterSpotAngle * .5f), WorldRotation(), float4(Color(), 1));
+		break;
+	}
 }

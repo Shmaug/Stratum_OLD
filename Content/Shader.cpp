@@ -69,11 +69,12 @@ bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
 	return rhs.mRenderPass == mRenderPass &&
 		((!rhs.mVertexInput && !mVertexInput) || (rhs.mVertexInput && mVertexInput && *rhs.mVertexInput == *mVertexInput)) &&
 		mTopology == rhs.mTopology &&
-		mCullMode == rhs.mCullMode;
+		mCullMode == rhs.mCullMode &&
+		mBlendMode == rhs.mBlendMode;
 }
 
 Shader::Shader(const string& name, ::DeviceManager* devices, const string& filename)
-	: mName(name), mViewportState({}), mRasterizationState({}), mDynamicState({}), mBlendState({}), mDepthStencilState({}) {
+	: mName(name), mViewportState({}), mRasterizationState({}), mDynamicState({}), mBlendMode(Opaque), mDepthStencilState({}) {
 	ifstream file(filename, ios::binary);
 	if (!file.is_open()) throw runtime_error("Could not load " + filename);
 
@@ -334,7 +335,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 	file.read(reinterpret_cast<char*>(&mRenderQueue), sizeof(uint32_t));
 	file.read(reinterpret_cast<char*>(&mRasterizationState.cullMode), sizeof(VkCullModeFlags));
 	file.read(reinterpret_cast<char*>(&mRasterizationState.polygonMode), sizeof(VkPolygonMode));
-	file.read(reinterpret_cast<char*>(&mBlendState), sizeof(VkPipelineColorBlendAttachmentState));
+	file.read(reinterpret_cast<char*>(&mBlendMode), sizeof(BlendMode));
 	file.read(reinterpret_cast<char*>(&mDepthStencilState), sizeof(VkPipelineDepthStencilStateCreateInfo));
 }
 Shader::~Shader() {
@@ -365,16 +366,56 @@ Shader::~Shader() {
 	}
 }
 
-VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode) {
+VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode) {
+	BlendMode blend = blendMode == BLEND_MODE_MAX_ENUM ? mShader->mBlendMode : blendMode;
 	VkCullModeFlags cull = cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM ? mShader->mRasterizationState.cullMode : cullMode;
-	PipelineInstance instance(*renderPass, vertexInput, topology, cull);
+	PipelineInstance instance(*renderPass, vertexInput, topology, cull, blendMode);
 
 	if (mPipelines.count(instance))
 		return mPipelines.at(instance);
 	else {
 		if (mStages.size() == 0) return VK_NULL_HANDLE;
 
-		vector<VkPipelineColorBlendAttachmentState> blendAttachmentStates(renderPass->ColorAttachmentCount(), mShader->mBlendState);
+		VkPipelineColorBlendAttachmentState bs = {};
+		bs.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		switch (blend) {
+		case Opaque:
+			bs.blendEnable = VK_FALSE;
+			bs.colorBlendOp = VK_BLEND_OP_ADD;
+			bs.alphaBlendOp = VK_BLEND_OP_ADD;
+			bs.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			bs.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		case Alpha:
+			bs.blendEnable = VK_TRUE;
+			bs.colorBlendOp = VK_BLEND_OP_ADD;
+			bs.alphaBlendOp = VK_BLEND_OP_ADD;
+			bs.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			bs.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			bs.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			break;
+		case Additive:
+			bs.blendEnable = VK_TRUE;
+			bs.colorBlendOp = VK_BLEND_OP_ADD;
+			bs.alphaBlendOp = VK_BLEND_OP_ADD;
+			bs.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			break;
+		case Multiply:
+			bs.blendEnable = VK_TRUE;
+			bs.colorBlendOp = VK_BLEND_OP_MULTIPLY_EXT;
+			bs.alphaBlendOp = VK_BLEND_OP_MULTIPLY_EXT;
+			bs.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			break;
+		}
+		vector<VkPipelineColorBlendAttachmentState> blendAttachmentStates(renderPass->ColorAttachmentCount(), bs);
 
 		VkPipelineRasterizationStateCreateInfo rasterState = mShader->mRasterizationState;
 		if (cullMode != VK_CULL_MODE_FLAG_BITS_MAX_ENUM)

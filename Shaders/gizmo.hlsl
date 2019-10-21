@@ -1,14 +1,15 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
+#pragma render_queue 5000
+#pragma cull false
 #pragma zwrite false
-#pragma blend_fac src_alpha inv_src_alpha
+#pragma blend alpha
 
-#pragma render_queue 1000
+#pragma static_sampler Sampler
 
 #include <shadercompat.h>
 
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
@@ -18,14 +19,28 @@
 	float3 Scale;
 }
 
-float4 vsmain([[vk::location(0)]] float3 vertex : POSITION) : SV_Position {
-	float3 vec = vertex * Scale;
-	vec = 2 * dot(Rotation.xyz, vec) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * vec + 2 * Rotation.w * cross(Rotation.xyz, vec);
-	vec += Position;
-	return mul(Camera.ViewProjection, float4(vec, 1));
+struct v2f {
+	float4 pos : SV_Position;
+	float3 viewRay : TEXCOORD0;
+	float3 normal : NORMAL;
+};
+
+v2f vsmain([[vk::location(0)]] float3 vertex : POSITION) {
+	v2f o;
+	float3 worldPos = vertex * Scale;
+	worldPos = 2 * dot(Rotation.xyz, worldPos) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * worldPos + 2 * Rotation.w * cross(Rotation.xyz, worldPos);
+	worldPos += Position;
+	o.viewRay = worldPos - Camera.Position;
+
+	float3 normal = float3(0, 0, 1);
+	o.normal = 2 * dot(Rotation.xyz, normal) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * normal + 2 * Rotation.w * cross(Rotation.xyz, normal);
+	o.pos = mul(Camera.ViewProjection, float4(worldPos, 1));
+	return o;
 }
 
-void fsmain(out float4 color : SV_Target0, out float4 depthNormal : SV_Target1) {
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1 ) {
 	color = Color;
-	depthNormal = float4(0, 0, 0, 1);
+	depthNormal = float4(normalize(i.normal * .5 + .5), length(i.viewRay) / Camera.Viewport.w);
 }

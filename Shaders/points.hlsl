@@ -34,9 +34,6 @@ struct v2f {
 	float3 rd : TEXCOORD0;
 	float3 center : TEXCOORD1;
 };
-struct fs_out {
-	
-};
 
 v2f vsmain(uint id : SV_VertexId) {
 	static const float3 offsets[6] = {
@@ -70,20 +67,17 @@ v2f vsmain(uint id : SV_VertexId) {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1,
-	inout uint coverage : SV_Coverage,
-	out float depth : SV_Depth ) {
+	inout uint coverage : SV_Coverage) {
 
 	float3 qp = Camera.Position - i.center;
-	float a = dot(i.rd, i.rd);
-	float b = dot(qp, i.rd);
 	float c = dot(qp, qp) - PointSize * PointSize;
 
+	float a = dot(i.rd, i.rd);
+	float b = dot(qp, i.rd);
 	float det = b * b - a * c;
 	clip(det);
 
-	float t = (-b - sqrt(det)) / a;
-
-	float3 p = Camera.Position + i.rd * t;
+	float3 p = Camera.Position + i.rd * (-b - sqrt(det)) / a;
 	float3 normal = normalize(p - i.center);
 
 	color = i.color * dot(normal, -normalize(i.rd));

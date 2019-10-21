@@ -5,7 +5,7 @@
 using namespace std;
 
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager) {
+	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
 	mGizmos = new ::Gizmos(this);
 }
 Scene::~Scene(){
@@ -176,4 +176,8 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	PROFILER_END;
 
 	camera->PostRender(commandBuffer, backBufferIndex);
+}
+
+void Scene::Raycast(const Ray& ray) {
+	
 }

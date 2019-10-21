@@ -2,7 +2,6 @@
 #pragma fragment fsmain
 
 #pragma render_queue 0
-
 #pragma cull false
 #pragma zwrite false
 
@@ -27,10 +26,8 @@ struct v2f {
 
 v2f vsmain([[vk::location(0)]] float3 vertex : POSITION ) {
 	v2f o;
-	float4 wp = mul(Object.ObjectToWorld, float4(vertex, 1.0));
-	wp.xyz += Camera.Position;
-	o.position = mul(Camera.ViewProjection, wp);
-	o.viewRay = wp.xyz - Camera.Position;
+	o.position = mul(Camera.ViewProjection, float4(vertex + Camera.Position, 1));
+	o.viewRay = vertex;
 	return o;
 }
 

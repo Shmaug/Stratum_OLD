@@ -47,6 +47,15 @@ struct FrameTime {
 	uint32_t mFrameNumber;
 };
 
+enum BlendMode {
+	Opaque = 0,
+	Alpha = 1,
+	Additive = 2,
+	Multiply = 3,
+	BLEND_MODE_MAX_ENUM = 0x7FFFFFFF
+};
+
+
 // Defines a vertex input. Hashes itself once at creation, then remains immutable.
 // Note: Meshes store a pointer to one of these, but do not handle creation/deletion.
 struct VertexInput {

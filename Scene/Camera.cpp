@@ -227,7 +227,8 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	mViewport.maxDepth = 1.f;
 }
 Camera::~Camera() {
-	delete mRenderPass;
+	if (mTargetWindow) mTargetWindow->mTargetCamera = nullptr;
+	safe_delete(mRenderPass);
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
 		for (auto& s : mFrameData[i].mDescriptorSets) {
 			vkDestroyDescriptorSetLayout(*mDevice, s.second.first, nullptr);
