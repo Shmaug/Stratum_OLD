@@ -59,8 +59,6 @@ private:
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 
-	bool mIsBound;
-
 	struct DeviceData {
 		::DescriptorSet** mDescriptorSets;
 		bool* mDirty;

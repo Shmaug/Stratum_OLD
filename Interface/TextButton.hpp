@@ -11,9 +11,9 @@
 
 class TextButton : public UIElement {
 public:
-	ENGINE_EXPORT TextButton(const std::string& name);
+	ENGINE_EXPORT TextButton(const std::string& name, UICanvas* canvas);
 	ENGINE_EXPORT ~TextButton();
-
+	
 	inline std::string Text() const { return mText; }
 	ENGINE_EXPORT void Text(const std::string& text);
 
@@ -29,10 +29,7 @@ public:
 
 	inline float TextScale() const { return mTextScale; }
 	inline void TextScale(float sc) { mTextScale = sc; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
-
-	inline std::shared_ptr<::Material> Material() const { return mMaterial; }
-	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
-
+	
 	inline virtual bool Visible() override { return UIElement::Visible() && Font(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
@@ -48,14 +45,13 @@ private:
 	std::vector<TextGlyph> mTempGlyphs;
 	uint32_t BuildText(Device* device, Buffer*& d);
 
+	Shader* mShader;
 	TextAnchor mHorizontalAnchor;
 	TextAnchor mVerticalAnchor;
 	float mTextScale;
 	std::string mText;
 	AABB mAABB;
 	AABB mTextAABB;
-	std::shared_ptr<::Material> mMaterial;
-
 	std::variant<::Font*, std::shared_ptr<::Font>> mFont;
 
 	std::unordered_map<Device*, DeviceData> mDeviceData;

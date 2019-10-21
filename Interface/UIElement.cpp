@@ -4,49 +4,52 @@
 
 using namespace std;
 
-UIElement::UIElement(const string& name)
-	: mName(name), mCanvas(nullptr), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(float3()), mAbsoluteExtent(float2()), mTransformDirty(true), mVisible(true) {}
-UIElement::~UIElement() {}
+UIElement::UIElement(const string& name, UICanvas* canvas)
+	: mName(name), mCanvas(canvas), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(float3()), mAbsoluteExtent(float2()), mTransformDirty(true), mVisible(true) {}
+UIElement::~UIElement() {
+	while (mChildren.size())
+		RemoveChild(mChildren[0]);
+	if (mParent) mParent->RemoveChild(this);
+}
 
-bool UIElement::Parent(UIElement* p) {
-	if (mParent == p) return true;
+void UIElement::AddChild(UIElement* c) {
+	if (c->mParent == this) return;
 
-	if (mParent)
-		for (auto it = mParent->mChildren.begin(); it != mParent->mChildren.end();)
-			if (*it == this)
-				it = mParent->mChildren.erase(it);
+	if (c->mParent)
+		for (auto it = c->mParent->mChildren.begin(); it != c->mParent->mChildren.end();)
+			if (*it == c)
+				it = c->mParent->mChildren.erase(it);
 			else
 				it++;
 
-	mParent = p;
-	if (!p || !p->AddChild(this)) {
-		Dirty();
-		return false;
-	}
-	Dirty();
-	return true;
+	mChildren.push_back(c);
+	c->mParent = this;
+	c->Dirty();
 }
-bool UIElement::AddChild(UIElement* e) {
-	mChildren.push_back(e);
-	Dirty();
-	return true;
+void UIElement::RemoveChild(UIElement* c) {
+	if (c->mParent != this) return;
+
+	for (auto it = mChildren.begin(); it != mChildren.end();)
+		if (*it == c)
+			it = mChildren.erase(it);
+		else
+			it++;
+
+	c->mParent = nullptr;
+	c->Dirty();
 }
 
 bool UIElement::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
 	if (mParent) {
-		mAbsolutePosition = mParent->AbsolutePosition() + float3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsolutePosition = mParent->AbsolutePosition() + float3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, 0);
 		mAbsoluteExtent   = mParent->AbsoluteExtent() * mExtent.mScale + mExtent.mOffset;
 	} else {
-		mAbsolutePosition = float3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, mDepth);
+		mAbsolutePosition = float3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, 0);
 		mAbsoluteExtent = mCanvas->Extent() * mExtent.mScale + mExtent.mOffset;
 	}
-
-	mAbsoluteAABB = AABB(mAbsolutePosition + float3(mAbsoluteExtent, 0), float3(mAbsoluteExtent, UI_THICKNESS));
-	for (UIElement* e : mChildren)
-		mAbsoluteAABB.Encapsulate(e->AbsoluteBounds());
-
+	
 	mTransformDirty = false;
 	return true;
 }

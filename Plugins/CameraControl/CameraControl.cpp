@@ -22,14 +22,10 @@ bool CameraControl::Init(Scene* scene) {
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
-	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 24);
-
-	shared_ptr<Material> fontMat = make_shared<Material>("OpenSans", fontshader);
-	fontMat->SetParameter("MainTexture", font->Texture());
+	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
 
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
 	fpsText->Font(font);
-	fpsText->Material(fontMat);
 	fpsText->Text("");
 	fpsText->VerticalAnchor(Maximum);
 	fpsText->HorizontalAnchor(Minimum);
@@ -42,7 +38,7 @@ bool CameraControl::Init(Scene* scene) {
 	mCameraPivot->LocalPosition(0, .5f, 0);
 
 	for (auto& camera : mScene->Cameras()) {
-		camera->Parent(mCameraPivot);
+		mCameraPivot->AddChild(camera);
 		camera->LocalPosition(0, 0, -mCameraDistance);
 	}
 
@@ -54,14 +50,14 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	
 	Camera* c = mScene->Cameras()[0];
-	mFpsText->Parent(c);
+	c->AddChild(mFpsText);
 	float d = c->Near() + .001f;
 	float y = d * tanf(c->FieldOfView() * .5f);
 	float x = y * c->Aspect();
 	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 10.f / c->PixelHeight()), d);
 	mFpsText->TextScale(d * .015f);
 
-	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .03f), .025f);
+	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 
 	float3 md = float3(mInput->CursorDelta(), 0);
 	if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {

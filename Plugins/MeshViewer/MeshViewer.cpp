@@ -100,7 +100,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 		t *= scale;
 		
 		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
-		nodeobj->Parent(nodepair.second);
+		nodepair.second->AddChild(nodeobj.get());
 		nodeobj->LocalPosition(t.x, t.y, t.z);
 		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
 		nodeobj->LocalScale(s.x, s.y, s.z);
@@ -185,7 +185,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(), aimesh, scale);
 
 			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
-			meshRenderer->Parent(nodeobj.get());
+			nodeobj.get()->AddChild(meshRenderer.get());
 			meshRenderer->Mesh(mesh);
 			meshRenderer->Material(material);
 
@@ -324,9 +324,9 @@ Object* MeshViewer::LoadObj(const string& filename, Shader* shader, float scale,
 
 void GetFiles(const string& path, vector<fs::path>& files) {
 	for (auto f : fs::directory_iterator(path)) {
-		if (f.is_directory())
+		if (fs::is_directory(f.path()))
 			GetFiles(f.path().string(), files);
-		else if (f.is_regular_file())
+		else if (fs::is_regular_file(f.path()))
 			files.push_back(f.path());
 	}
 }
@@ -403,39 +403,37 @@ bool MeshViewer::Init(Scene* scene) {
 	#pragma endregion
 
 	#pragma region Menu
-	Shader* fontShader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
 	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 96);
 	Font* boldfont = mScene->AssetManager()->LoadFont("Assets/OpenSans-Bold.ttf", 96);
-	shared_ptr<Material> uiMat = make_shared<Material>("UI", mScene->AssetManager()->LoadShader("Shaders/ui.shader"));
-	shared_ptr<Material> fontMat = make_shared<Material>("OpenSans", fontShader);
-	shared_ptr<Material> boldMat = make_shared<Material>("OpenSans Bold", fontShader);
-	fontMat->SetParameter("MainTexture", font->Texture());
-	boldMat->SetParameter("MainTexture", boldfont->Texture());
 
-	shared_ptr<UICanvas> panel = make_shared<UICanvas>("MeshViewerPanel", float2(.2f, .25f));
+	shared_ptr<UICanvas> panel = make_shared<UICanvas>("MeshViewerPanel", float2(.15f, .25f));
 	panel->RenderQueue(5000);
-	panel->LocalPosition(0, 1.5f, 0.5f);
+	panel->LocalPosition(0.2f, 1.5f, -0.1f);
 
-	shared_ptr<UIImage> bg = make_shared<UIImage>("Background");
-	panel->AddElement(bg);
+	shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Background", panel.get());
 	bg->Texture(white);
-	bg->Material(uiMat);
 	bg->Color(float4(0, 0, 0, .5f));
 	bg->Extent(1, 1, 0, 0);
+	bg->Outline(true);
 
-	shared_ptr<VerticalLayout> layout = make_shared<VerticalLayout>("Layout");
-	panel->AddElement(layout);
-	layout->Extent(1, 1, 0, 0);
+	shared_ptr<VerticalLayout> layout = panel->AddElement<VerticalLayout>("VerticalLayout", panel.get());
+	layout->Extent(.8f, 1, 0, 0);
+	layout->Spacing(.005f);
 
-	shared_ptr<TextButton> title = make_shared<TextButton>("Title");
-	panel->AddElement(title);
-	title->HorizontalAnchor(TextAnchor::Minimum);
+	shared_ptr<TextButton> title = panel->AddElement<TextButton>("Title", panel.get());
+	title->VerticalAnchor(TextAnchor::Middle);
 	title->Font(boldfont);
-	title->Material(boldMat);
-	title->Extent(1, 0, 0, .1f);
-	title->TextScale(.1f);
+	title->Extent(1, 0, 0, .025f);
+	title->TextScale(.05f);
 	title->Text("MeshViewer");
 	layout->AddChild(title.get());
+	
+	shared_ptr<UIImage> separator = panel->AddElement<UIImage>("Separator", panel.get());
+	separator->Texture(white);
+	separator->Color(float4(0));
+	separator->Extent(1, 0, 0, 0);
+	separator->Outline(true);
+	layout->AddChild(separator.get());
 
 	vector<fs::path> files;
 	GetFiles("Assets", files);
@@ -443,16 +441,22 @@ bool MeshViewer::Init(Scene* scene) {
 		string ext = f.extension().string();
 		if (ext != ".obj" && ext != ".fbx" && ext != ".gltf" && ext != ".glb") continue;
 
-		shared_ptr<TextButton> btn = make_shared<TextButton>(f.string());
-		panel->AddElement(btn);
+		shared_ptr<TextButton> btn = panel->AddElement<TextButton>(f.string(), panel.get());
+		btn->VerticalAnchor(TextAnchor::Middle);
 		btn->HorizontalAnchor(TextAnchor::Minimum);
 		btn->Font(font);
-		btn->Material(fontMat);
-		btn->Extent(1, 0, 0, .075f);
-		btn->TextScale(.075f);
+		btn->Extent(1, 0, 0, .0125f);
+		btn->TextScale(.025f);
 		btn->Text(f.filename().string());
 		layout->AddChild(btn.get());
 		mSceneButtons.push_back(btn.get());
+
+		shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Button Background", panel.get());
+		bg->Texture(white);
+		bg->Color(float4(0));
+		bg->Extent(1, 1, 0, 0);
+		bg->Outline(true);
+		btn->AddChild(bg.get());
 	}
 
 	layout->UpdateLayout();
@@ -460,8 +464,6 @@ bool MeshViewer::Init(Scene* scene) {
 	mScene->AddObject(panel);
 	mObjects.push_back(panel.get());
 	#pragma endregion
-
-	LoadScene(mSceneButtons[0]->mName, pbrshader);
 
 	return true;
 }

@@ -5,6 +5,7 @@
 
 #include <Content/Font.hpp>
 #include <Content/Material.hpp>
+#include <Content/Shader.hpp>
 #include <Core/Buffer.hpp>
 #include <Core/DescriptorSet.hpp>
 #include <Scene/Renderer.hpp>
@@ -24,7 +25,6 @@ public:
 
 	inline TextAnchor HorizontalAnchor() const { return mHorizontalAnchor; }
 	inline void HorizontalAnchor(TextAnchor anchor) { mHorizontalAnchor = anchor; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
-
 	inline TextAnchor VerticalAnchor() const { return mVerticalAnchor; }
 	inline void VerticalAnchor(TextAnchor anchor) { mVerticalAnchor = anchor; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
 
@@ -35,11 +35,8 @@ public:
 	inline float TextScale() const { return mTextScale; }
 	inline void TextScale(float sc) { mTextScale = sc; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
 
-	inline std::shared_ptr<::Material> Material() const { return mMaterial; }
-	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
-
 	inline virtual bool Visible() override { return mVisible && Font() && EnabledHeirarchy(); }
-	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
+	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
 
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
@@ -58,13 +55,14 @@ private:
 	std::vector<TextGlyph> mTempGlyphs;
 	uint32_t BuildText(Device* device, Buffer*& buffer);
 
+	Shader* mShader;
+	uint32_t mRenderQueue;
 	TextAnchor mHorizontalAnchor;
 	TextAnchor mVerticalAnchor;
 	float mTextScale;
 	std::string mText;
 	AABB mAABB;
 	AABB mTextAABB;
-	std::shared_ptr<::Material> mMaterial;
 
 	std::variant<::Font*, std::shared_ptr<::Font>> mFont;
 

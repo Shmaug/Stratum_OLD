@@ -5,7 +5,10 @@
 #pragma cull false
 #pragma zwrite false
 #pragma blend alpha
+
 #pragma static_sampler Sampler
+
+#pragma multi_compile OUTLINE
 
 #include <shadercompat.h>
 
@@ -28,6 +31,21 @@ struct v2f {
 };
 
 v2f vsmain(uint index : SV_VertexID) {
+	#ifdef OUTLINE
+	static const float2 positions[8] = {
+		float2(0,0),
+		float2(1,0),
+
+		float2(1,0),
+		float2(1,1),
+
+		float2(1,1),
+		float2(0,1),
+
+		float2(0,1),
+		float2(0,0)
+	};
+	#else
 	static const float2 positions[6] = {
 		float2(0,0),
 		float2(1,0),
@@ -36,6 +54,8 @@ v2f vsmain(uint index : SV_VertexID) {
 		float2(1,1),
 		float2(0,1)
 	};
+	#endif
+	
 	float4 wp = mul(Object.ObjectToWorld, float4(positions[index] * 2 - 1, 0, 1.0));
 
 	v2f o;

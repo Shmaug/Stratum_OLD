@@ -10,8 +10,8 @@ Light::~Light() {}
 void Light::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	switch (mType) {
 	case LightType::Point:
-		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), Radius(), camera->WorldRotation(), float4(Color(), 1));
-		Scene()->Gizmos()->DrawWireCircle(commandBuffer, backBufferIndex, WorldPosition(), mRange, camera->WorldRotation(), float4(Color(), .5f));
+		Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, WorldPosition(), Radius(), float4(Color(), 1));
+		Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, WorldPosition(), mRange, float4(Color(), .5f));
 		break;
 
 	case LightType::Spot:
