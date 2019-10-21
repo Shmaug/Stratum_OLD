@@ -2,24 +2,18 @@
 
 using namespace std;
 
-VerticalLayout::VerticalLayout(const string& name) : UIElement(name), mSpacing(0.f) {}
+VerticalLayout::VerticalLayout(const string& name, UICanvas* canvas) : UIElement(name, canvas), mSpacing(0.f) {}
 VerticalLayout::~VerticalLayout() {}
 
-bool VerticalLayout::AddChild(UIElement* e) {
-	if (!UIElement::AddChild(e)) return false;
-	UpdateLayout();
-	return true;
-}
-
 void VerticalLayout::UpdateLayout() {
-	float2 c = float2(1, 0);
+	float sy = 1;
+	float oy = 0;
 	for (uint32_t i = 0; i < ChildCount(); i++) {
 		UIElement* e = Child(i);
 		UDim2 p = e->Position();
-		p.mOffset.y = c.x;
-		p.mScale.y = c.y;
+		p.mScale.y = sy;
+		p.mOffset.y = oy;
 		e->Position(p);
-		c.x -= e->Extent().mScale.y;
-		c.y -= e->Extent().mOffset.y + mSpacing;
+		oy -= e->AbsoluteExtent().y * 2.f + mSpacing;
 	}
 }

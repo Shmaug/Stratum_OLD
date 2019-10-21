@@ -111,9 +111,6 @@ if(WIN32)
 
 	configure_file("$ENV{VULKAN_SDK}/shaderc/install/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 else()
-	target_link_directories(Engine PUBLIC "${VKCAVE_HOME}/ThirdParty/assimp/lib" "${VKCAVE_HOME}/ThirdParty/glfw/lib64")
-	target_link_directories(VkCave PUBLIC "${VKCAVE_HOME}/ThirdParty/assimp/lib" "${VKCAVE_HOME}/ThirdParty/glfw/lib64")
-	
 	target_link_libraries(ShaderCompiler
 		stdc++fs
 		pthread
@@ -126,20 +123,15 @@ else()
 		pthread
 		X11
 		"libvulkan.so.1"
-		"libassimp.so"
-		"libzlibstatic.a"
-		"libIrrXML.a"
-		"libglfw3.a" )
+		"${VKCAVE_HOME}/ThirdParty/glfw/lib64/libglfw3.a"
+		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libassimp.so"
+		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
+		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
 	if (${ENABLE_DEBUG_LAYERS})
 		target_link_libraries(Engine "libVkLayer_utils.so")
 	endif()
 
-	target_link_libraries(VkCave
-		"libvulkan.so.1"
-		"${PROJECT_BINARY_DIR}/bin/libEngine.so" )
-	if (${ENABLE_DEBUG_LAYERS})
-		target_link_libraries(VkCave "libVkLayer_utils.so")
-	endif()
+	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/bin/libEngine.so" "libvulkan.so.1")
 endif(WIN32)
 
 if (${ENABLE_DEBUG_LAYERS})
@@ -159,7 +151,7 @@ add_custom_command(
 	TARGET VkCave POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/Assets/" "${PROJECT_BINARY_DIR}/bin/Assets"
 	DEPENDS "${PROJECT_BINARY_DIR}/bin/Assets"
-	COMMENT "Symbolic link assets folder from ${source} => ${destination}" )
+	COMMENT "Linking ${CMAKE_CURRENT_SOURCE_DIR}/Assets/ to ${PROJECT_BINARY_DIR}/bin/Assets" )
 
 # Compile shaders
 add_shader_target(Shaders "Shaders/")

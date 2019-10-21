@@ -18,12 +18,12 @@ public:
 	bool mVisible;
 	const std::string mName;
 
-	ENGINE_EXPORT UIElement(const std::string& name);
+	ENGINE_EXPORT UIElement(const std::string& name, UICanvas* canvas);
 	ENGINE_EXPORT ~UIElement();
 
 	inline UIElement* Parent() const { return mParent; }
-	ENGINE_EXPORT bool Parent(UIElement* elem);
-	ENGINE_EXPORT virtual bool AddChild(UIElement* elem);
+	ENGINE_EXPORT void AddChild(UIElement* elem);
+	ENGINE_EXPORT void RemoveChild(UIElement* elem);
 
 	inline UICanvas* Canvas() const { return mCanvas; }
 
@@ -48,9 +48,7 @@ public:
 	inline float3 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }
 	// Relative to canvas
 	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
-	// Relative to canvas
-	inline virtual AABB AbsoluteBounds() { UpdateTransform(); return mAbsoluteAABB; }
-
+	
 	virtual bool Visible() { return mVisible; }
 	virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {}
 	
@@ -70,8 +68,6 @@ private:
 	float3 mAbsolutePosition;
 	// Relative to canvas
 	float2 mAbsoluteExtent;
-	// Relative to canvas
-	AABB mAbsoluteAABB;
 
 	UIElement* mParent;
 	std::vector<UIElement*> mChildren;

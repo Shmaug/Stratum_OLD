@@ -4,11 +4,10 @@
 
 class VerticalLayout : public UIElement {
 public:
-	ENGINE_EXPORT VerticalLayout(const std::string& name);
+	ENGINE_EXPORT VerticalLayout(const std::string& name, UICanvas* canvas);
 	ENGINE_EXPORT ~VerticalLayout();
 
-	ENGINE_EXPORT bool AddChild(UIElement* element);
-	// Update child positions (called in AddChild)
+	// Update child positions
 	ENGINE_EXPORT void UpdateLayout();
 
 	// Vertical spacing between elements

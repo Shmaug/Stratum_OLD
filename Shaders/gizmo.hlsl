@@ -6,8 +6,6 @@
 #pragma zwrite false
 #pragma blend alpha
 
-#pragma static_sampler Sampler
-
 #include <shadercompat.h>
 
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);

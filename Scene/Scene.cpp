@@ -85,8 +85,9 @@ void Scene::RemoveObject(Object* object) {
 	for (auto it = mObjects.begin(); it != mObjects.end();)
 		if (it->get() == object) {
 			while (object->mChildren.size())
-				object->mChildren[0]->Parent(object->mParent);
-			object->Parent(nullptr);
+				object->RemoveChild(object->mChildren[0]);
+			if (object->mParent) object->mParent->RemoveChild(object);
+			object->mParent = nullptr;
 			object->mScene = nullptr;
 			it = mObjects.erase(it);
 			break;

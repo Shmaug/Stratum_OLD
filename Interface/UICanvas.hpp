@@ -13,9 +13,18 @@ public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();
 
-	ENGINE_EXPORT void AddElement(std::shared_ptr<UIElement> element);
+  	template<typename T, typename... _Args>
+	inline std::shared_ptr<T> AddElement(_Args&&... __args) {
+		static_assert(std::is_base_of<UIElement, T>::value, "T must be a UIElement!");
+		std::shared_ptr<T> element = std::make_shared<T>(std::forward<_Args>(__args)...);
+		mElements.push_back(element);
+		element->mCanvas = this;
+		element->Dirty();
+		mSortedElementsDirty = true;
+		return element;
+	}
 	ENGINE_EXPORT void RemoveElement(UIElement* element);
-
+	
 	inline void Extent(const float2& size) { mExtent = size; Dirty(); }
 	inline float2 Extent() const { return mExtent; }
 
@@ -34,6 +43,7 @@ private:
 	AABB mAABB;
 	float2 mExtent;
 	std::vector<std::shared_ptr<UIElement>> mElements;
+
 
 	bool mSortedElementsDirty;
 	std::vector<UIElement*> mSortedElements;

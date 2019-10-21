@@ -83,7 +83,7 @@ Object* PointCloud::LoadScene(const fs::path& filename, float scale) {
 		t *= scale;
 
 		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
-		nodeobj->Parent(nodepair.second);
+		nodepair.second->AddChild(nodeobj.get());
 		nodeobj->LocalPosition(t.x, t.y, t.z);
 		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
 		nodeobj->LocalScale(s.x, s.y, s.z);
@@ -110,7 +110,7 @@ Object* PointCloud::LoadScene(const fs::path& filename, float scale) {
 			}
 
 			shared_ptr<PointRenderer> renderer = make_shared<PointRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
-			renderer->Parent(nodeobj.get());
+			nodeobj->AddChild(renderer.get());
 			renderer->Points(pts);
 			renderer->Material(mPointMaterial);
 
@@ -142,8 +142,6 @@ bool PointCloud::Init(Scene* scene) {
 	mPointMaterial->SetParameter("Noise", mScene->AssetManager()->LoadTexture("Assets/rgbanoise.png", false));
 	mPointMaterial->SetParameter("Time", 0.f);
 	mPointMaterial->SetParameter("PointSize", mPointSize);
-
-	return true;
 
 	vector<string> datasets {
 		"Assets/bunny.obj",

@@ -5,9 +5,9 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader)
-	: mName(name), mShader(shader), mIsBound(false), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::~Material(){
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
@@ -130,8 +130,6 @@ VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBuffe
 
 		vkCmdPushConstants(*commandBuffer, variant->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
-
-	mIsBound = true;
-
+	
 	return variant->mPipelineLayout;
 }

@@ -11,10 +11,9 @@ Object::Object(const string& name)
 	Dirty();
 }
 Object::~Object() {
-	for (const auto& o : mChildren)
-		o->Parent(mParent);
-	mChildren.clear();
-	Parent(nullptr);
+	while (mChildren.size())
+		RemoveChild(mChildren[0]);
+	if (mParent) mParent->RemoveChild(this);
 }
 
 bool Object::UpdateTransform() {
@@ -53,19 +52,17 @@ void Object::AddChild(Object* c) {
 	c->Dirty();
 }
 
-void Object::Parent(Object* p) {
-	if (mParent == p) return;
+void Object::RemoveChild(Object* c) {
+	if (c->mParent != this) return;
 
-	if (mParent)
-		for (auto it = mParent->mChildren.begin(); it != mParent->mChildren.end();)
-			if (*it == this)
-				it = mParent->mChildren.erase(it);
-			else
-				it++;
+	for (auto it = mChildren.begin(); it != mChildren.end();)
+		if (*it == c)
+			it = mChildren.erase(it);
+		else
+			it++;
 
-	if (p) p->mChildren.push_back(this);
-	mParent = p;
-	Dirty();
+	c->mParent = nullptr;
+	c->Dirty();
 }
 
 void Object::Dirty() {

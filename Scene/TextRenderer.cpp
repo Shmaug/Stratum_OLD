@@ -1,13 +1,15 @@
+#include <Content/Texture.hpp>
 #include <Core/DescriptorSet.hpp>
 #include <Scene/TextRenderer.hpp>
 #include <Scene/Camera.hpp>
+#include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
 #include <Shaders/shadercompat.h>
 
 using namespace std;
 
-TextRenderer::TextRenderer(const string& name) : Renderer(name), mVisible(true), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle) {}
+TextRenderer::TextRenderer(const string& name) : Renderer(name), mVisible(true), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
 TextRenderer::~TextRenderer() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
@@ -57,9 +59,6 @@ void TextRenderer::Text(const string& text) {
 }
 
 void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	::Material* material = materialOverride ? materialOverride : mMaterial.get();
-	if (!material) return;
-
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mGlyphCount = 0;
@@ -81,26 +80,29 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
 		data.mDirty[backBufferIndex] = false;
 	}
-
 	if (!data.mGlyphCount) return;
 
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, nullptr);
+	if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/font.shader");
+	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
+
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
 	if (!layout) return;
 
+	// Create object buffers
 	if (!data.mObjectBuffers[backBufferIndex]) {
 		data.mObjectBuffers[backBufferIndex] = new Buffer(mName + " ObjectBuffer", commandBuffer->Device(), sizeof(ObjectBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		data.mObjectBuffers[backBufferIndex]->Map();
 	}
+	// Create and assign descriptor sets
 	if (!data.mDescriptorSets[backBufferIndex]) {
-		auto shader = mMaterial->GetShader(commandBuffer->Device());
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 		data.mDescriptorSets[backBufferIndex]->CreateUniformBufferDescriptor(data.mObjectBuffers[backBufferIndex], OBJECT_BUFFER_BINDING);
+		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
 	}
+	// Assign glyph buffer
+	data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], BINDING_START + 2);
 
-	auto& bindings = material->GetShader(commandBuffer->Device())->mDescriptorBindings;
-	if (bindings.count("Glyphs"))
-		data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], bindings.at("Glyphs").second.binding);
-
+	// Update object buffer
 	if (data.mUniformDirty[backBufferIndex]) {
 		ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
 		objbuffer->ObjectToWorld = ObjectToWorld();
