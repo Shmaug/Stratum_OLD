@@ -1635,19 +1635,34 @@
         "index": 0,
         "texCoord": 0
       },
+      "occlusionTexture": {
+        "index": 37,
+        "texCoord": 0
+      },
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 1,
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.5
+        "roughnessFactor": 0.26261192560195923
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 38
+          }
+        }
       }
     },
     {
       "name": "Adam_Torso_rubber",
       "normalTexture": {
         "index": 2,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 37,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1657,12 +1672,23 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.5
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 38
+          }
+        }
       }
     },
     {
       "name": "Adam_Torso_plastic",
       "normalTexture": {
         "index": 4,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 37,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1672,6 +1698,13 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.6853391528129578
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 38
+          }
+        }
       }
     },
     {
@@ -1680,19 +1713,34 @@
         "index": 6,
         "texCoord": 0
       },
+      "occlusionTexture": {
+        "index": 35,
+        "texCoord": 0
+      },
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 7,
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.5
+        "roughnessFactor": 0.7171573638916016
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 36
+          }
+        }
       }
     },
     {
       "name": "Adam_head_rubber",
       "normalTexture": {
         "index": 8,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 35,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1702,12 +1750,23 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.22624826431274414
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 36
+          }
+        }
       }
     },
     {
       "name": "Adam_head_plastic",
       "normalTexture": {
         "index": 10,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 35,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1717,9 +1776,17 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.7126119136810303
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 36
+          }
+        }
       }
     },
     {
+      "name": "adam_monitors",
       "emissiveFactor": [
         0.75,
         0.8,
@@ -1729,9 +1796,8 @@
         "index": 12,
         "texCoord": 0
       },
-      "name": "adam_monitors",
       "pbrMetallicRoughness": {
-        "baseColorFactor": [ 0.1, 0.1, 0.1, 1],
+        "baseColorFactor": [ 0.1, 0.1, 0.1, 1 ],
         "metallicFactor": 0,
         "roughnessFactor": 0.5
       }
@@ -1742,19 +1808,34 @@
         "index": 13,
         "texCoord": 0
       },
+      "occlusionTexture": {
+        "index": 33,
+        "texCoord": 0
+      },
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 14,
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.5
+        "roughnessFactor": 0.3080664873123169
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 34
+          }
+        }
       }
     },
     {
       "name": "Adam_Arms_rubber",
       "normalTexture": {
         "index": 15,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 33,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1764,12 +1845,23 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.19443011283874512
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 34
+          }
+        }
       }
     },
     {
       "name": "Adam_Arms_plastic",
       "normalTexture": {
         "index": 17,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 33,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1779,6 +1871,13 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.7580664753913879
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 34
+          }
+        }
       }
     },
     {
@@ -1787,19 +1886,34 @@
         "index": 19,
         "texCoord": 0
       },
+      "occlusionTexture": {
+        "index": 31,
+        "texCoord": 0
+      },
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 20,
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.5
+        "roughnessFactor": 0.26261189579963684
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 32
+          }
+        }
       }
     },
     {
       "name": "Adam_Legs_rubber",
       "normalTexture": {
         "index": 21,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 31,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1809,12 +1923,23 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.5
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 32
+          }
+        }
       }
     },
     {
       "name": "Adam_Legs_plastic",
       "normalTexture": {
         "index": 23,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 31,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1824,6 +1949,13 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.800000011920929
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 32
+          }
+        }
       }
     },
     {
@@ -1885,19 +2017,34 @@
         "index": 25,
         "texCoord": 0
       },
+      "occlusionTexture": {
+        "index": 29,
+        "texCoord": 0
+      },
       "pbrMetallicRoughness": {
         "baseColorTexture": {
           "index": 26,
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.5
+        "roughnessFactor": 0.800000011920929
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 30
+          }
+        }
       }
     },
     {
       "name": "Adam_mask",
       "normalTexture": {
         "index": 27,
+        "texCoord": 0
+      },
+      "occlusionTexture": {
+        "index": 29,
         "texCoord": 0
       },
       "pbrMetallicRoughness": {
@@ -1907,6 +2054,13 @@
         },
         "metallicFactor": 0,
         "roughnessFactor": 0.7818182110786438
+      },
+      "extensions": {
+        "KHR_materials_pbrSpecularGlossiness": {
+          "specularGlossinesssTexture": {
+            "index": 30
+          }
+        }
       }
     }
   ],
@@ -2232,6 +2386,36 @@
     },
     {
       "source": 10
+    },
+    {
+      "source": 11
+    },
+    {
+      "source": 12
+    },
+    {
+      "source": 13
+    },
+    {
+      "source": 14
+    },
+    {
+      "source": 15
+    },
+    {
+      "source": 16
+    },
+    {
+      "source": 17
+    },
+    {
+      "source": 18
+    },
+    {
+      "source": 19
+    },
+    {
+      "source": 20
     }
   ],
   "images": [
@@ -2278,6 +2462,46 @@
     {
       "name": "Adam_mask_intact_a",
       "uri": "Adam_mask_intact_a.png"
+    },
+    {
+      "name": "Adam_mask_intact_o",
+      "uri": "Adam_mask_intact_o.png"
+    },
+    {
+      "name": "Adam_mask_intact_sg",
+      "uri": "Adam_mask_intact_sg.png"
+    },
+    {
+      "name": "Adam_Legs_o",
+      "uri": "Adam_Legs_o.png"
+    },
+    {
+      "name": "Adam_Legs_sg",
+      "uri": "Adam_Legs_sg.png"
+    },
+    {
+      "name": "Adam_Arms_o",
+      "uri": "Adam_Arms_o.png"
+    },
+    {
+      "name": "Adam_Arms_sg",
+      "uri": "Adam_Arms_sg.png"
+    },
+    {
+      "name": "Adam_Head_o",
+      "uri": "Adam_Head_o.png"
+    },
+    {
+      "name": "Adam_Head_sg",
+      "uri": "Adam_Head_sg.png"
+    },
+    {
+      "name": "Adam_Torso_o",
+      "uri": "Adam_Torso_o.png"
+    },
+    {
+      "name": "Adam_Torso_sg",
+      "uri": "Adam_Torso_sg.png"
     }
   ],
   "skins": [

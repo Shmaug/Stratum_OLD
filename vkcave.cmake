@@ -23,7 +23,7 @@ function(link_plugin TARGET_NAME)
 			"$ENV{VULKAN_SDK}/include"
 			"${VKCAVE_HOME}/ThirdParty/assimp/include"
 			"${VKCAVE_HOME}/ThirdParty/glfw/include" )
-		target_compile_definitions(${TARGET_NAME} PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+		target_compile_definitions(${TARGET_NAME} PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 
 		# Link vulkan and assimp
 		target_link_libraries(${TARGET_NAME}

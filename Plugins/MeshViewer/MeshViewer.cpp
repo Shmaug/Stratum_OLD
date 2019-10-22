@@ -193,21 +193,22 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 				bool twoSided = false;
 				aiColor3D emissionFac;
 				aiColor4D color;
-				aiString matname, diffuse, normal, metalroughness, emission, specular;
+				aiString matname, diffuse, normal, metalroughness, emission, occlusion, specgloss;
 				aiString alphaMode;
 				float metallic, roughness;
 				aimat->Get(AI_MATKEY_NAME, matname);
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS)
 					color.r = color.g = color.b = color.a = 1;
 				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0.f;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .3f;
+				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .5f;
 				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
 				if (aimat->Get(AI_MATKEY_COLOR_EMISSIVE, emissionFac) != aiReturn::aiReturn_SUCCESS) emissionFac.r = emissionFac.g = emissionFac.b = 0;
 				if (aimat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == aiReturn::aiReturn_SUCCESS && strcmp(alphaMode.C_Str(), "BLEND") == 0) blendMode = Alpha;
+				aimat->Get(AI_MATKEY_GLTF_PBRSPECULARGLOSSINESS, specgloss);
 
 				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &diffuse);
 				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalroughness);
-				aimat->GetTexture(aiTextureType_SPECULAR, 0, &specular);
+				aimat->GetTexture(aiTextureType_LIGHTMAP, 0, &occlusion);
 				aimat->GetTexture(aiTextureType_NORMALS, 0, &normal);
 				aimat->GetTexture(aiTextureType_EMISSIVE, 0, &emission);
 
@@ -228,17 +229,23 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 					material->EnableKeyword("COLOR_MAP");
 					material->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture(diffuse.C_Str()));
 				}
-				if (specular != aiString("") && specular.C_Str()[0] != '*') {
+				if (specgloss != aiString("") && specgloss.C_Str()[0] != '*') {
 					if (path.has_parent_path())
-						specular = path.parent_path().string() + "/" + specular.C_Str();
-					material->EnableKeyword("SPECULAR_MAP");
-					material->SetParameter("SpecGlossTexture", mScene->AssetManager()->LoadTexture(specular.C_Str()));
+						specgloss = path.parent_path().string() + "/" + specgloss.C_Str();
+					material->EnableKeyword("SPECGLOSS_MAP");
+					material->SetParameter("SpecGlossTexture", mScene->AssetManager()->LoadTexture(specgloss.C_Str()));
 				}
 				if (normal != aiString("") && normal.C_Str()[0] != '*'){
 					if (path.has_parent_path())
 						normal = path.parent_path().string() + "/" + normal.C_Str();
 					material->EnableKeyword("NORMAL_MAP");
 					material->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture(normal.C_Str(), false));
+				}
+				if (occlusion != aiString("") && occlusion.C_Str()[0] != '*') {
+					if (path.has_parent_path())
+						occlusion = path.parent_path().string() + "/" + occlusion.C_Str();
+					material->EnableKeyword("OCCLUSION_MAP");
+					material->SetParameter("OcclusionTexture", mScene->AssetManager()->LoadTexture(occlusion.C_Str(), false));
 				}
 				if (emission != aiString("") && emission.C_Str()[0] != '*') {
 					if (path.has_parent_path())
@@ -358,7 +365,7 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 	return root;
 }
 Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, float metal, float rough) {
-	if (mLoaded.count(filename)) return mLoaded.at(filename);
+	if (mLoaded.count(filename.string())) return mLoaded.at(filename.string());
 
 	#pragma pack(push)
 	#pragma pack(1)
@@ -389,14 +396,14 @@ Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, f
 		}
 	};
 	
-	shared_ptr<Material> mat = make_shared<Material>(filename, mPBRShader);
+	shared_ptr<Material> mat = make_shared<Material>(filename.string(), mPBRShader);
 	mat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	mat->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	mat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 	mat->SetParameter("Color", col);
 	mat->SetParameter("Metallic", metal);
 	mat->SetParameter("Roughness", rough);
-	shared_ptr<MeshRenderer> obj = make_shared<MeshRenderer>(filename);
+	shared_ptr<MeshRenderer> obj = make_shared<MeshRenderer>(filename.string());
 	obj->Material(mat);
 
 	mMaterials.push_back(mat);
@@ -407,7 +414,7 @@ Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, f
 
 	objvertex cur;
 
-	ifstream file(filename);
+	ifstream file(filename.string());
 
 	string line;
 	while (getline(file, line)){
@@ -455,7 +462,7 @@ Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, f
 
 	}
 
-	obj->Mesh(make_shared<Mesh>(filename, mScene->DeviceManager(), vertices.data(), indices.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(objvertex), (uint32_t)indices.size(), &ObjInput, VK_INDEX_TYPE_UINT32));
+	obj->Mesh(make_shared<Mesh>(filename.string(), mScene->DeviceManager(), vertices.data(), indices.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(objvertex), (uint32_t)indices.size(), &ObjInput, VK_INDEX_TYPE_UINT32));
 
 	mObjects.push_back(obj.get());
 	mScene->AddObject(obj);
@@ -466,7 +473,7 @@ Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, f
 	float3 offset = obj->WorldPosition() - aabb.mCenter;
 	offset.y += aabb.mExtents.y;
 	obj->LocalPosition(offset);
-	mLoaded.emplace(filename, obj.get());
+	mLoaded.emplace(filename.string(), obj.get());
 
 	return obj.get();
 }

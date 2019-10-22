@@ -3,14 +3,14 @@
 #define UI_THICKNESS .001f
 
 #include <Scene/Renderer.hpp>
-#include <Scene/Interactable.hpp>
+#include <Scene/Collider.hpp>
 
 class UIElement;
 
 // Scene object that holds UIElements
 // Acts as a graph of UIElements
 // Note: Hierarchical scaling is unsupported for raycasting!
-class UICanvas : public Renderer, public Interactable {
+class UICanvas : public Renderer, public Collider {
 public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();

@@ -4,8 +4,9 @@
 #pragma multi_compile NORMAL_MAP 
 #pragma multi_compile COLOR_MAP
 #pragma multi_compile TWO_SIDED
+#pragma multi_compile SPECGLOSS_MAP
+#pragma multi_compile OCCLUSION_MAP
 #pragma multi_compile EMISSION
-#pragma multi_compile SPECULAR_MAP
 
 #pragma render_queue 1000
 
@@ -30,7 +31,8 @@
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t3);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t4);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t5);
-[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t6);
+[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -53,7 +55,7 @@ struct v2f {
 #ifdef NORMAL_MAP
 	float4 tangent : TANGENT;
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECULAR_MAP)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECGLOSS_MAP) || defined(OCCLUSION_MAP)
 	float2 texcoord : TEXCOORD1;
 #endif
 };
@@ -159,7 +161,7 @@ v2f vsmain(
 #ifdef NORMAL_MAP
 	,[[vk::location(2)]] float4 tangent : TANGENT
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECULAR_MAP)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECGLOSS_MAP) || defined(OCCLUSION_MAP)
 	,[[vk::location(3)]] float2 texcoord : TEXCOORD0
 #endif
 	) {
@@ -208,7 +210,7 @@ void fsmain(v2f i,
 	#endif
 
 	MaterialInfo material;
-	#ifdef SPECULAR_MAP
+	#ifdef SPECGLOSS_MAP
 	float4 specGloss = SpecGlossTexture.Sample(Sampler, i.texcoord);
 	material.perceptualRoughness = (1.0 - (1.0 - Roughness) * specGloss.a);
 	material.diffuseColor = DiffuseAndSpecularFromSpecular(col.rgb, specGloss.rgb, material.specularColor, material.oneMinusReflectivity);
@@ -251,8 +253,12 @@ void fsmain(v2f i,
 	
 	eval += ShadeIndirect(material, normal, view, env, env);
 
+#	ifdef OCCLUSION_MAP
+	eval *= OcclusionTexture.Sample(Sampler, i.texcoord).rgb;
+	#endif
+
 	#ifdef EMISSION
-	eval.rgb += Emission* EmissionTexture.Sample(Sampler, i.texcoord).rgb;
+	eval.rgb += Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;
 	#endif
 
 	color = float4(eval, col.a);

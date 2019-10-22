@@ -73,9 +73,9 @@ if(WIN32)
 
 	set_target_properties(ShaderCompiler Engine VkCave PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS} /wd26451 /wd26812 /wd26451") # uninitialzed struct variable
 
-	target_compile_definitions(VkCave PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
-	target_compile_definitions(Engine PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
-	target_compile_definitions(ShaderCompiler PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+	target_compile_definitions(VkCave PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
+	target_compile_definitions(Engine PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
+	target_compile_definitions(ShaderCompiler PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 	
 	target_link_libraries(ShaderCompiler
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"

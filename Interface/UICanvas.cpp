@@ -6,7 +6,8 @@
 
 using namespace std;
 
-UICanvas::UICanvas(const string& name, const float2& extent) : Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000), mCollisionMask(0x02) {};
+UICanvas::UICanvas(const string& name, const float2& extent)
+	: Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000), mCollisionMask(0x02) {};
 UICanvas::~UICanvas() {}
 
 void UICanvas::RemoveElement(UIElement* element) {
