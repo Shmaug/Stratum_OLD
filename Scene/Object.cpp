@@ -32,6 +32,7 @@ bool Object::UpdateTransform() {
 	}
 
 	mWorldToObject = inverse(mObjectToWorld);
+	mBounds = AABB(mWorldPosition, float3());
 
 	mTransformDirty = false;
 	return true;
@@ -51,7 +52,6 @@ void Object::AddChild(Object* c) {
 	c->mParent = this;
 	c->Dirty();
 }
-
 void Object::RemoveChild(Object* c) {
 	if (c->mParent != this) return;
 
@@ -65,23 +65,42 @@ void Object::RemoveChild(Object* c) {
 	c->Dirty();
 }
 
+void Object::DirtyNoHierarchy() {
+	mTransformDirty = true;
+	for (const auto& o : mChildren)
+		o->DirtyNoHierarchy();
+}
 void Object::Dirty() {
 	mTransformDirty = true;
 	for (const auto& o : mChildren)
-		o->Dirty();
+		o->DirtyNoHierarchy();
+	
+	mHierarchyBoundsDirty = true;
+	Object* p = mParent;
+	while (p){
+		p->mHierarchyBoundsDirty = true;
+		p = p->mParent;
+	}
 }
 
 AABB Object::Bounds() {
-	return AABB(WorldPosition(), float3());
+	UpdateTransform();
+	return mBounds;
 }
 
-AABB Object::BoundsHeirarchy() {
-	AABB aabb = Bounds();
-	for (Object* c : mChildren)
-		aabb.Encapsulate(c->BoundsHeirarchy());
-	return aabb;
+AABB Object::BoundsHierarchy() {
+	if (mHierarchyBoundsDirty){
+		mHierarchyBounds = Bounds();
+		for (Object* c : mChildren){
+			AABB tmp = c->BoundsHierarchy();
+			if (tmp.mExtents.x != 0 || tmp.mExtents.y != 0 || tmp.mExtents.z != 0)
+				mHierarchyBounds.Encapsulate(tmp);
+		}
+		mHierarchyBoundsDirty = false;
+	}
+	return mHierarchyBounds;
 }
-bool Object::EnabledHeirarchy() {
+bool Object::EnabledHierarchy() {
 	Object* o = this;
 	while (o) {
 		if (!o->mEnabled) return false;

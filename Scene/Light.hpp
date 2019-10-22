@@ -11,7 +11,7 @@ enum LightType {
 	Spot = LIGHT_SPOT,
 };
 
-class Light : public Object {
+class Light : public virtual Object {
 public:
 	ENGINE_EXPORT Light(const std::string& name);
 	ENGINE_EXPORT ~Light();

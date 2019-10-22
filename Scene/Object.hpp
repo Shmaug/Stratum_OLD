@@ -42,20 +42,24 @@ public:
 	inline virtual void LocalScale(float x) { mLocalScale.x = x; mLocalScale.y = x; mLocalScale.z = x; Dirty(); }
 
 	ENGINE_EXPORT virtual AABB Bounds();
-	ENGINE_EXPORT virtual AABB BoundsHeirarchy();
+	ENGINE_EXPORT virtual AABB BoundsHierarchy();
 
 	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* colorMaterial) {};
 	
-	ENGINE_EXPORT bool EnabledHeirarchy();
+	ENGINE_EXPORT bool EnabledHierarchy();
 
 private:
 	friend class ::Scene;
 	::Scene* mScene;
 
+	bool mHierarchyBoundsDirty;
+	AABB mHierarchyBounds;
+	
 	bool mTransformDirty;
 	float3 mLocalPosition;
 	quaternion mLocalRotation;
 	float3 mLocalScale;
+	AABB mBounds;
 	float4x4 mObjectToWorld;
 	float4x4 mWorldToObject;
 
@@ -64,6 +68,8 @@ private:
 
 	Object* mParent;
 	std::vector<Object*> mChildren;
+
+	ENGINE_EXPORT void DirtyNoHierarchy();
 
 protected:
 	ENGINE_EXPORT virtual void Dirty();

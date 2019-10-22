@@ -48,14 +48,14 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Texture(), BINDING_START + 0);
 	}
 
-	float3 offset = AbsolutePosition();
+	float2 offset = AbsolutePosition();
 	float2 extent = AbsoluteExtent();
-	offset.z = 0;
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = float4x4::Translate( offset) * Canvas()->ObjectToWorld();
-	objbuffer->WorldToObject = float4x4::Translate(-offset) * Canvas()->WorldToObject();
+	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
+	objbuffer->WorldToObject = Canvas()->WorldToObject();
 	
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 	VkPushConstantRange extentRange = shader->mPushConstants.at("Extent");
 	if (mColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
@@ -64,6 +64,7 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
+		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
 		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
 	}
@@ -76,6 +77,7 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mOutlineColor);
+		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
 		vkCmdDraw(*commandBuffer, 8, 1, 0, 0);
 	}

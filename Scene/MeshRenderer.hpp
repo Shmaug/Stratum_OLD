@@ -7,10 +7,11 @@
 #include <Content/Material.hpp>
 #include <Content/Mesh.hpp>
 #include <Core/DescriptorSet.hpp>
+#include <Scene/Collider.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
-class MeshRenderer : public Renderer {
+class MeshRenderer : public Renderer, public Collider {
 public:
 	bool mVisible;
 
@@ -24,12 +25,14 @@ public:
 	inline std::shared_ptr<::Material> Material() const { return mMaterial; }
 	ENGINE_EXPORT void Material(std::shared_ptr<::Material> m);
 
-	inline virtual bool Visible() override { return mVisible && Mesh() && EnabledHeirarchy(); }
+	inline virtual bool Visible() override { return mVisible && Mesh() && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 	
+	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
+	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
+	inline virtual OBB ColliderBounds() override { UpdateTransform(); return mOBB; }
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
-	ENGINE_EXPORT virtual AABB BoundsHeirarchy() override;
 
 	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
@@ -41,10 +44,12 @@ private:
 		Buffer** mBoundLightBuffers;
 	};
 
+	uint32_t mCollisionMask;
 	uint8_t mNeedsObjectData;
 	uint8_t mNeedsLightData;
 	VkPushConstantRange mLightCountRange;
 
+	OBB mOBB;
 	AABB mAABB;
 
 	std::variant<::Mesh*, std::shared_ptr<::Mesh>> mMesh;

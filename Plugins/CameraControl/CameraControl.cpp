@@ -1,5 +1,5 @@
-#include <thread>
 #include "CameraControl.hpp"
+#include <Interface/UICanvas.hpp>
 #include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
@@ -8,7 +8,7 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {
+	: mScene(nullptr), mDragging(false), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
@@ -59,14 +59,19 @@ void CameraControl::Update(const FrameTime& frameTime) {
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 
-	float3 md = float3(mInput->CursorDelta(), 0);
-	if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
-		md.x = -md.x;
-		md = md * .0005f * mCameraDistance;
-	} else
-		md = float3(md.y, md.x, 0) * .005f;
+	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
+		Collider* hit = mScene->Raycast(mInput->GetPointer(0)->mWorldRay);
+		mDragging = !dynamic_cast<UICanvas*>(hit);
+	}
+	if (mDragging && !mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) mDragging = false;
+	if (mDragging) {
+		float3 md = float3(mInput->CursorDelta(), 0);
+		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+			md.x = -md.x;
+			md = md * .0005f * mCameraDistance;
+		} else
+			md = float3(md.y, md.x, 0) * .005f;
 
-	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) { // right mouse
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
 			// translate camera
 			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
@@ -75,8 +80,9 @@ void CameraControl::Update(const FrameTime& frameTime) {
 			mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
 			// rotate camera
 		}
+		mCameraPivot->LocalRotation(quaternion(mCameraEuler));
 	}
-	mCameraPivot->LocalRotation(quaternion(mCameraEuler));
+
 	for (uint32_t i = 0; i < mCameraPivot->ChildCount(); i++)
 		if (Camera* c = dynamic_cast<Camera*>(mCameraPivot->Child(i)))
 			c->LocalPosition(0, 0, -mCameraDistance);

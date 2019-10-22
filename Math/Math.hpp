@@ -245,6 +245,7 @@ struct int4 {
 	union {
 		struct { int32_t x, y, z, w; };
 		int3 xyz;
+		int2 xy;
 	};
 
 	inline int4 operator=(uint32_t v) {
@@ -591,6 +592,7 @@ struct uint4 {
 	union {
 		struct { uint32_t x, y, z, w; };
 		uint3 xyz;
+		uint2 xy;
 	};
 
 	inline uint4(const uint2& v0, const uint2& v1) : x(v0.x), y(v0.y), z(v1.x), w(v1.y) {};
@@ -920,6 +922,8 @@ struct float4 {
 		struct { float r, g, b, a; };
 		float3 xyz;
 		float3 rgb;
+		float2 xy;
+		float2 rg;
 	};
 
 	inline float4(const uint4& v) : x((float)v.x), y((float)v.y), z((float)v.z), w((float)v.w) {};
@@ -1184,9 +1188,12 @@ struct quaternion {
 	}
 	inline quaternion() : quaternion(0, 0, 0, 1) {};
 
-	inline static quaternion LookAt(const float3& forward) {
-		quaternion q(-forward.y, forward.x, 0, length(forward) + forward.z);
-		return q / length(q.xyzw);
+	// Expects forward and up to be normalized
+	inline static quaternion LookAt(const float3& forward, float3 up) {
+		up = normalize(up - forward * dot(up, forward));
+		float3 right = cross(up, forward);
+		float w = 2 * sqrtf(1 + right.x + up.y + forward.z);
+		return quaternion(forward.y - up.z, right.z - forward.x, up.x - right.y, w) / w;
 	}
 
 	inline float3 forward() {
@@ -1392,15 +1399,9 @@ struct float4x4 {
 		float3 right = normalize(cross(up, fwd));
 
 		float4x4 r(1.f);
-		r[0][0] = right.x;
-		r[1][0] = right.y;
-		r[2][0] = right.z;
-		r[0][1] = up.x;
-		r[1][1] = up.y;
-		r[2][1] = up.z;
-		r[0][2] = fwd.x;
-		r[1][2] = fwd.y;
-		r[2][2] = fwd.z;
+		r[0][0] = right.x; r[1][0] = right.y; r[2][0] = right.z;
+		r[0][1] = up.x;    r[1][1] = up.y;    r[2][1] = up.z;
+		r[0][2] = fwd.x;   r[1][2] = fwd.y;   r[2][2] = fwd.z;
 		r[3][0] = -dot(right, eye);
 		r[3][1] = -dot(up, eye);
 		r[3][2] = -dot(fwd, eye);

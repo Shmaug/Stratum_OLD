@@ -11,6 +11,7 @@
 #include <Scene/Gizmos.hpp>
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
+#include <Scene/Collider.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
@@ -48,7 +49,7 @@ public:
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
 	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
-	ENGINE_EXPORT void Raycast(const Ray& ray);
+	ENGINE_EXPORT Collider* Raycast(const Ray& ray, uint32_t mask = 0xFFFFFFFF);
 
 	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
 	inline const std::vector<Light*>& Lights() const { return mLights; }

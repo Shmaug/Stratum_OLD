@@ -21,6 +21,7 @@
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
+	float2 Offset;
 	float2 Extent;
 }
 
@@ -57,7 +58,7 @@ v2f vsmain(uint index : SV_VertexID) {
 	};
 	#endif
 	
-	float4 wp = mul(Object.ObjectToWorld, float4(Extent * (positions[index] * 2 - 1), 0, 1.0));
+	float4 wp = mul(Object.ObjectToWorld, float4(Offset + Extent * (positions[index] * 2 - 1), 0, 1.0));
 
 	v2f o;
 	o.position = mul(Camera.ViewProjection, wp);

@@ -7,7 +7,8 @@
 
 using namespace std;
 
-MeshRenderer::MeshRenderer(const string& name) : Renderer(name), mVisible(true), mMesh(nullptr), mNeedsLightData(2), mLightCountRange({}), mNeedsObjectData(true) {}
+MeshRenderer::MeshRenderer(const string& name)
+	: Object(name), mVisible(true), mMesh(nullptr), mNeedsLightData(2), mLightCountRange({}), mNeedsObjectData(true), mCollisionMask(0x01) {}
 MeshRenderer::~MeshRenderer() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
@@ -23,7 +24,9 @@ MeshRenderer::~MeshRenderer() {
 
 bool MeshRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(Mesh()->Bounds(), ObjectToWorld());
+	AABB mb = Mesh()->Bounds();
+	mOBB = OBB(mb.mCenter, mb.mExtents * LocalScale(), WorldRotation());
+	mAABB = mb * ObjectToWorld();
 	for (auto& d : mDeviceData)
 		memset(d.second.mUniformDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 	return true;
@@ -107,11 +110,5 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 void MeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, Bounds().mCenter, Bounds().mExtents, quaternion(0, 0, 0, 1), float4(1, 1, 1, 1));
-}
-
-AABB MeshRenderer::BoundsHeirarchy() {
-	AABB aabb = Bounds();
-	for (uint32_t i = 0; i < ChildCount(); i++)
-		aabb.Encapsulate(Child(i)->BoundsHeirarchy());
-	return aabb;
+	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, ColliderBounds().mCenter, ColliderBounds().mExtents, ColliderBounds().mOrientation, float4(.4f, 1, .4f, 1));
 }

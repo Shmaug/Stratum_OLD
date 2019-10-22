@@ -5,7 +5,7 @@
 using namespace std;
 
 UIElement::UIElement(const string& name, UICanvas* canvas)
-	: mName(name), mCanvas(canvas), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(float3()), mAbsoluteExtent(float2()), mTransformDirty(true), mVisible(true) {}
+	: mName(name), mCanvas(canvas), mRecieveRaycast(false), mParent(nullptr), mPosition(UDim2()), mExtent(UDim2()), mDepth(0.f), mAbsolutePosition(float2()), mAbsoluteExtent(float2()), mTransformDirty(true), mVisible(true) {}
 UIElement::~UIElement() {
 	while (mChildren.size())
 		RemoveChild(mChildren[0]);
@@ -49,10 +49,10 @@ bool UIElement::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
 	if (mParent) {
-		mAbsolutePosition = mParent->AbsolutePosition() + float3(mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset, 0);
+		mAbsolutePosition = mParent->AbsolutePosition() + mParent->AbsoluteExtent() * mPosition.mScale + mPosition.mOffset;
 		mAbsoluteExtent   = mParent->AbsoluteExtent() * mExtent.mScale + mExtent.mOffset;
 	} else {
-		mAbsolutePosition = float3(mCanvas->Extent() * mPosition.mScale + mPosition.mOffset, 0);
+		mAbsolutePosition = mCanvas->Extent() * mPosition.mScale + mPosition.mOffset;
 		mAbsoluteExtent = mCanvas->Extent() * mExtent.mScale + mExtent.mOffset;
 	}
 	

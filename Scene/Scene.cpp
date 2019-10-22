@@ -155,7 +155,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		PROFILER_BEGIN("Draw Gizmos");
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		for (const auto& r : mObjects)
-			if (r->EnabledHeirarchy()) {
+			if (r->EnabledHierarchy()) {
 				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
 				r->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
 				END_CMD_REGION(commandBuffer);
@@ -179,6 +179,28 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	camera->PostRender(commandBuffer, backBufferIndex);
 }
 
-void Scene::Raycast(const Ray& ray) {
-	
+Collider* Scene::Raycast(const Ray& ray, uint32_t mask) {
+	Collider* closest = nullptr;
+	float ct = -1.f;
+
+	queue<Object*> nodes;
+	for (const auto& o : mObjects) nodes.push(o.get());
+	while (!nodes.empty()){
+		Object* n = nodes.front(); nodes.pop();
+		if (n->mEnabled && ray.Intersect(n->BoundsHierarchy()).x > 0) {
+			if (Collider* c = dynamic_cast<Collider*>(n)) {
+				if ((c->CollisionMask() & mask) != 0) {
+					float t = ray.Intersect(c->ColliderBounds()).x;
+					if (t > 0 && (t < ct || closest == nullptr)) {
+						closest = c;
+						ct = t;
+					}
+				}
+			}
+			for (Object* c : n->mChildren)
+				nodes.push(c);
+		}
+	}
+
+	return closest;
 }

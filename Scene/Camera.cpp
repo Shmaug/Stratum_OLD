@@ -247,10 +247,10 @@ float4 Camera::WorldToClip(float3 worldPos) {
 	UpdateMatrices();
 	return mViewProjection * float4(worldPos, 1);
 }
-float3 Camera::ClipToWorld(float3 clipPos) {
+float3 Camera::ClipToWorldRay(float3 clipPos) {
 	UpdateMatrices();
 	float4 wp = mInvViewProjection * float4(clipPos, 1);
-	return wp.xyz / wp.w;
+	return normalize(wp.xyz / wp.w - WorldPosition());
 }
 
 ::DescriptorSet* Camera::DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stages) {
