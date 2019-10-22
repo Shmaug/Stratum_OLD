@@ -33,9 +33,9 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 	win->mInput->mCurrent.mCursorPos.y = (float)y + win->ClientRect().offset.y;
 
 	if (win->mTargetCamera) {
-		float3 wp = win->mTargetCamera->ClipToWorld(float3(2.f * (float)x / win->ClientRect().offset.x - 1.f, 2.f * (float)y / win->ClientRect().offset.y - 1.f, 1.f));
-		win->mInput->mCurrent.mMousePointer.mWorldPosition = win->mTargetCamera->WorldPosition();
-		win->mInput->mCurrent.mMousePointer.mWorldRotation = quaternion::LookAt(wp - win->mTargetCamera->WorldPosition());
+		float2 clip = 2.f * (float2(x,y) / float2(win->ClientRect().extent.width, win->ClientRect().extent.height)) - 1.0f;
+		win->mInput->mCurrent.mMousePointer.mWorldRay.mOrigin = win->mTargetCamera->WorldPosition();
+		win->mInput->mCurrent.mMousePointer.mWorldRay.mDirection = win->mTargetCamera->ClipToWorldRay(float3(clip, 0.f));
 	}
 }
 void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {

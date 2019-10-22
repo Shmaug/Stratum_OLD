@@ -51,22 +51,27 @@ private:
 	Scene* mScene;
 
 	UICanvas* mPanel;
-	vector<UIElement*> mSceneButtons;
+	vector<UIImage*> mSceneButtons;
+	bool mDragging;
+	TextLabel* mTitleText;
 	UIImage* mLoadBar;
 	TextLabel* mLoadText;
+
+	Shader* mPBRShader;
 
 	bool mLoading;
 	float mLoadProgress;
 	std::thread mLoadThread;
 
-	Object* LoadScene(const string& filename, Shader* shader, float scale = .05f);
-	Object* LoadObj(const string& filename, Shader* shader, float scale = .05f, const float4& col = float4(1), float metal = 0, float rough = 1);
+	void LoadAsync(fs::path filename, float scale = .05f);
+	Object* LoadScene(fs::path filename, float scale = .05f);
+	Object* LoadObj(fs::path filename, float scale = .05f, const float4& col = float4(1), float metal = 0, float rough = 1);
 };
 
 ENGINE_PLUGIN(MeshViewer)
 
-
-MeshViewer::MeshViewer() : mScene(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mPanel(nullptr) {
+MeshViewer::MeshViewer()
+	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mPanel(nullptr) {
 	mEnabled = true;
 }
 MeshViewer::~MeshViewer() {
@@ -75,11 +80,49 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scale) {
-	if (mLoaded.count(filename)) return mLoaded.at(filename);
+struct Vertex {
+	float3 position;
+	float3 normal;
+	float4 tangent;
+	float2 uv;
+
+	static const ::VertexInput VertexInput;
+};
+const ::VertexInput Vertex::VertexInput {
+	{
+		0, // binding
+		sizeof(Vertex), // stride
+		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+	},
+	{
+		{
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			offsetof(Vertex, position) // offset
+		},
+		{
+			1, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			offsetof(Vertex, normal) // offset
+		},
+		{
+			2, // location
+			0, // binding
+			VK_FORMAT_R32G32B32A32_SFLOAT, // format
+			offsetof(Vertex, tangent) // offset
+		},
+		{
+			3, // location
+			0, // binding
+			VK_FORMAT_R32G32_SFLOAT, // format
+			offsetof(Vertex, uv) // offset
+		}
+	}
+};
+Object* MeshViewer::LoadScene(fs::path path, float scale) {
 	mLoadProgress = 0;
-	
-	fs::path path(filename);
 	
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
 	Texture* whiteTexture = mScene->AssetManager()->LoadTexture("Assets/white.png");
@@ -88,9 +131,9 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
 	unordered_map<uint32_t, shared_ptr<Material>> materials;
 
-	const aiScene* aiscene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
+	const aiScene* aiscene = aiImportFile(path.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
 	if (!aiscene) {
-		cerr << "Failed to open " << filename <<  ": " << aiGetErrorString() << endl;
+		cerr << "Failed to open " << path.string() <<  ": " << aiGetErrorString() << endl;
 		return nullptr;
 	}
 
@@ -139,6 +182,8 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
 			aiMaterial* aimat = aiscene->mMaterials[aimesh->mMaterialIndex];
 
+			mLoadProgress = (float)meshNum / (float)meshCount;
+
 			if ((aimesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) == 0) continue;
 
 			shared_ptr<Material>& material = materials[aimesh->mMaterialIndex];
@@ -166,7 +211,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 				aimat->GetTexture(aiTextureType_NORMALS, 0, &normal);
 				aimat->GetTexture(aiTextureType_EMISSIVE, 0, &emission);
 
-				material = make_shared<Material>(matname.C_Str(), shader);
+				material = make_shared<Material>(matname.C_Str(), mPBRShader);
 				material->CullMode(cullMode);
 				material->BlendMode(blendMode);
 				material->SetParameter("BrdfTexture", brdfTexture);
@@ -213,7 +258,79 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			}
 
 			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
-			if (!mesh) mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(), aimesh, scale);
+			if (!mesh) {
+				const aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
+				vector<Vertex> vertices(aimesh->mNumVertices);
+				memset(vertices.data(), 0, sizeof(Vertex) * aimesh->mNumVertices);
+
+				float3 mn, mx;
+
+				// append vertices, keep track of bounding box
+				for (uint32_t j = 0; j < aimesh->mNumVertices; j++) {
+					Vertex& vertex = vertices[j];
+
+					vertex.position = float3((float)aimesh->mVertices[j].x, (float)aimesh->mVertices[j].y, (float)aimesh->mVertices[j].z);
+					if (aimesh->HasNormals()) vertex.normal = float3((float)aimesh->mNormals[j].x, (float)aimesh->mNormals[j].y, (float)aimesh->mNormals[j].z);
+					if (aimesh->HasTangentsAndBitangents()) {
+						vertex.tangent = float4((float)aimesh->mTangents[j].x, (float)aimesh->mTangents[j].y, (float)aimesh->mTangents[j].z, 1.f);
+						float3 bt = float3((float)aimesh->mBitangents[j].x, (float)aimesh->mBitangents[j].y, (float)aimesh->mBitangents[j].z);
+						vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
+					}
+					if (aimesh->HasTextureCoords(0)) vertex.uv = float2((float)aimesh->mTextureCoords[0][j].x, (float)aimesh->mTextureCoords[0][j].y);
+					vertex.position *= scale;
+
+					float vp = .5f * (float)j / (float)aimesh->mNumVertices;
+					mLoadProgress = ((float)meshNum + vp) / (float)meshCount;
+				}
+
+				bool use32bit = aimesh->mNumVertices > 0xFFFF;
+				vector<uint16_t> indices16;
+				vector<uint32_t> indices32;
+
+				if (use32bit)
+					for (uint32_t j = 0; j < aimesh->mNumFaces; j++) {
+						const aiFace& f = aimesh->mFaces[j];
+						if (f.mNumIndices == 0) continue;
+						indices32.push_back(f.mIndices[0]);
+						if (f.mNumIndices == 2) indices32.push_back(f.mIndices[1]);
+						for (uint32_t j = 2; j < f.mNumIndices; j++) {
+							indices32.push_back(f.mIndices[j - 1]);
+							indices32.push_back(f.mIndices[j]);
+						}
+						float fp = .5f + .5f * (float)j / (float)aimesh->mNumFaces;
+						mLoadProgress = ((float)meshNum + fp) / (float)meshCount;
+					} else {
+						for (uint32_t j = 0; j < aimesh->mNumFaces; j++) {
+							const aiFace& f = aimesh->mFaces[j];
+							if (f.mNumIndices == 0) continue;
+							indices16.push_back(f.mIndices[0]);
+							if (f.mNumIndices == 2) indices16.push_back(f.mIndices[1]);
+							for (uint32_t j = 2; j < f.mNumIndices; j++) {
+								indices16.push_back(f.mIndices[j - 1]);
+								indices16.push_back(f.mIndices[j]);
+							}
+							float fp = .5f + .5f * (float)j / (float)aimesh->mNumFaces;
+							mLoadProgress = ((float)meshNum + fp) / (float)meshCount;
+						}
+					}
+
+				void* indices;
+				VkIndexType indexType;
+				uint32_t indexCount;
+				if (use32bit) {
+					indexCount = (uint32_t)indices32.size();
+					indexType = VK_INDEX_TYPE_UINT32;
+					indices = indices32.data();
+				} else {
+					indexCount = (uint32_t)indices16.size();
+					indexType = VK_INDEX_TYPE_UINT16;
+					indices = indices16.data();
+				}
+
+				// mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(), aimesh, scale);
+				mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(),
+					vertices.data(), indices, (uint32_t)vertices.size(), (uint32_t)sizeof(Vertex), indexCount, &Vertex::VertexInput, indexType);
+			}
 
 			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
 			nodeobj.get()->AddChild(meshRenderer.get());
@@ -221,7 +338,6 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			meshRenderer->Material(material);
 			mLoadedObjects.push_back(meshRenderer);
 
-			mLoadProgress = (float)meshNum / (float)meshCount;
 			meshNum++;
 		}
 
@@ -229,18 +345,19 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
 	}
 
-	AABB aabb = root->BoundsHeirarchy();
+	AABB aabb = root->BoundsHierarchy();
 	root->LocalScale(.5f / fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z));
-	aabb = root->BoundsHeirarchy();
+	aabb = root->BoundsHierarchy();
 	float3 offset = root->WorldPosition() - aabb.mCenter;
 	offset.y += aabb.mExtents.y;
 	root->LocalPosition(offset);
 
-	mLoaded.emplace(filename, root);
+	mLoaded.emplace(path.string(), root);
 
+	mLoading = false;
 	return root;
 }
-Object* MeshViewer::LoadObj(const string& filename, Shader* shader, float scale, const float4& col, float metal, float rough) {
+Object* MeshViewer::LoadObj(fs::path filename, float scale, const float4& col, float metal, float rough) {
 	if (mLoaded.count(filename)) return mLoaded.at(filename);
 
 	#pragma pack(push)
@@ -272,7 +389,7 @@ Object* MeshViewer::LoadObj(const string& filename, Shader* shader, float scale,
 		}
 	};
 	
-	shared_ptr<Material> mat = make_shared<Material>(filename, shader);
+	shared_ptr<Material> mat = make_shared<Material>(filename, mPBRShader);
 	mat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	mat->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	mat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
@@ -343,15 +460,31 @@ Object* MeshViewer::LoadObj(const string& filename, Shader* shader, float scale,
 	mObjects.push_back(obj.get());
 	mScene->AddObject(obj);
 
-	AABB aabb = obj->BoundsHeirarchy();
+	AABB aabb = obj->BoundsHierarchy();
 	obj->LocalScale(.5f / fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z));
-	aabb = obj->BoundsHeirarchy();
+	aabb = obj->BoundsHierarchy();
 	float3 offset = obj->WorldPosition() - aabb.mCenter;
 	offset.y += aabb.mExtents.y;
 	obj->LocalPosition(offset);
 	mLoaded.emplace(filename, obj.get());
 
 	return obj.get();
+}
+
+void MeshViewer::LoadAsync(fs::path path, float scale) {
+	// disable all the other models
+	for (auto& l : mLoaded)
+		l.second->mEnabled = false;
+
+	if (mLoaded.count(path.string()))
+		// we've already loaded this model, just enable it
+		mLoaded.at(path.string())->mEnabled = true;
+	else {
+		// load the model asynchronously
+		mLoading = true;
+		mLoadProgress = 0.f;
+		mLoadThread = thread(&MeshViewer::LoadScene, this, path, scale);
+	}
 }
 
 void GetFiles(const string& path, vector<fs::path>& files) {
@@ -373,7 +506,7 @@ bool MeshViewer::Init(Scene* scene) {
 	Texture* white = mScene->AssetManager()->LoadTexture("Assets/white.png");
 	mScene->AssetManager()->LoadTexture("Assets/bump.png", false);
 
-	Shader* pbrshader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
+	mPBRShader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
 
 	#pragma region Skybox and Ground
 	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
@@ -386,7 +519,7 @@ bool MeshViewer::Init(Scene* scene) {
 	mObjects.push_back(skybox.get());
 	mScene->AddObject(skybox);
 
-	shared_ptr<Material> groundMat = make_shared<Material>("Ground", pbrshader);
+	shared_ptr<Material> groundMat = make_shared<Material>("Ground", mPBRShader);
 	groundMat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	groundMat->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	groundMat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
@@ -441,6 +574,7 @@ bool MeshViewer::Init(Scene* scene) {
 	shared_ptr<UICanvas> panel = make_shared<UICanvas>("MeshViewerPanel", float2(.15f, .25f));
 	panel->RenderQueue(5000);
 	panel->LocalPosition(0.2f, 1.5f, -0.1f);
+	mPanel = panel.get();
 
 	shared_ptr<UIImage> panelbg = panel->AddElement<UIImage>("Background", panel.get());
 	panelbg->Depth(1.f);
@@ -459,7 +593,9 @@ bool MeshViewer::Init(Scene* scene) {
 	title->Extent(1, 0, 0, .02f);
 	title->TextScale(.05f);
 	title->Text("MeshViewer");
+	title->mRecieveRaycast = true;
 	layout->AddChild(title.get());
+	mTitleText = title.get();
 	
 	shared_ptr<UIImage> separator = panel->AddElement<UIImage>("Separator", panel.get());
 	separator->Texture(white);
@@ -471,7 +607,7 @@ bool MeshViewer::Init(Scene* scene) {
 	shared_ptr<UIImage> loadBar = panel->AddElement<UIImage>("LoadBar", panel.get());
 	loadBar->Depth(.1f);
 	loadBar->Texture(white);
-	loadBar->Color(float4(.6f, 1, .6f, 1));
+	loadBar->Color(float4(.05f, .25f, .05f, 1));
 	loadBar->Position(0, -1, 0, .01f);
 	loadBar->Extent(1, 0, 0, .01f);
 	loadBar->Outline(false);
@@ -496,7 +632,7 @@ bool MeshViewer::Init(Scene* scene) {
 		bg->Color(float4(0));
 		bg->Extent(1, 0, 0, .015f);
 		bg->Outline(false);
-		bg->OutlineColor(float4(1,1,1,.1f));
+		bg->mRecieveRaycast = true;
 		layout->AddChild(bg.get());
 		mSceneButtons.push_back(bg.get());
 
@@ -515,19 +651,13 @@ bool MeshViewer::Init(Scene* scene) {
 	mScene->AddObject(panel);
 	mObjects.push_back(panel.get());
 	#pragma endregion
-	mPanel = panel.get();
-
-	mLoading = true;
-	mLoadProgress = 0.f;
-	mLoadThread = thread([&]() {
-		LoadScene(mSceneButtons[3]->mName, pbrshader);
-		mLoading = false;
-	});
-
+	
 	return true;
 }
 
 void MeshViewer::Update(const FrameTime& frameTime) {
+	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+
 	if (mLoading) {
 		char str[16];
 		sprintf(str, "%d%%", (int)(mLoadProgress*100.f+.5f));
@@ -539,11 +669,11 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		mLoadBar->Extent(mLoadProgress, extent.mScale.y, extent.mOffset.x, extent.mOffset.y);
 		mLoadBar->Position(mLoadProgress - 1.f, position.mScale.y, position.mOffset.x, position.mOffset.y);
 		mLoadBar->mVisible = true;
-	}else{
+	} else {
+		if (mLoadThread.joinable()) mLoadThread.join();
 		mLoadText->mVisible = false;
 		mLoadBar->mVisible = false;
 		if (mLoadedObjects.size()) {
-			if (mLoadThread.joinable()) mLoadThread.join();
 			for (const auto& o : mLoadedObjects) {
 				mScene->AddObject(o);
 				mObjects.push_back(o.get());
@@ -552,12 +682,41 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		}
 	}
 
-	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+	if (mDragging) {
+		if (!input->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT))
+			mDragging = false;
+		else
+			mPanel->LocalPosition() += mScene->Cameras()[0]->WorldRotation() * float3(input->CursorDelta() * float2(1, -1) * .1f, 0);
+	} else {
+		const Ray& ray = input->GetPointer(0)->mWorldRay;
+		Collider* hit = mScene->Raycast(ray);
+		if (hit && hit == mPanel) {
+			UIElement* elem = mPanel->Raycast(ray);
+
+			if (elem == mTitleText) {
+				if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT))
+					mDragging = true;
+			}
+
+			for (UIImage* i : mSceneButtons) {
+				if (!mLoading && i == elem) {
+					i->Color(float4(1,1,1,.25f));
+					i->Outline(true);
+					if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT))
+						LoadAsync(elem->mName);
+				} else {
+					i->Color(float4(0));
+					i->Outline(false);
+				}
+			}
+		}
+	}
+
 	if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
 		if (frameTime.mTotalTime - mLastClick < .2f) {
 			const InputPointer* ptr = input->GetPointer(0);
-			mPanel->LocalPosition(ptr->mWorldPosition + ptr->mWorldRotation * float3(0,0,.5f));
-			mPanel->LocalRotation(ptr->mWorldRotation);
+			mPanel->LocalPosition(ptr->mWorldRay.mOrigin + ptr->mWorldRay.mDirection * 1.5f);
+			mPanel->LocalRotation(mScene->Cameras()[0]->WorldRotation());
 		}
 		mLastClick = frameTime.mTotalTime;
 	}

@@ -18,6 +18,7 @@ struct UDim2 {
 class UIElement {
 public:
 	bool mVisible;
+	bool mRecieveRaycast;
 	const std::string mName;
 
 	ENGINE_EXPORT UIElement(const std::string& name, UICanvas* canvas);
@@ -36,7 +37,7 @@ public:
 	inline UDim2 Position() const { return mPosition; }
 	// Relative to parent
 	inline UDim2 Extent() const { return mExtent; }
-	// Relative to parent
+	// Relative to the canvas. Only controls draw order within the canvas. Higher depth = later draw
 	inline float Depth() const { return mDepth; }
 
 	// Top-left corner, relative to canvas
@@ -44,10 +45,11 @@ public:
 	inline void Position(float sx, float sy, float ox, float oy) { mPosition.mScale.x = sx; mPosition.mScale.y = sy; mPosition.mOffset.x = ox; mPosition.mOffset.y = oy; Dirty(); }
 	inline void Extent(const UDim2& s) { mExtent = s; Dirty(); }
 	inline void Extent(float sx, float sy, float ox, float oy) { mExtent.mScale.x = sx; mExtent.mScale.y = sy; mExtent.mOffset.x = ox; mExtent.mOffset.y = oy; Dirty(); }
+	// Relative to the canvas. Only controls draw order within the canvas. Higher depth = later draw
 	ENGINE_EXPORT void Depth(float d);
 
 	// Top-left corner, relative to canvas
-	inline float3 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }
+	inline float2 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }
 	// Relative to canvas
 	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
 	
@@ -67,7 +69,7 @@ private:
 	float mDepth;
 
 	// Top-left corner, relative to parent
-	float3 mAbsolutePosition;
+	float2 mAbsolutePosition;
 	// Relative to canvas
 	float2 mAbsoluteExtent;
 

@@ -9,7 +9,7 @@
 #include <Scene/Object.hpp>
 #include <Util/Util.hpp>
 
-class Camera : public Object {
+class Camera : public virtual Object {
 public:
 	enum StereoMode {
 		SBSHorizontal, SBSVertical
@@ -28,7 +28,7 @@ public:
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 
 	ENGINE_EXPORT float4 WorldToClip(float3 worldPos);
-	ENGINE_EXPORT float3 ClipToWorld(float3 clipPos);
+	ENGINE_EXPORT float3 ClipToWorldRay(float3 clipPos);
 
 	inline uint32_t RenderPriority() const { return mRenderPriority; }
 	inline void RenderPriority(uint32_t x) { mRenderPriority = x; }

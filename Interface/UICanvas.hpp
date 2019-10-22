@@ -30,11 +30,16 @@ public:
 	inline void Extent(const float2& size) { mExtent = size; Dirty(); }
 	inline float2 Extent() const { return mExtent; }
 
+	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
+	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
+
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }
-	inline virtual OBB InteractionBounds() { UpdateTransform(); return mOBB; }
+	inline virtual OBB ColliderBounds() { UpdateTransform(); return mOBB; }
+
+	ENGINE_EXPORT virtual UIElement* Raycast(const Ray& worldRay);
 
 	inline void Visible(bool v) { mVisible = v; };
-	inline virtual bool Visible() override { return mVisible && EnabledHeirarchy(); };
+	inline virtual bool Visible() override { return mVisible && EnabledHierarchy(); };
 	inline virtual void RenderQueue(uint32_t rq) { mRenderQueue = rq; }
 	inline virtual uint32_t RenderQueue() override { return mRenderQueue; }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
@@ -44,6 +49,7 @@ private:
 	friend class UIElement;
 	uint32_t mRenderQueue;
 	bool mVisible;
+	uint32_t mCollisionMask;
 	OBB mOBB;
 	AABB mAABB;
 	float2 mExtent;

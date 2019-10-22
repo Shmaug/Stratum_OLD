@@ -312,8 +312,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const aiMesh* mesh, flo
 	}
 
 	mVertexCount = (uint32_t)vertices.size();
-	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
 	mVertexInput = &Vertex::VertexInput;
+	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
 
 	for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
 		Device* device = devices->GetDevice(i);

@@ -2,13 +2,12 @@
 
 #include <set>
 
-#include <Scene/Object.hpp>
+#include <Scene/Collider.hpp>
 
 class InputPointer;
 
-class Interactable {
+class Interactable : public Collider {
 public:
-    virtual OBB InteractionBounds() = 0;
 
 private:
     friend class InputPointer;

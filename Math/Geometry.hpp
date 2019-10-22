@@ -140,7 +140,7 @@ struct OBB {
 		return sqDist <= sphere.mRadius * sphere.mRadius;
 	}
 
-	inline operator AABB(){
+	inline operator AABB() {
 		float3 re = mOrientation * mExtents;
 		float3 mn = mCenter - re;
 		float3 mx = mCenter + re;
@@ -171,15 +171,18 @@ struct Ray {
 	float3 mOrigin;
 	float3 mDirection;
 
+	inline Ray() : mOrigin(float3()), mDirection(float3(0,0,1)) {};
+	inline Ray(const float3& ro, const float3& rd) : mOrigin(ro), mDirection(rd) {};
+
 	inline float2 Intersect(const AABB& aabb) const {
 		float3 m = 1.f / mDirection;
 		float3 n = m * (mOrigin - aabb.mCenter);
 		float3 k = vabs(m) * aabb.mExtents;
 		float3 t1 = -n - k;
 		float3 t2 = -n + k;
-		float tN = fmaxf(fmaxf(t1.x, t1.y), t1.z);
-		float tF = fminf(fminf(t2.x, t2.y), t2.z);
-		if (tN > tF || tF < 0.f) return float2(-1.f);
+		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
+		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
+		if (tN > tF || tF < 0) return float2(-1);
 		return float2(tN, tF);
 	}
 	inline float2 Intersect(const OBB& obb) const {
@@ -189,9 +192,9 @@ struct Ray {
 		float3 k = vabs(m) * obb.mExtents;
 		float3 t1 = -n - k;
 		float3 t2 = -n + k;
-		float tN = fmaxf(fmaxf(t1.x, t1.y), t1.z);
-		float tF = fminf(fminf(t2.x, t2.y), t2.z);
-		if (tN > tF || tF < 0.f) return float2(-1.f);
+		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
+		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
+		if (tN > tF || tF < 0) return float2(-1);
 		return float2(tN, tF);
 	}
 	inline float2 Intersect(const Sphere& sphere) const {

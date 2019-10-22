@@ -94,7 +94,7 @@ void TextLabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* 
 	// Assign glyph buffer
 	data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], BINDING_START + 2);
 
-	float2 offset = AbsolutePosition().xy;
+	float2 offset = AbsolutePosition();
 	switch (mHorizontalAnchor) {
 	case Minimum:
 		offset.x -= AbsoluteExtent().x;

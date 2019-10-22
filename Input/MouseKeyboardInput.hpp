@@ -8,6 +8,8 @@ class Window;
 
 class MouseKeyboardInput : public InputDevice {
 public:
+	ENGINE_EXPORT MouseKeyboardInput();
+
 	inline bool MouseButtonDownFirst(int key) { return mCurrent.mMousePointer.mAxis[key] == GLFW_PRESS && mLast.mMousePointer.mAxis[key] == GLFW_RELEASE; }
 	inline bool MouseButtonUpFirst(int key) { return mLast.mMousePointer.mAxis[key] == GLFW_PRESS && mCurrent.mMousePointer.mAxis[key] == GLFW_RELEASE; }
 	inline bool MouseButtonDown(int key) { return mCurrent.mMousePointer.mAxis[key] == GLFW_PRESS; }
@@ -24,6 +26,7 @@ public:
 
 	inline uint32_t PointerCount() override { return 1; }
 	inline const InputPointer* GetPointer(uint32_t index) override { return &mCurrent.mMousePointer; }
+	inline const InputPointer* GetLastPointer(uint32_t index) override { return &mLast.mMousePointer; }
 	ENGINE_EXPORT void NextFrame() override;
 
 private:
