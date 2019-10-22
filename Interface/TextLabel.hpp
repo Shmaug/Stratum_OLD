@@ -9,10 +9,13 @@
 
 #include <cstring>
 
-class TextButton : public UIElement {
+class TextLabel : public UIElement {
 public:
-	ENGINE_EXPORT TextButton(const std::string& name, UICanvas* canvas);
-	ENGINE_EXPORT ~TextButton();
+	ENGINE_EXPORT TextLabel(const std::string& name, UICanvas* canvas);
+	ENGINE_EXPORT ~TextLabel();
+
+	inline float4 Color() const { return mColor; }
+	inline void Color(const float4& c) { mColor = c; }
 	
 	inline std::string Text() const { return mText; }
 	ENGINE_EXPORT void Text(const std::string& text);
@@ -46,6 +49,7 @@ private:
 	uint32_t BuildText(Device* device, Buffer*& d);
 
 	Shader* mShader;
+	float4 mColor;
 	TextAnchor mHorizontalAnchor;
 	TextAnchor mVerticalAnchor;
 	float mTextScale;

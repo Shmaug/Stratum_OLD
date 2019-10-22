@@ -75,6 +75,8 @@ void DeviceManager::CreateInstance() {
 		#ifdef ENABLE_DEBUG_LAYERS
 		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 		#endif
+		VK_KHR_SURFACE_EXTENSION_NAME,
+		VK_KHR_DISPLAY_EXTENSION_NAME,
 	};
 	
 	// request GLFW extensions

@@ -10,10 +10,11 @@ void VerticalLayout::UpdateLayout() {
 	float oy = 0;
 	for (uint32_t i = 0; i < ChildCount(); i++) {
 		UIElement* e = Child(i);
+		oy -= e->AbsoluteExtent().y + mSpacing;
 		UDim2 p = e->Position();
 		p.mScale.y = sy;
 		p.mOffset.y = oy;
 		e->Position(p);
-		oy -= e->AbsoluteExtent().y * 2.f + mSpacing;
+		oy -= e->AbsoluteExtent().y + mSpacing;
 	}
 }

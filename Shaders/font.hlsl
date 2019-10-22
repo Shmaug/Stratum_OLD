@@ -25,6 +25,11 @@ struct Glyph {
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
+[[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4 Color;
+	float2 Offset;
+}
+
 struct v2f {
 	float4 position : SV_Position;
 	float3 normal : NORMAL;
@@ -47,7 +52,7 @@ v2f vsmain(uint id : SV_VertexId) {
 		float2(0,1)
 	};
 
-	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c];
+	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
 	float4 wp = mul(Object.ObjectToWorld, float4(p, 0, 1.0));
 
 	o.position = mul(Camera.ViewProjection, wp);
@@ -62,6 +67,6 @@ void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
 
-	color = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
+	color = MainTexture.SampleLevel(Sampler, i.texcoord, 0) * Color;
 	depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 }

@@ -9,7 +9,8 @@
 
 using namespace std;
 
-TextRenderer::TextRenderer(const string& name) : Renderer(name), mVisible(true), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
+TextRenderer::TextRenderer(const string& name)
+	: Renderer(name), mVisible(true), mColor(float4(1)), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
 TextRenderer::~TextRenderer() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
@@ -110,8 +111,13 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 		data.mUniformDirty[backBufferIndex] = false;
 	}
 
+	float2 offset(0);
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
+
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-
+	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 }

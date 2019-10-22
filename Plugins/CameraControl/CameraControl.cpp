@@ -54,7 +54,7 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	float d = c->Near() + .001f;
 	float y = d * tanf(c->FieldOfView() * .5f);
 	float x = y * c->Aspect();
-	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 10.f / c->PixelHeight()), d);
+	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 32.f / c->PixelHeight()), d);
 	mFpsText->TextScale(d * .015f);
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
@@ -66,7 +66,7 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	} else
 		md = float3(md.y, md.x, 0) * .005f;
 
-	if (mInput->MouseButtonDown(1)) { // right mouse
+	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) { // right mouse
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
 			// translate camera
 			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);

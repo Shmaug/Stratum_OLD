@@ -25,7 +25,7 @@ add_library(Engine SHARED
 	"Core/Window.cpp"
 	"Input/InputManager.cpp"
 	"Input/MouseKeyboardInput.cpp"
-	"Interface/TextButton.cpp"
+	"Interface/TextLabel.cpp"
 	"Interface/UIElement.cpp"
 	"Interface/UIImage.cpp"
 	"Interface/UICanvas.cpp"

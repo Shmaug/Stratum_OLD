@@ -1,8 +1,10 @@
 #pragma once
 
+#include <set>
 #include <Scene/Object.hpp>
 
 class UICanvas;
+class InputPointer;
 
 struct UDim2 {
 	// Relative to parent
@@ -42,7 +44,7 @@ public:
 	inline void Position(float sx, float sy, float ox, float oy) { mPosition.mScale.x = sx; mPosition.mScale.y = sy; mPosition.mOffset.x = ox; mPosition.mOffset.y = oy; Dirty(); }
 	inline void Extent(const UDim2& s) { mExtent = s; Dirty(); }
 	inline void Extent(float sx, float sy, float ox, float oy) { mExtent.mScale.x = sx; mExtent.mScale.y = sy; mExtent.mOffset.x = ox; mExtent.mOffset.y = oy; Dirty(); }
-	inline void Depth(float d) { mDepth = d; Dirty(); }
+	ENGINE_EXPORT void Depth(float d);
 
 	// Top-left corner, relative to canvas
 	inline float3 AbsolutePosition() { UpdateTransform(); return mAbsolutePosition; }

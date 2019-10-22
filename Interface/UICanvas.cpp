@@ -1,5 +1,6 @@
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIElement.hpp>
+#include <Scene/Scene.hpp>
 
 #include <queue>
 
@@ -28,8 +29,8 @@ void UICanvas::RemoveElement(UIElement* element) {
 
 bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(float3(0), float3(mExtent, UI_THICKNESS * .5f));
-	mAABB *= ObjectToWorld();
+	mOBB = OBB(WorldPosition(), float3(mExtent, UI_THICKNESS * .5f) * LocalScale(), WorldRotation());
+	mAABB = mOBB;
 	return true;
 }
 void UICanvas::Dirty() {
@@ -51,4 +52,9 @@ void UICanvas::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* c
 
 	for (UIElement* e : mSortedElements)
 		e->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
+}
+
+void UICanvas::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1, 1, 1, 1));
+	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, InteractionBounds().mCenter, InteractionBounds().mExtents, InteractionBounds().mOrientation, float4(.2f, 1, .2f, 1));
 }

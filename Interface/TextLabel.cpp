@@ -1,4 +1,4 @@
-#include <Interface/TextButton.hpp>
+#include <Interface/TextLabel.hpp>
 
 #include <Interface/UICanvas.hpp>
 
@@ -12,9 +12,9 @@
 
 using namespace std;
 
-TextButton::TextButton(const string& name, UICanvas* canvas)
-	: UIElement(name, canvas), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
-TextButton::~TextButton() {
+TextLabel::TextLabel(const string& name, UICanvas* canvas)
+	: UIElement(name, canvas), mColor(float4(1)), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
+TextLabel::~TextLabel() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
 			safe_delete(d.second.mObjectBuffers[i]);
@@ -28,7 +28,7 @@ TextButton::~TextButton() {
 	}
 }
 
-uint32_t TextButton::BuildText(Device* device, Buffer*& buffer) {
+uint32_t TextLabel::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
@@ -46,13 +46,14 @@ uint32_t TextButton::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_END;
 	return glyphCount;
 }
-void TextButton::Text(const string& text) {
+void TextLabel::Text(const string& text) {
 	mText = text;
 	for (auto& d : mDeviceData)
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void TextLabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+	if (!mVisible || !Font()) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
 	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
 
@@ -93,10 +94,10 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 	// Assign glyph buffer
 	data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], BINDING_START + 2);
 
-	float3 offset = AbsolutePosition();
+	float2 offset = AbsolutePosition().xy;
 	switch (mHorizontalAnchor) {
 	case Minimum:
-		offset.x += -AbsoluteExtent().x;
+		offset.x -= AbsoluteExtent().x;
 		break;
 	case Maximum:
 		offset.x += AbsoluteExtent().x;
@@ -104,20 +105,24 @@ void TextButton::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer*
 	}
 	switch (mVerticalAnchor) {
 	case Minimum:
-		offset.y += -AbsoluteExtent().y;
+		offset.y -= AbsoluteExtent().y;
 		break;
 	case Maximum:
 		offset.y += AbsoluteExtent().y;
 		break;
 	}
-	offset.z = 0;
 
 	// Update object buffer
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = float4x4::Translate( offset) * Canvas()->ObjectToWorld();
-	objbuffer->WorldToObject = float4x4::Translate(-offset) * Canvas()->WorldToObject();
+	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
+	objbuffer->WorldToObject = Canvas()->WorldToObject();
+
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
+	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 }
