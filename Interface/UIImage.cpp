@@ -25,7 +25,7 @@ UIImage::~UIImage() {
 }
 
 void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	if (!Texture()) return;
+	if (!Texture() || !mVisible) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/ui.shader");
 	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
 	
@@ -49,12 +49,14 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	}
 
 	float3 offset = AbsolutePosition();
+	float2 extent = AbsoluteExtent();
 	offset.z = 0;
 	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = float4x4::Translate( offset) * Canvas()->ObjectToWorld() * float4x4::Scale(float3(AbsoluteExtent(), 1));
-	objbuffer->WorldToObject = float4x4::Translate(-offset) * Canvas()->WorldToObject() * float4x4::Scale(float3(1.f / AbsoluteExtent(), 1));
+	objbuffer->ObjectToWorld = float4x4::Translate( offset) * Canvas()->ObjectToWorld();
+	objbuffer->WorldToObject = float4x4::Translate(-offset) * Canvas()->WorldToObject();
 	
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange extentRange = shader->mPushConstants.at("Extent");
 	if (mColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
 		if (!layout) return;
@@ -62,6 +64,7 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
+		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
 		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
 	}
 
@@ -73,6 +76,7 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mOutlineColor);
+		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
 		vkCmdDraw(*commandBuffer, 8, 1, 0, 0);
 	}
 }

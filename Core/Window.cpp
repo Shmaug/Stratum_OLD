@@ -40,7 +40,7 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 }
 void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mCurrent.mMousePointer.mAxis[(uint32_t)button] = action;
+	win->mInput->mCurrent.mMousePointer.mAxis[(uint32_t)button] = action == GLFW_PRESS;
 }
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
@@ -58,6 +58,7 @@ Window::Window(VkInstance instance, const string& title, MouseKeyboardInput* inp
 		position.extent.height = 900;
 	}
 
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	mWindow = glfwCreateWindow(position.extent.width, position.extent.height, mTitle.c_str(), nullptr, nullptr);
 	if (mWindow == nullptr) {
 		const char* msg;

@@ -20,6 +20,9 @@ public:
 	ENGINE_EXPORT TextRenderer(const std::string& name);
 	ENGINE_EXPORT ~TextRenderer();
 
+	inline float4 Color() const { return mColor; }
+	inline void Color(const float4& c) { mColor = c; }
+
 	inline std::string Text() const { return mText; }
 	ENGINE_EXPORT void Text(const std::string& text);
 
@@ -56,6 +59,7 @@ private:
 	uint32_t BuildText(Device* device, Buffer*& buffer);
 
 	Shader* mShader;
+	float4 mColor;
 	uint32_t mRenderQueue;
 	TextAnchor mHorizontalAnchor;
 	TextAnchor mVerticalAnchor;

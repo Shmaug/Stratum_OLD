@@ -7,7 +7,7 @@
 #include <Scene/TextRenderer.hpp>
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIImage.hpp>
-#include <Interface/TextButton.hpp>
+#include <Interface/TextLabel.hpp>
 #include <Interface/VerticalLayout.hpp>
 #include <Util/Profiler.hpp>
 
@@ -35,17 +35,29 @@ public:
 	PLUGIN_EXPORT ~MeshViewer();
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
+	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
 
 private:
+	float mLastClick;
+
 	float mEnvironmentStrength;
 	Texture* mEnvironmentTexture;
+
+	vector<shared_ptr<Object>> mLoadedObjects;
 
 	vector<Object*> mObjects;
 	unordered_map<string, Object*> mLoaded;
 	vector<shared_ptr<Material>> mMaterials;
 	Scene* mScene;
 
-	vector<TextButton*> mSceneButtons;
+	UICanvas* mPanel;
+	vector<UIElement*> mSceneButtons;
+	UIImage* mLoadBar;
+	TextLabel* mLoadText;
+
+	bool mLoading;
+	float mLoadProgress;
+	std::thread mLoadThread;
 
 	Object* LoadScene(const string& filename, Shader* shader, float scale = .05f);
 	Object* LoadObj(const string& filename, Shader* shader, float scale = .05f, const float4& col = float4(1), float metal = 0, float rough = 1);
@@ -54,17 +66,19 @@ private:
 ENGINE_PLUGIN(MeshViewer)
 
 
-MeshViewer::MeshViewer() : mScene(nullptr), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr) {
+MeshViewer::MeshViewer() : mScene(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mPanel(nullptr) {
 	mEnabled = true;
 }
 MeshViewer::~MeshViewer() {
+	if (mLoadThread.joinable()) mLoadThread.join();
 	for (Object* obj : mObjects)
 		mScene->RemoveObject(obj);
 }
 
 Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scale) {
 	if (mLoaded.count(filename)) return mLoaded.at(filename);
-
+	mLoadProgress = 0;
+	
 	fs::path path(filename);
 	
 	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
@@ -80,10 +94,22 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 		return nullptr;
 	}
 
+	uint32_t meshCount = 0;
+	queue<aiNode*> aiNodes;
+	aiNodes.push(aiscene->mRootNode);
+	while (!aiNodes.empty()){
+		aiNode* node = aiNodes.front();
+		aiNodes.pop();
+		meshCount += node->mNumMeshes;
+		for (uint32_t i = 0; i < node->mNumChildren; i++)
+			aiNodes.push(node->mChildren[i]);
+	}
+	
 	queue<pair<aiNode*, Object*>> nodes;
 	nodes.push(make_pair(aiscene->mRootNode, nullptr));
 	Object* root = nullptr;
 
+	uint32_t meshNum = 0;
 	uint32_t renderQueueOffset = 0;
 
 	while(!nodes.empty()) {
@@ -104,9 +130,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 		nodeobj->LocalPosition(t.x, t.y, t.z);
 		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
 		nodeobj->LocalScale(s.x, s.y, s.z);
-
-		mScene->AddObject(nodeobj);
-		mObjects.push_back(nodeobj.get());
+		mLoadedObjects.push_back(nodeobj);
 
 		if (nodepair.first == aiscene->mRootNode)
 			root = nodeobj.get();
@@ -124,7 +148,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 				bool twoSided = false;
 				aiColor3D emissionFac;
 				aiColor4D color;
-				aiString matname, diffuse, normal, metalroughness, emission;;
+				aiString matname, diffuse, normal, metalroughness, emission, specular;
 				aiString alphaMode;
 				float metallic, roughness;
 				aimat->Get(AI_MATKEY_NAME, matname);
@@ -138,6 +162,7 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 
 				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &diffuse);
 				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalroughness);
+				aimat->GetTexture(aiTextureType_SPECULAR, 0, &specular);
 				aimat->GetTexture(aiTextureType_NORMALS, 0, &normal);
 				aimat->GetTexture(aiTextureType_EMISSIVE, 0, &emission);
 
@@ -157,6 +182,12 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 						diffuse = path.parent_path().string() + "/" + diffuse.C_Str();
 					material->EnableKeyword("COLOR_MAP");
 					material->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture(diffuse.C_Str()));
+				}
+				if (specular != aiString("") && specular.C_Str()[0] != '*') {
+					if (path.has_parent_path())
+						specular = path.parent_path().string() + "/" + specular.C_Str();
+					material->EnableKeyword("SPECULAR_MAP");
+					material->SetParameter("SpecGlossTexture", mScene->AssetManager()->LoadTexture(specular.C_Str()));
 				}
 				if (normal != aiString("") && normal.C_Str()[0] != '*'){
 					if (path.has_parent_path())
@@ -188,9 +219,10 @@ Object* MeshViewer::LoadScene(const string& filename, Shader* shader, float scal
 			nodeobj.get()->AddChild(meshRenderer.get());
 			meshRenderer->Mesh(mesh);
 			meshRenderer->Material(material);
+			mLoadedObjects.push_back(meshRenderer);
 
-			mScene->AddObject(meshRenderer);
-			mObjects.push_back(meshRenderer.get());
+			mLoadProgress = (float)meshNum / (float)meshCount;
+			meshNum++;
 		}
 
 		for (uint32_t i = 0; i < node->mNumChildren; i++)
@@ -410,20 +442,21 @@ bool MeshViewer::Init(Scene* scene) {
 	panel->RenderQueue(5000);
 	panel->LocalPosition(0.2f, 1.5f, -0.1f);
 
-	shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Background", panel.get());
-	bg->Texture(white);
-	bg->Color(float4(0, 0, 0, .5f));
-	bg->Extent(1, 1, 0, 0);
-	bg->Outline(true);
+	shared_ptr<UIImage> panelbg = panel->AddElement<UIImage>("Background", panel.get());
+	panelbg->Depth(1.f);
+	panelbg->Texture(white);
+	panelbg->Color(float4(0, 0, 0, .5f));
+	panelbg->Extent(1, 1, 0, 0);
+	panelbg->Outline(true);
 
 	shared_ptr<VerticalLayout> layout = panel->AddElement<VerticalLayout>("VerticalLayout", panel.get());
-	layout->Extent(.8f, 1, 0, 0);
-	layout->Spacing(.005f);
+	layout->Extent(.9f, 1, 0, 0);
+	layout->Spacing(.0025f);
 
-	shared_ptr<TextButton> title = panel->AddElement<TextButton>("Title", panel.get());
-	title->VerticalAnchor(TextAnchor::Middle);
+	shared_ptr<TextLabel> title = panel->AddElement<TextLabel>("Title", panel.get());
+	title->VerticalAnchor(TextAnchor::Minimum);
 	title->Font(boldfont);
-	title->Extent(1, 0, 0, .025f);
+	title->Extent(1, 0, 0, .02f);
 	title->TextScale(.05f);
 	title->Text("MeshViewer");
 	layout->AddChild(title.get());
@@ -435,28 +468,46 @@ bool MeshViewer::Init(Scene* scene) {
 	separator->Outline(true);
 	layout->AddChild(separator.get());
 
+	shared_ptr<UIImage> loadBar = panel->AddElement<UIImage>("LoadBar", panel.get());
+	loadBar->Depth(.1f);
+	loadBar->Texture(white);
+	loadBar->Color(float4(.6f, 1, .6f, 1));
+	loadBar->Position(0, -1, 0, .01f);
+	loadBar->Extent(1, 0, 0, .01f);
+	loadBar->Outline(false);
+	mLoadBar = loadBar.get();
+
+	shared_ptr<TextLabel> loadText = panel->AddElement<TextLabel>("LoadText", panel.get());
+	loadText->Depth(.01f);
+	loadText->Font(font);
+	loadText->TextScale(.0175f);
+	loadText->Position(0, -1, 0, .01f);
+	loadText->Extent(1, 0, 0, .01f);
+	mLoadText = loadText.get();
+
 	vector<fs::path> files;
 	GetFiles("Assets", files);
 	for (auto f : files) {
 		string ext = f.extension().string();
 		if (ext != ".obj" && ext != ".fbx" && ext != ".gltf" && ext != ".glb") continue;
 
-		shared_ptr<TextButton> btn = panel->AddElement<TextButton>(f.string(), panel.get());
+		shared_ptr<UIImage> bg = panel->AddElement<UIImage>(f.string(), panel.get());
+		bg->Texture(white);
+		bg->Color(float4(0));
+		bg->Extent(1, 0, 0, .015f);
+		bg->Outline(false);
+		bg->OutlineColor(float4(1,1,1,.1f));
+		layout->AddChild(bg.get());
+		mSceneButtons.push_back(bg.get());
+
+		shared_ptr<TextLabel> btn = panel->AddElement<TextLabel>(f.string(), panel.get());
 		btn->VerticalAnchor(TextAnchor::Middle);
 		btn->HorizontalAnchor(TextAnchor::Minimum);
 		btn->Font(font);
-		btn->Extent(1, 0, 0, .0125f);
-		btn->TextScale(.025f);
+		btn->Extent(.9f, 1, 0, 0);
+		btn->TextScale(bg->AbsoluteExtent().y * 2);
 		btn->Text(f.filename().string());
-		layout->AddChild(btn.get());
-		mSceneButtons.push_back(btn.get());
-
-		shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Button Background", panel.get());
-		bg->Texture(white);
-		bg->Color(float4(0));
-		bg->Extent(1, 1, 0, 0);
-		bg->Outline(true);
-		btn->AddChild(bg.get());
+		bg->AddChild(btn.get());
 	}
 
 	layout->UpdateLayout();
@@ -464,6 +515,50 @@ bool MeshViewer::Init(Scene* scene) {
 	mScene->AddObject(panel);
 	mObjects.push_back(panel.get());
 	#pragma endregion
+	mPanel = panel.get();
+
+	mLoading = true;
+	mLoadProgress = 0.f;
+	mLoadThread = thread([&]() {
+		LoadScene(mSceneButtons[3]->mName, pbrshader);
+		mLoading = false;
+	});
 
 	return true;
+}
+
+void MeshViewer::Update(const FrameTime& frameTime) {
+	if (mLoading) {
+		char str[16];
+		sprintf(str, "%d%%", (int)(mLoadProgress*100.f+.5f));
+		mLoadText->Text(str);
+		mLoadText->mVisible = true;
+
+		UDim2 position = mLoadBar->Position();
+		UDim2 extent = mLoadBar->Extent();
+		mLoadBar->Extent(mLoadProgress, extent.mScale.y, extent.mOffset.x, extent.mOffset.y);
+		mLoadBar->Position(mLoadProgress - 1.f, position.mScale.y, position.mOffset.x, position.mOffset.y);
+		mLoadBar->mVisible = true;
+	}else{
+		mLoadText->mVisible = false;
+		mLoadBar->mVisible = false;
+		if (mLoadedObjects.size()) {
+			if (mLoadThread.joinable()) mLoadThread.join();
+			for (const auto& o : mLoadedObjects) {
+				mScene->AddObject(o);
+				mObjects.push_back(o.get());
+			}
+			mLoadedObjects.clear();
+		}
+	}
+
+	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+	if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
+		if (frameTime.mTotalTime - mLastClick < .2f) {
+			const InputPointer* ptr = input->GetPointer(0);
+			mPanel->LocalPosition(ptr->mWorldPosition + ptr->mWorldRotation * float3(0,0,.5f));
+			mPanel->LocalRotation(ptr->mWorldRotation);
+		}
+		mLastClick = frameTime.mTotalTime;
+	}
 }

@@ -33,20 +33,20 @@ public:
 	inline float4x4 ObjectToWorld() { UpdateTransform(); return mObjectToWorld; }
 	inline float4x4 WorldToObject() { UpdateTransform(); return mWorldToObject; }
 
-	inline void LocalPosition(const float3& p) { mLocalPosition = p; Dirty(); }
-	inline void LocalRotation(const quaternion& r) { mLocalRotation = r; Dirty(); }
-	inline void LocalScale(const float3& s) { mLocalScale = s; Dirty(); }
+	inline virtual void LocalPosition(const float3& p) { mLocalPosition = p; Dirty(); }
+	inline virtual void LocalRotation(const quaternion& r) { mLocalRotation = r; Dirty(); }
+	inline virtual void LocalScale(const float3& s) { mLocalScale = s; Dirty(); }
 
-	inline void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
-	inline void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
-	inline void LocalScale(float x) { mLocalScale.x = x; mLocalScale.y = x; mLocalScale.z = x; Dirty(); }
+	inline virtual void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
+	inline virtual void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
+	inline virtual void LocalScale(float x) { mLocalScale.x = x; mLocalScale.y = x; mLocalScale.z = x; Dirty(); }
 
-	ENGINE_EXPORT bool EnabledHeirarchy();
 	ENGINE_EXPORT virtual AABB Bounds();
 	ENGINE_EXPORT virtual AABB BoundsHeirarchy();
 
 	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* colorMaterial) {};
-
+	
+	ENGINE_EXPORT bool EnabledHeirarchy();
 
 private:
 	friend class ::Scene;

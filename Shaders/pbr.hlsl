@@ -5,6 +5,7 @@
 #pragma multi_compile COLOR_MAP
 #pragma multi_compile TWO_SIDED
 #pragma multi_compile EMISSION
+#pragma multi_compile SPECULAR_MAP
 
 #pragma render_queue 1000
 
@@ -14,6 +15,7 @@
 
 #define PI 3.1415926535897932
 #define INV_PI 0.31830988618
+#define MIN_ROUGHNESS 0.04
 #define unity_ColorSpaceDielectricSpec float4(0.04, 0.04, 0.04, 1.0 - 0.04) // standard dielectric reflectivity coef at incident angle (= 4%)
 
 // per-object
@@ -27,7 +29,8 @@
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t2);
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t3);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t4);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t5);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -50,7 +53,7 @@ struct v2f {
 #ifdef NORMAL_MAP
 	float4 tangent : TANGENT;
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECULAR_MAP)
 	float2 texcoord : TEXCOORD1;
 #endif
 };
@@ -60,6 +63,27 @@ float3 DiffuseAndSpecularFromMetallic(float3 albedo, float metallic, out float3 
 	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
 	oneMinusReflectivity = oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
 	return albedo * oneMinusReflectivity;
+}
+float3 DiffuseAndSpecularFromSpecular(float3 diffuse, float3 specular, out float3 specColor, out float oneMinusReflectivity) {
+	float maxSpecular = max(max(specular.r, specular.g), specular.b);
+
+	float metallic = 0;
+	float perceivedDiffuse = sqrt(0.299 * diffuse.r * diffuse.r + 0.587 * diffuse.g * diffuse.g + 0.114 * diffuse.b * diffuse.b);
+	float perceivedSpecular = sqrt(0.299 * specular.r * specular.r + 0.587 * specular.g * specular.g + 0.114 * specular.b * specular.b);
+	if (perceivedSpecular > MIN_ROUGHNESS) {
+		float a = MIN_ROUGHNESS;
+		float b = perceivedDiffuse * (1.0 - maxSpecular) / (1.0 - MIN_ROUGHNESS) + perceivedSpecular - 2.0 * MIN_ROUGHNESS;
+		float c = MIN_ROUGHNESS - perceivedSpecular;
+		float D = max(b * b - 4.0 * a * c, 0.0);
+		float metallic = clamp((-b + sqrt(D)) / (2.0 * a), 0.0, 1.0);
+	}
+	specColor = lerp(unity_ColorSpaceDielectricSpec.rgb, diffuse, metallic);
+
+	float3 baseColorDiffusePart = diffuse.rgb * ((1.0 - maxSpecular) / (1 - MIN_ROUGHNESS) / max(1 - metallic, .0001));
+	float3 baseColorSpecularPart = specular - (float3(MIN_ROUGHNESS) * (1 - metallic) * (1 / max(metallic, .0001)));
+	float oneMinusDielectricSpec = unity_ColorSpaceDielectricSpec.a;
+	oneMinusReflectivity = oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
+	return lerp(baseColorDiffusePart, baseColorSpecularPart, metallic * metallic);
 }
 
 float pow5(float x) {
@@ -135,7 +159,7 @@ v2f vsmain(
 #ifdef NORMAL_MAP
 	,[[vk::location(2)]] float4 tangent : TANGENT
 #endif
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECULAR_MAP)
 	,[[vk::location(3)]] float2 texcoord : TEXCOORD0
 #endif
 	) {
@@ -184,8 +208,14 @@ void fsmain(v2f i,
 	#endif
 
 	MaterialInfo material;
+	#ifdef SPECULAR_MAP
+	float4 specGloss = SpecGlossTexture.Sample(Sampler, i.texcoord);
+	material.perceptualRoughness = (1.0 - (1.0 - Roughness) * specGloss.a);
+	material.diffuseColor = DiffuseAndSpecularFromSpecular(col.rgb, specGloss.rgb, material.specularColor, material.oneMinusReflectivity);
+	#else
 	material.diffuseColor = DiffuseAndSpecularFromMetallic(col.rgb, Metallic, material.specularColor, material.oneMinusReflectivity);
 	material.perceptualRoughness = Roughness * .99;
+	#endif
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	material.nv = abs(dot(normal, view));
 

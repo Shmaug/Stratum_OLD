@@ -39,6 +39,12 @@ void UIElement::RemoveChild(UIElement* c) {
 	c->Dirty();
 }
 
+void UIElement::Depth(float d){
+	mDepth = d;
+	mCanvas->mSortedElementsDirty = true;
+	Dirty();
+}
+
 bool UIElement::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
@@ -55,7 +61,6 @@ bool UIElement::UpdateTransform() {
 }
 
 void UIElement::Dirty() {
-	mCanvas->mSortedElementsDirty = true;
 	mTransformDirty = true;
 	for (const auto& o : mChildren)
 		o->Dirty();

@@ -1641,7 +1641,7 @@
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.26261192560195923
+        "roughnessFactor": 0.5
       }
     },
     {
@@ -1686,7 +1686,7 @@
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.7171573638916016
+        "roughnessFactor": 0.5
       }
     },
     {
@@ -1748,7 +1748,7 @@
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.3080664873123169
+        "roughnessFactor": 0.5
       }
     },
     {
@@ -1793,7 +1793,7 @@
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.26261189579963684
+        "roughnessFactor": 0.5
       }
     },
     {
@@ -1891,7 +1891,7 @@
           "texCoord": 0
         },
         "metallicFactor": 1,
-        "roughnessFactor": 0.800000011920929
+        "roughnessFactor": 0.5
       }
     },
     {

@@ -198,6 +198,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 	glyphs.resize(str.size());
 
 	float2 p(0);
+	uint32_t lc = 0;
 
 	const FontGlyph* prev = nullptr;
 
@@ -206,12 +207,13 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 
 	uint32_t lineStart = 0;
 	uint32_t glyphCount = 0;
-	float ly = mAscender - mDescender + mLineSpace;
+	float ly = (mAscender - mDescender) + mLineSpace;
 
 	auto newLine = [&]() {
 		p.x = 0;
 		p.y -= ly;
 		prev = nullptr;
+		lc++;
 
 		float x = 0.f;
 		switch (horizontalAnchor) {
@@ -262,18 +264,18 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 	}
 
 	newLine();
-
+	p.y += ly;
 
 	float verticalOffset = 0;
 	switch (verticalAnchor) {
 	case Minimum:
-		verticalOffset = (p.y - ly) * scale;
+		verticalOffset = -p.y  * scale;
 		break;
 	case Middle:
-		verticalOffset = (p.y - ly) * scale * .5f;
+		verticalOffset = (lc * (-mDescender - (mAscender - mDescender) * .5f)+ (lc - 1) * mLineSpace) * scale * .5f;
 		break;
 	case Maximum:
-		verticalOffset = -ly * scale;
+		verticalOffset = 0;
 		break;
 	}
 

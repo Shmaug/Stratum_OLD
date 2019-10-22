@@ -3,12 +3,14 @@
 #define UI_THICKNESS .001f
 
 #include <Scene/Renderer.hpp>
+#include <Scene/Interactable.hpp>
 
 class UIElement;
 
 // Scene object that holds UIElements
 // Acts as a graph of UIElements
-class UICanvas : public Renderer {
+// Note: Hierarchical scaling is unsupported for raycasting!
+class UICanvas : public Renderer, public Interactable {
 public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();
@@ -29,21 +31,23 @@ public:
 	inline float2 Extent() const { return mExtent; }
 
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }
+	inline virtual OBB InteractionBounds() { UpdateTransform(); return mOBB; }
 
 	inline void Visible(bool v) { mVisible = v; };
 	inline virtual bool Visible() override { return mVisible && EnabledHeirarchy(); };
 	inline virtual void RenderQueue(uint32_t rq) { mRenderQueue = rq; }
 	inline virtual uint32_t RenderQueue() override { return mRenderQueue; }
-	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 private:
 	friend class UIElement;
 	uint32_t mRenderQueue;
 	bool mVisible;
+	OBB mOBB;
 	AABB mAABB;
 	float2 mExtent;
 	std::vector<std::shared_ptr<UIElement>> mElements;
-
 
 	bool mSortedElementsDirty;
 	std::vector<UIElement*> mSortedElements;
