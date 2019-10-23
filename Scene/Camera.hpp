@@ -17,55 +17,51 @@ public:
 
 	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
 	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
-	ENGINE_EXPORT ~Camera();
+	ENGINE_EXPORT virtual ~Camera();
 
 	inline ::Device* Device() const { return mDevice; }
 
-	ENGINE_EXPORT void PreRender();
-	ENGINE_EXPORT void PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	ENGINE_EXPORT void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	inline ::RenderPass* RenderPass() const { return mRenderPass; }
+	ENGINE_EXPORT virtual void PreRender();
+	ENGINE_EXPORT virtual void PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT virtual void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT virtual void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	inline virtual ::RenderPass* RenderPass() const { return mRenderPass; }
 
-	ENGINE_EXPORT float4 WorldToClip(float3 worldPos);
-	ENGINE_EXPORT float3 ClipToWorldRay(float3 clipPos);
+	ENGINE_EXPORT virtual float4 WorldToClip(float3 worldPos);
+	ENGINE_EXPORT virtual float3 ClipToWorldRay(float3 clipPos);
 
-	inline uint32_t RenderPriority() const { return mRenderPriority; }
-	inline void RenderPriority(uint32_t x) { mRenderPriority = x; }
+	inline virtual uint32_t RenderPriority() const { return mRenderPriority; }
+	inline virtual void RenderPriority(uint32_t x) { mRenderPriority = x; }
 
-	inline bool RenderDepthNormals() const { return mRenderDepthNormals; }
-	inline void RenderDepthNormals(bool x) { mRenderDepthNormals = x; }
+	inline Window* TargetWindow() const { return mTargetWindow; }
 
-	inline void Viewport(const VkViewport& v) { mViewport = v; }
-	inline VkViewport Viewport() const { return mViewport; }
+	inline virtual float Aspect() const { return (float)mPixelWidth / (float)mPixelHeight; }
+	inline virtual float Near() const { return mNear; }
+	inline virtual float Far() const { return mFar; }
+	inline virtual float FieldOfView() const { return mFieldOfView; }
+	inline virtual float4 PerspectiveBounds() const { return mPerspectiveBounds; }
+	inline virtual uint32_t PixelWidth()  const { return mPixelWidth;  }
+	inline virtual uint32_t PixelHeight() const { return mPixelHeight; }
+	inline virtual VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 
-	inline float Aspect() const { return (float)mPixelWidth / (float)mPixelHeight; }
-	inline float Near() const { return mNear; }
-	inline float Far() const { return mFar; }
-	inline float FieldOfView() const { return mFieldOfView; }
-	inline float4 PerspectiveBounds() const { return mPerspectiveBounds; }
-	inline uint32_t PixelWidth()  const { return mPixelWidth;  }
-	inline uint32_t PixelHeight() const { return mPixelHeight; }
-	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
+	inline virtual void Near(float n) { mNear = n; mMatricesDirty = true; }
+	inline virtual void Far (float f) { mFar = f;  mMatricesDirty = true; }
+	inline virtual void FieldOfView(float f) { mPerspectiveBounds = float4(0.f); mFieldOfView = f; mMatricesDirty = true; }
+	inline virtual void PerspectiveBounds(const float4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; mMatricesDirty = true; }
+	inline virtual void PixelWidth (uint32_t w) { mPixelWidth  = w; DirtyFramebuffers(); mMatricesDirty = true; }
+	inline virtual void PixelHeight(uint32_t h) { mPixelHeight = h; DirtyFramebuffers(); mMatricesDirty = true; }
+	inline virtual void SampleCount(VkSampleCountFlagBits s) { mSampleCount = s; DirtyFramebuffers(); }
 
-	inline void Near(float n) { mNear = n; mMatricesDirty = true; }
-	inline void Far (float f) { mFar = f;  mMatricesDirty = true; }
-	inline void FieldOfView(float f) { mPerspectiveBounds = float4(0.f); mFieldOfView = f; mMatricesDirty = true; }
-	inline void PerspectiveBounds(const float4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; mMatricesDirty = true; }
-	inline void PixelWidth (uint32_t w) { mPixelWidth  = w; DirtyFramebuffers(); mMatricesDirty = true; }
-	inline void PixelHeight(uint32_t h) { mPixelHeight = h; DirtyFramebuffers(); mMatricesDirty = true; }
-	inline void SampleCount(VkSampleCountFlagBits s) { mSampleCount = s; DirtyFramebuffers(); }
+	inline virtual Texture* ColorBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mColorBuffer; }
+	inline virtual Texture* DepthNormalBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthNormalBuffer; }
+	inline virtual Texture* DepthBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthBuffer; }
+	inline virtual Buffer* UniformBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mUniformBuffer; }
+	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stage);
 
-	inline Texture* ColorBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mColorBuffer; }
-	inline Texture* DepthNormalBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthNormalBuffer; }
-	inline Texture* DepthBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mDepthBuffer; }
-	inline Buffer* UniformBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mUniformBuffer; }
-	ENGINE_EXPORT ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stage);
-
-	inline float4x4 View() { UpdateMatrices(); return mView; }
-	inline float4x4 Projection() { UpdateMatrices(); return mProjection; }
-	inline float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
-	inline float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
+	inline virtual float4x4 View() { UpdateMatrices(); return mView; }
+	inline virtual float4x4 Projection() { UpdateMatrices(); return mProjection; }
+	inline virtual float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
+	inline virtual float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
 
 private:
 	uint32_t mRenderPriority;
@@ -74,7 +70,6 @@ private:
 	VkFormat mDepthFormat;
 
 	bool mOrthographic;
-	bool mRenderDepthNormals;
 	float mOrthographicSize;
 
 	float mFieldOfView;

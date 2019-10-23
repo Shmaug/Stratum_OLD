@@ -7,7 +7,7 @@ using namespace std;
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
-	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
+	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr),
 	mMatricesDirty(true),
 	mRenderFormat(renderFormat),
 	mDepthFormat(depthFormat),
@@ -117,7 +117,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
-	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr), mRenderDepthNormals(true),
+	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr),
 	mMatricesDirty(true),
 	mRenderFormat(targetWindow->Format().format),
 	mDepthFormat(depthFormat),

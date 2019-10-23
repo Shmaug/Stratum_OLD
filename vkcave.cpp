@@ -105,6 +105,8 @@ private:
 		PROFILER_BEGIN("Render Cameras");
 		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
 		for (const auto& camera : mScene->Cameras()) {
+			if (!camera->EnabledHierarchy()) continue;
+
 			PROFILER_BEGIN("Get CommandBuffer");
 			shared_ptr<CommandBuffer> commandBuffer;
 			if (commandBuffers.count(camera->Device()))
