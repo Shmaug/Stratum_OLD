@@ -141,10 +141,9 @@ struct OBB {
 	}
 
 	inline operator AABB() {
-		float3 re = mOrientation * mExtents;
-		float3 mn = mCenter - re;
-		float3 mx = mCenter + re;
-		float3 corners[8] {
+		float3 mn = mCenter - mExtents;
+		float3 mx = mCenter + mExtents;
+		float3 corners[8]{
 			mx,							// 1,1,1
 			float3(mn.x, mx.y, mx.z),	// 0,1,1
 			float3(mx.x, mx.y, mn.z),	// 1,1,0
@@ -154,16 +153,17 @@ struct OBB {
 			float3(mx.x, mn.y, mn.z),	// 1,0,0
 			mn,							// 0,0,0
 		};
+		for (uint32_t i = 0; i < 8; i++)
+			corners[i] = mOrientation * corners[i];
+
 		mn = corners[0];
 		mx = corners[0];
 		for (uint32_t i = 1; i < 8; i++) {
 			mn = vmin(mn, corners[i]);
 			mx = vmax(mx, corners[i]);
 		}
-		AABB aabb;
-		aabb.mCenter = (mn + mx) * .5f;
-		aabb.mExtents = (mx - mn) * .5f;
-		return aabb;
+
+		return AABB(mCenter, (mx - mn) * .5f);
 	}
 };
 

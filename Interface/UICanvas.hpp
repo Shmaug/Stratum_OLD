@@ -1,7 +1,5 @@
 #pragma once
 
-#define UI_THICKNESS .001f
-
 #include <Scene/Renderer.hpp>
 #include <Scene/Collider.hpp>
 
@@ -9,7 +7,6 @@ class UIElement;
 
 // Scene object that holds UIElements
 // Acts as a graph of UIElements
-// Note: Hierarchical scaling is unsupported for raycasting!
 class UICanvas : public Renderer, public Collider {
 public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
@@ -46,6 +43,7 @@ public:
 	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 private:
+	float3 mLastRaycastPos;
 	friend class UIElement;
 	uint32_t mRenderQueue;
 	bool mVisible;

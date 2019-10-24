@@ -32,6 +32,9 @@ bool Object::UpdateTransform() {
 	}
 
 	mWorldToObject = inverse(mObjectToWorld);
+	mWorldScale.x = length(mObjectToWorld.c1.xyz);
+	mWorldScale.y = length(mObjectToWorld.c2.xyz);
+	mWorldScale.z = length(mObjectToWorld.c3.xyz);
 	mBounds = AABB(mWorldPosition, float3());
 
 	mTransformDirty = false;

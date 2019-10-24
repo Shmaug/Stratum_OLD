@@ -1538,12 +1538,12 @@ inline float determinant(const float4x4& m) {
 		m[0][2] * coef[2] + m[0][3] * coef[3];
 }
 
-inline float2x2 inverse(float2x2& m) {
+inline float2x2 inverse(const float2x2& m) {
 	return float2x2(
 		 m.c2[1], -m.c1[1],
 		-m.c2[0],  m.c1[0]) / determinant(m);
 }
-inline float3x3 inverse(float3x3& m) {
+inline float3x3 inverse(const float3x3& m) {
 	float3x3 result;
 	result[0][0] =  m[1][1] * m[2][2] - m[2][1] * m[1][2];
 	result[1][0] = -m[1][0] * m[2][2] - m[2][0] * m[1][2];
@@ -1556,72 +1556,77 @@ inline float3x3 inverse(float3x3& m) {
 	result[2][2] =  m[0][0] * m[1][1] - m[1][0] * m[0][1];
 	return result / determinant(m);
 }
-inline float4x4 inverse(float4x4& m) {
-	float c00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
-	float c02 = m[1][2] * m[3][3] - m[3][2] * m[1][3];
-	float c03 = m[1][2] * m[2][3] - m[2][2] * m[1][3];
-	
-	float c04 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
-	float c06 = m[1][1] * m[3][3] - m[3][1] * m[1][3];
-	float c07 = m[1][1] * m[2][3] - m[2][1] * m[1][3];
-	
-	float c08 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
-	float c10 = m[1][1] * m[3][2] - m[3][1] * m[1][2];
-	float c11 = m[1][1] * m[2][2] - m[2][1] * m[1][2];
-	
-	float c12 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
-	float c14 = m[1][0] * m[3][3] - m[3][0] * m[1][3];
-	float c15 = m[1][0] * m[2][3] - m[2][0] * m[1][3];
-	
-	float c16 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
-	float c18 = m[1][0] * m[3][2] - m[3][0] * m[1][2];
-	float c19 = m[1][0] * m[2][2] - m[2][0] * m[1][2];
-	
-	float c20 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
-	float c22 = m[1][0] * m[3][1] - m[3][0] * m[1][1];
-	float c23 = m[1][0] * m[2][1] - m[2][0] * m[1][1];
+inline float4x4 inverse(const float4x4& m) {
+	float Coef00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
+	float Coef02 = m[1][2] * m[3][3] - m[3][2] * m[1][3];
+	float Coef03 = m[1][2] * m[2][3] - m[2][2] * m[1][3];
 
-	float4 f0(c00, c00, c02, c03);
-	float4 f1(c04, c04, c06, c07);
-	float4 f2(c08, c08, c10, c11);
-	float4 f3(c12, c12, c14, c15);
-	float4 f4(c16, c16, c18, c19);
-	float4 f5(c20, c20, c22, c23);
+	float Coef04 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
+	float Coef06 = m[1][1] * m[3][3] - m[3][1] * m[1][3];
+	float Coef07 = m[1][1] * m[2][3] - m[2][1] * m[1][3];
 
-	float4 v0(m[1][0], m[0][0], m[0][0], m[0][0]);
-	float4 v1(m[1][1], m[0][1], m[0][1], m[0][1]);
-	float4 v2(m[1][2], m[0][2], m[0][2], m[0][2]);
-	float4 v3(m[1][3], m[0][3], m[0][3], m[0][3]);
+	float Coef08 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
+	float Coef10 = m[1][1] * m[3][2] - m[3][1] * m[1][2];
+	float Coef11 = m[1][1] * m[2][2] - m[2][1] * m[1][2];
 
-	float4 i0(v1 * f0 - v2 * f1 + v3 * f2);
-	float4 i1(v0 * f0 - v2 * f3 + v3 * f4);
-	float4 i2(v0 * f1 - v1 * f3 + v3 * f5);
-	float4 i3(v0 * f2 - v1 * f4 + v2 * f5);
+	float Coef12 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
+	float Coef14 = m[1][0] * m[3][3] - m[3][0] * m[1][3];
+	float Coef15 = m[1][0] * m[2][3] - m[2][0] * m[1][3];
 
-	float4 sa(1, -1,  1, -1);
-	float4 sb(-1, 1, -1, 1);
-	float4x4 result(i0 * sa, i1 * sb, i2 * sa, i3 * sb);
+	float Coef16 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
+	float Coef18 = m[1][0] * m[3][2] - m[3][0] * m[1][2];
+	float Coef19 = m[1][0] * m[2][2] - m[2][0] * m[1][2];
 
-	float4 d = m[0] * result[0];
-	return result / ((d.x + d.y) + (d.z + d.w));
+	float Coef20 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
+	float Coef22 = m[1][0] * m[3][1] - m[3][0] * m[1][1];
+	float Coef23 = m[1][0] * m[2][1] - m[2][0] * m[1][1];
+
+	float4 Fac0(Coef00, Coef00, Coef02, Coef03);
+	float4 Fac1(Coef04, Coef04, Coef06, Coef07);
+	float4 Fac2(Coef08, Coef08, Coef10, Coef11);
+	float4 Fac3(Coef12, Coef12, Coef14, Coef15);
+	float4 Fac4(Coef16, Coef16, Coef18, Coef19);
+	float4 Fac5(Coef20, Coef20, Coef22, Coef23);
+
+	float4 Vec0(m[1][0], m[0][0], m[0][0], m[0][0]);
+	float4 Vec1(m[1][1], m[0][1], m[0][1], m[0][1]);
+	float4 Vec2(m[1][2], m[0][2], m[0][2], m[0][2]);
+	float4 Vec3(m[1][3], m[0][3], m[0][3], m[0][3]);
+
+	float4 Inv0(Vec1 * Fac0 - Vec2 * Fac1 + Vec3 * Fac2);
+	float4 Inv1(Vec0 * Fac0 - Vec2 * Fac3 + Vec3 * Fac4);
+	float4 Inv2(Vec0 * Fac1 - Vec1 * Fac3 + Vec3 * Fac5);
+	float4 Inv3(Vec0 * Fac2 - Vec1 * Fac4 + Vec2 * Fac5);
+
+	float4 SignA(+1, -1, +1, -1);
+	float4 SignB(-1, +1, -1, +1);
+	float4x4 Inverse(Inv0 * SignA, Inv1 * SignB, Inv2 * SignA, Inv3 * SignB);
+
+	float4 Row0(Inverse[0][0], Inverse[1][0], Inverse[2][0], Inverse[3][0]);
+
+	float4 Dot0(m[0] * Row0);
+	float Dot1 = (Dot0.x + Dot0.y) + (Dot0.z + Dot0.w);
+
+	float OneOverDeterminant = 1.f / Dot1;
+	return Inverse * OneOverDeterminant;
 }
 inline quaternion inverse(const quaternion& q) {
 	float s = 1.f / dot(q.xyzw, q.xyzw);
 	return quaternion(-q.x, -q.y, -q.z, q.w) * s;
 }
 
-inline float2x2 transpose(float2x2& m) {
+inline float2x2 transpose(const float2x2& m) {
 	return float2x2(
 		m.c1[0], m.c1[1],
 		m.c2[0], m.c2[1] );
 }
-inline float3x3 transpose(float3x3& m) {
+inline float3x3 transpose(const float3x3& m) {
 	return float3x3(
 		m.c1[0], m.c1[1], m.c1[2],
 		m.c2[0], m.c2[1], m.c2[2],
 		m.c3[0], m.c3[1], m.c3[2] );
 }
-inline float4x4 transpose(float4x4& m) {
+inline float4x4 transpose(const float4x4& m) {
 	return float4x4(
 		m.c1[0], m.c1[1], m.c1[2], m.c1[3],
 		m.c2[0], m.c2[1], m.c2[2], m.c2[3],

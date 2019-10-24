@@ -30,7 +30,7 @@ void UICanvas::RemoveElement(UIElement* element) {
 
 bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mOBB = OBB(WorldPosition(), float3(mExtent, UI_THICKNESS * .5f) * LocalScale(), WorldRotation());
+	mOBB = OBB(WorldPosition(), float3(mExtent, .001f) * WorldScale(), WorldRotation());
 	mAABB = mOBB;
 	return true;
 }
@@ -44,25 +44,20 @@ UIElement* UICanvas::Raycast(const Ray& worldRay) {
 	float t = worldRay.Intersect(ColliderBounds()).x;
 	if (t < 0) return nullptr;
 	float3 wp = worldRay.mOrigin + worldRay.mDirection * t;
-	float2 cp = (WorldToObject() * float4(wp, 1)).xy;
+
+	float3 cp = (WorldToObject() * float4(wp, 1)).xyz;
+	mLastRaycastPos = (ObjectToWorld() * float4(cp, 1)).xyz;
 
 	float minDepth = 0;
 	UIElement* hit = nullptr;
-	queue<UIElement*> nodes;
-	for (const auto& e : mElements)
-		nodes.push(e.get());
-	while (!nodes.empty()){
-		UIElement* e = nodes.front(); nodes.pop();
-
+	for (const shared_ptr<UIElement>& e : mElements) {
 		if (e->mRecieveRaycast && e->mVisible && (!hit || e->Depth() < minDepth)){
-			float2 rp = vabs(cp - e->AbsolutePosition());
+			float2 rp = vabs(cp.xy - e->AbsolutePosition());
 			if (rp.x < e->AbsoluteExtent().x && rp.y < e->AbsoluteExtent().y) {
-				hit = e;
+				hit = e.get();
 				minDepth = e->Depth();
 			}
 		}
-		for (UIElement* c : e->mChildren)
-			nodes.push(c);
 	}
 	return hit;
 }
@@ -84,4 +79,6 @@ void UICanvas::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* c
 void UICanvas::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1, 1, 1, 1));
 	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, ColliderBounds().mCenter, ColliderBounds().mExtents, ColliderBounds().mOrientation, float4(.4f, 1, .4f, 1));
+	
+	Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, mLastRaycastPos, .005f, float4(.4f, .4f, 1, 1));
 }
