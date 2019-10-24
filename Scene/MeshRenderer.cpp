@@ -25,8 +25,8 @@ MeshRenderer::~MeshRenderer() {
 bool MeshRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
 	AABB mb = Mesh()->Bounds();
-	mOBB = OBB(mb.mCenter, mb.mExtents * LocalScale(), WorldRotation());
-	mAABB = mb * ObjectToWorld();
+	mOBB = OBB((ObjectToWorld() * float4(mb.mCenter, 1)).xyz, mb.mExtents * WorldScale(), WorldRotation());
+	mAABB = mOBB;
 	for (auto& d : mDeviceData)
 		memset(d.second.mUniformDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 	return true;

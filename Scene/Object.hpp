@@ -29,6 +29,7 @@ public:
 	inline float3 LocalPosition() { UpdateTransform(); return mLocalPosition; }
 	inline quaternion LocalRotation() { UpdateTransform(); return mLocalRotation; }
 	inline float3 LocalScale() { UpdateTransform(); return mLocalScale; }
+	inline float3 WorldScale() { UpdateTransform(); return mWorldScale; }
 
 	inline float4x4 ObjectToWorld() { UpdateTransform(); return mObjectToWorld; }
 	inline float4x4 WorldToObject() { UpdateTransform(); return mWorldToObject; }
@@ -59,6 +60,7 @@ private:
 	float3 mLocalPosition;
 	quaternion mLocalRotation;
 	float3 mLocalScale;
+	float3 mWorldScale;
 	AABB mBounds;
 	float4x4 mObjectToWorld;
 	float4x4 mWorldToObject;
