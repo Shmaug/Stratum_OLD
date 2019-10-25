@@ -27,7 +27,6 @@ private:
 
 	TextRenderer* mFpsText;
 	Object* mCameraPivot;
-	bool mDragging;
 
 	float mFrameTimeAccum;
 	float mFps;

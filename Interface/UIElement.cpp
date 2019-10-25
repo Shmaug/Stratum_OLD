@@ -12,6 +12,15 @@ UIElement::~UIElement() {
 	if (mParent) mParent->RemoveChild(this);
 }
 
+bool UIElement::Visible(){
+	UIElement* p = this;
+	while (p) {
+		if (!p->mVisible) return false;
+		p = p->mParent;
+	}
+	return true;
+}
+
 void UIElement::AddChild(UIElement* c) {
 	if (c->mParent == this) return;
 

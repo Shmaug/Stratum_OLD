@@ -53,7 +53,7 @@ public:
 	// Relative to canvas
 	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
 	
-	virtual bool Visible() { return mVisible; }
+	ENGINE_EXPORT bool Visible();
 	virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {}
 	
 private:

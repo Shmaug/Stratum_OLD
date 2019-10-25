@@ -2,10 +2,10 @@
 
 #include <Interface/UIElement.hpp>
 
-class VerticalLayout : public UIElement {
+class UILayout : public UIElement {
 public:
-	ENGINE_EXPORT VerticalLayout(const std::string& name, UICanvas* canvas);
-	ENGINE_EXPORT ~VerticalLayout();
+	ENGINE_EXPORT UILayout(const std::string& name, UICanvas* canvas);
+	ENGINE_EXPORT ~UILayout();
 
 	// Update child positions
 	ENGINE_EXPORT void UpdateLayout();

@@ -40,10 +40,8 @@ public:
 	inline virtual void RenderQueue(uint32_t rq) { mRenderQueue = rq; }
 	inline virtual uint32_t RenderQueue() override { return mRenderQueue; }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
-	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 private:
-	float3 mLastRaycastPos;
 	friend class UIElement;
 	uint32_t mRenderQueue;
 	bool mVisible;

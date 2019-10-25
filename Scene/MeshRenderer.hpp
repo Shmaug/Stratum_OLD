@@ -34,8 +34,6 @@ public:
 	inline virtual OBB ColliderBounds() override { UpdateTransform(); return mOBB; }
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
-	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
-
 private:
 	struct DeviceData {
 		Buffer** mObjectBuffers;

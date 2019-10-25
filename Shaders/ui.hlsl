@@ -8,8 +8,6 @@
 
 #pragma static_sampler Sampler
 
-#pragma multi_compile OUTLINE
-
 #include <shadercompat.h>
 
 // per-object
@@ -23,46 +21,33 @@
 	float4 Color;
 	float2 Offset;
 	float2 Extent;
+	float2 Bounds;
 }
 
 struct v2f {
 	float4 position : SV_Position;
-	float3 normal : NORMAL;
-	float2 texcoord : TEXCOORD0;
+	float4 texcoord : TEXCOORD0;
 	float3 worldPos : TEXCOORD1;
+	float3 normal : NORMAL;
 };
 
 v2f vsmain(uint index : SV_VertexID) {
-	#ifdef OUTLINE
-	static const float2 positions[8] = {
-		float2(0,0),
-		float2(1,0),
-
-		float2(1,0),
-		float2(1,1),
-
-		float2(1,1),
-		float2(0,1),
-
-		float2(0,1),
-		float2(0,0)
-	};
-	#else
 	static const float2 positions[6] = {
 		float2(0,0),
 		float2(1,0),
-		float2(0,1),
-		float2(1,0),
 		float2(1,1),
-		float2(0,1)
+		float2(0,1),
+		float2(0,0),
+		float2(1,1)
 	};
-	#endif
-	
-	float4 wp = mul(Object.ObjectToWorld, float4(Offset + Extent * (positions[index] * 2 - 1), 0, 1.0));
+
+	float2 p = Offset + Extent * (positions[index] * 2 - 1);
+	float4 wp = mul(Object.ObjectToWorld, float4(p, 0, 1.0));
 
 	v2f o;
 	o.position = mul(Camera.ViewProjection, wp);
-	o.texcoord = positions[index];
+	o.texcoord.xy = positions[index];
+	o.texcoord.zw = abs(p);
 	o.normal = mul(float4(0, 0, 1, 1), Object.WorldToObject).xyz;
 	o.worldPos = wp.xyz;
 
@@ -72,6 +57,7 @@ v2f vsmain(uint index : SV_VertexID) {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
-	color = MainTexture.SampleLevel(Sampler, i.texcoord, 0) * Color;
+	clip(any(Bounds - i.texcoord.zw));
+	color = MainTexture.SampleLevel(Sampler, i.texcoord.xy, 0) * Color;
 	depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
 }

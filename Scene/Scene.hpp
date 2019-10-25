@@ -30,6 +30,8 @@ private:
 
 	std::unordered_map<Device*, Buffer**> mLightBuffers;
 
+	std::vector<Light*> mActiveLights;
+
 	::AssetManager* mAssetManager;
 	::DeviceManager* mDeviceManager;
 	::Gizmos* mGizmos;
@@ -49,10 +51,10 @@ public:
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
 	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
-	ENGINE_EXPORT Collider* Raycast(const Ray& ray, uint32_t mask = 0xFFFFFFFF);
+	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 
 	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
-	inline const std::vector<Light*>& Lights() const { return mLights; }
+	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }

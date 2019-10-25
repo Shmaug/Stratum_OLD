@@ -44,9 +44,7 @@ UIElement* UICanvas::Raycast(const Ray& worldRay) {
 	float t = worldRay.Intersect(ColliderBounds()).x;
 	if (t < 0) return nullptr;
 	float3 wp = worldRay.mOrigin + worldRay.mDirection * t;
-
 	float3 cp = (WorldToObject() * float4(wp, 1)).xyz;
-	mLastRaycastPos = (ObjectToWorld() * float4(cp, 1)).xyz;
 
 	float minDepth = 0;
 	UIElement* hit = nullptr;
@@ -73,12 +71,6 @@ void UICanvas::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* c
 	}
 
 	for (UIElement* e : mSortedElements)
-		e->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
-}
-
-void UICanvas::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1, 1, 1, 1));
-	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, ColliderBounds().mCenter, ColliderBounds().mExtents, ColliderBounds().mOrientation, float4(.4f, 1, .4f, 1));
-	
-	Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, mLastRaycastPos, .005f, float4(.4f, .4f, 1, 1));
+		if (e->Visible())
+			e->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
 }

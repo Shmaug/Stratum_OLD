@@ -58,6 +58,5 @@ private:
 	std::shared_ptr<Fence> mCompletionFence;
 
 	RenderPass* mCurrentRenderPass;
-	Material* mCurrentMaterial;
-	GraphicsShader* mCurrentShader;
+	VkPipeline mCurrentPipeline;
 };

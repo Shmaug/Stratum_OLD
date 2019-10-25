@@ -8,7 +8,7 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mDragging(false), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
@@ -59,12 +59,7 @@ void CameraControl::Update(const FrameTime& frameTime) {
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 
-	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
-		Collider* hit = mScene->Raycast(mInput->GetPointer(0)->mWorldRay);
-		mDragging = !dynamic_cast<UICanvas*>(hit);
-	}
-	if (mDragging && !mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) mDragging = false;
-	if (mDragging) {
+	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
 			md.x = -md.x;

@@ -11,7 +11,9 @@ class InputPointer {
 public:
 	InputDevice* mDevice;
 	Ray mWorldRay;
+	Ray mLastWorldRay;
 	std::unordered_map<uint32_t, float> mAxis;
+	std::unordered_map<uint32_t, float> mLastAxis;
 };
 
 class InputDevice {
@@ -19,8 +21,6 @@ public:
 	inline virtual uint32_t PointerCount() { return 0; };
 	// Get info about a pointer
 	inline virtual const InputPointer* GetPointer(uint32_t index) { return nullptr; };
-	// Get info about a pointer from 1 frame ago
-	inline virtual const InputPointer* GetLastPointer(uint32_t index) { return nullptr; };
 
 	inline virtual void NextFrame() {}
 };
