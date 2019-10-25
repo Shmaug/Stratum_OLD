@@ -97,7 +97,7 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 			data.mBoundLightBuffers[backBufferIndex] = lights;
 		}
 
-		uint32_t lc = (uint32_t)Scene()->Lights().size();
+		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 		vkCmdPushConstants(*commandBuffer, layout, mLightCountRange.stageFlags, mLightCountRange.offset, mLightCountRange.size, &lc);
 	}
 
@@ -106,9 +106,4 @@ void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
 	vkCmdBindIndexBuffer(*commandBuffer, *m->IndexBuffer(commandBuffer->Device()), 0, m->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, 0, 0, 0);
-}
-
-void MeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, Bounds().mCenter, Bounds().mExtents, quaternion(0, 0, 0, 1), float4(1, 1, 1, 1));
-	Scene()->Gizmos()->DrawWireCube(commandBuffer, backBufferIndex, ColliderBounds().mCenter, ColliderBounds().mExtents, ColliderBounds().mOrientation, float4(.4f, 1, .4f, 1));
 }

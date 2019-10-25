@@ -1,15 +1,16 @@
-#include <Interface/VerticalLayout.hpp>
+#include <Interface/UILayout.hpp>
 
 using namespace std;
 
-VerticalLayout::VerticalLayout(const string& name, UICanvas* canvas) : UIElement(name, canvas), mSpacing(0.f) {}
-VerticalLayout::~VerticalLayout() {}
+UILayout::UILayout(const string& name, UICanvas* canvas) : UIElement(name, canvas), mSpacing(0.f) {}
+UILayout::~UILayout() {}
 
-void VerticalLayout::UpdateLayout() {
+void UILayout::UpdateLayout() {
 	float sy = 1;
 	float oy = 0;
 	for (uint32_t i = 0; i < ChildCount(); i++) {
 		UIElement* e = Child(i);
+		if (!e->Visible()) continue;
 		oy -= e->AbsoluteExtent().y + mSpacing;
 		UDim2 p = e->Position();
 		p.mScale.y = sy;

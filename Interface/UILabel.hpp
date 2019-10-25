@@ -9,10 +9,10 @@
 
 #include <cstring>
 
-class TextLabel : public UIElement {
+class UILabel : public UIElement {
 public:
-	ENGINE_EXPORT TextLabel(const std::string& name, UICanvas* canvas);
-	ENGINE_EXPORT ~TextLabel();
+	ENGINE_EXPORT UILabel(const std::string& name, UICanvas* canvas);
+	ENGINE_EXPORT ~UILabel();
 
 	inline float4 Color() const { return mColor; }
 	inline void Color(const float4& c) { mColor = c; }
@@ -33,7 +33,6 @@ public:
 	inline float TextScale() const { return mTextScale; }
 	inline void TextScale(float sc) { mTextScale = sc; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
 	
-	inline virtual bool Visible() override { return UIElement::Visible() && Font(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 private:

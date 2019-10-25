@@ -2,9 +2,20 @@
 
 #include <Math/Math.hpp>
 
+struct Plane {
+	float3 mNormal;
+	float mDistance;
+	
+	inline Plane() : mNormal(float3()), mDistance(0) {}
+	inline Plane(const float3& normal, float distance) : mNormal(normal), mDistance(distance) {}
+	inline Plane(const float3& point, const float3& normal) : mNormal(normal), mDistance(dot(point, normal)) {}
+};
 struct Sphere {
 	float3 mCenter;
 	float mRadius;
+	
+	inline Sphere() : mCenter(float3()), mRadius(0) {}
+	inline Sphere(const float3& center, float radius) : mCenter(center), mRadius(radius) {}
 };
 struct AABB {
 	float3 mCenter;
@@ -174,6 +185,13 @@ struct Ray {
 	inline Ray() : mOrigin(float3()), mDirection(float3(0,0,1)) {};
 	inline Ray(const float3& ro, const float3& rd) : mOrigin(ro), mDirection(rd) {};
 
+	inline float Intersect(const Plane& plane) const {
+		return -(dot(mOrigin, plane.mNormal) + plane.mDistance) / dot(mDirection, plane.mNormal);
+	}
+	inline float Intersect(const float3& planeNormal, const float3& planePoint) const {
+		return -dot(mOrigin - planePoint, planeNormal) / dot(mDirection, planeNormal);
+	}
+
 	inline float2 Intersect(const AABB& aabb) const {
 		float3 m = 1.f / mDirection;
 		float3 n = m * (mOrigin - aabb.mCenter);
@@ -199,10 +217,12 @@ struct Ray {
 	}
 	inline float2 Intersect(const Sphere& sphere) const {
 		float3 pq = mOrigin - sphere.mCenter;
-		float b = dot(pq, mDirection);
-		float d = b * b - 4.f * dot(pq, pq);
-		if (d < 0.f) return float2(-1.f);
+		float a = dot(mDirection, mDirection);
+		float b = 2 * dot(pq, mDirection);
+		float c = dot(pq, pq) - sphere.mRadius * sphere.mRadius;
+		float d = b * b - 4 * a * c;
+		if (d < 0.f) return float2(-1);
 		d = sqrt(d);
-		return -.5f * float2(b + d, b - d);
+		return -.5f * float2(b + d, b - d) / a;
 	}
 };

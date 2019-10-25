@@ -1,5 +1,6 @@
 #include <Scene/Gizmos.hpp>
 #include <Scene/Scene.hpp>
+#include <Input/MouseKeyboardInput.hpp>
 
 using namespace std;
 
@@ -20,7 +21,7 @@ const ::VertexInput Float3VertexInput{
 };
 
 Gizmos::Gizmos(Scene* scene) {
-	mGizmoMaterial = new Material("Gizmo", scene->AssetManager()->LoadShader("Shaders/gizmo.shader"));
+	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.shader");
 	
 	const uint32_t CircleResolution = 64;
 
@@ -54,8 +55,8 @@ Gizmos::Gizmos(Scene* scene) {
 	};
 
 	for (uint32_t i = 0; i < CircleResolution; i++){
-		circleVerts[i].x = cosf(2.f * PI * i / (float)CircleResolution);
-		circleVerts[i].y = sinf(2.f * PI * i / (float)CircleResolution);
+		circleVerts[i].x = cosf(2.f * PI * i / (float)CircleResolution - PI * .5f);
+		circleVerts[i].y = sinf(2.f * PI * i / (float)CircleResolution - PI * .5f);
 		circleVerts[i].z = 0;
 		circleIndices[2*i] = i;
 		circleIndices[2*i+1] = (i+1) % CircleResolution;
@@ -77,21 +78,121 @@ Gizmos::Gizmos(Scene* scene) {
 	mWireSphereMesh = new Mesh("Wire Sphere", scene->DeviceManager(), sphereVerts, sphereIndices, 3*CircleResolution, sizeof(float3), 6*CircleResolution, &Float3VertexInput, VK_INDEX_TYPE_UINT16, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 }
 Gizmos::~Gizmos() {
-	safe_delete(mGizmoMaterial);
+	for (auto& it : mDescriptorSets)
+		safe_delete(it.second);
 	safe_delete(mCubeMesh);
 	safe_delete(mWireCubeMesh);
 	safe_delete(mWireCircleMesh);
 	safe_delete(mWireSphereMesh);
 }
 
-void Gizmos::DrawCube(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color) {
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mGizmoMaterial, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+bool Gizmos::PositionHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const quaternion& plane, float3& position){
+	float radius = .15f;
+	float t = input->mWorldRay.Intersect(Sphere(position, radius)).x;
+	float lt = input->mLastWorldRay.Intersect(Sphere(position, radius)).x;
+
+	DrawWireCircle(commandBuffer, backBufferIndex, position, radius, plane, float4(1,1,1,1));
+	
+	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
+
+	float3 fwd = plane * float3(0,0,1);
+	float3 p  = input->mWorldRay.mOrigin + input->mWorldRay.mDirection * input->mWorldRay.Intersect(fwd, position);
+	float3 lp = input->mLastWorldRay.mOrigin + input->mLastWorldRay.mDirection * input->mLastWorldRay.Intersect(fwd, position);
+
+	position += p - lp;
+
+	return true;
+}
+bool Gizmos::RotationHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const float3& center, quaternion& rotation){
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	if (!layout) return false;
+
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
+
+	float radius = .125f;
+
+	float4 color_xy(.2f,.2f,1,.5f);
+	float4 color_xz(.2f,1,.2f,.5f);
+	float4 color_yz(1,.2f,.2f,.5f);
+
+	float t = input->mWorldRay.Intersect(Sphere(center, radius)).x;
+	float lt = input->mLastWorldRay.Intersect(Sphere(center, radius)).x;
+
+	float3 scale(radius);
+	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
+	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &scale);
+
+	VkDeviceSize vboffset = 0;
+	VkBuffer vb = *mWireCircleMesh->VertexBuffer(commandBuffer->Device());
+	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
+	vkCmdBindIndexBuffer(*commandBuffer, *mWireCircleMesh->IndexBuffer(commandBuffer->Device()), 0, mWireCircleMesh->IndexType());
+
+	quaternion r = rotation;
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_xy);
+	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
+	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+
+	r *= quaternion(float3(0, PI/2, 0));
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_yz);
+	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
+	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+	
+	r *= quaternion(float3(PI/2, 0, 0));
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_xz);
+	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
+	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+
+	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
+
+	float3 p = input->mWorldRay.mOrigin - center + input->mWorldRay.mDirection * t;
+	float3 lp = input->mLastWorldRay.mOrigin - center + input->mLastWorldRay.mDirection * lt;
+
+	float3 rotAxis = cross(normalize(lp), normalize(p));
+	float angle = length(rotAxis);
+	if (fabsf(angle) > .0001f)
+		rotation = quaternion(asinf(angle), rotAxis / angle) * rotation;
+
+	return true;
+}
+
+void Gizmos::DrawBillboard(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const float4& color, Texture* texture, const float4& textureST){
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {"TEXTURED_QUAD"});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	if (!layout) return;
 
-	VkPushConstantRange colorRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Color");
-	VkPushConstantRange posRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Position");
-	VkPushConstantRange rotRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Scale");
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
+	VkPushConstantRange stRange = shader->mPushConstants.at("MainTexture_ST");
+
+	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
+	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
+	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &extents);
+	vkCmdPushConstants(*commandBuffer, layout, stRange.stageFlags, stRange.offset, stRange.size, &textureST);
+
+	if (mDescriptorSets.count(texture) == 0){
+		DescriptorSet* ds = new DescriptorSet(texture->mName + " DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		ds->CreateSampledTextureDescriptor(texture, shader->mDescriptorBindings.at("MainTexture").second.binding);
+		mDescriptorSets.emplace(texture, ds);
+	}
+	VkDescriptorSet ds = *mDescriptorSets.at(texture);
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+	vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
+}
+void Gizmos::DrawCube(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color) {
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	if (!layout) return;
+
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
 
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
 	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
@@ -105,13 +206,14 @@ void Gizmos::DrawCube(CommandBuffer* commandBuffer, uint32_t backBufferIndex, co
 	vkCmdDrawIndexed(*commandBuffer, mCubeMesh->IndexCount(), 1, 0, 0, 0);
 }
 void Gizmos::DrawWireCube  (CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color){
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mGizmoMaterial, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 	if (!layout) return;
 
-	VkPushConstantRange colorRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Color");
-	VkPushConstantRange posRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Position");
-	VkPushConstantRange rotRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Scale");
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange  =  shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange  =  shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
 
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
 	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
@@ -125,15 +227,16 @@ void Gizmos::DrawWireCube  (CommandBuffer* commandBuffer, uint32_t backBufferInd
 	vkCmdDrawIndexed(*commandBuffer, mWireCubeMesh->IndexCount(), 1, 0, 0, 0);
 }
 void Gizmos::DrawWireCircle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const quaternion& rotation, const float4& color){
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mGizmoMaterial, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 	if (!layout) return;
 
 	float3 scale(radius);
 
-	VkPushConstantRange colorRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Color");
-	VkPushConstantRange posRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Position");
-	VkPushConstantRange rotRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Scale");
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
 
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
 	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
@@ -147,16 +250,17 @@ void Gizmos::DrawWireCircle(CommandBuffer* commandBuffer, uint32_t backBufferInd
 	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
 }
 void Gizmos::DrawWireSphere(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const float4& color){
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mGizmoMaterial, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 	if (!layout) return;
 
 	float3 scale(radius);
 	quaternion rotation(0,0,0,1);
 
-	VkPushConstantRange colorRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Color");
-	VkPushConstantRange posRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Position");
-	VkPushConstantRange rotRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = mGizmoMaterial->GetShader(commandBuffer->Device())->mPushConstants.at("Scale");
+	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
+	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
+	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
+	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
 
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
 	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);

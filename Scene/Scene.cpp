@@ -110,19 +110,26 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		lb = new Buffer("Light Buffer", commandBuffer->Device(), vmax(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
+	mActiveLights.clear();
 	if (mLights.size()){
+		uint32_t li = 0;
 		GPULight* lights = (GPULight*)lb->MappedData();
-		for (uint32_t i = 0; i < mLights.size(); i++) {
-			float cosInner = cosf(mLights[i]->InnerSpotAngle());
-			float cosOuter = cosf(mLights[i]->OuterSpotAngle());
+		for (Light* l : mLights) {
+			if (!l->EnabledHierarchy()) continue;
+			mActiveLights.push_back(l);
+			
+			float cosInner = cosf(l->InnerSpotAngle());
+			float cosOuter = cosf(l->OuterSpotAngle());
 
-			lights[i].WorldPosition = mLights[i]->WorldPosition();
-			lights[i].InvSqrRange = 1.f / (mLights[i]->Range() * mLights[i]->Range());
-			lights[i].Color = mLights[i]->Color() * mLights[i]->Intensity();
-			lights[i].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
-			lights[i].SpotAngleOffset = -cosOuter * lights[i].SpotAngleScale;
-			lights[i].Direction = mLights[i]->WorldRotation() * float3(0, 0, -1);
-			lights[i].Type = mLights[i]->Type();
+			lights[li].WorldPosition = l->WorldPosition();
+			lights[li].InvSqrRange = 1.f / (l->Range() * l->Range());
+			lights[li].Color = l->Color() * l->Intensity();
+			lights[li].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
+			lights[li].SpotAngleOffset = -cosOuter * lights[li].SpotAngleScale;
+			lights[li].Direction = l->WorldRotation() * float3(0, 0, -1);
+			lights[li].Type = l->Type();
+
+			li++;
 		}
 	}
 	PROFILER_END;
@@ -157,9 +164,14 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy()) {
 				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
-				r->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+				r->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex);
 				END_CMD_REGION(commandBuffer);
 			}
+
+		for (const auto& p : mPluginManager->Plugins())
+			if (p->mEnabled)
+				p->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex);
+
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
@@ -179,9 +191,9 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	camera->PostRender(commandBuffer, backBufferIndex);
 }
 
-Collider* Scene::Raycast(const Ray& ray, uint32_t mask) {
+Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
 	Collider* closest = nullptr;
-	float ct = -1.f;
+	hitT = -1.f;
 
 	queue<Object*> nodes;
 	for (const auto& o : mObjects) nodes.push(o.get());
@@ -191,9 +203,9 @@ Collider* Scene::Raycast(const Ray& ray, uint32_t mask) {
 			if (Collider* c = dynamic_cast<Collider*>(n)) {
 				if ((c->CollisionMask() & mask) != 0) {
 					float t = ray.Intersect(c->ColliderBounds()).x;
-					if (t > 0 && (t < ct || closest == nullptr)) {
+					if (t > 0 && (t < hitT || closest == nullptr)) {
 						closest = c;
-						ct = t;
+						hitT = t;
 					}
 				}
 			}

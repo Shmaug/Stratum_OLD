@@ -1,4 +1,4 @@
-#include <Interface/TextLabel.hpp>
+#include <Interface/UILabel.hpp>
 
 #include <Interface/UICanvas.hpp>
 
@@ -12,9 +12,9 @@
 
 using namespace std;
 
-TextLabel::TextLabel(const string& name, UICanvas* canvas)
+UILabel::UILabel(const string& name, UICanvas* canvas)
 	: UIElement(name, canvas), mColor(float4(1)), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
-TextLabel::~TextLabel() {
+UILabel::~UILabel() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
 			safe_delete(d.second.mObjectBuffers[i]);
@@ -28,7 +28,7 @@ TextLabel::~TextLabel() {
 	}
 }
 
-uint32_t TextLabel::BuildText(Device* device, Buffer*& buffer) {
+uint32_t UILabel::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
@@ -46,16 +46,19 @@ uint32_t TextLabel::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_END;
 	return glyphCount;
 }
-void TextLabel::Text(const string& text) {
+void UILabel::Text(const string& text) {
 	mText = text;
 	for (auto& d : mDeviceData)
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void TextLabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void UILabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!mVisible || !Font()) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
-	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
+	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {"CANVAS_BOUNDS"});
+
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
+	if (!layout) return;
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
@@ -76,9 +79,6 @@ void TextLabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* 
 		data.mDirty[backBufferIndex] = false;
 	}
 	if (data.mGlyphCount == 0) return;
-
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
-	if (!layout) return;
 
 	// Create object buffers
 	if (!data.mObjectBuffers[backBufferIndex]) {
@@ -117,12 +117,16 @@ void TextLabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* 
 	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
 	objbuffer->WorldToObject = Canvas()->WorldToObject();
 
+	float2 bounds = Canvas()->Extent();
+
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
+	VkPushConstantRange boundsRange = shader->mPushConstants.at("Bounds");
 
 	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
+	vkCmdPushConstants(*commandBuffer, layout, boundsRange.stageFlags, boundsRange.offset, boundsRange.size, &bounds);
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 }

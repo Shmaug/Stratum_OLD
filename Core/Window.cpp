@@ -34,13 +34,13 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 
 	if (win->mTargetCamera) {
 		float2 clip = 2.f * (float2(x,y) / float2(win->ClientRect().extent.width, win->ClientRect().extent.height)) - 1.0f;
-		win->mInput->mCurrent.mMousePointer.mWorldRay.mOrigin = win->mTargetCamera->WorldPosition();
-		win->mInput->mCurrent.mMousePointer.mWorldRay.mDirection = win->mTargetCamera->ClipToWorldRay(float3(clip, 0.f));
+		win->mInput->mMousePointer.mWorldRay.mOrigin = win->mTargetCamera->WorldPosition();
+		win->mInput->mMousePointer.mWorldRay.mDirection = win->mTargetCamera->ClipToWorldRay(float3(clip, 0.f));
 	}
 }
 void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mCurrent.mMousePointer.mAxis[(uint32_t)button] = action == GLFW_PRESS;
+	win->mInput->mMousePointer.mAxis[(uint32_t)button] = action == GLFW_PRESS;
 }
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);

@@ -2,13 +2,14 @@
 #include <thread>
 #include <unordered_map>
 
+#include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/TextRenderer.hpp>
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIImage.hpp>
-#include <Interface/TextLabel.hpp>
-#include <Interface/VerticalLayout.hpp>
+#include <Interface/UILabel.hpp>
+#include <Interface/UILayout.hpp>
 #include <Util/Profiler.hpp>
 
 #include <Plugins/CameraControl/CameraControl.hpp>
@@ -36,6 +37,7 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
+	PLUGIN_EXPORT void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
 private:
 	float mLastClick;
@@ -45,20 +47,26 @@ private:
 
 	vector<shared_ptr<Object>> mLoadedObjects;
 
+	// for editing lights
+	Light* mSelectedLight;
+	vector<Light*> mLights;
+
 	vector<Object*> mObjects;
 	unordered_map<string, Object*> mLoaded;
 	vector<shared_ptr<Material>> mMaterials;
 	Scene* mScene;
 
 	UICanvas* mPanel;
-	vector<UIImage*> mSceneButtons;
-	bool mDragging;
-	TextLabel* mTitleText;
+	UIElement* mFileLoadPanel;
+	UIElement* mLightSettingsPanel;
+	vector<UIImage*> mLoadFileButtons;
+	UILabel* mTitleText;
+	UILabel* mLoadText;
 	UIImage* mLoadBar;
-	TextLabel* mLoadText;
 
 	Shader* mPBRShader;
 
+	bool mDraggingPanel;
 	bool mLoading;
 	float mLoadProgress;
 	std::thread mLoadThread;
@@ -71,7 +79,7 @@ private:
 ENGINE_PLUGIN(MeshViewer)
 
 MeshViewer::MeshViewer()
-	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mPanel(nullptr) {
+	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mSelectedLight(nullptr), mPanel(nullptr), mDraggingPanel(false) {
 	mEnabled = true;
 }
 MeshViewer::~MeshViewer() {
@@ -553,6 +561,7 @@ bool MeshViewer::Init(Scene* scene) {
 	light0->LocalRotation(quaternion(radians(float3(45, 45, 0))));
 	light0->LocalPosition(light0->LocalRotation() * float3(0, 0, -3) + float3(0, 1, 0));
 	mObjects.push_back(light0.get());
+	mLights.push_back(light0.get());
 	mScene->AddObject(light0);
 
 	shared_ptr<Light> light1 = make_shared<Light>("Point");
@@ -562,6 +571,7 @@ bool MeshViewer::Init(Scene* scene) {
 	light1->LocalPosition(-1.25f, 1.5f, -.25f);
 	light1->Color(float3(.5f, .5f, 1.f));
 	mObjects.push_back(light1.get());
+	mLights.push_back(light1.get());
 	mScene->AddObject(light1);
 
 	shared_ptr<Light> light2 = make_shared<Light>("Point");
@@ -571,16 +581,28 @@ bool MeshViewer::Init(Scene* scene) {
 	light2->LocalPosition(1.25f, 1.5f, -.25f);
 	light2->Color(float3(1.f, .5f, .5f));
 	mObjects.push_back(light2.get());
+	mLights.push_back(light2.get());
 	mScene->AddObject(light2);
+
+	shared_ptr<Light> light3 = make_shared<Light>("Sun");
+	light3->Type(Sun);
+	light3->Intensity(.1f);
+	light3->Color(float3(1.f, .95f, .9f));
+	light3->LocalRotation(quaternion(radians(float3(45, -45, 0))));
+	light3->LocalPosition(float3(0, 3, 0));
+	mLights.push_back(light3.get());
+	mObjects.push_back(light3.get());
+	mScene->AddObject(light3);
 	#pragma endregion
 
 	#pragma region Menu
 	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 96);
 	Font* boldfont = mScene->AssetManager()->LoadFont("Assets/OpenSans-Bold.ttf", 96);
 
+	#pragma region Header
 	shared_ptr<UICanvas> panel = make_shared<UICanvas>("MeshViewerPanel", float2(.15f, .25f));
 	panel->RenderQueue(5000);
-	panel->LocalPosition(0.2f, 1.5f, -0.1f);
+	panel->LocalPosition(0.2f, 1.f, -0.1f);
 	mPanel = panel.get();
 
 	shared_ptr<UIImage> panelbg = panel->AddElement<UIImage>("Background", panel.get());
@@ -590,26 +612,30 @@ bool MeshViewer::Init(Scene* scene) {
 	panelbg->Extent(1, 1, 0, 0);
 	panelbg->Outline(true);
 
-	shared_ptr<VerticalLayout> layout = panel->AddElement<VerticalLayout>("VerticalLayout", panel.get());
-	layout->Extent(.9f, 1, 0, 0);
-	layout->Spacing(.0025f);
-
-	shared_ptr<TextLabel> title = panel->AddElement<TextLabel>("Title", panel.get());
+	shared_ptr<UILabel> title = panel->AddElement<UILabel>("Title", panel.get());
 	title->VerticalAnchor(TextAnchor::Minimum);
 	title->Font(boldfont);
+	title->Position(0, 1, 0, -.02f);
 	title->Extent(1, 0, 0, .02f);
 	title->TextScale(.05f);
 	title->Text("MeshViewer");
 	title->mRecieveRaycast = true;
-	layout->AddChild(title.get());
 	mTitleText = title.get();
 	
 	shared_ptr<UIImage> separator = panel->AddElement<UIImage>("Separator", panel.get());
 	separator->Texture(white);
 	separator->Color(float4(0));
-	separator->Extent(1, 0, 0, 0);
 	separator->Outline(true);
-	layout->AddChild(separator.get());
+	separator->Position(0, 1, 0, -.05f);
+	separator->Extent(.95f, 0, 0, 0);
+	#pragma endregion
+
+	#pragma region File loading
+	shared_ptr<UILayout> fileLayout = panel->AddElement<UILayout>("File Loader", panel.get());
+	fileLayout->Extent(.9f, 1, 0, -.025f);
+	fileLayout->Position(0, 0, 0, -.05f);
+	fileLayout->Spacing(.0025f);
+	mFileLoadPanel = fileLayout.get();
 
 	shared_ptr<UIImage> loadBar = panel->AddElement<UIImage>("LoadBar", panel.get());
 	loadBar->Depth(.1f);
@@ -620,7 +646,7 @@ bool MeshViewer::Init(Scene* scene) {
 	loadBar->Outline(false);
 	mLoadBar = loadBar.get();
 
-	shared_ptr<TextLabel> loadText = panel->AddElement<TextLabel>("LoadText", panel.get());
+	shared_ptr<UILabel> loadText = panel->AddElement<UILabel>("LoadText", panel.get());
 	loadText->Depth(.01f);
 	loadText->Font(font);
 	loadText->TextScale(.0175f);
@@ -640,10 +666,10 @@ bool MeshViewer::Init(Scene* scene) {
 		bg->Extent(1, 0, 0, .015f);
 		bg->Outline(false);
 		bg->mRecieveRaycast = true;
-		layout->AddChild(bg.get());
-		mSceneButtons.push_back(bg.get());
+		fileLayout->AddChild(bg.get());
+		mLoadFileButtons.push_back(bg.get());
 
-		shared_ptr<TextLabel> btn = panel->AddElement<TextLabel>(f.string(), panel.get());
+		shared_ptr<UILabel> btn = panel->AddElement<UILabel>(f.string(), panel.get());
 		btn->VerticalAnchor(TextAnchor::Middle);
 		btn->HorizontalAnchor(TextAnchor::Minimum);
 		btn->Font(font);
@@ -653,7 +679,88 @@ bool MeshViewer::Init(Scene* scene) {
 		bg->AddChild(btn.get());
 	}
 
-	layout->UpdateLayout();
+	fileLayout->UpdateLayout();
+	#pragma endregion
+
+	#pragma region Light editor
+	shared_ptr<UILayout> lightLayout = panel->AddElement<UILayout>("Light Editor", panel.get());
+	lightLayout->Extent(.9f, 1, 0, -.025f);
+	lightLayout->Position(0, 0, 0, -.05f);
+	lightLayout->Spacing(.0015f);
+	mLightSettingsPanel = lightLayout.get();
+
+	shared_ptr<UILabel> colorLabel = panel->AddElement<UILabel>("Color Label", panel.get());
+	colorLabel->VerticalAnchor(TextAnchor::Middle);
+	colorLabel->HorizontalAnchor(TextAnchor::Minimum);
+	colorLabel->Font(font);
+	colorLabel->Extent(.98f, 0, 0, .01f);
+	colorLabel->TextScale(.02f);
+	colorLabel->Text("Color");
+	lightLayout->AddChild(colorLabel.get());
+
+
+	shared_ptr<UILabel> intensityLabel = panel->AddElement<UILabel>("Intensity Label", panel.get());
+	intensityLabel->VerticalAnchor(TextAnchor::Middle);
+	intensityLabel->HorizontalAnchor(TextAnchor::Minimum);
+	intensityLabel->Font(font);
+	intensityLabel->Extent(.98f, 0, 0, .01f);
+	intensityLabel->TextScale(.02f);
+	intensityLabel->Text("Intensity");
+	lightLayout->AddChild(intensityLabel.get());
+	
+
+	shared_ptr<UILabel> typeLabel = panel->AddElement<UILabel>("Type Label", panel.get());
+	typeLabel->VerticalAnchor(TextAnchor::Middle);
+	typeLabel->HorizontalAnchor(TextAnchor::Minimum);
+	typeLabel->Font(font);
+	typeLabel->Extent(.98f, 0, 0, .01f);
+	typeLabel->TextScale(.02f);
+	typeLabel->Text("Type");
+	lightLayout->AddChild(typeLabel.get());
+
+
+	shared_ptr<UILabel> radiusLabel = panel->AddElement<UILabel>("Radius Label", panel.get());
+	radiusLabel->VerticalAnchor(TextAnchor::Middle);
+	radiusLabel->HorizontalAnchor(TextAnchor::Minimum);
+	radiusLabel->Font(font);
+	radiusLabel->Extent(.98f, 0, 0, .01f);
+	radiusLabel->TextScale(.02f);
+	radiusLabel->Text("Radius");
+	lightLayout->AddChild(radiusLabel.get());
+
+
+	shared_ptr<UILabel> rangeLabel = panel->AddElement<UILabel>("Range Label", panel.get());
+	rangeLabel->VerticalAnchor(TextAnchor::Middle);
+	rangeLabel->HorizontalAnchor(TextAnchor::Minimum);
+	rangeLabel->Font(font);
+	rangeLabel->Extent(.98f, 0, 0, .01f);
+	rangeLabel->TextScale(.02f);
+	rangeLabel->Text("Range");
+	lightLayout->AddChild(rangeLabel.get());
+
+
+	shared_ptr<UILabel> outerAngleLabel = panel->AddElement<UILabel>("Outer Angle Label", panel.get());
+	outerAngleLabel->VerticalAnchor(TextAnchor::Middle);
+	outerAngleLabel->HorizontalAnchor(TextAnchor::Minimum);
+	outerAngleLabel->Font(font);
+	outerAngleLabel->Extent(.98f, 0, 0, .01f);
+	outerAngleLabel->TextScale(.02f);
+	outerAngleLabel->Text("Outer Angle");
+	lightLayout->AddChild(outerAngleLabel.get());
+
+
+	shared_ptr<UILabel> innerAngleLabel = panel->AddElement<UILabel>("Inner Angle Label", panel.get());
+	innerAngleLabel->VerticalAnchor(TextAnchor::Middle);
+	innerAngleLabel->HorizontalAnchor(TextAnchor::Minimum);
+	innerAngleLabel->Font(font);
+	innerAngleLabel->Extent(.98f, 0, 0, .01f);
+	innerAngleLabel->TextScale(.02f);
+	innerAngleLabel->Text("Inner Angle");
+	lightLayout->AddChild(innerAngleLabel.get());
+
+	lightLayout->UpdateLayout();
+	lightLayout->mVisible = false;
+	#pragma endregion
 
 	mScene->AddObject(panel);
 	mObjects.push_back(panel.get());
@@ -689,23 +796,24 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		}
 	}
 
-	if (mDragging) {
+	if (mDraggingPanel) {
 		if (!input->MouseButtonDown(GLFW_MOUSE_BUTTON_LEFT))
-			mDragging = false;
+			mDraggingPanel = false;
 		else
 			mPanel->LocalPosition() += mScene->Cameras()[0]->WorldRotation() * float3(input->CursorDelta() * float2(1, -1) * .1f, 0);
 	} else {
 		const Ray& ray = input->GetPointer(0)->mWorldRay;
-		Collider* hit = mScene->Raycast(ray);
+		float hitT;
+		Collider* hit = mScene->Raycast(ray, hitT);
 		if (hit && hit == mPanel) {
 			UIElement* elem = mPanel->Raycast(ray);
 
 			if (elem == mTitleText) {
 				if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT))
-					mDragging = true;
+					mDraggingPanel = true;
 			}
 
-			for (UIImage* i : mSceneButtons) {
+			for (UIImage* i : mLoadFileButtons) {
 				if (!mLoading && i == elem) {
 					i->Color(float4(1,1,1,.25f));
 					i->Outline(true);
@@ -717,14 +825,88 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 				}
 			}
 		}
+
+		// Toggle menu on/off
+		if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
+			if (frameTime.mTotalTime - mLastClick < .2f) {
+				mPanel->mEnabled = !mPanel->mEnabled;
+				const InputPointer* ptr = input->GetPointer(0);
+				mPanel->LocalPosition(ptr->mWorldRay.mOrigin + ptr->mWorldRay.mDirection * 1.5f);
+				mPanel->LocalRotation(mScene->Cameras()[0]->WorldRotation());
+			}
+			mLastClick = frameTime.mTotalTime;
+		}
 	}
 
-	if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
-		if (frameTime.mTotalTime - mLastClick < .2f) {
-			const InputPointer* ptr = input->GetPointer(0);
-			mPanel->LocalPosition(ptr->mWorldRay.mOrigin + ptr->mWorldRay.mDirection * 1.5f);
-			mPanel->LocalRotation(mScene->Cameras()[0]->WorldRotation());
+}
+
+void MeshViewer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+
+	const Ray& ray = input->GetPointer(0)->mWorldRay;
+	float hitT;
+	Collider* hit = mScene->Raycast(ray, hitT);
+
+	Gizmos* gizmos = mScene->Gizmos();
+
+	bool change = input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
+
+	// manipulate selection
+	if (mSelectedLight) {
+		mLightSettingsPanel->mVisible = true;
+		mFileLoadPanel->mVisible = false;
+		switch (mSelectedLight->Type()) {
+			case LightType::Spot:
+				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(commandBuffer, backBufferIndex,
+				mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
+					mSelectedLight->Range() * tanf(mSelectedLight->InnerSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(commandBuffer, backBufferIndex,
+				mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
+					mSelectedLight->Range() * tanf(mSelectedLight->OuterSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
+				break;
+
+			case LightType::Point:
+				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Range(), float4(mSelectedLight->Color(), .1f));
+				break;
+			}
+
+		if (input->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+			quaternion r = mSelectedLight->WorldRotation();
+			if (mScene->Gizmos()->RotationHandle(commandBuffer, backBufferIndex, input->GetPointer(0), mSelectedLight->WorldPosition(), r)) {
+				mSelectedLight->LocalRotation(r);
+				change = false;
+			}
+		}else{
+			float3 p = mSelectedLight->WorldPosition();
+			if (mScene->Gizmos()->PositionHandle(commandBuffer, backBufferIndex, input->GetPointer(0), camera->WorldRotation(), p)) {
+				mSelectedLight->LocalPosition(p);
+				change = false;
+			}
 		}
-		mLastClick = frameTime.mTotalTime;
+	}else{
+		mLightSettingsPanel->mVisible = false;
+		mFileLoadPanel->mVisible = true;
+	}
+
+	// change selection
+	Light* sl = mSelectedLight;
+	if (change) mSelectedLight = nullptr;
+	for (Light* light : mLights) {
+		float lt = ray.Intersect(Sphere(light->WorldPosition(), .09f)).x;
+		bool hover = lt > 0 && (hitT < 0 || lt < hitT);
+		if (hover) hitT = lt;
+
+		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
+		gizmos->DrawBillboard(commandBuffer, backBufferIndex, light->WorldPosition(), hover && light != sl ? .09f : .075f, float4(col, 1), 
+			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
+
+		if (hover){
+			if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
+				light->mEnabled = !light->mEnabled;
+			if (change)
+				mSelectedLight = light;
+		}
 	}
 }
