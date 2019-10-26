@@ -347,6 +347,8 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 					vertices.data(), indices, (uint32_t)vertices.size(), (uint32_t)sizeof(Vertex), indexCount, &Vertex::VertexInput, indexType);
 			}
 
+			// TODO: load weights...
+
 			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
 			nodeobj.get()->AddChild(meshRenderer.get());
 			meshRenderer->Mesh(mesh);

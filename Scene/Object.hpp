@@ -31,6 +31,7 @@ public:
 	inline float3 LocalScale() { UpdateTransform(); return mLocalScale; }
 	inline float3 WorldScale() { UpdateTransform(); return mWorldScale; }
 
+	inline float4x4 ObjectToParent() { UpdateTransform(); return mObjectToParent; }
 	inline float4x4 ObjectToWorld() { UpdateTransform(); return mObjectToWorld; }
 	inline float4x4 WorldToObject() { UpdateTransform(); return mWorldToObject; }
 
@@ -62,6 +63,7 @@ private:
 	float3 mLocalScale;
 	float3 mWorldScale;
 	AABB mBounds;
+	float4x4 mObjectToParent;
 	float4x4 mObjectToWorld;
 	float4x4 mWorldToObject;
 

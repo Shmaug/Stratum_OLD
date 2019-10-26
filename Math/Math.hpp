@@ -1208,6 +1208,21 @@ struct quaternion {
 		return *this;
 	}
 
+	inline quaternion operator +(const quaternion& s) const {
+		return quaternion(
+			x + s.x,
+			y + s.y,
+			z + s.z,
+			w + s.w);
+	}
+	inline quaternion operator -(const quaternion& s) const {
+		return quaternion(
+			x - s.x,
+			y - s.y,
+			z - s.z,
+			w - s.w);
+	}
+
 	inline quaternion operator *(const quaternion& s) const {
 		return quaternion(
 			w * s.x + s.w * x + y * s.z - s.y * z,
@@ -1612,6 +1627,10 @@ inline quaternion inverse(const quaternion& q) {
 	return quaternion(-q.x, -q.y, -q.z, q.w) * s;
 }
 
+inline quaternion normalize(const quaternion& q){
+	return q / length(q.xyzw);
+}
+
 inline float2x2 transpose(const float2x2& m) {
 	return float2x2(
 		m.c1[0], m.c1[1],
@@ -1851,4 +1870,25 @@ inline float3 lerp(const float3& a, const float3& b, float t) {
 }
 inline float4 lerp(const float4& a, const float4& b, float t) {
 	return a + (b - a) * t;
+}
+inline quaternion lerp(const quaternion& a, const quaternion& b, float t) {
+	return a + (b - a) * t;
+}
+inline quaternion slerp(quaternion v0, quaternion v1, float t){
+	float d = dot(v0.xyz, v1.xyz);
+	if (d < 0){
+		v1.xyzw = -v1.xyzw;
+		d = -d;
+	}
+
+    if (d > .9995) return lerp(v0, v1, t);
+
+    float theta_0 = acosf(d);
+    float theta = theta_0*t;
+    float sin_theta = sin(theta);
+    float sin_theta_0 = sin(theta_0);
+
+    float s0 = cosf(theta) - d * sin_theta / sin_theta_0;
+    float s1 = sin_theta / sin_theta_0;
+	return v0 * s0 + v1 * s1;
 }

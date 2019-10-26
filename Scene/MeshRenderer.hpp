@@ -18,12 +18,12 @@ public:
 	ENGINE_EXPORT MeshRenderer(const std::string& name);
 	ENGINE_EXPORT ~MeshRenderer();
 
-	inline void Mesh(::Mesh* m) { mMesh = m; }
-	inline void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }
-	inline ::Mesh* Mesh() const { return mMesh.index() == 0 ? std::get<::Mesh*>(mMesh) : std::get<std::shared_ptr<::Mesh>>(mMesh).get(); }
+	inline virtual void Mesh(::Mesh* m) { mMesh = m; Dirty(); }
+	inline virtual void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }
+	inline virtual ::Mesh* Mesh() const { return mMesh.index() == 0 ? std::get<::Mesh*>(mMesh) : std::get<std::shared_ptr<::Mesh>>(mMesh).get(); }
 
-	inline std::shared_ptr<::Material> Material() const { return mMaterial; }
-	ENGINE_EXPORT void Material(std::shared_ptr<::Material> m);
+	inline virtual std::shared_ptr<::Material> Material() const { return mMaterial; }
+	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
@@ -41,19 +41,18 @@ private:
 		bool* mUniformDirty;
 		Buffer** mBoundLightBuffers;
 	};
-
+	
+	std::unordered_map<Device*, DeviceData> mDeviceData;
 	uint32_t mCollisionMask;
+
+protected:
+	std::shared_ptr<::Material> mMaterial;
 	uint8_t mNeedsObjectData;
 	uint8_t mNeedsLightData;
 	VkPushConstantRange mLightCountRange;
 
 	OBB mOBB;
 	AABB mAABB;
-
 	std::variant<::Mesh*, std::shared_ptr<::Mesh>> mMesh;
-	std::shared_ptr<::Material> mMaterial;
-
-	std::unordered_map<Device*, DeviceData> mDeviceData;
-protected:
 	ENGINE_EXPORT virtual bool UpdateTransform() override;
 };
