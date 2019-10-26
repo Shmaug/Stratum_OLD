@@ -6,6 +6,7 @@ set(VKCAVE_HOME ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "Directory of VkCave")
 include(vkcave.cmake)
 
 add_library(Engine SHARED
+	"Content/Animation.cpp"
 	"Content/AssetManager.cpp"
 	"Content/Font.cpp"
 	"Content/Material.cpp"
@@ -36,6 +37,7 @@ add_library(Engine SHARED
 	"Scene/MeshRenderer.cpp"
 	"Scene/Scene.cpp"
 	"Scene/Object.cpp"
+	"Scene/SkinnedMeshRenderer.cpp"
 	"Scene/TextRenderer.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Profiler.cpp" )

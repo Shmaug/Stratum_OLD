@@ -19,14 +19,14 @@ Object::~Object() {
 bool Object::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
-	mObjectToWorld = float4x4::Translate(mLocalPosition) * float4x4(mLocalRotation) * float4x4::Scale(mLocalScale);
+	mObjectToParent = float4x4::Translate(mLocalPosition) * float4x4(mLocalRotation) * float4x4::Scale(mLocalScale);
 
 	if (mParent) {
-		mObjectToWorld = mParent->ObjectToWorld() * mObjectToWorld;
-
+		mObjectToWorld = mParent->ObjectToWorld() * mObjectToParent;
 		mWorldPosition = (mParent->mObjectToWorld * float4(mLocalPosition, 1.f)).xyz;
 		mWorldRotation = mParent->mWorldRotation * mLocalRotation;
 	} else {
+		mObjectToWorld = mObjectToParent;
 		mWorldPosition = mLocalPosition;
 		mWorldRotation = mLocalRotation;
 	}
