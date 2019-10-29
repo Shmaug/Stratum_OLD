@@ -1174,10 +1174,8 @@ struct quaternion {
 		w = c.x * c.y * c.z + s.x * s.y * s.z;
 	};
 	inline quaternion(float angle, const float3& axis) {
-		float sn = sin(angle * .5f);
-    	float cs = cos(angle * .5f);
-		xyz = axis * sn;
-		w = cs;
+		xyz = axis * sinf(angle * .5f);
+		w = cosf(angle * .5f);
 	};
 	// from-to rotation
 	// https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another

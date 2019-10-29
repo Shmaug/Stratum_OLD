@@ -119,12 +119,11 @@ uint32_t GetDepth(aiNode* node) {
 	return d;
 }
 
-
-shared_ptr<Bone> AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, shared_ptr<Bone>>& boneMap, float scale) {
+Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, Bone*>& boneMap, float scale) {
 	if (node == root) return nullptr;
 	if (boneMap.count(node))
 		return boneMap.at(node);
-
+	
 	float4x4 mat = ConvertMatrix(node->mTransformation);
 	Bone* parent = nullptr;
 
@@ -135,12 +134,9 @@ shared_ptr<Bone> AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, 
 			mat = mat * ConvertMatrix(p->mTransformation);
 			p = p->mParent;
 		}
-		if (p) parent = AddBone(rig, p, scene, root, boneMap, scale).get();
+		// parent transform is the first non-empty parent bone
+		if (p) parent = AddBone(rig, p, scene, root, boneMap, scale);
 	}
-
-	auto bone = make_shared<Bone>(node->mName.C_Str(), (uint32_t)rig.size());
-	boneMap.emplace(node, bone);
-	rig.push_back(bone.get());
 
 	quaternion q;
 	q.x = mat.c3.y - mat.c2.z;
@@ -149,11 +145,14 @@ shared_ptr<Bone> AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, 
 	q.w = sqrtf(1.f + mat.c1.x + mat.c2.y + mat.c3.z) * .5f;
 	q.xyz /= 4.f * q.w;
 
+	Bone* bone = new Bone(node->mName.C_Str(), (uint32_t)rig.size());
+	boneMap.emplace(node, bone);
+	rig.push_back(bone);
 	bone->LocalPosition(mat.c4.xyz * scale);
 	bone->LocalRotation(q);
 	bone->LocalScale(length(mat.c1.xyz), length(mat.c2.xyz), length(mat.c3.xyz));
 
-	parent->AddChild(bone.get());
+	if (parent) parent->AddChild(bone);
 	return bone;
 }
 
@@ -162,8 +161,10 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 	: mName(name), mVertexInput(nullptr), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
-	if (!scene) throw runtime_error("Failed to load " + filename);
-
+	if (!scene) {
+		cerr << "Failed to open " << filename <<  ": " << aiGetErrorString() << endl;
+		return;
+	}
 	vector<Vertex> vertices;
 	vector<AIWeight> weights;
 	unordered_map<string, aiBone*> uniqueBones;
@@ -180,6 +181,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 	for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
 		const aiMesh* mesh = scene->mMeshes[i];
 		uint32_t baseIndex = (uint32_t)vertices.size();
+		
+		if ((mesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) == 0) continue;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
 			Vertex vertex = {};
@@ -207,11 +210,6 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 			weights.push_back(AIWeight());
 		}
 
-		if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_POINT)
-			mTopology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-		else if (mesh->mPrimitiveTypes & aiPrimitiveType::aiPrimitiveType_LINE)
-			mTopology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-
 		if (use32bit)
 			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 				const aiFace& f = mesh->mFaces[i];
@@ -238,119 +236,122 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 		if (mesh->HasBones())
 			for (uint16_t c = 0; c < mesh->mNumBones; c++) {
 				aiBone* bone = mesh->mBones[c];
-				for (unsigned int i = 0; i < bone->mNumWeights; i++) {
+				for (uint32_t i = 0; i < bone->mNumWeights; i++) {
 					uint32_t index = baseIndex + bone->mWeights[i].mVertexId;
 					weights[index].SetWeight(bone->mName.C_Str(), (float)bone->mWeights[i].mWeight);
 				}
 
 				if (uniqueBones.count(bone->mName.C_Str()) == 0)
 					uniqueBones.emplace(bone->mName.C_Str(), bone);
-		}
+			}
+	}
 
-		if (uniqueBones.size()) {
-			unordered_map<aiNode*, shared_ptr<Bone>> boneMap;
+	if (uniqueBones.size()) {
+		unordered_map<aiNode*, Bone*> boneMap;
 
-			// find animation root
-			aiNode* root = scene->mRootNode;
-			unsigned int rootDepth = 0xFFFF;
-			for (auto& b : uniqueBones) {
-				aiNode* node = scene->mRootNode->FindNode(b.second->mName);
-				while (node&& node->mName == aiString(""))
+		// find animation root
+		aiNode* root = scene->mRootNode;
+		uint32_t rootDepth = 0xFFFF;
+		for (auto& b : uniqueBones) {
+			aiNode* node = scene->mRootNode->FindNode(b.second->mName);
+			while (node&& node->mName == aiString(""))
+				node = node->mParent;
+			uint32_t d = GetDepth(node);
+			if (d < rootDepth) {
+				rootDepth = d;
+
+				while (node->mParent&& node->mParent->mName == aiString(""))
 					node = node->mParent;
-				unsigned int d = GetDepth(node);
-				if (d < rootDepth) {
-					rootDepth = d;
-
-					while (node->mParent&& node->mParent->mName == aiString(""))
-						node = node->mParent;
-					root = node->mParent;
-				}
-			}
-
-			mRig = make_shared<AnimationRig>();
-
-			// compute bone matrices
-			unordered_map<string, unsigned int> bonesByName;
-			for (auto& b : uniqueBones) {
-				aiNode* node = scene->mRootNode->FindNode(b.second->mName);
-				shared_ptr<Bone> bone = AddBone(*mRig, node, scene, root, boneMap, scale);
-				if (!bone) continue;
-				BoneTransform bt;
-				bt.FromMatrix(ConvertMatrix(b.second->mOffsetMatrix), scale);
-				bone->mBindOffset = bt.ToMatrix();
-				bonesByName.emplace(b.second->mName.C_Str(), bone->mBoneIndex);
-			}
-
-			float4x4 rootTransform(1.f);
-			while (root) {
-				rootTransform = rootTransform * ConvertMatrix(root->mTransformation);
-				root = root->mParent;
-			}
-			BoneTransform roott;
-			roott.FromMatrix(rootTransform, scale);
-
-			for (auto& b : *mRig) {
-				if (!b->Parent()) {
-					BoneTransform bt;
-					bt.mPosition = b->LocalPosition();
-					bt.mRotation = b->LocalRotation();
-					bt.mScale = b->LocalScale();
-					bt = roott * bt;
-					b->LocalPosition(bt.mPosition);
-					b->LocalRotation(bt.mRotation);
-					b->LocalScale(bt.mScale);
-				}
-			}
-
-			for (uint32_t i = 0; i < scene->mNumAnimations; i++) {
-				const aiAnimation* anim = scene->mAnimations[i];
-				mAnimations.emplace(anim->mName.C_Str(), new Animation(anim, bonesByName, scale));
-			}
-
-			vector<VertexWeight> vertexWeights(vertices.size());
-			for (uint32_t i = 0; i < vertices.size(); i++) {
-				weights[i].NormalizeWeights();
-				for (unsigned int j = 0; j < 4; j++) {
-					if (bonesByName.count(weights[i].bones[j])) {
-						vertexWeights[i].indices[j] = bonesByName.at(weights[i].bones[j]);
-						vertexWeights[i].weights[j] = weights[i].weights[j];
-					}
-				}
-			}
-
-			for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
-				Device* device = devices->GetDevice(i);
-				DeviceData& d = mDeviceData[device];
-				d.mWeightBuffer = make_shared<Buffer>(mName + " Weights", device, vertexWeights.size() * sizeof(VertexWeight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+				root = node->mParent;
 			}
 		}
 
-		if (use32bit) {
-			mIndexCount = (uint32_t)indices32.size();
-			mIndexType = VK_INDEX_TYPE_UINT32;
-		} else {
-			mIndexCount = (uint32_t)indices16.size();
-			mIndexType = VK_INDEX_TYPE_UINT16;
+		mRig = make_shared<AnimationRig>();
+
+		// compute bone matrices and bonesByName
+		unordered_map<string, uint32_t> bonesByName;
+		for (auto& b : uniqueBones) {
+			aiNode* node = scene->mRootNode->FindNode(b.second->mName);
+			Bone* bone = AddBone(*mRig, node, scene, root, boneMap, scale);
+			if (!bone) continue;
+			BoneTransform bt;
+			bt.FromMatrix(ConvertMatrix(b.second->mOffsetMatrix), scale);
+			bone->mBindOffset = bt.ToMatrix();
+			bonesByName.emplace(b.second->mName.C_Str(), bone->mBoneIndex);
 		}
 
-		aiReleaseImport(scene);
+		float4x4 rootTransform(1.f);
+		while (root) {
+			rootTransform = rootTransform * ConvertMatrix(root->mTransformation);
+			root = root->mParent;
+		}
+		BoneTransform roott;
+		roott.FromMatrix(rootTransform, scale);
 
-		mVertexCount = (uint32_t)vertices.size();
-		mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
-		mVertexInput = &Vertex::VertexInput;
+		for (auto& b : *mRig) {
+			if (!b->Parent()) {
+				BoneTransform bt {
+					b->LocalPosition(),
+					b->LocalRotation(),
+					b->LocalScale()
+				};
+				bt = roott * bt;
+				b->LocalPosition(bt.mPosition);
+				b->LocalRotation(bt.mRotation);
+				b->LocalScale(bt.mScale);
+			}
+		}
+
+		for (uint32_t i = 0; i < scene->mNumAnimations; i++) {
+			const aiAnimation* anim = scene->mAnimations[i];
+			mAnimations.emplace(anim->mName.C_Str(), new Animation(anim, bonesByName, scale));
+		}
+
+		vector<VertexWeight> vertexWeights(vertices.size());
+		for (uint32_t i = 0; i < vertices.size(); i++) {
+			weights[i].NormalizeWeights();
+			for (unsigned int j = 0; j < 4; j++) {
+				if (bonesByName.count(weights[i].bones[j])) {
+					vertexWeights[i].indices[j] = bonesByName.at(weights[i].bones[j]);
+					vertexWeights[i].weights[j] = weights[i].weights[j];
+				}
+			}
+		}
 
 		for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
 			Device* device = devices->GetDevice(i);
 			DeviceData& d = mDeviceData[device];
-			d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-			if (use32bit)
-				d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices32.data(), sizeof(uint32_t) * indices32.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-			else
-				d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+			d.mWeightBuffer = make_shared<Buffer>(mName + " Weights", device, vertexWeights.size() * sizeof(VertexWeight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		}
 	}
+	
+	if (use32bit) {
+		mIndexCount = (uint32_t)indices32.size();
+		mIndexType = VK_INDEX_TYPE_UINT32;
+	} else {
+		mIndexCount = (uint32_t)indices16.size();
+		mIndexType = VK_INDEX_TYPE_UINT16;
+	}
 
-	printf("Loaded %s: %d verts %d tris / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
+	aiReleaseImport(scene);
+
+	mVertexCount = (uint32_t)vertices.size();
+	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
+	mVertexInput = &Vertex::VertexInput;
+
+	for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
+		Device* device = devices->GetDevice(i);
+		DeviceData& d = mDeviceData[device];
+		if (!uniqueBones.size())
+			d.mWeightBuffer = nullptr;
+		d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | (uniqueBones.size() ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0));
+		if (use32bit)
+			d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices32.data(), sizeof(uint32_t) * indices32.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+		else
+			d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	}
+
+	printf("Loaded %s / %d verts %d tris / %d bones / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mRig ? (int)mRig->size() : (int)0, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
 }
 Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
 	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
@@ -445,6 +446,8 @@ Mesh* Mesh::CreateCube(const string& name, DeviceManager* devices, float r) {
 }
 
 Mesh::~Mesh() {
+	for (Bone* b : *mRig)
+		safe_delete(b);
 	for (auto it : mAnimations)
 		safe_delete(it.second);
 }

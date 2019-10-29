@@ -4,7 +4,7 @@
 using namespace std;
 
 Object::Object(const string& name)
-	: mName(name), mParent(nullptr),
+	: mName(name), mParent(nullptr), mScene(nullptr),
 	mLocalPosition(float3()), mLocalRotation(quaternion(0, 0, 0, 1)), mLocalScale(float3(1)),
 	mWorldPosition(float3()), mWorldRotation(quaternion(0, 0, 0, 1)),
 	mObjectToWorld(float4x4(1)), mWorldToObject(float4x4(1)), mTransformDirty(true), mEnabled(true) {
@@ -68,19 +68,27 @@ void Object::RemoveChild(Object* c) {
 	c->Dirty();
 }
 
-void Object::DirtyNoHierarchy() {
-	mTransformDirty = true;
-	for (const auto& o : mChildren)
-		o->DirtyNoHierarchy();
-}
 void Object::Dirty() {
 	mTransformDirty = true;
-	for (const auto& o : mChildren)
-		o->DirtyNoHierarchy();
+	queue<Object*> objs;
+	for (Object* c : mChildren) {
+		c->mTransformDirty = true;
+		for (Object* o : c->mChildren)
+			if (o == this) cerr << "Loop in heirarchy! " << c->mName << " -> " << mName << endl;
+			else objs.push(o);
+	}
+	while (!objs.empty()) {
+		Object* c = objs.front();
+		objs.pop();
+		c->mTransformDirty = true;
+		for (Object* o : c->mChildren)
+			if (o == this) cerr << "Loop in heirarchy! " << c->mName << " -> " << mName << endl;
+			else objs.push(o);
+	}
 	
 	mHierarchyBoundsDirty = true;
 	Object* p = mParent;
-	while (p){
+	while (p) {
 		p->mHierarchyBoundsDirty = true;
 		p = p->mParent;
 	}

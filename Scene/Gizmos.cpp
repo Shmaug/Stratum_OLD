@@ -159,6 +159,11 @@ bool Gizmos::RotationHandle(CommandBuffer* commandBuffer, uint32_t backBufferInd
 	return true;
 }
 
+void Gizmos::DrawLine(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& p0, const float3& p1, const float4& color){
+	float3 v = p1 - p0;
+	float l = length(v);
+	DrawWireCube(commandBuffer, backBufferIndex, (p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(float3(0,0,1), v / l), color);
+}
 void Gizmos::DrawBillboard(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const float4& color, Texture* texture, const float4& textureST){
 	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {"TEXTURED_QUAD"});
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
