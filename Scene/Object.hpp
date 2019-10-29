@@ -73,8 +73,6 @@ private:
 	Object* mParent;
 	std::vector<Object*> mChildren;
 
-	ENGINE_EXPORT void DirtyNoHierarchy();
-
 protected:
 	ENGINE_EXPORT virtual void Dirty();
 	ENGINE_EXPORT virtual bool UpdateTransform();

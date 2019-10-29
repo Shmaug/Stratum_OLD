@@ -47,11 +47,13 @@ void SkinnedMeshRenderer::Mesh(::Mesh* mesh, Object* rigRoot) {
         mRigRoot = rigRoot;
 
         if (mesh) {
-            const AnimationRig& meshRig = *mesh->Rig();
+            AnimationRig& meshRig = *mesh->Rig();
 
-            mRig.resize(mRig.size());
+            mRig.resize(meshRig.size());
             for (uint32_t i = 0; i < meshRig.size(); i++) {
-                mRig[i] = new Bone(meshRig[i]->mName, i);
+				auto bone = make_shared<Bone>(meshRig[i]->mName, i);
+				Scene()->AddObject(bone);
+                mRig[i] = bone.get();
                 mRig[i]->LocalPosition(meshRig[i]->LocalPosition());
                 mRig[i]->LocalRotation(meshRig[i]->LocalRotation());
                 mRig[i]->LocalScale(meshRig[i]->LocalScale());
@@ -71,15 +73,7 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	::Material* material = materialOverride ? materialOverride : mMaterial.get();
-	if (!material) return;
-
-	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), m->Topology());
-	if (!layout) return;
-	auto shader = material->GetShader(commandBuffer->Device());
-
+void SkinnedMeshRenderer::PreRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mObjectBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
@@ -98,19 +92,20 @@ void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, Comma
 	}
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
+	::Mesh* m = Mesh();
     if (data.mMesh != m) {
         data.mMesh = m;
         safe_delete(data.mVertices[backBufferIndex]);
     }
 
     if (!data.mPoseBuffers[backBufferIndex]){
-        data.mPoseBuffers[backBufferIndex] = new Buffer(mName + " PoseBuffer", commandBuffer->Device(), mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        data.mPoseBuffers[backBufferIndex] = new Buffer(mName + " PoseBuffer", commandBuffer->Device(), mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         data.mPoseBuffers[backBufferIndex]->Map();
     }
     if (!data.mVertices[backBufferIndex]){
-        data.mVertices[backBufferIndex] = new Buffer(mName + " VertexBuffer", commandBuffer->Device(), m->VertexBuffer(commandBuffer->Device())->Size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        data.mVertices[backBufferIndex] = new Buffer(mName + " VertexBuffer", commandBuffer->Device(), m->VertexBuffer(commandBuffer->Device())->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         VkBufferCopy region = {};
-        region.size = VK_WHOLE_SIZE;
+        region.size = m->VertexBuffer(commandBuffer->Device())->Size();
         vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(commandBuffer->Device()), *data.mVertices[backBufferIndex], 1, &region);
     }
 
@@ -123,6 +118,18 @@ void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, Comma
 		for (uint32_t i = 0; i < mRig.size(); i++)
 			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
     }
+}
+
+void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+	::Material* material = materialOverride ? materialOverride : mMaterial.get();
+	if (!material) return;
+
+	::Mesh* m = Mesh();
+	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), m->Topology());
+	if (!layout) return;
+	auto shader = material->GetShader(commandBuffer->Device());
+
+	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
 	if (mNeedsObjectData == 2)
         mNeedsObjectData = (uint8_t)shader->mDescriptorBindings.count("Object");
@@ -170,4 +177,14 @@ void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, Comma
 	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
 	vkCmdBindIndexBuffer(*commandBuffer, *m->IndexBuffer(commandBuffer->Device()), 0, m->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, 0, 0, 0);
+}
+
+void SkinnedMeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	if (mRig.size()){
+		for (auto b : mRig) {
+			Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));
+			if (Bone* parent = dynamic_cast<Bone*>(b->Parent()))
+				Scene()->Gizmos()->DrawLine(commandBuffer, backBufferIndex, b->WorldPosition(), parent->WorldPosition(), float4(0.25f, 1.f, 0.25f, 1.f));
+		}
+	}
 }

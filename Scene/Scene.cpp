@@ -146,6 +146,10 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
 			p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
+	for (const auto& r : mRenderers)
+		if (r->Visible()) {
+			r->PreRender(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+		}
 	PROFILER_END;
 
 	PROFILER_BEGIN("Draw");
