@@ -8,7 +8,7 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0) {
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0), mTriangleCount(0) {
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
@@ -89,7 +89,11 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		mFrameTimeAccum -= 1.f;
 		mFrameCount = 0;
 		char buf[256];
-		sprintf(buf, "%.2f fps\n", mFps);
+		sprintf(buf, "%.2f fps | %d tris\n", mFps, mTriangleCount);
 		mFpsText->Text(buf);
 	}
+}
+
+void CameraControl::PostRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	mTriangleCount = commandBuffer->mTriangleCount;
 }

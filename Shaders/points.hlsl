@@ -14,7 +14,6 @@ struct Point {
 };
 
 // per-object
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
 [[vk::binding(BINDING_START, PER_OBJECT)]] StructuredBuffer<Point> Points : register(t0);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
@@ -23,6 +22,9 @@ struct Point {
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4x4 ObjectToWorld;
+	float4x4 WorldToObject;
+
 	float Time;
 	float PointSize;
 	float3 Extents;
@@ -55,11 +57,11 @@ v2f vsmain(uint id : SV_VertexId) {
 	float t = saturate(Time);
 	float3 p = lerp(noise * Extents, pt.Position, t * t * (3 - 2 * t));
 
-	float4 wp = mul(Object.ObjectToWorld, float4(p + PointSize * offset, 1.0));
+	float4 wp = mul(ObjectToWorld, float4(p + PointSize * offset, 1.0));
 	v2f o;
 	o.position = mul(Camera.ViewProjection, wp);
 	o.rd = wp.xyz - Camera.Position;
-	o.center = mul(Object.ObjectToWorld, float4(p, 1)).xyz;
+	o.center = mul(ObjectToWorld, float4(p, 1)).xyz;
 	o.color = pt.Color;
 	return o;
 }

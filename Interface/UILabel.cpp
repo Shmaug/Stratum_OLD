@@ -17,13 +17,11 @@ UILabel::UILabel(const string& name, UICanvas* canvas)
 UILabel::~UILabel() {
 	for (auto& d : mDeviceData) {
 		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
-			safe_delete(d.second.mObjectBuffers[i]);
 			safe_delete(d.second.mDescriptorSets[i]);
 			safe_delete(d.second.mGlyphBuffers[i]);
 		}
 		safe_delete(d.second.mDirty);
 		safe_delete(d.second.mGlyphBuffers);
-		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
 	}
 }
@@ -65,11 +63,9 @@ void UILabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		d.mGlyphCount = 0;
 		d.mDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mGlyphBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mObjectBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
 		memset(d.mDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
 	}
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
@@ -80,15 +76,9 @@ void UILabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	}
 	if (data.mGlyphCount == 0) return;
 
-	// Create object buffers
-	if (!data.mObjectBuffers[backBufferIndex]) {
-		data.mObjectBuffers[backBufferIndex] = new Buffer(mName + " ObjectBuffer", commandBuffer->Device(), sizeof(ObjectBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		data.mObjectBuffers[backBufferIndex]->Map();
-	}
 	// Create and assign descriptor sets
 	if (!data.mDescriptorSets[backBufferIndex]) {
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		data.mDescriptorSets[backBufferIndex]->CreateUniformBufferDescriptor(data.mObjectBuffers[backBufferIndex], OBJECT_BUFFER_BINDING);
 		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
 	}
 	// Assign glyph buffer
@@ -112,10 +102,10 @@ void UILabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		break;
 	}
 
-	// Update object buffer
-	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
-	objbuffer->WorldToObject = Canvas()->WorldToObject();
+	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
+	VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
+	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
+	vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
 
 	float2 bounds = Canvas()->Extent();
 

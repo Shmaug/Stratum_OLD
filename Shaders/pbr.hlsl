@@ -20,7 +20,6 @@
 #define unity_ColorSpaceDielectricSpec float4(0.04, 0.04, 0.04, 1.0 - 0.04) // standard dielectric reflectivity coef at incident angle (= 4%)
 
 // per-object
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] ConstantBuffer<ObjectBuffer> Object : register(b0);
 [[vk::binding(BINDING_START + 5, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t3);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
@@ -35,6 +34,9 @@
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4x4 ObjectToWorld;
+	float4x4 WorldToObject;
+
 	float4 Color;
 	float Metallic;
 	float Roughness;
@@ -167,13 +169,13 @@ v2f vsmain(
 	) {
 	v2f o;
 	
-	float4 wp = mul(Object.ObjectToWorld, float4(vertex, 1.0));
+	float4 wp = mul(ObjectToWorld, float4(vertex, 1.0));
 
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
-	o.normal = mul(float4(normal, 1), Object.WorldToObject).xyz;
+	o.normal = mul(float4(normal, 1), WorldToObject).xyz;
 	#ifdef NORMAL_MAP
-	o.tangent = mul(tangent, Object.WorldToObject) * tangent.w;
+	o.tangent = mul(tangent, WorldToObject) * tangent.w;
 	#endif
 	#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	o.texcoord = texcoord;
@@ -261,6 +263,6 @@ void fsmain(v2f i,
 	eval.rgb += Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;
 	#endif
 
-	color = float4(eval, col.a);
+	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
 }

@@ -156,7 +156,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
 	camera->BeginRenderPass(commandBuffer, backBufferIndex);
 	for (const auto& r : mRenderers)
-		if (r->Visible()) {
+		if (r->Visible() && camera->IntersectFrustum(r->Bounds())) {
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
 			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
 			END_CMD_REGION(commandBuffer);

@@ -10,23 +10,17 @@ using namespace std;
 PointRenderer::PointRenderer(const string& name) : Renderer(name), mVisible(true) {}
 PointRenderer::~PointRenderer() {
 	for (auto& d : mDeviceData) {
-		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
-			safe_delete(d.second.mObjectBuffers[i]);
+		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
 			safe_delete(d.second.mDescriptorSets[i]);
-		}
 		safe_delete(d.second.mPointBuffer);
 		safe_delete_array(d.second.mDescriptorDirty);
-		safe_delete_array(d.second.mObjectBuffers);
 		safe_delete_array(d.second.mDescriptorSets);
-		safe_delete_array(d.second.mUniformDirty);
 	}
 }
 
 bool PointRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
 	mAABB = AABB(mPointAABB, ObjectToWorld());
-	for (auto& d : mDeviceData)
-		memset(d.second.mUniformDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 	return true;
 }
 
@@ -41,11 +35,6 @@ void PointRenderer::Points(const vector<Point>& points) {
 		mx = vmax(points[i].mPosition.xyz, mx);
 	}
 	mPointAABB = AABB((mn + mx) * .5f, (mx - mn) * .5f);
-
-	for (auto& d : mDeviceData) {
-		memset(d.second.mDescriptorDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
-		d.second.mPointsDirty = true;
-	}
 	mAABB = AABB(mPointAABB, ObjectToWorld());
 }
 
@@ -112,4 +101,6 @@ void PointRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuff
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 
 	vkCmdDraw(*commandBuffer, 6 * mPoints.size(), 1, 0, 0);
+
+	commandBuffer->mTriangleCount += 2 * (uint32_t)mPoints.size();
 }

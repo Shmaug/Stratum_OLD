@@ -63,6 +63,8 @@ public:
 	inline virtual float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
 	inline virtual float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
 
+	ENGINE_EXPORT bool IntersectFrustum(const AABB& aabb);
+
 private:
 	uint32_t mRenderPriority;
 
@@ -85,6 +87,8 @@ private:
 	float4x4 mViewProjection;
 	float4x4 mInvViewProjection;
 	bool mMatricesDirty;
+
+	float4 mFrustum[6];
 
 	VkViewport mViewport;
 
