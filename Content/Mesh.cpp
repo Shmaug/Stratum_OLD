@@ -446,8 +446,9 @@ Mesh* Mesh::CreateCube(const string& name, DeviceManager* devices, float r) {
 }
 
 Mesh::~Mesh() {
-	for (Bone* b : *mRig)
-		safe_delete(b);
+	if (mRig)
+		for (Bone* b : *mRig)
+			safe_delete(b);
 	for (auto it : mAnimations)
 		safe_delete(it.second);
 }
