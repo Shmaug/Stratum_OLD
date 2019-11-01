@@ -972,7 +972,7 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		quaternion w = quaternion(float3(0, -atan2f(g.z, g.x), 0));
 		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), w, .1f));
 
-		r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .2f, r->mBody->LocalPosition().z);
+		r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .05f, r->mBody->LocalPosition().z);
 
 		r->mRArm->LocalRotation(quaternion(float3(-sinf(t) * PI * .25f, 0, 0)));
 		r->mLArm->LocalRotation(quaternion(float3( sinf(t) * PI * .25f, 0, 0)));
@@ -984,7 +984,7 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		float angle = length(axis);
 		quaternion q = inverse(r->mHead->Parent()->WorldRotation()) * quaternion(asinf(angle), axis / angle);
 		r->mHead->LocalRotation(slerp(r->mHead->LocalRotation(), q, .1f));
-		r->mHead->LocalPosition(r->mHead->LocalPosition().x, .6f + sinf(t + PI * .25f - .01f) * .05f, r->mHead->LocalPosition().z);
+		r->mHead->LocalPosition(r->mHead->LocalPosition().x, sinf(t + PI * .25f - .01f) * .01f, r->mHead->LocalPosition().z);
 
 		x ^= 0x12f343a5;
 		x += 0xa234fab;
