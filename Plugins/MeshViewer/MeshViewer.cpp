@@ -29,6 +29,10 @@ namespace fs = std::filesystem;
 
 using namespace std;
 
+struct Robot {
+	
+};
+
 class MeshViewer : public EnginePlugin {
 public:
 	PLUGIN_EXPORT MeshViewer();
@@ -68,6 +72,7 @@ private:
 	float mLoadProgress;
 	std::thread mLoadThread;
 
+	void LoadRobot();
 	void LoadAsync(fs::path filename, float scale = .05f);
 	Object* LoadScene(fs::path filename, float scale = .05f);
 };
@@ -407,6 +412,170 @@ void MeshViewer::LoadAsync(fs::path path, float scale) {
 	}
 }
 
+void MeshViewer::LoadRobot() {
+	Mesh* antennaMesh = mScene->AssetManager()->LoadMesh("Assets/robot/antenna_s.obj", 1.f);
+	Mesh* headMesh = mScene->AssetManager()->LoadMesh("Assets/robot/head_s.obj", 1.f);
+	Mesh* limbMesh = mScene->AssetManager()->LoadMesh("Assets/robot/limb_s.obj", 1.f);
+	Mesh* bodyMesh = mScene->AssetManager()->LoadMesh("Assets/robot/body_s.obj", 1.f);
+	Mesh* eyeMesh = mScene->AssetManager()->LoadMesh ("Assets/robot/eyeball_s.obj", 1.f);
+
+	auto metal = make_shared<Material>("RobotMetal", mPBRShader);
+	metal->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+	metal->SetParameter("Color", float4(.9f));
+	metal->SetParameter("Metallic", 1.f);
+	metal->SetParameter("Roughness", .025f);
+	metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+	metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+
+	auto facem = make_shared<Material>("RobotFace", mPBRShader);
+	facem->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+	facem->SetParameter("Color", float4(.01f));
+	facem->SetParameter("Metallic", 1.f);
+	facem->SetParameter("Roughness", .01f);
+	facem->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+	facem->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+
+	auto eye = make_shared<Material>("RobotEye", mPBRShader);
+	eye->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+	eye->SetParameter("Color", float4(0.2f, 0.5f, 0.75f));
+	eye->SetParameter("Metallic", 0.f);
+	eye->SetParameter("Roughness", .025f);
+	eye->SetParameter("Emission", float3(.5f, .75f, 1.f));
+	eye->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
+	eye->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+	eye->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+	eye->EnableKeyword("EMISSION");
+
+	shared_ptr<MeshRenderer> body = make_shared<MeshRenderer>("Body");
+	mScene->AddObject(body);
+	body->LocalPosition(0, .6f, 0);
+	body->LocalRotation(quaternion(0, 1, 0, 0));
+	body->LocalScale(float3(.625f, .219f, 1.f) * .2f);
+	body->Mesh(bodyMesh);
+	body->Material(metal);
+
+	shared_ptr<MeshRenderer> bottom = make_shared<MeshRenderer>("Bottom");
+	mScene->AddObject(bottom);
+	body->AddChild(bottom.get());
+	bottom->LocalPosition(0.f, -.99965f, 0.f);
+	bottom->LocalRotation(quaternion(1, 0, 0, 0));
+	bottom->LocalScale(1.0203343629837036f, 9.632735252380371f, 1.0203343629837036f);
+	bottom->Mesh(headMesh);
+	bottom->Material(metal);
+
+	shared_ptr<MeshRenderer> top = make_shared<MeshRenderer>("Top");
+	mScene->AddObject(top);
+	body->AddChild(top.get());
+	top->LocalPosition(0, 1.003046f, 0);
+	top->LocalRotation(quaternion(0, 1, 0, 0));
+	top->LocalScale(1.02033436f, 0.9687414f, 1.02033436f);
+	top->Mesh(headMesh);
+	top->Material(metal);
+
+	shared_ptr<Object> head = make_shared<Object>("Head");
+	mScene->AddObject(head);
+	body->AddChild(head.get());
+	head->LocalPosition(-7.604217557855009e-07f, 5.057405471801758f, -0.001944709219969809f);
+	head->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, .5f));
+	head->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<MeshRenderer> htop = make_shared<MeshRenderer>("Head Top");
+	mScene->AddObject(htop);
+	head->AddChild(htop.get());
+	htop->LocalPosition(0.0019446611404418945f, 4.753257769607444e-07f, -0.3489670753479004f);
+	htop->LocalRotation(quaternion(0.5000003576278687f, 0.4999997615814209f, 0.5000002980232239f, 0.4999997913837433f));
+	htop->LocalScale(.6117526888847351f, 0.9861886501312256f, 0.9283669590950012f);
+	htop->Mesh(headMesh);
+	htop->Material(metal);
+
+	shared_ptr<MeshRenderer> face = make_shared<MeshRenderer>("Face");
+	mScene->AddObject(face);
+	htop->AddChild(face.get());
+	face->LocalPosition(-0.46354931592941284f, 0.4908345341682434f, 0.0016714046942070127f);
+	face->LocalRotation(quaternion(-0.5031242370605469f, 0.8642140626907349f, -2.5014125881739346e-08f, -1.1258141974224145e-08f));
+	face->LocalScale(0.5513290166854858f, 0.3918508291244507f, 0.7281637787818909f);
+	face->Mesh(headMesh);
+	face->Material(facem);
+
+	shared_ptr<MeshRenderer> leye = make_shared<MeshRenderer>("LEye");
+	mScene->AddObject(leye);
+	face->AddChild(leye.get());
+	leye->LocalPosition(0.04395657777786255f, 0.6733275651931763f, -0.48340997099876404f);
+	leye->LocalRotation(quaternion(-0.024556323885917664f, 0.17886871099472046f, 0.5156598091125488f, 0.8375547528266907f));
+	leye->LocalScale(4.487833499908447f, 4.02925968170166f, 3.8776533603668213f);
+	leye->Mesh(eyeMesh);
+	leye->Material(eye);
+
+	shared_ptr<MeshRenderer> reye = make_shared<MeshRenderer>("REye");
+	mScene->AddObject(reye);
+	face->AddChild(reye.get());
+	reye->LocalPosition(0.04395657777786255f, 0.6733278036117554f, 0.4880000650882721f);
+	reye->LocalRotation(quaternion(-0.5141682028770447f, 0.5729449391365051f, -0.18911446630954742f, 0.6095907688140869f));
+	reye->LocalScale(4.66795015335083f, 3.7310101985931396f, 3.7737956047058105f);
+	reye->Mesh(eyeMesh);
+	reye->Material(eye);
+
+	shared_ptr<MeshRenderer> hbtm = make_shared<MeshRenderer>("Head Bottom");
+	mScene->AddObject(hbtm);
+	htop->AddChild(hbtm.get());
+	hbtm->LocalPosition(-3.698136089892723e-13f, 2.384185791015625e-07f, -4.2254308237897986e-21f);
+	hbtm->LocalRotation(quaternion(1.0f, -9.635839433030924e-07f, -1.7729925616549735e-07, 5.971345728994493e-08));
+	hbtm->LocalScale(1.0f, 0.24752794206142426f, 0.9999998211860657f);
+	hbtm->Mesh(headMesh);
+	hbtm->Material(metal);
+
+	shared_ptr<MeshRenderer> rantenna = make_shared<MeshRenderer>("RAntenna");
+	mScene->AddObject(rantenna);
+	htop->AddChild(rantenna.get());
+	rantenna->LocalPosition(0.01295844092965126f, 1.0729432106018066f, -0.7886744141578674f);
+	rantenna->LocalRotation(quaternion(-0.15088200569152832f, 0.695493221282959f, -0.13628718256950378f, 0.6891658902168274f));
+	rantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
+	rantenna->Mesh(antennaMesh);
+	rantenna->Material(metal);
+	shared_ptr<MeshRenderer> lantenna = make_shared<MeshRenderer>("LAntenna");
+	mScene->AddObject(lantenna);
+	htop->AddChild(lantenna.get());
+	lantenna->LocalPosition(0.012958616018295288f, 1.0729432106018066f, 0.739460825920105f);
+	lantenna->LocalRotation(quaternion(0.15088188648223877f, -0.6954931616783142f, -0.13628722727298737f, 0.6891659498214722f));
+	lantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
+	lantenna->Mesh(antennaMesh);
+	lantenna->Material(metal);
+
+	shared_ptr<Object> rarm = make_shared<Object>("RArm");
+	mScene->AddObject(rarm);
+	body->AddChild(rarm.get());
+	rarm->LocalPosition(-4.6921653051867906e-07f, 0.5858743190765381f, -1.1581997871398926f);
+	rarm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
+	rarm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<MeshRenderer> rarmm = make_shared<MeshRenderer>("RArm");
+	mScene->AddObject(rarmm);
+	rarm->AddChild(rarmm.get());
+	rarmm->LocalPosition(-0.06043827533721924f, 3.438727560478583e-07f, -0.8278734683990479f);
+	rarmm->LocalRotation(quaternion(0.7071068286895752, 1.5700925641616852e-16, 1.403772174824528e-22, 0.7071067094802856f));
+	rarmm->LocalScale(0.734440267086029f, 1.9024626016616821f, 1.9024626016616821f);
+	rarmm->Mesh(limbMesh);
+	rarmm->Material(metal);
+
+	shared_ptr<Object> larm = make_shared<Object>("LArm");
+	mScene->AddObject(larm);
+	body->AddChild(larm.get());
+	larm->LocalPosition(-6.312293976407091e-07f, 0.5858747959136963f, 1.1582022905349731f);
+	larm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
+	larm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<MeshRenderer> larmm = make_shared<MeshRenderer>("LArm");
+	mScene->AddObject(larmm);
+	larm->AddChild(larmm.get());
+	larmm->LocalPosition(-0.0005675554275512695f, 3.438727844695677e-07f, -0.827873706817627f);
+	larmm->LocalRotation(quaternion(0.7071068286895752f, 1.570089917183725e-16f, -3.7433923820535783e-23f, 0.7071067094802856f));
+	larmm->LocalScale(0.7344402074813843f, 1.9024626016616821f, 1.9024626016616821f);
+	larmm->Mesh(limbMesh);
+	larmm->Material(metal);
+
+	mLoading = false;
+}
+
 void GetFiles(const string& path, vector<fs::path>& files) {
 	for (auto f : fs::directory_iterator(path)) {
 		if (fs::is_directory(f.path()))
@@ -582,6 +751,26 @@ bool MeshViewer::Init(Scene* scene) {
 		bg->AddChild(btn.get());
 	}
 
+	{
+		shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Robot", panel.get());
+		bg->Texture(white);
+		bg->Color(float4(0));
+		bg->Extent(1, 0, 0, .015f);
+		bg->Outline(false);
+		bg->mRecieveRaycast = true;
+		fileLayout->AddChild(bg.get());
+		mLoadFileButtons.push_back(bg.get());
+
+		shared_ptr<UILabel> btn = panel->AddElement<UILabel>("Robot", panel.get());
+		btn->VerticalAnchor(TextAnchor::Middle);
+		btn->HorizontalAnchor(TextAnchor::Minimum);
+		btn->Font(font);
+		btn->Extent(.9f, 1, 0, 0);
+		btn->TextScale(bg->AbsoluteExtent().y * 2);
+		btn->Text("Robot");
+		bg->AddChild(btn.get());
+	}
+
 	fileLayout->UpdateLayout();
 	#pragma endregion
 
@@ -713,8 +902,12 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 				if (!mLoading && i == elem) {
 					i->Color(float4(1,1,1,.25f));
 					i->Outline(true);
-					if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT))
-						LoadAsync(elem->mName, 1);
+					if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
+						if (elem->mName == "Robot")
+							LoadRobot();
+						else
+							LoadAsync(elem->mName, 1);
+					}
 				} else {
 					i->Color(float4(0));
 					i->Outline(false);
