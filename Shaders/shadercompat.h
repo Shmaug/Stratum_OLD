@@ -24,10 +24,6 @@ struct CameraBuffer {
 	float _pad1;
 	float3 Position;
 };
-struct ObjectBuffer {
-	float4x4 ObjectToWorld;
-	float4x4 WorldToObject;
-};
 
 struct GPULight {
 	float3 WorldPosition;

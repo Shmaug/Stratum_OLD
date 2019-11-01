@@ -39,6 +39,7 @@ CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const 
 	ThrowIfFailed(vkAllocateCommandBuffers(*mDevice, &allocInfo, &mCommandBuffer), "vkAllocateCommandBuffers failed");
 
 	mCompletionFence = make_shared<Fence>(device);
+	mTriangleCount = 0;
 
 	mDevice->SetObjectName(mCommandBuffer, name);
 	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
@@ -68,6 +69,7 @@ void CommandBuffer::Reset(const string& name) {
 	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
 	mCurrentRenderPass = nullptr;
 	mCurrentPipeline = VK_NULL_HANDLE;
+	mTriangleCount = 0;
 }
 
 void CommandBuffer::BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount) {

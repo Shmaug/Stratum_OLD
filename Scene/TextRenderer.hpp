@@ -42,17 +42,16 @@ public:
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
 
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 private:
 	struct DeviceData {
-		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
 		Buffer** mGlyphBuffers;
 		bool* mDirty;
 		uint32_t mGlyphCount;
-		bool* mUniformDirty;
 	};
 
 	std::vector<TextGlyph> mTempGlyphs;

@@ -24,9 +24,7 @@ protected:
 		Buffer** mPoseBuffers;
 		Buffer** mVertices;
 
-		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
-		bool* mUniformDirty;
 		Buffer** mBoundLightBuffers;
 
 	    ::Mesh* mMesh;

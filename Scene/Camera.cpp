@@ -428,9 +428,38 @@ bool Camera::UpdateMatrices() {
 
 	mViewProjection = mProjection * mView;
 	mInvViewProjection = inverse(mViewProjection);
+	
+	float3 corners[8]{
+		float3(-1,  1, 0),
+		float3( 1,  1, 0),
+		float3(-1, -1, 0),
+		float3( 1, -1, 0),
+		
+		float3(-1,  1, 1),
+		float3( 1,  1, 1),
+		float3(-1, -1, 1),
+		float3( 1, -1, 1),
+	};
+	for (uint32_t i = 0; i < 8; i++) {
+		float4 c = mInvViewProjection * float4(corners[i], 1);
+		corners[i] = c.xyz / c.w;
+	}
+
+	mFrustum[0].xyz = normalize(cross(corners[1] - corners[0], corners[2] - corners[0])); // near
+	mFrustum[1].xyz = normalize(cross(corners[6] - corners[4], corners[5] - corners[4])); // far
+	mFrustum[2].xyz = normalize(cross(corners[5] - corners[1], corners[3] - corners[1])); // right
+	mFrustum[3].xyz = normalize(cross(corners[2] - corners[0], corners[4] - corners[0])); // left
+	mFrustum[4].xyz = normalize(cross(corners[3] - corners[2], corners[6] - corners[2])); // top
+	mFrustum[5].xyz = normalize(cross(corners[4] - corners[0], corners[1] - corners[0])); // bottom
+
+	mFrustum[0].w = dot(mFrustum[0].xyz, corners[0]);
+	mFrustum[1].w = dot(mFrustum[1].xyz, corners[4]);
+	mFrustum[2].w = dot(mFrustum[2].xyz, corners[1]);
+	mFrustum[3].w = dot(mFrustum[3].xyz, corners[0]);
+	mFrustum[4].w = dot(mFrustum[4].xyz, corners[2]);
+	mFrustum[5].w = dot(mFrustum[5].xyz, corners[0]);
 
 	mMatricesDirty = false;
-	
 	return true;
 }
 
@@ -441,4 +470,13 @@ void Camera::Dirty() {
 void Camera::DirtyFramebuffers() {
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
 		mFrameData[i].mFramebufferDirty = true;
+}
+
+bool Camera::IntersectFrustum(const AABB& aabb) {
+	UpdateMatrices();
+	float r = length(aabb.mExtents);
+	for (uint32_t i = 0; i < 6; i++)
+		if (dot(mFrustum[i].xyz, aabb.mCenter - mFrustum[i].xyz * mFrustum[i].w) < -r)
+			return false;
+	return true;
 }

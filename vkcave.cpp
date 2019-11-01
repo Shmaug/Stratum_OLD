@@ -122,8 +122,10 @@ private:
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffers");
-		for (auto& d : commandBuffers)
+		for (auto& d : commandBuffers) {
 			fences.push_back(d.first->Execute(d.second));
+			d.first->FlushCommandBuffers();
+		}
 		PROFILER_END;
 	}
 

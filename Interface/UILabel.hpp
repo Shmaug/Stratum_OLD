@@ -37,7 +37,6 @@ public:
 
 private:
 	struct DeviceData {
-		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
 		Buffer** mGlyphBuffers;
 		bool* mDirty;

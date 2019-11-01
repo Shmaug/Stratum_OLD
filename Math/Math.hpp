@@ -1186,14 +1186,6 @@ struct quaternion {
 	}
 	inline quaternion() : quaternion(0, 0, 0, 1) {};
 
-	// Expects forward and up to be normalized
-	inline static quaternion LookAt(const float3& forward, float3 up) {
-		up = normalize(up - forward * dot(up, forward));
-		float3 right = cross(up, forward);
-		float w = 2 * sqrtf(1 + right.x + up.y + forward.z);
-		return quaternion(forward.y - up.z, right.z - forward.x, up.x - right.y, w) / w;
-	}
-
 	inline float3 forward() const {
 		return 2 * z * xyz + float3(0, 0, w * w - dot(xyz, xyz)) + 2 * w * float3(y, -x, 0);
 	}
@@ -1888,5 +1880,5 @@ inline quaternion slerp(quaternion v0, quaternion v1, float t){
 
     float s0 = cosf(theta) - d * sin_theta / sin_theta_0;
     float s1 = sin_theta / sin_theta_0;
-	return v0 * s0 + v1 * s1;
+	return normalize(v0 * s0 + v1 * s1);
 }

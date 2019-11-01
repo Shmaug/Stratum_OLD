@@ -35,10 +35,8 @@ private:
 	struct DeviceData {
 		bool mPointsDirty;
 		Buffer* mPointBuffer;
-		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
 		bool* mDescriptorDirty;
-		bool* mUniformDirty;
 	};
 
 	AABB mPointAABB;

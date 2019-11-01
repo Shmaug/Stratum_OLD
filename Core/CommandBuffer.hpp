@@ -49,6 +49,8 @@ public:
 
 	inline ::Device* Device() const { return mDevice; }
 
+	uint32_t mTriangleCount;
+
 private:
 	friend class Device;
 	ENGINE_EXPORT CommandBuffer(::Device* device, VkCommandPool commandPool, const std::string& name = "Command Buffer");

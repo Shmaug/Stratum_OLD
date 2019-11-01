@@ -28,7 +28,8 @@ public:
 	inline virtual bool Visible() override { return mVisible && Mesh() && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
-	
+	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) override;
+
 	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
 	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
 	inline virtual OBB ColliderBounds() override { UpdateTransform(); return mOBB; }
@@ -36,9 +37,7 @@ public:
 
 private:
 	struct DeviceData {
-		Buffer** mObjectBuffers;
 		DescriptorSet** mDescriptorSets;
-		bool* mUniformDirty;
 		Buffer** mBoundLightBuffers;
 	};
 	

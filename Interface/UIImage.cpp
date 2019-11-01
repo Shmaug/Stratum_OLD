@@ -16,10 +16,8 @@ UIImage::UIImage(const string& name, UICanvas* canvas)
 	: UIElement(name, canvas), mTexture((::Texture*)nullptr), mColor(float4(1)), mOutlineColor(float4(1)), mOutline(false), mShader(nullptr) {}
 UIImage::~UIImage() {
 	for (auto& d : mDeviceData) {
-		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
-			safe_delete(d.second.mObjectBuffers[i]);
+		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
 			safe_delete(d.second.mDescriptorSets[i]);
-		}
 		safe_delete_array(d.second.mDescriptorSets);
 	}
 }
@@ -34,25 +32,18 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mObjectBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
 		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mObjectBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
 	}
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
-	if (!data.mObjectBuffers[backBufferIndex]) {
-		data.mObjectBuffers[backBufferIndex] = new Buffer(mName + " ObjectBuffer", commandBuffer->Device(), sizeof(ObjectBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		data.mObjectBuffers[backBufferIndex]->Map();
-	}
 	if (!data.mDescriptorSets[backBufferIndex]) {
 		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		data.mDescriptorSets[backBufferIndex]->CreateUniformBufferDescriptor(data.mObjectBuffers[backBufferIndex], OBJECT_BUFFER_BINDING);
 		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Texture(), BINDING_START + 0);
 	}
-	ObjectBuffer* objbuffer = (ObjectBuffer*)data.mObjectBuffers[backBufferIndex]->MappedData();
-	objbuffer->ObjectToWorld = Canvas()->ObjectToWorld();
-	objbuffer->WorldToObject = Canvas()->WorldToObject();
 
+
+	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
+	VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 	VkPushConstantRange extentRange = shader->mPushConstants.at("Extent");
@@ -66,6 +57,8 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (mColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
+		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
+		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
 		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
@@ -76,6 +69,8 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (mOutline && mOutlineColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
+		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
+		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mOutlineColor);
 		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
