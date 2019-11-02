@@ -33,7 +33,7 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 	win->mInput->mCurrent.mCursorPos.y = (float)y + win->ClientRect().offset.y;
 
 	if (win->mTargetCamera) {
-		float2 clip = 2.f * (float2(x,y) / float2(win->ClientRect().extent.width, win->ClientRect().extent.height)) - 1.0f;
+		float2 clip = 2.f * (float2((float)x, (float)y) / float2((float)win->ClientRect().extent.width, (float)win->ClientRect().extent.height)) - 1.0f;
 		win->mInput->mMousePointer.mWorldRay.mOrigin = win->mTargetCamera->WorldPosition();
 		win->mInput->mMousePointer.mWorldRay.mDirection = win->mTargetCamera->ClipToWorldRay(float3(clip, 0.f));
 	}

@@ -1,15 +1,3 @@
-#ifdef WINDOWS
-#include <Windows.h>
-#ifdef _DEBUG
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-#undef near
-#undef far
-#undef free
-#endif
-
 #include <chrono>
 #include <iostream>
 #include <sstream>

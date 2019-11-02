@@ -1,5 +1,17 @@
 #pragma once
 
+#ifdef WINDOWS
+#include <winsock2.h>
+#include <Windows.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#undef near
+#undef far
+#undef free
+#endif
+
 #include <stdexcept>
 #include <algorithm>
 #include <optional>
@@ -76,25 +88,31 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	int c = 0;
 	switch(color) {
 		case Red:
+		case BoldRed:
 		c = FOREGROUND_RED;
 		break;
 		case Green:
+		case BoldGreen:
 		c = FOREGROUND_GREEN;
 		break;
 		case Blue:
+		case BoldBlue:
 		c = FOREGROUND_BLUE;
 		break;
 		case Yellow:
+		case BoldYellow:
 		c = FOREGROUND_RED | FOREGROUND_GREEN;
 		break;
 		case Cyan:
+		case BoldCyan:
 		c = FOREGROUND_BLUE | FOREGROUND_GREEN;
 		break;
 		case Magenta:
+		case BoldMagenta:
 		c = FOREGROUND_RED | FOREGROUND_BLUE;
 		break;
 	}
-	if (color >= 6) c &= FOREGROUND_INTENSITY;
+	if (color >= 6) c |= FOREGROUND_INTENSITY;
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), c);
 	#else
 	switch(color) {

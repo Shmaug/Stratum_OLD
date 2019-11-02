@@ -1,11 +1,5 @@
 #pragma once
 
-#ifdef WINDOWS
-#include <Windows.h>
-#undef near
-#undef far
-#endif
-
 #include <Core/EnginePlugin.hpp>
 #include <vector>
 
