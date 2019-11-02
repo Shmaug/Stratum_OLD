@@ -38,29 +38,14 @@ using namespace std;
 // Debug messenger functions
 #ifdef ENABLE_DEBUG_LAYERS
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void* pUserData) {
-	#ifdef WINDOWS
-	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
-	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN);
-	#else
-	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		printf("\x1B[31m");
-	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-		printf("\x1B[33m");
-	#endif
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT){
+		printf_color(BoldRed, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+		throw runtime_error(pCallbackData->pMessage);
+	} else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		printf_color(BoldYellow, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+	else
+		printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 
-	printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-	
-	if (messageSeverity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)) {
-		#ifdef WINDOWS
-		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-		#else
-		printf("\x1B[0m");
-		#endif
-		if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-			throw runtime_error(pCallbackData->pMessage);
-	}
 	return VK_FALSE;
 }
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
@@ -124,7 +109,7 @@ private:
 		PROFILER_BEGIN("Execute CommandBuffers");
 		for (auto& d : commandBuffers) {
 			fences.push_back(d.first->Execute(d.second));
-			d.first->FlushCommandBuffers();
+			//PipelineInstanced.first->FlushCommandBuffers();
 		}
 		PROFILER_END;
 	}

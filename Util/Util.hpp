@@ -55,6 +55,98 @@ enum BlendMode {
 	BLEND_MODE_MAX_ENUM = 0x7FFFFFFF
 };
 
+enum ConsoleColor {
+	Red,
+	Green,
+	Blue,
+	Yellow,
+	Cyan,
+	Magenta,
+
+	BoldRed,
+	BoldGreen,
+	BoldBlue,
+	BoldYellow,
+	BoldCyan,
+	BoldMagenta
+};
+template<typename... Args>
+inline void printf_color(ConsoleColor color, Args&&... a) {
+	#ifdef WINDOWS
+	int c = 0;
+	switch(color) {
+		case Red:
+		c = FOREGROUND_RED;
+		break;
+		case Green:
+		c = FOREGROUND_GREEN;
+		break;
+		case Blue:
+		c = FOREGROUND_BLUE;
+		break;
+		case Yellow:
+		c = FOREGROUND_RED | FOREGROUND_GREEN;
+		break;
+		case Cyan:
+		c = FOREGROUND_BLUE | FOREGROUND_GREEN;
+		break;
+		case Magenta:
+		c = FOREGROUND_RED | FOREGROUND_BLUE;
+		break;
+	}
+	if (color >= 6) c &= FOREGROUND_INTENSITY;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), c);
+	#else
+	switch(color) {
+		case Red:
+		printf("\x1B[0;31m");
+		break;
+		case Green:
+		printf("\x1B[0;32m");
+		break;
+		case Blue:
+		printf("\x1B[0;34m");
+		break;
+		case Yellow:
+		printf("\x1B[0;33m");
+		break;
+		case Cyan:
+		printf("\x1B[0;36m");
+		break;
+		case Magenta:
+		printf("\x1B[0;35m");
+		break;
+
+		case BoldRed:
+		printf("\x1B[1;31m");
+		break;
+		case BoldGreen:
+		printf("\x1B[1;32m");
+		break;
+		case BoldBlue:
+		printf("\x1B[1;34m");
+		break;
+		case BoldYellow:
+		printf("\x1B[1;33m");
+		break;
+		case BoldCyan:
+		printf("\x1B[1;36m");
+		break;
+		case BoldMagenta:
+		printf("\x1B[1;35m");
+		break;
+	}
+	#endif
+
+	printf(std::forward<Args>(a)...);
+
+	#ifdef WINDOWS
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	#else
+	printf("\x1B[0m");
+	#endif
+}
+
 
 // Defines a vertex input. Hashes itself once at creation, then remains immutable.
 // Note: Meshes store a pointer to one of these, but do not handle creation/deletion.
@@ -460,6 +552,22 @@ inline const char* FormatToString(VkFormat format) {
 	case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG: return "VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG";
 	case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG: return "VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG";
 	case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG: return "VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG";
+	}
+	return "";
+}
+inline const char* TopologyToString(VkPrimitiveTopology topology) {
+	switch (topology) {
+    case VK_PRIMITIVE_TOPOLOGY_POINT_LIST: return "VK_PRIMITIVE_TOPOLOGY_POINT_LIST";                        
+    case VK_PRIMITIVE_TOPOLOGY_LINE_LIST: return "VK_PRIMITIVE_TOPOLOGY_LINE_LIST";
+    case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP: return "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP";
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST: return "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST";
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP: return "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP";
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN: return "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN";
+    case VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY: return "VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY";
+    case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY: return "VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY";
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY: return "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY";
+    case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY: return "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY";
+    case VK_PRIMITIVE_TOPOLOGY_PATCH_LIST: return "VK_PRIMITIVE_TOPOLOGY_PATCH_LIST";
 	}
 	return "";
 }

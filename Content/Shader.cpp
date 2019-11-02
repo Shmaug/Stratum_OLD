@@ -473,6 +473,34 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 		renderPass->Device()->SetObjectName(p, mShader->mName + " Variant");
 		mPipelines.emplace(instance, p);
 
+		const char* cullstr = "";
+		if (cullMode == VK_CULL_MODE_NONE)
+			cullstr = "VK_CULL_MODE_NONE";
+		if (cullMode & VK_CULL_MODE_BACK_BIT)
+			cullstr = "VK_CULL_MODE_BACK";
+		if (cullMode & VK_CULL_MODE_FRONT_BIT)
+			cullstr = "VK_CULL_MODE_FRONT";
+		if (cullMode == VK_CULL_MODE_FRONT_AND_BACK)
+			cullstr = "VK_CULL_MODE_FRONT_AND_BACK";
+		
+		const char* blendstr = "";
+		switch (blend){
+		case Opaque: blendstr = "Opaque"; break;
+		case Alpha: blendstr = "Alpha"; break;
+		case Additive: blendstr = "Additive"; break;
+		case Multiply: blendstr = "Multiply"; break;
+		}
+
+		string kw = ""; 
+		for (const auto& d : mShader->mDeviceData)
+			for (const auto& k : d.second.mGraphicsVariants)
+				if (k.second == this) {
+					kw = k.first;
+					break;
+				}
+		printf_color(Green, "%s [%s]: Generating graphics pipeline  %s  %s  %s\n",
+			mShader->mName.c_str(), kw.c_str(), blendstr, cullstr, TopologyToString(topology));
+
 		return p;
 	}
 }

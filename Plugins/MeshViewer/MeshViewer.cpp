@@ -458,6 +458,7 @@ void MeshViewer::LoadRobot() {
 	for (int i = 0; i < 100; i++) {
 		shared_ptr<MeshRenderer> body = make_shared<MeshRenderer>("Body");
 		mScene->AddObject(body);
+		mObjects.push_back(body.get());
 		body->LocalRotation(quaternion(0, 1, 0, 0));
 		body->LocalScale(float3(.625f, .219f, 1.f) * .2f);
 		body->Mesh(bodyMesh);
@@ -465,6 +466,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> bottom = make_shared<MeshRenderer>("Bottom");
 		mScene->AddObject(bottom);
+		mObjects.push_back(bottom.get());
 		body->AddChild(bottom.get());
 		bottom->LocalPosition(0.f, -.99965f, 0.f);
 		bottom->LocalRotation(quaternion(1, 0, 0, 0));
@@ -474,6 +476,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> top = make_shared<MeshRenderer>("Top");
 		mScene->AddObject(top);
+		mObjects.push_back(top.get());
 		body->AddChild(top.get());
 		top->LocalPosition(0, 1.003046f, 0);
 		top->LocalRotation(quaternion(0, 1, 0, 0));
@@ -483,6 +486,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<Object> head = make_shared<Object>("Head");
 		mScene->AddObject(head);
+		mObjects.push_back(head.get());
 		body->AddChild(head.get());
 		head->LocalPosition(-7.604217557855009e-07f, 5.057405471801758f, -0.001944709219969809f);
 		head->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, .5f));
@@ -490,10 +494,12 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<Object> neck = make_shared<Object>("Neck");
 		mScene->AddObject(neck);
+		mObjects.push_back(neck.get());
 		head->AddChild(neck.get());
 
 		shared_ptr<MeshRenderer> htop = make_shared<MeshRenderer>("Head Top");
 		mScene->AddObject(htop);
+		mObjects.push_back(htop.get());
 		neck->AddChild(htop.get());
 		htop->LocalPosition(0.0019446611404418945f, 4.753257769607444e-07f, -0.3489670753479004f);
 		htop->LocalRotation(quaternion(0.5000003576278687f, 0.4999997615814209f, 0.5000002980232239f, 0.4999997913837433f));
@@ -503,6 +509,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> face = make_shared<MeshRenderer>("Face");
 		mScene->AddObject(face);
+		mObjects.push_back(face.get());
 		htop->AddChild(face.get());
 		face->LocalPosition(-0.46354931592941284f, 0.4908345341682434f, 0.0016714046942070127f);
 		face->LocalRotation(quaternion(-0.5031242370605469f, 0.8642140626907349f, -2.5014125881739346e-08f, -1.1258141974224145e-08f));
@@ -512,6 +519,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> leye = make_shared<MeshRenderer>("LEye");
 		mScene->AddObject(leye);
+		mObjects.push_back(leye.get());
 		face->AddChild(leye.get());
 		leye->LocalPosition(0.04395657777786255f, 0.6733275651931763f, -0.48340997099876404f);
 		leye->LocalRotation(quaternion(-0.024556323885917664f, 0.17886871099472046f, 0.5156598091125488f, 0.8375547528266907f));
@@ -521,6 +529,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> reye = make_shared<MeshRenderer>("REye");
 		mScene->AddObject(reye);
+		mObjects.push_back(reye.get());
 		face->AddChild(reye.get());
 		reye->LocalPosition(0.04395657777786255f, 0.6733278036117554f, 0.4880000650882721f);
 		reye->LocalRotation(quaternion(-0.5141682028770447f, 0.5729449391365051f, -0.18911446630954742f, 0.6095907688140869f));
@@ -530,6 +539,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> hbtm = make_shared<MeshRenderer>("Head Bottom");
 		mScene->AddObject(hbtm);
+		mObjects.push_back(hbtm.get());
 		htop->AddChild(hbtm.get());
 		hbtm->LocalPosition(-3.698136089892723e-13f, 2.384185791015625e-07f, -4.2254308237897986e-21f);
 		hbtm->LocalRotation(quaternion(1.0f, -9.635839433030924e-07f, -1.7729925616549735e-07, 5.971345728994493e-08));
@@ -539,6 +549,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> rantenna = make_shared<MeshRenderer>("RAntenna");
 		mScene->AddObject(rantenna);
+		mObjects.push_back(rantenna.get());
 		htop->AddChild(rantenna.get());
 		rantenna->LocalPosition(0.01295844092965126f, 1.0729432106018066f, -0.7886744141578674f);
 		rantenna->LocalRotation(quaternion(-0.15088200569152832f, 0.695493221282959f, -0.13628718256950378f, 0.6891658902168274f));
@@ -547,6 +558,7 @@ void MeshViewer::LoadRobot() {
 		rantenna->Material(metal);
 		shared_ptr<MeshRenderer> lantenna = make_shared<MeshRenderer>("LAntenna");
 		mScene->AddObject(lantenna);
+		mObjects.push_back(lantenna.get());
 		htop->AddChild(lantenna.get());
 		lantenna->LocalPosition(0.012958616018295288f, 1.0729432106018066f, 0.739460825920105f);
 		lantenna->LocalRotation(quaternion(0.15088188648223877f, -0.6954931616783142f, -0.13628722727298737f, 0.6891659498214722f));
@@ -556,6 +568,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<Object> rarm = make_shared<Object>("RArm");
 		mScene->AddObject(rarm);
+		mObjects.push_back(rarm.get());
 		body->AddChild(rarm.get());
 		rarm->LocalPosition(-4.6921653051867906e-07f, 0.5858743190765381f, -1.1581997871398926f);
 		rarm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
@@ -563,6 +576,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> rarmm = make_shared<MeshRenderer>("RArm");
 		mScene->AddObject(rarmm);
+		mObjects.push_back(rarmm.get());
 		rarmm->LocalPosition(-0.06043827533721924f, 3.438727560478583e-07f, -0.8278734683990479f);
 		rarmm->LocalRotation(quaternion(0.7071068286895752, 1.5700925641616852e-16, 1.403772174824528e-22, 0.7071067094802856f));
 		rarmm->LocalScale(0.734440267086029f, 1.9024626016616821f, 1.9024626016616821f);
@@ -571,6 +585,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<Object> larm = make_shared<Object>("LArm");
 		mScene->AddObject(larm);
+		mObjects.push_back(larm.get());
 		body->AddChild(larm.get());
 		larm->LocalPosition(-6.312293976407091e-07f, 0.5858747959136963f, 1.1582022905349731f);
 		larm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
@@ -578,6 +593,7 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<MeshRenderer> larmm = make_shared<MeshRenderer>("LArm");
 		mScene->AddObject(larmm);
+		mObjects.push_back(larmm.get());
 		larmm->LocalPosition(-0.0005675554275512695f, 3.438727844695677e-07f, -0.827873706817627f);
 		larmm->LocalRotation(quaternion(0.7071068286895752f, 1.570089917183725e-16f, -3.7433923820535783e-23f, 0.7071067094802856f));
 		larmm->LocalScale(0.7344402074813843f, 1.9024626016616821f, 1.9024626016616821f);
@@ -586,16 +602,19 @@ void MeshViewer::LoadRobot() {
 
 		shared_ptr<Object> lshoulder = make_shared<Object>("LShoulder");
 		mScene->AddObject(lshoulder);
+		mObjects.push_back(lshoulder.get());
 		larm->AddChild(lshoulder.get());
 		lshoulder->AddChild(larmm.get());
 
 		shared_ptr<Object> rshoulder = make_shared<Object>("LShoulder");
 		mScene->AddObject(rshoulder);
+		mObjects.push_back(rshoulder.get());
 		rarm->AddChild(rshoulder.get());
 		rshoulder->AddChild(rarmm.get());
 
 		shared_ptr<Object> b = make_shared<Object>("Robot");
 		mScene->AddObject(b);
+		mObjects.push_back(b.get());
 		b->AddChild(body.get());
 
 		Robot* robot = new Robot();

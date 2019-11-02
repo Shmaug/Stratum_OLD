@@ -57,8 +57,11 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (mColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
-		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
+		float4x4 mt = Canvas()->ObjectToWorld();
+		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
+		mt = Canvas()->WorldToObject();
+		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
+
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
 		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);
@@ -69,8 +72,11 @@ void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	if (mOutline && mOutlineColor.a > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
-		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
+		float4x4 mt = Canvas()->ObjectToWorld();
+		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
+		mt = Canvas()->WorldToObject();
+		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
+
 		vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mOutlineColor);
 		vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 		vkCmdPushConstants(*commandBuffer, layout, extentRange.stageFlags, extentRange.offset, extentRange.size, &extent);

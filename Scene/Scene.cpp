@@ -15,6 +15,10 @@ Scene::~Scene(){
 		safe_delete_array(kp.second);
 	}
 	safe_delete(mGizmos);
+
+	while (mObjects.size())
+		RemoveObject(mObjects[0].get());
+
 	mCameras.clear();
 	mRenderers.clear();
 	mLights.clear();
