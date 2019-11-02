@@ -14,17 +14,15 @@ struct Point {
 };
 
 // per-object
-[[vk::binding(BINDING_START, PER_OBJECT)]] StructuredBuffer<Point> Points : register(t0);
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Objects : register(t0);
+[[vk::binding(BINDING_START, PER_OBJECT)]] StructuredBuffer<Point> Points : register(t1);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> Noise : register(t1);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> Noise : register(t2);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4x4 ObjectToWorld;
-	float4x4 WorldToObject;
-
 	float Time;
 	float PointSize;
 	float3 Extents;
@@ -37,7 +35,7 @@ struct v2f {
 	float3 center : TEXCOORD1;
 };
 
-v2f vsmain(uint id : SV_VertexId) {
+v2f vsmain(uint id : SV_VertexId, uint instance : SV_InstanceID) {
 	static const float3 offsets[6] = {
 		float3(-1,-1, 0),
 		float3( 1,-1, 0),
@@ -57,11 +55,11 @@ v2f vsmain(uint id : SV_VertexId) {
 	float t = saturate(Time);
 	float3 p = lerp(noise * Extents, pt.Position, t * t * (3 - 2 * t));
 
-	float4 wp = mul(ObjectToWorld, float4(p + PointSize * offset, 1.0));
+	float4 wp = mul(Objects[instance].ObjectToWorld, float4(p + PointSize * offset, 1.0));
 	v2f o;
 	o.position = mul(Camera.ViewProjection, wp);
 	o.rd = wp.xyz - Camera.Position;
-	o.center = mul(ObjectToWorld, float4(p, 1)).xyz;
+	o.center = mul(Objects[instance].ObjectToWorld, float4(p, 1)).xyz;
 	o.color = pt.Color;
 	return o;
 }

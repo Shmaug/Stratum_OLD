@@ -1,8 +1,11 @@
 #include <Scene/Scene.hpp>
+#include <Scene/MeshRenderer.hpp>
 #include <Core/DeviceManager.hpp>
 #include <Util/Profiler.hpp>
 
 using namespace std;
+
+#define MAX_INSTANCE_BATCH 64
 
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -138,8 +141,12 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	}
 	PROFILER_END;
 
-	PROFILER_BEGIN("Sort");
-	sort(mRenderers.begin(), mRenderers.end(), [](Renderer* a, Renderer* b) {
+	PROFILER_BEGIN("Gather/Sort");
+	mRenderList.clear();
+	for (Renderer* r : mRenderers)
+		if (r->Visible() && camera->IntersectFrustum(r->Bounds()))
+			mRenderList.push_back(r);
+	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
 		return a->RenderQueue() < b->RenderQueue();
 	});
 	PROFILER_END;
@@ -150,21 +157,73 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
 			p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
-	for (const auto& r : mRenderers)
-		if (r->Visible()) {
-			r->PreRender(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
-		}
+	for (Renderer* r : mRenderList)
+		r->PreRender(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
 	PROFILER_END;
 
+	// combine MeshRenderers that have the same material and mesh
 	PROFILER_BEGIN("Draw");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
 	camera->BeginRenderPass(commandBuffer, backBufferIndex);
-	for (const auto& r : mRenderers)
-		if (r->Visible() && camera->IntersectFrustum(r->Bounds())) {
+	
+	DescriptorSet* batchDS = nullptr;
+	Buffer* batchBuffer = nullptr;
+
+	MeshRenderer* batchStart = nullptr;
+	uint32_t batchSize = 0;
+
+	for (Renderer* r : mRenderers) {
+		MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r);
+		if (cur && cur->Batchable()) {
+			if (batchStart && batchSize + 1 < MAX_INSTANCE_BATCH &&
+				(materialOverride || batchStart->Material() == cur->Material()) && batchStart->Mesh() == cur->Mesh()) {
+				// append to batch
+				((ObjectBuffer*)batchBuffer-> MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
+				((ObjectBuffer*)batchBuffer-> MappedData())[batchSize].WorldToObject = cur->WorldToObject();
+				batchSize++;
+			} else {
+				// not batchable
+				if (batchStart) {
+					BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
+					batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+					END_CMD_REGION(commandBuffer);
+				}
+				
+				batchSize = 0;
+				batchStart = cur;
+
+				batchBuffer = new Buffer("Batch", commandBuffer->Device(), sizeof(ObjectBuffer) * MAX_INSTANCE_BATCH, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				batchBuffer->Map();
+				batchDS = new DescriptorSet("BatchDS", commandBuffer->Device()->DescriptorPool(), cur->Material()->GetShader(commandBuffer->Device())->mDescriptorSetLayouts[PER_OBJECT]);
+				batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
+				batchDS->CreateStorageBufferDescriptor(lb, LIGHT_BUFFER_BINDING);
+
+			}
+			// append to batch
+			((ObjectBuffer*)batchBuffer->MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
+			((ObjectBuffer*)batchBuffer->MappedData())[batchSize].WorldToObject = cur->WorldToObject();
+			batchSize++;
+		} else {
+			// render last batch
+			if (batchStart) {
+				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
+				batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+				END_CMD_REGION(commandBuffer);
+				batchStart = nullptr;
+			}
+			
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
-			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, nullptr);
+			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
 			END_CMD_REGION(commandBuffer);
 		}
+	}
+	// render last batch
+	if (batchStart) {
+		BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
+		batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+		END_CMD_REGION(commandBuffer);
+	}
+	PROFILER_END;
 
 	if (mDrawGizmos) {
 		PROFILER_BEGIN("Draw Gizmos");
@@ -187,7 +246,6 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	camera->EndRenderPass(commandBuffer, backBufferIndex);
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
-
 
 	// Post Render
 	PROFILER_BEGIN("Post Render");

@@ -9,12 +9,17 @@
 
 #define CAMERA_BUFFER_BINDING 0
 #define OBJECT_BUFFER_BINDING 1
-#define BINDING_START 2
+#define LIGHT_BUFFER_BINDING 2
+#define BINDING_START 3
 
 #define LIGHT_SUN 0
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
 
+struct ObjectBuffer{
+	float4x4 ObjectToWorld;
+	float4x4 WorldToObject;
+};
 struct CameraBuffer {
 	float4x4 ViewProjection;
 	float4 Viewport;
