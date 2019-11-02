@@ -104,8 +104,10 @@ void UILabel::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 
 	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 	VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
-	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &Canvas()->ObjectToWorld());
-	vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &Canvas()->WorldToObject());
+	float4x4 mt = Canvas()->ObjectToWorld();
+	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
+	mt = Canvas()->WorldToObject();
+	vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
 
 	float2 bounds = Canvas()->Extent();
 

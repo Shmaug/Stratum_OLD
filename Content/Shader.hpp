@@ -27,7 +27,7 @@ namespace std {
 	template<>
 	struct hash<PipelineInstance> {
 		inline std::size_t operator()(const  PipelineInstance& p) const {
-			std::size_t h;
+			std::size_t h = 0;
 			hash_combine(h, p.mRenderPass);
 			if (p.mVertexInput) hash_combine(h, *p.mVertexInput);
 			hash_combine(h, p.mTopology);
@@ -80,6 +80,7 @@ public:
 	inline uint32_t RenderQueue() const { return mRenderQueue; }
 
 private:
+	friend class GraphicsShader;
 	friend class AssetManager;
 	ENGINE_EXPORT Shader(const std::string& name, DeviceManager* devices, const std::string& filename);
 

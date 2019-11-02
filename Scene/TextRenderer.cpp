@@ -92,8 +92,10 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 
 	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 	VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
-	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &ObjectToWorld());
-	vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &WorldToObject());
+	float4x4 mt = ObjectToWorld();
+	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
+	mt = WorldToObject();
+	vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
 
 	float2 offset(0);
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
