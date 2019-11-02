@@ -1,17 +1,4 @@
-﻿#ifdef WINDOWS
-#include <winsock2.h>
-#include <stdlib.h>
-#include <Windows.h>
-#undef near
-#undef far
-#ifdef _DEBUG
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#endif
-#endif
-
-#include <chrono>
+﻿#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <thread>
@@ -40,7 +27,7 @@ using namespace std;
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void* pUserData) {
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT){
 		printf_color(BoldRed, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-		throw runtime_error(pCallbackData->pMessage);
+		throw runtime_error("");
 	} else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 		printf_color(BoldYellow, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 	else
@@ -355,7 +342,7 @@ int main(int argc, char* argv[]) {
 		#endif
 	}
 
-	#if defined(WINDOWS)// && defined(_DEBUG)
+	#if defined(WINDOWS)
 	OutputDebugString("Dumping Memory Leaks...\n");
 	_CrtDumpMemoryLeaks();
 	OutputDebugString("Done\n");

@@ -80,6 +80,7 @@ if(WIN32)
 	target_compile_definitions(ShaderCompiler PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 	
 	target_link_libraries(ShaderCompiler
+		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
 		"$ENV{VULKAN_SDK}/shaderc/install/lib/shaderc_shared.lib"
 		"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/lib/spirv-cross-core.lib" )

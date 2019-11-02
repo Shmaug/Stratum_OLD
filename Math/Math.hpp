@@ -3,6 +3,12 @@
 #include <cassert>
 #include <math.h>
 
+#ifdef far
+#undef far
+#endif
+#ifdef near
+#undef near
+#endif
 #ifdef vmin
 #undef vmin
 #endif
