@@ -41,6 +41,7 @@ private:
 	std::vector<Light*> mLights;
 	std::vector<Camera*> mCameras;
 	std::vector<Renderer*> mRenderers;
+	std::vector<Renderer*> mRenderList;
 	bool mDrawGizmos;
 
 public:

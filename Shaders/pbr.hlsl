@@ -20,23 +20,21 @@
 #define unity_ColorSpaceDielectricSpec float4(0.04, 0.04, 0.04, 1.0 - 0.04) // standard dielectric reflectivity coef at incident angle (= 4%)
 
 // per-object
-[[vk::binding(BINDING_START + 5, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t3);
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Objects : register(t0);
+[[vk::binding(LIGHT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t1);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t0);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t1);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t2);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t3);
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t4);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t5);
-[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t6);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t2);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t3);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t4);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t5);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t6);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t7);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t8);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4x4 ObjectToWorld;
-	float4x4 WorldToObject;
-
 	float4 Color;
 	float Metallic;
 	float Roughness;
@@ -159,23 +157,24 @@ float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float
 
 v2f vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
-	[[vk::location(1)]] float3 normal : NORMAL
+	[[vk::location(1)]] float3 normal : NORMAL,
 #ifdef NORMAL_MAP
-	,[[vk::location(2)]] float4 tangent : TANGENT
+	[[vk::location(2)]] float4 tangent : TANGENT,
 #endif
 #if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECGLOSS_MAP) || defined(OCCLUSION_MAP)
-	,[[vk::location(3)]] float2 texcoord : TEXCOORD0
+	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
 #endif
+	uint instance : SV_InstanceID
 	) {
 	v2f o;
 	
-	float4 wp = mul(ObjectToWorld, float4(vertex, 1.0));
+	float4 wp = mul(Objects[instance].ObjectToWorld, float4(vertex, 1.0));
 
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
-	o.normal = mul(float4(normal, 1), WorldToObject).xyz;
+	o.normal = mul(float4(normal, 1), Objects[instance].WorldToObject).xyz;
 	#ifdef NORMAL_MAP
-	o.tangent = mul(tangent, WorldToObject) * tangent.w;
+	o.tangent = mul(tangent, Objects[instance].WorldToObject) * tangent.w;
 	#endif
 	#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	o.texcoord = texcoord;
