@@ -86,6 +86,7 @@ private:
 			else {
 				commandBuffer = camera->Device()->GetCommandBuffer();
 				commandBuffers.emplace(camera->Device(), commandBuffer);
+				mScene->PreFrame(commandBuffer.get(), backBufferIndex);
 			}
 			PROFILER_END;
 
@@ -94,10 +95,8 @@ private:
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffers");
-		for (auto& d : commandBuffers) {
+		for (auto& d : commandBuffers)
 			fences.push_back(d.first->Execute(d.second));
-			//PipelineInstanced.first->FlushCommandBuffers();
-		}
 		PROFILER_END;
 	}
 

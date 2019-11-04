@@ -30,7 +30,7 @@ void Fence::Reset(){
 }
 
 CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const string& name)
-	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentPipeline(VK_NULL_HANDLE) {
+	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentMaterial(nullptr), mCurrentPipeline(VK_NULL_HANDLE) {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = mCommandPool;
@@ -68,6 +68,7 @@ void CommandBuffer::Reset(const string& name) {
 	mDevice->SetObjectName(mCommandBuffer, name);
 	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
 	mCurrentRenderPass = nullptr;
+	mCurrentMaterial = nullptr;
 	mCurrentPipeline = VK_NULL_HANDLE;
 	mTriangleCount = 0;
 }
@@ -99,11 +100,21 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, uint32_t back
 		VkDescriptorSet camds = *mCurrentRenderPass->Camera()->DescriptorSet(backBufferIndex, shader->mDescriptorBindings.at("Camera").second.stageFlags);
 		vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
+	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
 }
 VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input, VkPrimitiveTopology topology) {
 	VkPipeline pipeline = material->GetShader(mDevice)->GetPipeline(mCurrentRenderPass, input, topology);
-	if (pipeline == mCurrentPipeline) return material->GetShader(mDevice)->mPipelineLayout;
+	if (pipeline == mCurrentPipeline) {
+		GraphicsShader* shader = material->GetShader(mDevice);
+		if (material != mCurrentMaterial) {
+			material->SetParameters(this, backBufferIndex, mCurrentRenderPass, shader);
+			mCurrentMaterial = material;
+		}
+		return shader->mPipelineLayout;
+	}
+	
 	mCurrentPipeline = pipeline;
+	mCurrentMaterial = material;
 	return material->Bind(this, backBufferIndex, mCurrentRenderPass, input, topology);
 }

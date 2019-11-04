@@ -5,6 +5,7 @@
 #include <Content/AssetManager.hpp>
 #include <Content/Material.hpp>
 #include <Core/DeviceManager.hpp>
+#include <Core/DescriptorSet.hpp>
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
 #include <Scene/Camera.hpp>
@@ -28,7 +29,13 @@ private:
 	friend class VkCAVE;
 	ENGINE_EXPORT Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
 
-	std::unordered_map<Device*, Buffer**> mLightBuffers;
+	struct DeviceData {
+		Buffer** mLightBuffers;
+		std::vector<Buffer*>* mInstanceBuffers;
+		std::vector<DescriptorSet*>* mInstanceDescriptorSets;
+		uint32_t* mInstanceIndex;
+	};
+	std::unordered_map<Device*, DeviceData> mDeviceData;
 
 	std::vector<Light*> mActiveLights;
 
@@ -45,16 +52,18 @@ private:
 	bool mDrawGizmos;
 
 public:
+
 	ENGINE_EXPORT ~Scene();
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
+	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 
-	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mLightBuffers.at(device)[backBufferIndex]; }
+	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mDeviceData.at(device).mLightBuffers[backBufferIndex]; }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
