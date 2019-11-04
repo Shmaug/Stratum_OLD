@@ -39,8 +39,12 @@ void Buffer::Upload(const void* data, VkDeviceSize size) {
 	if (!data) return;
 	if (size > mSize) throw runtime_error("Data size out of bounds");
 	if (mMemoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-		memcpy(Map(), data, size);
-		Unmap();
+		if (mMappedData) {
+			memcpy(mMappedData, data, size);
+		} else {
+			memcpy(Map(), data, size);
+			Unmap();
+		}
 	} else {
 		if ((mUsageFlags & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
 			mUsageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
