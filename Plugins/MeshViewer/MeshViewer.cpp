@@ -432,7 +432,6 @@ void MeshViewer::LoadRobot() {
 	metal->SetParameter("Roughness", .025f);
 	metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-	metal->RenderQueue(10001);
 
 	auto facem = make_shared<Material>("RobotFace", mPBRShader);
 	facem->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
@@ -441,7 +440,6 @@ void MeshViewer::LoadRobot() {
 	facem->SetParameter("Roughness", .01f);
 	facem->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	facem->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-	facem->RenderQueue(10002);
 
 	auto eye = make_shared<Material>("RobotEye", mPBRShader);
 	eye->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
@@ -453,7 +451,6 @@ void MeshViewer::LoadRobot() {
 	eye->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	eye->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	eye->EnableKeyword("EMISSION");
-	eye->RenderQueue(1003);
 
 	for (int i = 0; i < 100; i++) {
 		shared_ptr<MeshRenderer> body = make_shared<MeshRenderer>("Body");

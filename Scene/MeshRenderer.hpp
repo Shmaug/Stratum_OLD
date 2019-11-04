@@ -24,7 +24,7 @@ public:
 
 	inline virtual std::shared_ptr<::Material> Material() const { return mMaterial; }
 	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
-	inline bool Batchable() const { return mBatchable; }
+	ENGINE_EXPORT bool Batchable(Device* device);
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
@@ -40,13 +40,12 @@ public:
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 private:
-	bool mBatchable;
 	uint32_t mCollisionMask;
 
 protected:
 	std::shared_ptr<::Material> mMaterial;
-	bool mNeedsObjectData;
-	bool mNeedsLightData;
+	uint32_t mNeedsObjectData;
+	uint32_t mNeedsLightData;
 	VkPushConstantRange mLightCountRange;
 
 	OBB mOBB;

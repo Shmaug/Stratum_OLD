@@ -8,7 +8,7 @@
 using namespace std;
 
 MeshRenderer::MeshRenderer(const string& name)
-	: Object(name), mVisible(true), mMesh(nullptr), mNeedsObjectData(false), mNeedsLightData(false), mBatchable(false), mLightCountRange({}), mCollisionMask(0x01) {}
+	: Object(name), mVisible(true), mMesh(nullptr), mNeedsObjectData(2), mNeedsLightData(2), mLightCountRange({}), mCollisionMask(0x01) {}
 MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
@@ -21,14 +21,18 @@ bool MeshRenderer::UpdateTransform() {
 
 void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
+	mNeedsLightData = 2;
+	mNeedsObjectData = 2;
+}
 
-	// TODO
-	mNeedsLightData = shader->mDescriptorBindings.count("Lights");
-	mNeedsObjectData = shader->mDescriptorBindings.count("Objects");
-	if (mNeedsLightData)
-		mLightCountRange = shader->mPushConstants.at("LightCount");
-
-	mBatchable = mNeedsLightData && mNeedsObjectData;
+bool MeshRenderer::Batchable(Device* device) {
+	auto shader = mMaterial->GetShader(device);
+	if (mNeedsLightData == 2) {
+		mNeedsLightData = shader->mDescriptorBindings.count("Lights");
+		if (mNeedsLightData == 1) mLightCountRange = shader->mPushConstants.at("LightCount");
+	}
+	if (mNeedsObjectData == 2) mNeedsObjectData = shader->mDescriptorBindings.count("Objects");
+	return mNeedsLightData == 1 && mNeedsObjectData == 1;
 }
 
 void MeshRenderer::DrawInstanced(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
@@ -39,11 +43,11 @@ void MeshRenderer::DrawInstanced(const FrameTime& frameTime, Camera* camera, Com
 	if (!layout) return;
 	auto shader = material->GetShader(commandBuffer->Device());
 
-	if (mNeedsLightData) {
+	if (mNeedsLightData == 1) {
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 		vkCmdPushConstants(*commandBuffer, layout, mLightCountRange.stageFlags, mLightCountRange.offset, mLightCountRange.size, &lc);
 	}
-	if (mBatchable && instanceDS != VK_NULL_HANDLE)
+	if (mNeedsLightData == 1 && mNeedsObjectData == 1 && instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
 	VkDeviceSize vboffset = 0;

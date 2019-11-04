@@ -61,4 +61,5 @@ private:
 
 	RenderPass* mCurrentRenderPass;
 	VkPipeline mCurrentPipeline;
+	Material* mCurrentMaterial;
 };

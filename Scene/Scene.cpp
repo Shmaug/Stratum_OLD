@@ -5,17 +5,25 @@
 
 using namespace std;
 
-#define MAX_INSTANCE_BATCH 64
+#define MAX_INSTANCE_BATCH 1024
 
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
 	mGizmos = new ::Gizmos(this);
 }
 Scene::~Scene(){
-	for (auto& kp : mLightBuffers) {
-		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++)
-			safe_delete(kp.second[i]);
-		safe_delete_array(kp.second);
+	for (auto& kp : mDeviceData) {
+		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++) {
+			safe_delete(kp.second.mLightBuffers[i]);
+			for (Buffer* b : kp.second.mInstanceBuffers[i])
+				safe_delete(b);
+			for (DescriptorSet* d : kp.second.mInstanceDescriptorSets[i])
+				safe_delete(d);
+		}
+		safe_delete_array(kp.second.mInstanceIndex);
+		safe_delete_array(kp.second.mInstanceBuffers);
+		safe_delete_array(kp.second.mLightBuffers);
+		safe_delete_array(kp.second.mInstanceDescriptorSets);
 	}
 	safe_delete(mGizmos);
 
@@ -102,15 +110,22 @@ void Scene::RemoveObject(Object* object) {
 			it++;
 }
 
-void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
-	PROFILER_BEGIN("Gather Lights");
-	if (mLightBuffers.count(commandBuffer->Device()) == 0) {
-		Buffer** b = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		memset(b, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		mLightBuffers.emplace(commandBuffer->Device(), b);
+void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	if (mDeviceData.count(commandBuffer->Device()) == 0) {
+		DeviceData& data = mDeviceData[commandBuffer->Device()];
+		data.mLightBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
+		data.mInstanceBuffers = new vector<Buffer*>[commandBuffer->Device()->MaxFramesInFlight()];
+		data.mInstanceDescriptorSets = new vector<DescriptorSet*>[commandBuffer->Device()->MaxFramesInFlight()];
+		data.mInstanceIndex = new uint32_t[commandBuffer->Device()->MaxFramesInFlight()];
+		memset(data.mLightBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
+		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * commandBuffer->Device()->MaxFramesInFlight());
+		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * commandBuffer->Device()->MaxFramesInFlight());
 	}
+	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	data.mInstanceIndex[backBufferIndex] = 0;
 
-	Buffer*& lb = mLightBuffers.at(commandBuffer->Device())[backBufferIndex];
+	PROFILER_BEGIN("Gather Lights");
+	Buffer*& lb = data.mLightBuffers[backBufferIndex];
 	if (lb && lb->Size() < mLights.size() * sizeof(GPULight))
 		safe_delete(lb);
 	if (!lb) {
@@ -140,15 +155,28 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		}
 	}
 	PROFILER_END;
+}
 
-	PROFILER_BEGIN("Gather/Sort");
+void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
+	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	
+	PROFILER_BEGIN("Gather/Sort Renderers");
 	mRenderList.clear();
 	for (Renderer* r : mRenderers)
 		if (r->Visible() && camera->IntersectFrustum(r->Bounds()))
 			mRenderList.push_back(r);
+
 	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
+		if (a->RenderQueue() == b->RenderQueue())
+			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
+				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
+					if (ma->Mesh() == mb->Mesh())
+						return ma->Material().get() < mb->Material().get();
+					else
+						return ma->Mesh() < mb->Mesh();
 		return a->RenderQueue() < b->RenderQueue();
 	});
+	
 	PROFILER_END;
 
 	camera->PreRender();
@@ -172,9 +200,9 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	MeshRenderer* batchStart = nullptr;
 	uint32_t batchSize = 0;
 
-	for (Renderer* r : mRenderers) {
+	for (Renderer* r : mRenderList) {
 		MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r);
-		if (cur && cur->Batchable()) {
+		if (cur && cur->Batchable(commandBuffer->Device())) {
 			if (batchStart && batchSize + 1 < MAX_INSTANCE_BATCH &&
 				(materialOverride || batchStart->Material() == cur->Material()) && batchStart->Mesh() == cur->Mesh()) {
 				// append to batch
@@ -192,11 +220,19 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 				batchSize = 0;
 				batchStart = cur;
 
-				batchBuffer = new Buffer("Batch", commandBuffer->Device(), sizeof(ObjectBuffer) * MAX_INSTANCE_BATCH, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-				batchBuffer->Map();
-				batchDS = new DescriptorSet("BatchDS", commandBuffer->Device()->DescriptorPool(), cur->Material()->GetShader(commandBuffer->Device())->mDescriptorSetLayouts[PER_OBJECT]);
-				batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
-				batchDS->CreateStorageBufferDescriptor(lb, LIGHT_BUFFER_BINDING);
+				if (data.mInstanceIndex[backBufferIndex] >= data.mInstanceDescriptorSets[backBufferIndex].size()) {
+					batchBuffer = new Buffer("Batch", commandBuffer->Device(), sizeof(ObjectBuffer) * MAX_INSTANCE_BATCH, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+					batchBuffer->Map();
+					batchDS = new DescriptorSet("BatchDS", commandBuffer->Device()->DescriptorPool(), cur->Material()->GetShader(commandBuffer->Device())->mDescriptorSetLayouts[PER_OBJECT]);
+					batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
+					data.mInstanceDescriptorSets[backBufferIndex].push_back(batchDS);
+					data.mInstanceBuffers[backBufferIndex].push_back(batchBuffer);
+				} else {
+					batchDS = data.mInstanceDescriptorSets[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
+					batchBuffer = data.mInstanceBuffers[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
+				}
+				data.mInstanceIndex[backBufferIndex]++;
+				batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[backBufferIndex], LIGHT_BUFFER_BINDING);
 
 			}
 			// append to batch
