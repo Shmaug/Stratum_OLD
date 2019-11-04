@@ -31,3 +31,15 @@ BUILD_SHARED_LIBS=FALSE
 GLFW:
 
 BUILD_SHARED_LIBS=FALSE
+
+
+## TODO
+
+- Vectorize math library
+- Proper scene BVH
+- Shadow mapping
+- Tiled lighting
+- Atmospheric scattering
+- Linearly Transformed Cosine based area lights
+- Faster unordered_map?
+- Dynamic per-frame GPU memory allocator

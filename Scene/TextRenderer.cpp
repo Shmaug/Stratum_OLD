@@ -44,8 +44,8 @@ uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 	if (buffer && buffer->Size() < glyphCount * sizeof(TextGlyph))
 		safe_delete(buffer);
 	if (!buffer)
-		buffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	buffer ->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
+		buffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+	buffer->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
 	PROFILER_END;
 	return glyphCount;
 }

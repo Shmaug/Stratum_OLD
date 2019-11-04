@@ -100,7 +100,7 @@ AABB Object::Bounds() {
 }
 
 AABB Object::BoundsHierarchy() {
-	if (mHierarchyBoundsDirty){
+	if (mHierarchyBoundsDirty) {
 		mHierarchyBounds = Bounds();
 		for (Object* c : mChildren){
 			AABB tmp = c->BoundsHierarchy();
