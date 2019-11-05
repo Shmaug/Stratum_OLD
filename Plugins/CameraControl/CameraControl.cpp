@@ -49,8 +49,15 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	if (mInput->KeyDownFirst(GLFW_KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	
-	Camera* c = mScene->Cameras()[0];
+	Camera* c = nullptr;
+	for (Camera* a : mScene->Cameras()) {
+		if (a->EnabledHierarchy()) {
+			c = a;
+			break;
+		}
+	}
 	c->AddChild(mFpsText);
+
 	float d = c->Near() + .001f;
 	float y = d * tanf(c->FieldOfView() * .5f);
 	float x = y * c->Aspect();

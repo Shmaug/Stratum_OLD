@@ -45,8 +45,8 @@ private:
 	std::vector<Texture*> mTextures;
 	std::unordered_map<Texture*, uint32_t> mTextureMap;
 
-	uint mLineVertexCount;
-	uint mTriVertexCount;
+	uint32_t mLineVertexCount;
+	uint32_t mTriVertexCount;
 
 	enum GizmoType{
 		Billboard,
@@ -58,9 +58,9 @@ private:
 		quaternion Rotation;
 		float4 TextureST;
 		float3 Position;
-		uint TextureIndex;
+		uint32_t TextureIndex;
 		float3 Scale;
-		uint Type;
+		uint32_t Type;
 	};
 
 	std::vector<Gizmo> mTriDrawList;

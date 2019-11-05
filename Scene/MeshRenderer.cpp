@@ -28,10 +28,10 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 bool MeshRenderer::Batchable(Device* device) {
 	auto shader = mMaterial->GetShader(device);
 	if (mNeedsLightData == 2) {
-		mNeedsLightData = shader->mDescriptorBindings.count("Lights");
+		mNeedsLightData = (uint32_t)shader->mDescriptorBindings.count("Lights");
 		if (mNeedsLightData == 1) mLightCountRange = shader->mPushConstants.at("LightCount");
 	}
-	if (mNeedsObjectData == 2) mNeedsObjectData = shader->mDescriptorBindings.count("Objects");
+	if (mNeedsObjectData == 2) mNeedsObjectData = (uint32_t)shader->mDescriptorBindings.count("Objects");
 	return mNeedsLightData == 1 && mNeedsObjectData == 1;
 }
 

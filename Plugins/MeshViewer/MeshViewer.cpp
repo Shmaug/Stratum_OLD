@@ -86,7 +86,9 @@ private:
 ENGINE_PLUGIN(MeshViewer)
 
 MeshViewer::MeshViewer()
-	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f), mEnvironmentTexture(nullptr), mSelectedLight(nullptr), mPanel(nullptr), mDraggingPanel(false) {
+	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f),
+	mEnvironmentTexture(nullptr), mSelectedLight(nullptr), mPanel(nullptr), mDraggingPanel(false),
+	mFileLoadPanel(nullptr), mLightSettingsPanel(nullptr), mLoadBar(nullptr), mLoadProgress(0.f), mLoadText(nullptr), mTitleText(nullptr) {
 	mEnabled = true;
 }
 MeshViewer::~MeshViewer() {
