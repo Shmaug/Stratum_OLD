@@ -41,8 +41,8 @@ add_library(Engine SHARED
 	"Scene/TextRenderer.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Profiler.cpp" )
-add_executable(ShaderCompiler "shadercompiler.cpp")
-add_executable(VkCave "vkcave.cpp" "ThirdParty/json11.cpp")
+add_executable(ShaderCompiler "exec/shadercompiler.cpp")
+add_executable(VkCave "exec/vkcave.cpp" "ThirdParty/json11.cpp")
 
 set_target_properties(Engine VkCave ShaderCompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine VkCave ShaderCompiler PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
@@ -127,7 +127,7 @@ else()
 		X11
 		"libvulkan.so.1"
 		"${VKCAVE_HOME}/ThirdParty/glfw/lib64/libglfw3.a"
-		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libassimp.so"
+		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libassimp.a"
 		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
 		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
 	if (${ENABLE_DEBUG_LAYERS})

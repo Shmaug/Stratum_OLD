@@ -50,7 +50,7 @@ UIElement* UICanvas::Raycast(const Ray& worldRay) {
 	UIElement* hit = nullptr;
 	for (const shared_ptr<UIElement>& e : mElements) {
 		if (e->mRecieveRaycast && e->mVisible && (!hit || e->Depth() < minDepth)){
-			float2 rp = vabs(cp.xy - e->AbsolutePosition());
+			float2 rp = abs(cp.xy - e->AbsolutePosition());
 			if (rp.x < e->AbsoluteExtent().x && rp.y < e->AbsoluteExtent().y) {
 				hit = e.get();
 				minDepth = e->Depth();

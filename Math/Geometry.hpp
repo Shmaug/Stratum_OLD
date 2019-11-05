@@ -44,8 +44,8 @@ struct AABB {
 		mn = corners[0];
 		mx = corners[0];
 		for (uint32_t i = 1; i < 8; i++) {
-			mn = vmin(mn, corners[i]);
-			mx = vmax(mx, corners[i]);
+			mn = min(mn, corners[i]);
+			mx = max(mx, corners[i]);
 		}
 
 		mCenter = (mn + mx) * .5f;
@@ -85,8 +85,8 @@ struct AABB {
 	}
 
 	inline void Encapsulate(const AABB& aabb) {
-		float3 mn = vmin(mCenter - mExtents, aabb.mCenter - aabb.mExtents);
-		float3 mx = vmax(mCenter + mExtents, aabb.mCenter + aabb.mExtents);
+		float3 mn = min(mCenter - mExtents, aabb.mCenter - aabb.mExtents);
+		float3 mx = max(mCenter + mExtents, aabb.mCenter + aabb.mExtents);
 		mCenter = (mn + mx) * .5f;
 		mExtents = (mx - mn) * .5f;
 	}
@@ -114,8 +114,8 @@ struct AABB {
 		mn = corners[0];
 		mx = corners[0];
 		for (uint32_t i = 1; i < 8; i++) {
-			mn = vmin(mn, corners[i]);
-			mx = vmax(mx, corners[i]);
+			mn = min(mn, corners[i]);
+			mx = max(mx, corners[i]);
 		}
 
 		mCenter = (mn + mx) * .5f;
@@ -170,8 +170,8 @@ struct OBB {
 		mn = corners[0];
 		mx = corners[0];
 		for (uint32_t i = 1; i < 8; i++) {
-			mn = vmin(mn, corners[i]);
-			mx = vmax(mx, corners[i]);
+			mn = min(mn, corners[i]);
+			mx = max(mx, corners[i]);
 		}
 
 		return AABB(mCenter, (mx - mn) * .5f);
@@ -195,7 +195,7 @@ struct Ray {
 	inline float2 Intersect(const AABB& aabb) const {
 		float3 m = 1.f / mDirection;
 		float3 n = m * (mOrigin - aabb.mCenter);
-		float3 k = vabs(m) * aabb.mExtents;
+		float3 k = abs(m) * aabb.mExtents;
 		float3 t1 = -n - k;
 		float3 t2 = -n + k;
 		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
@@ -207,7 +207,7 @@ struct Ray {
 		quaternion io = inverse(obb.mOrientation);
 		float3 m = 1.f / (io * mDirection);
 		float3 n = m * (io * (mOrigin - obb.mCenter));
-		float3 k = vabs(m) * obb.mExtents;
+		float3 k = abs(m) * obb.mExtents;
 		float3 t1 = -n - k;
 		float3 t2 = -n + k;
 		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
