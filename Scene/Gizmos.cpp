@@ -4,94 +4,86 @@
 
 using namespace std;
 
-const ::VertexInput Float3VertexInput{
-	{
-		0, // binding
-		sizeof(float3), // stride
-		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
-	},
-	{
-		{
-			0, // location
-			0, // binding
-			VK_FORMAT_R32G32B32_SFLOAT, // format
-			0 // offset
-		}
-	}
+const uint32_t CircleResolution = 64;
+struct GizmoVertex {
+	float3 position;
+	float2 texcoord;
 };
 
-Gizmos::Gizmos(Scene* scene) {
+Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0) {
 	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.shader");
+	mWhiteTexture = scene->AssetManager()->LoadTexture("Assets/white.png");
+	mTextures.push_back(mWhiteTexture);
+	mTextureMap.emplace(mWhiteTexture, 0);
 	
-	const uint32_t CircleResolution = 64;
+	GizmoVertex vertices[8 + CircleResolution];
+	vertices[0] = { float3(-1,  1,  1), float2(0,0) };
+	vertices[1] = { float3( 1,  1,  1), float2(1,0) };
+	vertices[2] = { float3(-1, -1,  1), float2(0,1) };
+	vertices[3] = { float3( 1, -1,  1), float2(1,1) };
+	vertices[4] = { float3(-1,  1, -1), float2(0,0) };
+	vertices[5] = { float3( 1,  1, -1), float2(1,0) };
+	vertices[6] = { float3(-1, -1, -1), float2(0,1) };
+	vertices[7] = { float3( 1, -1, -1), float2(1,1) };
 
-	float3 sphereVerts[3*CircleResolution];
-	uint16_t sphereIndices[CircleResolution*6];
-	float3 circleVerts[CircleResolution];
-	uint16_t circleIndices[CircleResolution*2];
-	float3 cubeVerts[8] {
-		float3(-1, -1, -1),
-		float3( 1, -1, -1),
-		float3(-1, -1,  1),
-		float3( 1, -1,  1),
+	uint16_t indices[60 + CircleResolution*2] {
+		// cube (x36)
+		0,1,2,1,3,2, // +z
+		7,5,4,7,4,6, // -z
+		3,1,7,7,1,5, // +x
+		4,0,2,6,4,2, // -x
+		4,5,1,4,1,0, // +y
+		7,2,3,7,6,2, // -y
 
-		float3(-1,  1, -1),
-		float3( 1,  1, -1),
-		float3(-1,  1,  1),
-		float3( 1,  1,  1),
-	};
-	uint16_t wireCubeIndices[24] {
+		// wire cube (x24)
 		0,1, 1,3, 3,2, 2,0,
 		4,5, 5,7, 7,6, 6,4,
 		0,4, 1,5, 3,7, 2,6
 	};
-	uint16_t cubeIndices[36] {
-		2,7,6,2,3,7,
-		0,1,2,2,1,3,
-		1,5,7,7,3,1,
-		4,5,1,4,1,0,
-		6,4,2,4,0,2,
-		4,7,5,4,6,7
-	};
 
-	for (uint32_t i = 0; i < CircleResolution; i++){
-		circleVerts[i].x = cosf(2.f * PI * i / (float)CircleResolution - PI * .5f);
-		circleVerts[i].y = sinf(2.f * PI * i / (float)CircleResolution - PI * .5f);
-		circleVerts[i].z = 0;
-		circleIndices[2*i] = i;
-		circleIndices[2*i+1] = (i+1) % CircleResolution;
-
-		sphereVerts[i] = circleVerts[i];
-		sphereVerts[CircleResolution+i] = float3(circleVerts[i].x, 0, circleVerts[i].y);
-		sphereVerts[2*CircleResolution+i] = float3(0, circleVerts[i].x, circleVerts[i].y);
-		sphereIndices[2*i] = i;
-		sphereIndices[2*i+1] = (i+1) % CircleResolution;
-		sphereIndices[2*CircleResolution + 2*i] = CircleResolution + i;
-		sphereIndices[2*CircleResolution + 2*i+1] = CircleResolution + (i+1) % CircleResolution;
-		sphereIndices[4*CircleResolution + 2*i] = 2*CircleResolution + i;
-		sphereIndices[4*CircleResolution + 2*i+1] = 2*CircleResolution + (i+1) % CircleResolution;
+	for (uint32_t i = 0; i < CircleResolution; i++) {
+		vertices[8 + i].position.x = cosf(2.f * PI * i / (float)CircleResolution - PI * .5f);
+		vertices[8 + i].position.y = sinf(2.f * PI * i / (float)CircleResolution - PI * .5f);
+		vertices[8 + i].position.z = 0;
+		vertices[8 + i].texcoord = vertices[8+i].position.xy;
+		indices[60 + 2*i]   = 8 + i;
+		indices[60 + 2*i+1] = 8 + (i+1) % CircleResolution;
 	}
 
-	mCubeMesh = new Mesh("Cube", scene->DeviceManager(), cubeVerts, cubeIndices, 8, sizeof(float3), 36, &Float3VertexInput, VK_INDEX_TYPE_UINT16);
-	mWireCubeMesh = new Mesh("Wire Cube", scene->DeviceManager(), cubeVerts, wireCubeIndices, 8, sizeof(float3), 24, &Float3VertexInput, VK_INDEX_TYPE_UINT16, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	mWireCircleMesh = new Mesh("Wire Circle", scene->DeviceManager(), circleVerts, circleIndices, CircleResolution, sizeof(float3), 2*CircleResolution, &Float3VertexInput, VK_INDEX_TYPE_UINT16, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	mWireSphereMesh = new Mesh("Wire Sphere", scene->DeviceManager(), sphereVerts, sphereIndices, 3*CircleResolution, sizeof(float3), 6*CircleResolution, &Float3VertexInput, VK_INDEX_TYPE_UINT16, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+	for (uint32_t i = 0; i < scene->DeviceManager()->DeviceCount(); i++){
+		Device* device = scene->DeviceManager()->GetDevice(i);
+		DeviceData d = {};
+
+		d.mVertices = new Buffer("Gizmo Vertices", device, vertices, sizeof(GizmoVertex) * (8 + CircleResolution), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+		d.mIndices = new Buffer("Gizmo Indices", device, indices, sizeof(uint16_t) * (60 + 2*CircleResolution), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+		d.mBufferIndex = new uint32_t[device->MaxFramesInFlight()];
+		d.mInstanceBuffers = new vector<pair<DescriptorSet*, Buffer*>>[device->MaxFramesInFlight()];
+
+		memset(d.mBufferIndex, 0, sizeof(uint32_t) * device->MaxFramesInFlight());
+
+		mDeviceData.emplace(device, d);
+	}
 }
 Gizmos::~Gizmos() {
-	for (auto& it : mDescriptorSets)
-		safe_delete(it.second);
-	safe_delete(mCubeMesh);
-	safe_delete(mWireCubeMesh);
-	safe_delete(mWireCircleMesh);
-	safe_delete(mWireSphereMesh);
+	for (auto& d : mDeviceData){
+		safe_delete(d.second.mVertices);
+		safe_delete(d.second.mIndices);
+		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
+			for (auto& p : d.second.mInstanceBuffers[i]){
+				safe_delete(p.first);
+				safe_delete(p.second);
+			}
+		safe_delete_array(d.second.mBufferIndex);
+		safe_delete_array(d.second.mInstanceBuffers);
+	}
 }
 
-bool Gizmos::PositionHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const quaternion& plane, float3& position){
+bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position){
 	float radius = .15f;
 	float t = input->mWorldRay.Intersect(Sphere(position, radius)).x;
 	float lt = input->mLastWorldRay.Intersect(Sphere(position, radius)).x;
 
-	DrawWireCircle(commandBuffer, backBufferIndex, position, radius, plane, float4(1,1,1,1));
+	DrawWireCircle(position, radius, plane, float4(1,1,1,1));
 	
 	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
 
@@ -103,48 +95,19 @@ bool Gizmos::PositionHandle(CommandBuffer* commandBuffer, uint32_t backBufferInd
 
 	return true;
 }
-bool Gizmos::RotationHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const float3& center, quaternion& rotation){
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	if (!layout) return false;
-
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
-
+bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation){
 	float radius = .125f;
-
-	float4 color_xy(.2f,.2f,1,.5f);
-	float4 color_xz(.2f,1,.2f,.5f);
-	float4 color_yz(1,.2f,.2f,.5f);
-
 	float t = input->mWorldRay.Intersect(Sphere(center, radius)).x;
 	float lt = input->mLastWorldRay.Intersect(Sphere(center, radius)).x;
 
-	float3 scale(radius);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &scale);
-
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mWireCircleMesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mWireCircleMesh->IndexBuffer(commandBuffer->Device()), 0, mWireCircleMesh->IndexType());
-
 	quaternion r = rotation;
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_xy);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
-	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+	DrawWireCircle(center, radius, r, float4(.2f,.2f,1,.5f));
 
 	r *= quaternion(float3(0, PI/2, 0));
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_yz);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
-	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+	DrawWireCircle(center, radius, r, float4(1,.2f,.2f,.5f));
 	
 	r *= quaternion(float3(PI/2, 0, 0));
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color_xz);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &r);
-	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+	DrawWireCircle(center, radius, r, float4(.2f,1,.2f,.5f));
 
 	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
 
@@ -159,127 +122,178 @@ bool Gizmos::RotationHandle(CommandBuffer* commandBuffer, uint32_t backBufferInd
 	return true;
 }
 
-void Gizmos::DrawLine(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& p0, const float3& p1, const float4& color){
+void Gizmos::DrawLine(const float3& p0, const float3& p1, const float4& color){
 	float3 v = p1 - p0;
 	float l = length(v);
 	v /= l;
-
 	float3 axis = cross(v, float3(0,0,1));
 	float angle = length(axis);
-
-	DrawWireCube(commandBuffer, backBufferIndex, (p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(asinf(angle), axis / angle), color);
+	DrawWireCube((p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(asinf(angle), axis / angle), color);
 }
-void Gizmos::DrawBillboard(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const float4& color, Texture* texture, const float4& textureST){
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {"TEXTURED_QUAD"});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	if (!layout) return;
-
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
-	VkPushConstantRange stRange = shader->mPushConstants.at("MainTexture_ST");
-
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &extents);
-	vkCmdPushConstants(*commandBuffer, layout, stRange.stageFlags, stRange.offset, stRange.size, &textureST);
-
-	if (mDescriptorSets.count(texture) == 0){
-		DescriptorSet* ds = new DescriptorSet(texture->mName + " DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		ds->CreateSampledTextureDescriptor(texture, shader->mDescriptorBindings.at("MainTexture").second.binding);
-		mDescriptorSets.emplace(texture, ds);
+void Gizmos::DrawBillboard(const float3& center, const float2& extents, const quaternion& rotation, const float4& color, Texture* texture, const float4& textureST){
+	Gizmo g = {};
+	g.Color = color;
+	g.Position = center;
+	g.Rotation = rotation;
+	g.Scale = float3(extents, 0);
+	if (mTextureMap.count(texture))
+		g.TextureIndex = mTextureMap.at(texture);
+	else {
+		g.TextureIndex = (uint32_t)mTextures.size();
+		mTextureMap.emplace(texture, (uint32_t)mTextures.size());
+		mTextures.push_back(texture);
 	}
-	VkDescriptorSet ds = *mDescriptorSets.at(texture);
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
-	vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
+	g.TextureST = textureST;
+	g.Type = Billboard;
+	mTriDrawList.push_back(g);
 }
-void Gizmos::DrawCube(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color) {
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	if (!layout) return;
-
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
-
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &rotation);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &extents);
-
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mCubeMesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mCubeMesh->IndexBuffer(commandBuffer->Device()), 0, mCubeMesh->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, mCubeMesh->IndexCount(), 1, 0, 0, 0);
+void Gizmos::DrawCube(const float3& center, const float3& extents, const quaternion& rotation, const float4& color) {
+	Gizmo g = {};
+	g.Color = color;
+	g.Position = center;
+	g.Rotation = rotation;
+	g.Scale = extents;
+	g.TextureIndex = 0;
+	g.TextureST = 0;
+	g.Type = Cube;
+	mTriDrawList.push_back(g);
 }
-void Gizmos::DrawWireCube  (CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color){
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	if (!layout) return;
-
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange  =  shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange  =  shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
-
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &rotation);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &extents);
-
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mWireCubeMesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mWireCubeMesh->IndexBuffer(commandBuffer->Device()), 0, mWireCubeMesh->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, mWireCubeMesh->IndexCount(), 1, 0, 0, 0);
+void Gizmos::DrawWireCube(const float3& center, const float3& extents, const quaternion& rotation, const float4& color) {
+	Gizmo g = {};
+	g.Color = color;
+	g.Position = center;
+	g.Rotation = rotation;
+	g.Scale = extents;
+	g.TextureIndex = 0;
+	g.TextureST = 0;
+	g.Type = Cube;
+	mLineDrawList.push_back(g);
 }
-void Gizmos::DrawWireCircle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const quaternion& rotation, const float4& color){
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	if (!layout) return;
-
-	float3 scale(radius);
-
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
-
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &rotation);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &scale);
-
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mWireCircleMesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mWireCircleMesh->IndexBuffer(commandBuffer->Device()), 0, mWireCircleMesh->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, mWireCircleMesh->IndexCount(), 1, 0, 0, 0);
+void Gizmos::DrawWireCircle(const float3& center, float radius, const quaternion& rotation, const float4& color){
+	Gizmo g = {};
+	g.Color = color;
+	g.Position = center;
+	g.Rotation = rotation;
+	g.Scale = radius;
+	g.TextureIndex = 0;
+	g.TextureST = 0;
+	g.Type = Circle;
+	mLineDrawList.push_back(g);
 }
-void Gizmos::DrawWireSphere(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const float4& color){
+void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& color){
+	DrawWireCircle(center, radius, quaternion(0,0,0,1), color);
+	DrawWireCircle(center, radius, quaternion(1,0,0,0), color);
+	DrawWireCircle(center, radius, quaternion(0,1,0,0), color);
+}
+
+void Gizmos::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
+	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	data.mBufferIndex[backBufferIndex] = 0;
+}
+void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	uint32_t instanceOffset = 0;
 	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &Float3VertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
-	if (!layout) return;
+	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
-	float3 scale(radius);
-	quaternion rotation(0,0,0,1);
+	uint32_t billboardCount = 0;
+	uint32_t cubeCount = 0;
+	uint32_t wireCubeCount = 0;
+	uint32_t wireCircleCount = 0;
 
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange posRange   = shader->mPushConstants.at("Position");
-	VkPushConstantRange rotRange   = shader->mPushConstants.at("Rotation");
-	VkPushConstantRange scaleRange = shader->mPushConstants.at("Scale");
+	for (const Gizmo& g : mLineDrawList) {
+		if (g.Type == Cube) wireCubeCount++;
+		else if (g.Type == Circle) wireCircleCount++;
+	}
+	for (const Gizmo& g : mTriDrawList) {
+		if (g.Type == Cube) cubeCount++;
+		else if (g.Type == Billboard) billboardCount++;
+	}
 
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &color);
-	vkCmdPushConstants(*commandBuffer, layout, posRange.stageFlags, posRange.offset, posRange.size, &center);
-	vkCmdPushConstants(*commandBuffer, layout, rotRange.stageFlags, rotRange.offset, rotRange.size, &rotation);
-	vkCmdPushConstants(*commandBuffer, layout, scaleRange.stageFlags, scaleRange.offset, scaleRange.size, &scale);
+	uint32_t total = billboardCount + cubeCount + wireCubeCount + wireCircleCount;
+	if (total == 0) return;
 
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mWireSphereMesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mWireSphereMesh->IndexBuffer(commandBuffer->Device()), 0, mWireSphereMesh->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, mWireSphereMesh->IndexCount(), 1, 0, 0, 0);
+	Buffer* gizmoBuffer = nullptr;
+	DescriptorSet* gizmoDS = nullptr;
+	if (data.mInstanceBuffers[backBufferIndex].size() <= data.mBufferIndex[backBufferIndex]) {
+		gizmoBuffer = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+		gizmoBuffer->Map();
+
+		gizmoDS = new DescriptorSet("Gizmos", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, OBJECT_BUFFER_BINDING);
+
+		data.mInstanceBuffers[backBufferIndex].push_back(make_pair(gizmoDS, gizmoBuffer));
+	} else {
+		Buffer*& b = data.mInstanceBuffers[backBufferIndex][data.mBufferIndex[backBufferIndex]].second;
+		gizmoDS = data.mInstanceBuffers[backBufferIndex][data.mBufferIndex[backBufferIndex]].first;
+
+		if (b->Size() < sizeof(Gizmo) * total) {
+			safe_delete(b);
+			b = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			gizmoDS->CreateStorageBufferDescriptor(b, OBJECT_BUFFER_BINDING);
+		}
+
+		gizmoBuffer = b;
+	}
+
+	VkDescriptorSetLayoutBinding b = shader->mDescriptorBindings.at("MainTexture").second;
+	gizmoDS->CreateSampledTextureDescriptor(mTextures.data(), (uint32_t)mTextures.size(), b.descriptorCount, b.binding);
+
+	data.mBufferIndex[backBufferIndex]++;
+
+	sort(mLineDrawList.begin(), mLineDrawList.end(), [&](const Gizmo& a, const Gizmo& b){
+		return a.Type < b.Type;
+	});
+	sort(mTriDrawList.begin(), mTriDrawList.end(), [&](const Gizmo& a, const Gizmo& b){
+		return a.Type < b.Type;
+	});
+
+	Gizmo* buf = (Gizmo*)gizmoBuffer->MappedData();
+	memcpy(buf, mLineDrawList.data(), mLineDrawList.size() * sizeof(Gizmo));
+	buf += mLineDrawList.size();
+	memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
+
+	if (wireCubeCount + wireCircleCount > 0) {
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+		if (layout) {
+			VkDeviceSize vboffset = 0;
+			VkBuffer vb = *data.mVertices;
+			vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
+			vkCmdBindIndexBuffer(*commandBuffer, *data.mIndices, 0, VK_INDEX_TYPE_UINT16);
+
+			VkDescriptorSet ds = *gizmoDS;
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+
+			// wire cube	
+			vkCmdDrawIndexed(*commandBuffer, 24, wireCubeCount, 36, 0, instanceOffset);
+			instanceOffset += wireCubeCount;
+			// wire circle
+			vkCmdDrawIndexed(*commandBuffer, CircleResolution * 2, wireCircleCount, 60, 0, instanceOffset);
+			instanceOffset += wireCircleCount;
+		}
+	}
+
+	if (cubeCount + billboardCount > 0){
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		if (layout) {
+			VkDeviceSize vboffset = 0;
+			VkBuffer vb = *data.mVertices;
+			vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
+			vkCmdBindIndexBuffer(*commandBuffer, *data.mIndices, 0, VK_INDEX_TYPE_UINT16);
+
+			VkDescriptorSet ds = *gizmoDS;
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+
+			// billboard
+			vkCmdDrawIndexed(*commandBuffer, 6, billboardCount, 0, 0, instanceOffset);
+			instanceOffset += billboardCount;
+			// cube	
+			vkCmdDrawIndexed(*commandBuffer, 36, cubeCount, 0, 0, instanceOffset);
+			instanceOffset += cubeCount;
+		}
+	}
+
+	mTextures.clear();
+	mTextureMap.clear();
+	mTextures.push_back(mWhiteTexture);
+	mTextureMap.emplace(mWhiteTexture, 0);
 }

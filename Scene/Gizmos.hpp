@@ -13,24 +13,58 @@ public:
 	ENGINE_EXPORT Gizmos(Scene* scene);
 	ENGINE_EXPORT ~Gizmos();
 
-	ENGINE_EXPORT bool PositionHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const quaternion& plane, float3& position);
-	ENGINE_EXPORT bool RotationHandle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const InputPointer* input, const float3& center, quaternion& rotation);
+	ENGINE_EXPORT bool PositionHandle(const InputPointer* input, const quaternion& plane, float3& position);
+	ENGINE_EXPORT bool RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation);
 	
-	ENGINE_EXPORT void DrawBillboard(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const float4& color, Texture* texture, const float4& textureST = float4(1,1,0,0));
+	ENGINE_EXPORT void DrawBillboard(const float3& center, const float2& extent, const quaternion& rotation, const float4& color, Texture* texture, const float4& textureST = float4(1,1,0,0));
 	
-	ENGINE_EXPORT void DrawLine(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& p0, const float3& p1, const float4& color);
+	ENGINE_EXPORT void DrawLine(const float3& p0, const float3& p1, const float4& color);
 	
-	ENGINE_EXPORT void DrawCube  (CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color);
-	ENGINE_EXPORT void DrawWireCube  (CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, const float3& extents, const quaternion& rotation, const float4& color);
+	ENGINE_EXPORT void DrawCube  (const float3& center, const float3& extents, const quaternion& rotation, const float4& color);
+	ENGINE_EXPORT void DrawWireCube  (const float3& center, const float3& extents, const quaternion& rotation, const float4& color);
 	// Draw a circle facing in the Z direction
-	ENGINE_EXPORT void DrawWireCircle(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const quaternion& rotation, const float4& color);
-	ENGINE_EXPORT void DrawWireSphere(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const float3& center, float radius, const float4& color);
+	ENGINE_EXPORT void DrawWireCircle(const float3& center, float radius, const quaternion& rotation, const float4& color);
+	ENGINE_EXPORT void DrawWireSphere(const float3& center, float radius, const float4& color);
 
 private:
-	std::unordered_map<Texture*, DescriptorSet*> mDescriptorSets;
+	friend class Scene;
+	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+
+	struct DeviceData {
+		Buffer* mVertices;
+		Buffer* mIndices;
+
+		uint32_t* mBufferIndex;
+		std::vector<std::pair<DescriptorSet*, Buffer*>>* mInstanceBuffers;
+	};
+	std::unordered_map<Device*, DeviceData> mDeviceData;
+
+	Texture* mWhiteTexture;
+
+	std::vector<Texture*> mTextures;
+	std::unordered_map<Texture*, uint32_t> mTextureMap;
+
+	uint mLineVertexCount;
+	uint mTriVertexCount;
+
+	enum GizmoType{
+		Billboard,
+		Cube,
+		Circle,
+	};
+	struct Gizmo {
+		float4 Color;
+		quaternion Rotation;
+		float4 TextureST;
+		float3 Position;
+		uint TextureIndex;
+		float3 Scale;
+		uint Type;
+	};
+
+	std::vector<Gizmo> mTriDrawList;
+	std::vector<Gizmo> mLineDrawList;
+
 	Shader* mGizmoShader;
-	Mesh* mCubeMesh;
-	Mesh* mWireCubeMesh;
-	Mesh* mWireCircleMesh;
-	Mesh* mWireSphereMesh;
 };
