@@ -984,22 +984,16 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		float t = frameTime.mTotalTime + (x % 100);
 		t *= 3.f;
 
-		float3 g = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
-		quaternion w = quaternion(float3(0, -atan2f(g.z, g.x), 0));
-		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), w, .1f));
-
+		float3 v = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
+		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), quaternion(float3(0, -atan2f(v.z, v.x), 0)), .1f));
 		r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .05f, r->mBody->LocalPosition().z);
 
 		r->mRArm->LocalRotation(quaternion(float3(-sinf(t) * PI * .25f, 0, 0)));
 		r->mLArm->LocalRotation(quaternion(float3( sinf(t) * PI * .25f, 0, 0)));
 
-		float3 axis = normalize(mScene->Cameras()[0]->WorldPosition() - r->mHead->WorldPosition());
-		float3 up = float3(0, 1, 0);
-		up -= axis * dot(axis, up);
-		axis = cross(axis, up);
-		float angle = length(axis);
-		quaternion q = inverse(r->mHead->Parent()->WorldRotation()) * quaternion(asinf(angle), axis / angle);
-		r->mHead->LocalRotation(slerp(r->mHead->LocalRotation(), q, .1f));
+		v = mScene->Cameras()[0]->WorldPosition() - r->mHead->WorldPosition();
+		quaternion q(float3(atan2f(v.x, v.y), atan2f(v.z, v.x), 0));
+		r->mHead->LocalRotation(slerp(r->mHead->LocalRotation(), inverse(r->mHead->Parent()->WorldRotation()) * q, .1f));
 		r->mHead->LocalPosition(r->mHead->LocalPosition().x, sinf(t + PI * .25f - .01f) * .01f, r->mHead->LocalPosition().z);
 
 		x ^= 0x12f343a5;
@@ -1051,7 +1045,7 @@ void MeshViewer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandB
 				change = false;
 			}
 		}
-	}else{
+	} else {
 		mLightSettingsPanel->mVisible = false;
 		mFileLoadPanel->mVisible = true;
 	}

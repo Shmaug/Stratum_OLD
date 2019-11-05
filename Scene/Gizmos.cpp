@@ -9,6 +9,27 @@ struct GizmoVertex {
 	float3 position;
 	float2 texcoord;
 };
+const ::VertexInput GizmoVertexInput {
+	{
+		0, // binding
+		sizeof(GizmoVertex), // stride
+		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+	},
+	{
+		{
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			0 // offset
+		},
+		{
+			3, // location
+			0, // binding
+			VK_FORMAT_R32G32_SFLOAT, // format
+			sizeof(float3) // offset
+		}
+	}
+};
 
 Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0) {
 	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.shader");
@@ -102,10 +123,8 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 
 	quaternion r = rotation;
 	DrawWireCircle(center, radius, r, float4(.2f,.2f,1,.5f));
-
 	r *= quaternion(float3(0, PI/2, 0));
 	DrawWireCircle(center, radius, r, float4(1,.2f,.2f,.5f));
-	
 	r *= quaternion(float3(PI/2, 0, 0));
 	DrawWireCircle(center, radius, r, float4(.2f,1,.2f,.5f));
 
@@ -126,7 +145,7 @@ void Gizmos::DrawLine(const float3& p0, const float3& p1, const float4& color){
 	float3 v = p1 - p0;
 	float l = length(v);
 	v /= l;
-	float3 axis = cross(v, float3(0,0,1));
+	float3 axis = cross(float3(0,0,1), v);
 	float angle = length(axis);
 	DrawWireCube((p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(asinf(angle), axis / angle), color);
 }
@@ -182,8 +201,8 @@ void Gizmos::DrawWireCircle(const float3& center, float radius, const quaternion
 }
 void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& color){
 	DrawWireCircle(center, radius, quaternion(0,0,0,1), color);
-	DrawWireCircle(center, radius, quaternion(1,0,0,0), color);
-	DrawWireCircle(center, radius, quaternion(0,1,0,0), color);
+	DrawWireCircle(center, radius, quaternion(0, .70710678f, 0, .70710678f), color);
+	DrawWireCircle(center, radius, quaternion(.70710678f, 0, 0, .70710678f), color);
 }
 
 void Gizmos::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
@@ -229,6 +248,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		if (b->Size() < sizeof(Gizmo) * total) {
 			safe_delete(b);
 			b = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			b->Map();
 			gizmoDS->CreateStorageBufferDescriptor(b, OBJECT_BUFFER_BINDING);
 		}
 
@@ -248,12 +268,15 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	});
 
 	Gizmo* buf = (Gizmo*)gizmoBuffer->MappedData();
-	memcpy(buf, mLineDrawList.data(), mLineDrawList.size() * sizeof(Gizmo));
-	buf += mLineDrawList.size();
-	memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
+	if (mLineDrawList.size()){
+		memcpy(buf, mLineDrawList.data(), mLineDrawList.size() * sizeof(Gizmo));
+		buf += mLineDrawList.size();
+	}
+	if (mTriDrawList.size())
+		memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
 
 	if (wireCubeCount + wireCircleCount > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;
@@ -273,7 +296,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	}
 
 	if (cubeCount + billboardCount > 0){
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;
@@ -292,6 +315,8 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		}
 	}
 
+	mTriDrawList.clear();
+	mLineDrawList.clear();
 	mTextures.clear();
 	mTextureMap.clear();
 	mTextures.push_back(mWhiteTexture);
