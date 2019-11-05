@@ -154,6 +154,8 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 			li++;
 		}
 	}
+
+	mGizmos->PreFrame(commandBuffer, backBufferIndex);
 	PROFILER_END;
 }
 
@@ -274,7 +276,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
 				p->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex);
-
+		mGizmos->Draw(commandBuffer, backBufferIndex);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}

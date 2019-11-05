@@ -1024,30 +1024,29 @@ void MeshViewer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandB
 		mFileLoadPanel->mVisible = false;
 		switch (mSelectedLight->Type()) {
 			case LightType::Spot:
-				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(commandBuffer, backBufferIndex,
-				mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
+				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
 					mSelectedLight->Range() * tanf(mSelectedLight->InnerSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(commandBuffer, backBufferIndex,
-				mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
+				gizmos->DrawWireCircle(
+					mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
 					mSelectedLight->Range() * tanf(mSelectedLight->OuterSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
 				break;
 
 			case LightType::Point:
-				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
-				gizmos->DrawWireSphere(commandBuffer, backBufferIndex, mSelectedLight->WorldPosition(), mSelectedLight->Range(), float4(mSelectedLight->Color(), .1f));
+				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Range(), float4(mSelectedLight->Color(), .1f));
 				break;
 			}
 
 		if (input->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
 			quaternion r = mSelectedLight->WorldRotation();
-			if (mScene->Gizmos()->RotationHandle(commandBuffer, backBufferIndex, input->GetPointer(0), mSelectedLight->WorldPosition(), r)) {
+			if (mScene->Gizmos()->RotationHandle(input->GetPointer(0), mSelectedLight->WorldPosition(), r)) {
 				mSelectedLight->LocalRotation(r);
 				change = false;
 			}
 		}else{
 			float3 p = mSelectedLight->WorldPosition();
-			if (mScene->Gizmos()->PositionHandle(commandBuffer, backBufferIndex, input->GetPointer(0), camera->WorldRotation(), p)) {
+			if (mScene->Gizmos()->PositionHandle(input->GetPointer(0), camera->WorldRotation(), p)) {
 				mSelectedLight->LocalPosition(p);
 				change = false;
 			}
@@ -1066,7 +1065,7 @@ void MeshViewer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandB
 		if (hover) hitT = lt;
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
-		gizmos->DrawBillboard(commandBuffer, backBufferIndex, light->WorldPosition(), hover && light != sl ? .09f : .075f, float4(col, 1), 
+		gizmos->DrawBillboard(light->WorldPosition(), hover && light != sl ? .09f : .075f, camera->WorldRotation(), float4(col, 1), 
 			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
 
 		if (hover){

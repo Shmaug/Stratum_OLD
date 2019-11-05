@@ -1,82 +1,64 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
-#pragma multi_compile TEXTURED_QUAD
-
 #pragma render_queue 5000
 #pragma cull false
 #pragma zwrite false
 #pragma blend alpha
 
 #pragma static_sampler Sampler
+#pragma array MainTexture 1024
 
 #include <shadercompat.h>
 
+struct Gizmo {
+	float4 Color;
+	float4 Rotation;
+	float4 TextureST;
+	float3 Position;
+	uint TextureIndex;
+	float3 Scale;
+	uint Type;
+};
+
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
-[[vk::binding(BINDING_START + 0, PER_OBJECT)]] Texture2D<float4> MainTexture : register(t0);
-[[vk::binding(BINDING_START + 1, PER_OBJECT)]] SamplerState Sampler : register(s0);
-
-[[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4 Color;
-	float3 Position;
-	float4 Rotation;
-	float3 Scale;
-	#ifdef TEXTURED_QUAD
-	float4 MainTexture_ST;
-	#endif
-}
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<Gizmo> Gizmos : register(t0);
+[[vk::binding(BINDING_START + 0, PER_OBJECT)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[1024] : register(t1);
 
 struct v2f {
 	float4 pos : SV_Position;
 	float3 viewRay : TEXCOORD0;
 	float3 normal : NORMAL;
-	#ifdef TEXTURED_QUAD
-	float2 uv : TEXCOORD1;
-	#endif
+	float4 color : COLOR0;
+	float2 texcoord : TEXCOORD1;
+	uint textureIndex : TEXCOORD2;
 };
 
+float3 rotate(float4 q, float3 v){
+	return 2 * dot(q.xyz, v) * q.xyz + (q.w * q.w - dot(q.xyz, q.xyz)) * v + 2 * q.w * cross(q.xyz, v);
+}
+
 v2f vsmain(
-	#ifdef TEXTURED_QUAD
-	uint index : SV_VertexID
-	#else
-	[[vk::location(0)]] float3 vertex : POSITION
-	#endif
-	) {
+	[[vk::location(0)]] float3 vertex : Position,  
+	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
+	uint i : SV_InstanceID ) {
 	v2f o;
-	
-	#ifdef TEXTURED_QUAD
-	static const float2 positions[6] = {
-		float2(0,0),
-		float2(1,0),
-		float2(0,1),
-		float2(1,0),
-		float2(1,1),
-		float2(0,1)
-	};
-	float3 worldPos = float3((positions[index]*2-1), 0) * Scale;
-	worldPos = Camera.Right * worldPos.x + Camera.Up * worldPos.y;
-	o.uv = positions[index] * MainTexture_ST.xy + MainTexture_ST.zw;
-	#else
-	float3 worldPos = vertex * Scale;
-	worldPos = 2 * dot(Rotation.xyz, worldPos) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * worldPos + 2 * Rotation.w * cross(Rotation.xyz, worldPos);
-	#endif
 
-	worldPos += Position;
-	o.viewRay = worldPos - Camera.Position;
-
-	float3 normal = float3(0, 0, 1);
-	o.normal = 2 * dot(Rotation.xyz, normal) * Rotation.xyz + (Rotation.w * Rotation.w - dot(Rotation.xyz, Rotation.xyz)) * normal + 2 * Rotation.w * cross(Rotation.xyz, normal);
+	float3 worldPos = Gizmos[i].Position + rotate(Gizmos[i].Rotation, vertex * Gizmos[i].Scale);
 	o.pos = mul(Camera.ViewProjection, float4(worldPos, 1));
+	o.viewRay = worldPos - Camera.Position;
+	o.normal = rotate(Gizmos[i].Rotation, float3(0,0,1));
+	o.color = Gizmos[i].Color;
+	o.texcoord = texcoord;
+	o.textureIndex = Gizmos[i].TextureIndex;
 	return o;
 }
 
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
-	color = Color;
-	#ifdef TEXTURED_QUAD
-	color *= MainTexture.Sample(Sampler, i.uv);
-	#endif
+	color = MainTexture[i.textureIndex].Sample(Sampler, i.texcoord) * i.color;
 	depthNormal = float4(normalize(i.normal * .5 + .5), length(i.viewRay) / Camera.Viewport.w);
 }

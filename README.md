@@ -35,7 +35,6 @@ BUILD_SHARED_LIBS=FALSE
 
 ## TODO
 
-- Vectorize math library
 - Proper scene BVH
 - Shadow mapping
 - Tiled lighting

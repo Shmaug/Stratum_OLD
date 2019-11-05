@@ -168,9 +168,9 @@ void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, Comma
 void SkinnedMeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	if (mRig.size()){
 		for (auto b : mRig) {
-			Scene()->Gizmos()->DrawWireSphere(commandBuffer, backBufferIndex, b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));
+			Scene()->Gizmos()->DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));
 			if (Bone* parent = dynamic_cast<Bone*>(b->Parent()))
-				Scene()->Gizmos()->DrawLine(commandBuffer, backBufferIndex, b->WorldPosition(), parent->WorldPosition(), float4(0.25f, 1.f, 0.25f, 1.f));
+				Scene()->Gizmos()->DrawLine(b->WorldPosition(), parent->WorldPosition(), float4(0.25f, 1.f, 0.25f, 1.f));
 		}
 	}
 }
