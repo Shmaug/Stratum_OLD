@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef WINDOWS
+#pragma warning(push)
+#pragma warning(disable:26495)
+#endif
+
 #include <cassert>
 #include <math.h>
 
@@ -18,6 +23,7 @@
 #ifdef abs
 #undef abs
 #endif
+
 
 #define PI 3.1415926535897932384626433832795f
 
@@ -424,11 +430,6 @@ struct uint2 {
 		return *this;
 	}
 
-	inline uint2 operator -() const {
-		uint2 r;
-		rpt2(i) r.v[i] = -v[i];
-		return r;
-	}
 	inline uint2 operator -(uint32_t s) const {
 		uint2 r;
 		rpt2(i) r.v[i] = v[i] - s;
@@ -548,11 +549,6 @@ struct uint3 {
 		return *this;
 	}
 
-	inline uint3 operator -() const {
-		uint3 r;
-		rpt3(i) r.v[i] = -v[i];
-		return r;
-	}
 	inline uint3 operator -(uint32_t s) const {
 		uint3 r;
 		rpt3(i) r.v[i] = v[i] - s;
@@ -676,11 +672,6 @@ struct uint4 {
 		return *this;
 	}
 
-	inline uint4 operator -() const {
-		uint4 r;
-		rpt4(i) r.v[i] = -v[i];
-		return r;
-	}
 	inline uint4 operator -(uint32_t s) const {
 		uint4 r;
 		rpt4(i) r.v[i] = v[i] - s;
@@ -1811,7 +1802,6 @@ namespace std {
 inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b; }
 inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b; }
 inline int32_t clamp(int32_t x, int32_t l, int32_t h) { return min(max(x, l), h); }
-inline int32_t abs(int32_t a) { return a < 0 ? -a : a; }
 
 inline int2 min(const int2& a, const int2& b) {
 	int2 r;
@@ -2042,3 +2032,7 @@ inline quaternion slerp(const quaternion& v0, quaternion v1, float t){
 #undef rpt2
 #undef rpt3
 #undef rpt4
+
+#ifdef WINDOWS
+#pragma warning(pop)
+#endif

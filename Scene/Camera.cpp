@@ -263,13 +263,6 @@ void Camera::PreRender() {
 		mPixelHeight = mTargetWindow->BackBufferSize().height;
 		DirtyFramebuffers();
 		mMatricesDirty = true;
-
-		mViewport.x = 0;
-		mViewport.y = 0;
-		mViewport.width = (float)mPixelWidth;
-		mViewport.height = (float)mPixelHeight;
-		mViewport.minDepth = 0.f;
-		mViewport.maxDepth = 1.f;
 	}
 }
 void Camera::PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
@@ -353,7 +346,13 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 		{ 1.f, 0.f },
 	};
 	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, 3);
-
+	
+	mViewport.x = 0;
+	mViewport.y = 0;
+	mViewport.width = (float)mPixelWidth;
+	mViewport.height = (float)mPixelHeight;
+	mViewport.minDepth = 0.f;
+	mViewport.maxDepth = 1.f;
 	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 
 	VkRect2D scissor{ {0, 0}, { mPixelWidth, mPixelHeight } };

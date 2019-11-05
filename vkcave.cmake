@@ -6,6 +6,13 @@ else()
 	set (CMAKE_CXX_STANDARD 17)
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftree-vectorize")
+endif()
+if(MSVC)
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26451 /wd26812")
+endif()
+
 function(link_plugin TARGET_NAME)
 	target_include_directories(${TARGET_NAME} PUBLIC
 		"${VKCAVE_HOME}"
@@ -41,8 +48,6 @@ function(link_plugin TARGET_NAME)
 		if (${ENABLE_DEBUG_LAYERS})
 			target_link_libraries(${TARGET_NAME} "$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib")
 		endif()
-
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26812 /wd26451") # unscoped enum, arithmetic overflow
 	endif(WIN32)
 	
 	if (${ENABLE_DEBUG_LAYERS})

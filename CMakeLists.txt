@@ -73,8 +73,6 @@ if(WIN32)
 	target_include_directories(ShaderCompiler PUBLIC 
 		"$ENV{VULKAN_SDK}/include" "${VKCAVE_HOME}/ThirdParty/SPIRV-Cross/include")
 
-	set_target_properties(ShaderCompiler Engine VkCave PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS} /wd26451 /wd26812 /wd26451") # uninitialzed struct variable
-
 	target_compile_definitions(VkCave PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 	target_compile_definitions(Engine PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 	target_compile_definitions(ShaderCompiler PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
