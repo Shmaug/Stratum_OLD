@@ -202,8 +202,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const string& filename,
 				mn = vertex.position;
 				mx = vertex.position;
 			} else {
-				mn = vmin(vertex.position, mn);
-				mx = vmax(vertex.position, mx);
+				mn = min(vertex.position, mn);
+				mx = max(vertex.position, mx);
 			}
 
 			vertices.push_back(vertex);
@@ -368,8 +368,8 @@ Mesh::Mesh(const string& name, ::DeviceManager* devices, const void* vertices, c
 		if (i == 0)
 			mn = mx = pos;
 		else {
-			mn = vmin(pos, mn);
-			mx = vmax(pos, mx);
+			mn = min(pos, mn);
+			mx = max(pos, mx);
 		}
 	}
 
@@ -398,8 +398,8 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 		if (i == 0)
 			mn = mx = pos;
 		else {
-			mn = vmin(pos, mn);
-			mx = vmax(pos, mx);
+			mn = min(pos, mn);
+			mx = max(pos, mx);
 		}
 	}
 

@@ -95,7 +95,7 @@ Font::Font(const string& name, DeviceManager* deviceManager, const string& filen
 			// |         space |
 			// |_______________|
 			box.rect.offset = space.offset;
-			packedSize = vmax(packedSize, uint2(space.offset.x + box.rect.extent.width, space.offset.y + box.rect.extent.height));
+			packedSize = max(packedSize, uint2(space.offset.x + box.rect.extent.width, space.offset.y + box.rect.extent.height));
 
 			if (box.rect.extent.width == space.extent.width && box.rect.extent.height == space.extent.height) {
 				spaces.erase(spaces.begin() + i);
@@ -284,8 +284,8 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB& aabb, std::v
 	for (uint32_t i = 0; i < glyphCount; i++) {
 		glyphs[i].mPosition.y += verticalOffset;
 		if (i == 0) mn = mx = glyphs[i].mPosition;
-		mn = vmin(mn, glyphs[i].mPosition);
-		mx = vmax(mx, glyphs[i].mPosition + glyphs[i].mSize);
+		mn = min(mn, glyphs[i].mPosition);
+		mx = max(mx, glyphs[i].mPosition + glyphs[i].mSize);
 	}
 
 	aabb = AABB(float3((mn + mx) * .5f, 0), float3((mx - mn) * .5f, 0));
