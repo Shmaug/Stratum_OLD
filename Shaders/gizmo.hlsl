@@ -45,14 +45,15 @@ v2f vsmain(
 	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
 	uint i : SV_InstanceID ) {
 	v2f o;
+	Gizmo g = Gizmos[i];
 
-	float3 worldPos = Gizmos[i].Position + rotate(Gizmos[i].Rotation, vertex * Gizmos[i].Scale);
+	float3 worldPos = g.Position + rotate(g.Rotation, vertex * g.Scale);
 	o.pos = mul(Camera.ViewProjection, float4(worldPos, 1));
 	o.viewRay = worldPos - Camera.Position;
-	o.normal = rotate(Gizmos[i].Rotation, float3(0,0,1));
-	o.color = Gizmos[i].Color;
-	o.texcoord = texcoord;
-	o.textureIndex = Gizmos[i].TextureIndex;
+	o.normal = rotate(g.Rotation, float3(0,0,1));
+	o.color = g.Color;
+	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;
+	o.textureIndex = g.TextureIndex;
 	return o;
 }
 

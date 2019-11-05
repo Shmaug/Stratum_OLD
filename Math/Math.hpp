@@ -1247,11 +1247,16 @@ struct quaternion {
 		euler *= .5f;
 		float3 c = cos(euler);
 		float3 s = sin(euler);
+		
+		float4 m0(s.x, c.x, c.x, c.x);
+		float4 m1(c.y, s.y, c.y, c.y);
+		float4 m2(c.z, c.z, s.z, c.z);
 
-		x = s.x * c.y * c.z - c.x * s.y * s.z;
-		y = c.x * s.y * c.z + s.x * c.y * s.z;
-		z = c.x * c.y * s.z - s.x * s.y * c.z;
-		w = c.x * c.y * c.z + s.x * s.y * s.z;
+		float4 m3(-c.x, s.x, -s.x, s.x);
+		float4 m4(s.y, c.y, s.y, s.y);
+		float4 m5(s.z, s.z, c.z, s.z);
+
+		xyzw = m0*m1*m2 + m3*m4*m5;
 	};
 	inline quaternion(float angle, const float3& axis) {
 		angle *= .5f;

@@ -254,6 +254,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 	unordered_map<shaderc_shader_kind, string> stages;
 	vector<string> kernels;
 	vector<string> staticSamplers;
+	vector<pair<string, uint32_t>> arrays; // name, size
 
 	uint32_t renderQueue = 1000;
 
@@ -316,13 +317,19 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 				} else if (*it == "kernel") {
 					if (++it == words.end()) return false;
 					kernels.push_back(*it);
+
 				} else if (*it == "static_sampler") {
 					if (++it == words.end()) return false;
 					staticSamplers.push_back(*it);
 
-				}else if (*it == "render_queue"){
+				} else if (*it == "array") {
 					if (++it == words.end()) return false;
-					renderQueue = atoi((*it).c_str());
+					string name = *it;
+					if (++it == words.end()) return false;
+					arrays.push_back(make_pair(name, (uint32_t)atoi(it->c_str())));
+				} else if (*it == "render_queue"){
+					if (++it == words.end()) return false;
+					renderQueue = atoi(it->c_str());
 
 				} else if (*it == "zwrite") {
 					if (++it == words.end()) return false;
@@ -399,23 +406,27 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 			uint32_t bc = (uint32_t)descriptorBindings.size();
 			output.write(reinterpret_cast<const char*>(&bc), sizeof(uint32_t));
 			for (const auto& b : descriptorBindings) {
-				uint32_t nlen = (uint32_t)b.first.length();
-				output.write(reinterpret_cast<const char*>(&nlen), sizeof(uint32_t));
-				output.write(b.first.c_str(), nlen);
-
-				output.write(reinterpret_cast<const char*>(&b.second.first), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.binding), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.descriptorCount), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.descriptorType), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.stageFlags), sizeof(VkShaderStageFlagBits));
-
+				uint32_t descriptorCount = b.second.second.descriptorCount;
 				uint32_t static_sampler = 0;
-				for (const auto& s : staticSamplers) {
+				for (const string& s : staticSamplers)
 					if (s == b.first) {
 						static_sampler = 1;
 						break;
 					}
-				}
+				for (const auto& s : arrays)
+					if (s.first == b.first) {
+						descriptorCount = s.second;
+						break;
+					}
+
+				uint32_t nlen = (uint32_t)b.first.length();
+				output.write(reinterpret_cast<const char*>(&nlen), sizeof(uint32_t));
+				output.write(b.first.c_str(), nlen);
+				output.write(reinterpret_cast<const char*>(&b.second.first), sizeof(uint32_t));
+				output.write(reinterpret_cast<const char*>(&b.second.second.binding), sizeof(uint32_t));
+				output.write(reinterpret_cast<const char*>(&descriptorCount), sizeof(uint32_t));
+				output.write(reinterpret_cast<const char*>(&b.second.second.descriptorType), sizeof(uint32_t));
+				output.write(reinterpret_cast<const char*>(&b.second.second.stageFlags), sizeof(VkShaderStageFlagBits));
 				output.write(reinterpret_cast<const char*>(&static_sampler), sizeof(uint32_t));
 			}
 
@@ -425,7 +436,6 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 				uint32_t nlen = (uint32_t)b.first.length();
 				output.write(reinterpret_cast<const char*>(&nlen), sizeof(uint32_t));
 				output.write(b.first.c_str(), nlen);
-
 				output.write(reinterpret_cast<const char*>(&b.second.offset), sizeof(uint32_t));
 				output.write(reinterpret_cast<const char*>(&b.second.size), sizeof(uint32_t));
 				output.write(reinterpret_cast<const char*>(&b.second.stageFlags), sizeof(VkShaderStageFlagBits));
