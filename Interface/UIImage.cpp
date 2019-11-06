@@ -22,7 +22,7 @@ UIImage::~UIImage() {
 	}
 }
 
-void UIImage::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void UIImage::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!Texture() || !mVisible) return;
 	if (mColor.a <= 0 && (!mOutline || mOutlineColor.a <= 0)) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/ui.shader");

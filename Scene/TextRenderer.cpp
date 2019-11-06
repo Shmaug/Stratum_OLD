@@ -56,7 +56,7 @@ void TextRenderer::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void TextRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mGlyphCount = 0;
@@ -109,6 +109,6 @@ void TextRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffe
 	commandBuffer->mTriangleCount += data.mGlyphCount * 2;
 }
 
-void TextRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void TextRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
 };

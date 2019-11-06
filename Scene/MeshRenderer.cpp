@@ -35,7 +35,7 @@ bool MeshRenderer::Batchable(Device* device) {
 	return mNeedsLightData == 1 && mNeedsObjectData == 1;
 }
 
-void MeshRenderer::DrawInstanced(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
+void MeshRenderer::DrawInstanced(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();
 
 	::Mesh* m = Mesh();
@@ -58,10 +58,10 @@ void MeshRenderer::DrawInstanced(const FrameTime& frameTime, Camera* camera, Com
 	commandBuffer->mTriangleCount += instanceCount * (m->IndexCount() / 3);
 }
 
-void MeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, 1, nullptr, materialOverride);
+void MeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+	DrawInstanced( camera, commandBuffer, backBufferIndex, 1, nullptr, materialOverride);
 }
 
-void MeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void MeshRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
 };

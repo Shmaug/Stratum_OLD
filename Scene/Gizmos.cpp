@@ -205,8 +205,8 @@ void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& co
 	DrawWireCircle(center, radius, quaternion(.70710678f, 0, 0, .70710678f), color);
 }
 
-void Gizmos::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
-	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+void Gizmos::PreFrame(Device* device, uint32_t backBufferIndex){
+	DeviceData& data = mDeviceData.at(device);
 	data.mBufferIndex[backBufferIndex] = 0;
 }
 void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {

@@ -10,6 +10,7 @@ using namespace std;
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
 	mGizmos = new ::Gizmos(this);
+	mShadowMaterial = make_shared<Material>("Shadow", mAssetManager->LoadShader("Shaders/shadow.shader"));
 }
 Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
@@ -24,6 +25,7 @@ Scene::~Scene(){
 		safe_delete_array(kp.second.mInstanceBuffers);
 		safe_delete_array(kp.second.mLightBuffers);
 		safe_delete_array(kp.second.mInstanceDescriptorSets);
+		safe_delete(kp.second.mShadowCamera);
 	}
 	safe_delete(mGizmos);
 
@@ -111,25 +113,32 @@ void Scene::RemoveObject(Object* object) {
 }
 
 void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
-	if (mDeviceData.count(commandBuffer->Device()) == 0) {
-		DeviceData& data = mDeviceData[commandBuffer->Device()];
-		data.mLightBuffers = new Buffer * [commandBuffer->Device()->MaxFramesInFlight()];
-		data.mInstanceBuffers = new vector<Buffer*>[commandBuffer->Device()->MaxFramesInFlight()];
-		data.mInstanceDescriptorSets = new vector<DescriptorSet*>[commandBuffer->Device()->MaxFramesInFlight()];
-		data.mInstanceIndex = new uint32_t[commandBuffer->Device()->MaxFramesInFlight()];
-		memset(data.mLightBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * commandBuffer->Device()->MaxFramesInFlight());
+	Device* device = commandBuffer->Device();
+	
+	if (mDeviceData.count(device) == 0) {
+		DeviceData& data = mDeviceData[device];
+		uint32_t c = device->MaxFramesInFlight();
+		data.mLightBuffers = new Buffer*[c];
+		data.mInstanceBuffers = new vector<Buffer*>[c];
+		data.mInstanceDescriptorSets = new vector<DescriptorSet*>[c];
+		data.mInstanceIndex = new uint32_t[c];
+		memset(data.mLightBuffers, 0, sizeof(Buffer*) * c);
+		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * c);
+		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * c);
+
+		data.mShadowCamera = new Camera("ShadowCamera", device, VK_FORMAT_R16_UNORM, VK_FORMAT_D32_SFLOAT);
+		data.mShadowCamera->PixelWidth(4096);
+		data.mShadowCamera->PixelHeight(4096);
+		data.mShadowCamera->SampleCount(VK_SAMPLE_COUNT_1_BIT);
 	}
-	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	DeviceData& data = mDeviceData.at(device);
 	data.mInstanceIndex[backBufferIndex] = 0;
 
 	PROFILER_BEGIN("Gather Lights");
 	Buffer*& lb = data.mLightBuffers[backBufferIndex];
-	if (lb && lb->Size() < mLights.size() * sizeof(GPULight))
-		safe_delete(lb);
+	if (lb && lb->Size() < mLights.size() * sizeof(GPULight)) safe_delete(lb);
 	if (!lb) {
-		lb = new Buffer("Light Buffer", commandBuffer->Device(), max(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		lb = new Buffer("Light Buffer", device, max(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
 	mActiveLights.clear();
@@ -139,6 +148,13 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		for (Light* l : mLights) {
 			if (!l->EnabledHierarchy()) continue;
 			mActiveLights.push_back(l);
+
+			if (l->Type() == Sun) {
+				data.mShadowCamera->Orthographic(true);
+				data.mShadowCamera->OrthographicSize(10);
+				data.mShadowCamera->LocalRotation(l->WorldRotation());
+				data.mShadowCamera->LocalPosition(l->WorldRotation() * float3(0, 0, -10));
+			}
 			
 			float cosInner = cosf(l->InnerSpotAngle());
 			float cosOuter = cosf(l->OuterSpotAngle());
@@ -154,12 +170,19 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 			li++;
 		}
 	}
-
-	mGizmos->PreFrame(commandBuffer, backBufferIndex);
 	PROFILER_END;
+
+	PROFILER_BEGIN("Render Shadows");
+	bool g = mDrawGizmos;
+	mDrawGizmos = false;
+	//Render(data.mShadowCamera, commandBuffer, backBufferIndex, mShadowMaterial.get());
+	mDrawGizmos = g;
+	PROFILER_END;
+
+	mGizmos->PreFrame(device, backBufferIndex);
 }
 
-void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
+void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
 	PROFILER_BEGIN("Gather/Sort Renderers");
@@ -167,7 +190,6 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	for (Renderer* r : mRenderers)
 		if (r->Visible() && camera->IntersectFrustum(r->Bounds()))
 			mRenderList.push_back(r);
-
 	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
 		if (a->RenderQueue() == b->RenderQueue())
 			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
@@ -178,7 +200,6 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 						return ma->Mesh() < mb->Mesh();
 		return a->RenderQueue() < b->RenderQueue();
 	});
-	
 	PROFILER_END;
 
 	camera->PreRender();
@@ -186,9 +207,9 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PreRender(frameTime, camera, commandBuffer, backBufferIndex);
+			p->PreRender(camera, commandBuffer, backBufferIndex);
 	for (Renderer* r : mRenderList)
-		r->PreRender(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
+		r->PreRender(camera, commandBuffer, backBufferIndex, materialOverride);
 	PROFILER_END;
 
 	// combine MeshRenderers that have the same material and mesh
@@ -215,7 +236,7 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 				// not batchable
 				if (batchStart) {
 					BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-					batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+					batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
 					END_CMD_REGION(commandBuffer);
 				}
 				
@@ -245,20 +266,20 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 			// render last batch
 			if (batchStart) {
 				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-				batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+				batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
 				END_CMD_REGION(commandBuffer);
 				batchStart = nullptr;
 			}
 			
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
-			r->Draw(frameTime, camera, commandBuffer, backBufferIndex, materialOverride);
+			r->Draw(camera, commandBuffer, backBufferIndex, materialOverride);
 			END_CMD_REGION(commandBuffer);
 		}
 	}
 	// render last batch
 	if (batchStart) {
 		BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-		batchStart->DrawInstanced(frameTime, camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+		batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
 		END_CMD_REGION(commandBuffer);
 	}
 	PROFILER_END;
@@ -269,13 +290,13 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy()) {
 				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
-				r->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex);
+				r->DrawGizmos(camera, commandBuffer, backBufferIndex);
 				END_CMD_REGION(commandBuffer);
 			}
 
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
-				p->DrawGizmos(frameTime, camera, commandBuffer, backBufferIndex);
+				p->DrawGizmos(camera, commandBuffer, backBufferIndex);
 		mGizmos->Draw(commandBuffer, backBufferIndex);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
@@ -289,10 +310,10 @@ void Scene::Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* co
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PostRender(frameTime, camera, commandBuffer, backBufferIndex);
+			p->PostRender(camera, commandBuffer, backBufferIndex);
 	PROFILER_END;
 
-	camera->PostRender(commandBuffer, backBufferIndex);
+	camera->ResolveWindow(commandBuffer, backBufferIndex);
 }
 
 Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {

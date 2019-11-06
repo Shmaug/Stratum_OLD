@@ -70,7 +70,7 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void SkinnedMeshRenderer::PreRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
@@ -113,7 +113,7 @@ void SkinnedMeshRenderer::PreRender(const FrameTime& frameTime, Camera* camera, 
     }
 }
 
-void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();
 	if (!material) return;
 
@@ -165,7 +165,7 @@ void SkinnedMeshRenderer::Draw(const FrameTime& frameTime, Camera* camera, Comma
 	commandBuffer->mTriangleCount += m->IndexCount() / 3;
 }
 
-void SkinnedMeshRenderer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void SkinnedMeshRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	if (mRig.size()){
 		for (auto b : mRig) {
 			Scene()->Gizmos()->DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));

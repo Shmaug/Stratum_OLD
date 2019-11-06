@@ -38,7 +38,7 @@ void PointRenderer::Points(const vector<Point>& points) {
 	mAABB = AABB(mPointAABB, ObjectToWorld());
 }
 
-void PointRenderer::Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void PointRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
 	if (!mPoints.size()) return;
 
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();

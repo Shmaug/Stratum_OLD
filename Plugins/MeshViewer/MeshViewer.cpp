@@ -44,7 +44,7 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
-	PLUGIN_EXPORT void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	PLUGIN_EXPORT void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
 private:
 	float mLastClick;
@@ -1003,7 +1003,7 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 	}
 }
 
-void MeshViewer::DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void MeshViewer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	const Ray& ray = input->GetPointer(0)->mWorldRay;

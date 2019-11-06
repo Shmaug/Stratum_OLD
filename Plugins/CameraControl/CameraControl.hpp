@@ -11,7 +11,7 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
-	PLUGIN_EXPORT void PostRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	PLUGIN_EXPORT void PostRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
 	inline void CameraDistance(float d) { mCameraDistance = d; }
 	inline float CameraDistance() const { return mCameraDistance; }
