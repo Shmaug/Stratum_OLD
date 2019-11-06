@@ -56,13 +56,13 @@ void CameraControl::Update(const FrameTime& frameTime) {
 			break;
 		}
 	}
-	c->AddChild(mFpsText);
-
-	float d = c->Near() + .001f;
-	float y = d * tanf(c->FieldOfView() * .5f);
-	float x = y * c->Aspect();
-	mFpsText->LocalPosition(x * (-1.f + 32.f / c->PixelWidth()), y * (1.f - 32.f / c->PixelHeight()), d);
-	mFpsText->TextScale(d * .015f);
+	if (c) {
+		c->AddChild(mFpsText);
+		float d = c->Near() + .001f;
+		float3 r = inverse(c->WorldRotation()) * c->ClipToWorldRay(float3(-.95f, -.95f, 1.f));
+		mFpsText->LocalPosition(r * d / r.z);
+		mFpsText->TextScale(d * .015f);
+	}
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 
@@ -101,6 +101,6 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	}
 }
 
-void CameraControl::PostRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void CameraControl::PostRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	mTriangleCount = commandBuffer->mTriangleCount;
 }

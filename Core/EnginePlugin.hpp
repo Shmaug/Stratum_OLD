@@ -23,9 +23,9 @@ public:
 	inline virtual void Update	  (const FrameTime& frameTime) {}
 	inline virtual void PostUpdate(const FrameTime& frameTime) {}
 	
-	inline virtual void PreRender (const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
-	inline virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
-	inline virtual void PostRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
+	inline virtual void PreRender (Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
+	inline virtual void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
+	inline virtual void PostRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {}
 	
 	// Higher priority plugins get called first
 	inline virtual int Priority() { return 50; }

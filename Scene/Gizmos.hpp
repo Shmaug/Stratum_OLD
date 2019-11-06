@@ -28,7 +28,7 @@ public:
 
 private:
 	friend class Scene;
-	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT void PreFrame(Device* device, uint32_t backBufferIndex);
 	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 
 	struct DeviceData {

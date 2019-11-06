@@ -27,7 +27,7 @@ public:
 	inline virtual bool Visible() override { return mVisible && mPoints.size() && EnabledHeirarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 
-	PLUGIN_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	PLUGIN_EXPORT virtual void Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 
 	inline AABB Bounds() override { UpdateTransform(); return mAABB; }
 

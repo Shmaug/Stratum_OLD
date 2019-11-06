@@ -14,10 +14,10 @@ public:
 
 	ENGINE_EXPORT virtual Bone* GetBone(const std::string& name) const;
 	
-	ENGINE_EXPORT virtual void PreRender(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
-	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void PreRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
 	
-	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) override;
+	ENGINE_EXPORT virtual void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) override;
 
 protected:
 	struct DeviceData {

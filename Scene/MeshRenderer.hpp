@@ -28,11 +28,10 @@ public:
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
-	ENGINE_EXPORT virtual void Draw(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
-	ENGINE_EXPORT virtual void DrawGizmos(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) override;
+	ENGINE_EXPORT virtual void Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) override;
 	
-	// instanceDS contains Objects[] and Lights[] SRVs at locations specified in shadercompat
-	ENGINE_EXPORT virtual void DrawInstanced(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride);
+	ENGINE_EXPORT virtual void DrawInstanced(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride);
 
 	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
 	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }

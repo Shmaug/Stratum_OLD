@@ -22,7 +22,7 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 	ENGINE_EXPORT virtual void PreRender();
-	ENGINE_EXPORT virtual void PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT virtual void ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT virtual void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	ENGINE_EXPORT virtual void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	inline virtual ::RenderPass* RenderPass() const { return mRenderPass; }
@@ -35,6 +35,8 @@ public:
 
 	inline Window* TargetWindow() const { return mTargetWindow; }
 
+	inline virtual bool Orthographic() const { return mOrthographic; }
+	inline virtual float OrthographicSize() const { return mOrthographicSize; }
 	inline virtual float Aspect() const { return (float)mPixelWidth / (float)mPixelHeight; }
 	inline virtual float Near() const { return mNear; }
 	inline virtual float Far() const { return mFar; }
@@ -44,6 +46,8 @@ public:
 	inline virtual uint32_t PixelHeight() const { return mPixelHeight; }
 	inline virtual VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 
+	inline virtual void Orthographic(bool o) { mOrthographic = o; mMatricesDirty = true; }
+	inline virtual void OrthographicSize(float s) { mOrthographicSize = s; mMatricesDirty = true; }
 	inline virtual void Near(float n) { mNear = n; mMatricesDirty = true; }
 	inline virtual void Far (float f) { mFar = f;  mMatricesDirty = true; }
 	inline virtual void FieldOfView(float f) { mPerspectiveBounds = float4(0.f); mFieldOfView = f; mMatricesDirty = true; }

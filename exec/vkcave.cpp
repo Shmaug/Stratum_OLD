@@ -67,6 +67,14 @@ private:
 	#endif
 
 	void Render(FrameTime* frameTime, uint32_t backBufferIndex, vector<shared_ptr<Fence>>& fences) {
+		PROFILER_BEGIN("Get CommandBuffers");
+		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
+		for (uint32_t i = 0; i < mScene->DeviceManager()->DeviceCount(); i++) {
+			shared_ptr<CommandBuffer> commandBuffer = mScene->DeviceManager()->GetDevice(i)->GetCommandBuffer();
+			commandBuffers.emplace(commandBuffer->Device(), commandBuffer);
+		}
+		PROFILER_END;
+
 		PROFILER_BEGIN("Sort Cameras");
 		// sort cameras so that RenderDepth of 0 is last
 		sort(mScene->mCameras.begin(), mScene->mCameras.end(), [](const auto& a, const auto& b) {
@@ -74,23 +82,15 @@ private:
 		});
 		PROFILER_END;
 
+		PROFILER_BEGIN("Scene Pre Frame");
+		for (auto& d : commandBuffers)
+			mScene->PreFrame(d.second.get(), backBufferIndex);
+		PROFILER_END;
+
 		PROFILER_BEGIN("Render Cameras");
-		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
 		for (const auto& camera : mScene->Cameras()) {
 			if (!camera->EnabledHierarchy()) continue;
-
-			PROFILER_BEGIN("Get CommandBuffer");
-			shared_ptr<CommandBuffer> commandBuffer;
-			if (commandBuffers.count(camera->Device()))
-				commandBuffer = commandBuffers.at(camera->Device());
-			else {
-				commandBuffer = camera->Device()->GetCommandBuffer();
-				commandBuffers.emplace(camera->Device(), commandBuffer);
-				mScene->PreFrame(commandBuffer.get(), backBufferIndex);
-			}
-			PROFILER_END;
-
-			mScene->Render(*frameTime, camera, commandBuffer.get(), backBufferIndex, nullptr);
+			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), backBufferIndex, nullptr);
 		}
 		PROFILER_END;
 

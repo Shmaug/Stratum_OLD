@@ -33,11 +33,13 @@ private:
 		Buffer** mLightBuffers;
 		std::vector<Buffer*>* mInstanceBuffers;
 		std::vector<DescriptorSet*>* mInstanceDescriptorSets;
+		Camera* mShadowCamera;
 		uint32_t* mInstanceIndex;
 	};
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 
 	std::vector<Light*> mActiveLights;
+	std::shared_ptr<Material> mShadowMaterial;
 
 	::AssetManager* mAssetManager;
 	::DeviceManager* mDeviceManager;
@@ -52,14 +54,13 @@ private:
 	bool mDrawGizmos;
 
 public:
-
 	ENGINE_EXPORT ~Scene();
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	ENGINE_EXPORT void Render(const FrameTime& frameTime, Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
+	ENGINE_EXPORT void Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 
