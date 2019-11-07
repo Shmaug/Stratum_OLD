@@ -3,7 +3,7 @@
 
 using namespace std;
 
-DescriptorSet::DescriptorSet(const string& name, DescriptorPool* pool, VkDescriptorSetLayout layout) : mDescriptorPool(pool) {
+DescriptorSet::DescriptorSet(const string& name, DescriptorPool* pool, VkDescriptorSetLayout layout) : mDescriptorPool(pool), mLayout(layout) {
 	mDescriptorSet = pool->AllocateDescriptorSet(layout);
 	pool->Device()->SetObjectName(mDescriptorSet, name);
 }

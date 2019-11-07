@@ -174,7 +174,7 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 		if (mipLevels == 0)
 			GenerateMipMaps(commandBuffer.get());
 		else
-			TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+			TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer));
 	}
@@ -216,7 +216,7 @@ Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize 
 	if (mipLevels == 0)
 		GenerateMipMaps(commandBuffer.get());
 	else
-		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 	device->Execute(commandBuffer)->Wait();
 

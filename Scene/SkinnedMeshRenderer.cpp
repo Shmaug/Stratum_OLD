@@ -124,9 +124,7 @@ void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uin
 
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
-	if (mNeedsObjectData == 2)
-        mNeedsObjectData = (uint8_t)shader->mDescriptorBindings.count("Object");
-	if (mNeedsObjectData) {
+	if (shader->mDescriptorBindings.count("Object")) {
 		VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 		VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
 		float4x4 mt = ObjectToWorld();
@@ -135,12 +133,7 @@ void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uin
 		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
 	}
 
-	if (mNeedsLightData == 2) {
-		mNeedsLightData = (uint8_t)shader->mDescriptorBindings.count("Lights");
-		if (mNeedsLightData)
-			mLightCountRange = shader->mPushConstants.at("LightCount");
-	}
-	if (mNeedsLightData == 1) {
+	if (shader->mDescriptorBindings.count("Lights")) {
 		if (!data.mDescriptorSets[backBufferIndex])
 			data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 
@@ -150,8 +143,9 @@ void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uin
 			data.mBoundLightBuffers[backBufferIndex] = lights;
 		}
 
+		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		vkCmdPushConstants(*commandBuffer, layout, mLightCountRange.stageFlags, mLightCountRange.offset, mLightCountRange.size, &lc);
+		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
 		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	}

@@ -8,7 +8,7 @@
 using namespace std;
 
 MeshRenderer::MeshRenderer(const string& name)
-	: Object(name), mVisible(true), mMesh(nullptr), mNeedsObjectData(2), mNeedsLightData(2), mLightCountRange({}), mCollisionMask(0x01) {}
+	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01), mCastShadows(true) {}
 MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
@@ -21,18 +21,6 @@ bool MeshRenderer::UpdateTransform() {
 
 void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
-	mNeedsLightData = 2;
-	mNeedsObjectData = 2;
-}
-
-bool MeshRenderer::Batchable(Device* device) {
-	auto shader = mMaterial->GetShader(device);
-	if (mNeedsLightData == 2) {
-		mNeedsLightData = (uint32_t)shader->mDescriptorBindings.count("Lights");
-		if (mNeedsLightData == 1) mLightCountRange = shader->mPushConstants.at("LightCount");
-	}
-	if (mNeedsObjectData == 2) mNeedsObjectData = (uint32_t)shader->mDescriptorBindings.count("Objects");
-	return mNeedsLightData == 1 && mNeedsObjectData == 1;
 }
 
 void MeshRenderer::DrawInstanced(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
@@ -43,11 +31,12 @@ void MeshRenderer::DrawInstanced(Camera* camera, CommandBuffer* commandBuffer, u
 	if (!layout) return;
 	auto shader = material->GetShader(commandBuffer->Device());
 
-	if (mNeedsLightData == 1) {
+	if (shader->mPushConstants.count("LightCount")) {
+		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		vkCmdPushConstants(*commandBuffer, layout, mLightCountRange.stageFlags, mLightCountRange.offset, mLightCountRange.size, &lc);
+		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
 	}
-	if (mNeedsLightData == 1 && mNeedsObjectData == 1 && instanceDS != VK_NULL_HANDLE)
+	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
 	VkDeviceSize vboffset = 0;
@@ -59,7 +48,7 @@ void MeshRenderer::DrawInstanced(Camera* camera, CommandBuffer* commandBuffer, u
 }
 
 void MeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
-	DrawInstanced( camera, commandBuffer, backBufferIndex, 1, nullptr, materialOverride);
+	DrawInstanced( camera, commandBuffer, backBufferIndex, 1, VK_NULL_HANDLE, materialOverride);
 }
 
 void MeshRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {

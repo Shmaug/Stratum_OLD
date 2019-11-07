@@ -24,8 +24,13 @@ struct v2f {
 
 v2f vsmain([[vk::location(0)]] float3 vertex : POSITION ) {
 	v2f o;
-	o.position = mul(Camera.ViewProjection, float4(vertex + Camera.Position, 1));
-	o.viewRay = vertex;
+
+	float3 worldPos = vertex + Camera.Position;
+	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
+
+	float4 p0 = mul(Camera.InvViewProjection, float4(o.position.xy / o.position.w, 0, 1));
+	o.viewRay = worldPos - p0.xyz / p0.w;
+
 	return o;
 }
 
@@ -36,5 +41,5 @@ void fsmain(v2f i,
 	float3 view = normalize(i.viewRay);
 	float2 uv = float2(atan2(view.z, view.x) * INV_PI * .5 + .5, acos(view.y) * INV_PI);
 	color = float4(pow(EnvironmentTexture.SampleLevel(Sampler, uv, 0).rgb, 1 / 2.2), 1);
-	depthNormal = float4(0,0,0,Camera.Viewport.w);
+	depthNormal = float4(0,0,0, Camera.Viewport.w);
 }

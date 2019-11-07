@@ -5,22 +5,23 @@
  
 using namespace std;
 
-Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat)
+Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
 	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr),
 	mMatricesDirty(true),
 	mRenderFormat(renderFormat),
 	mDepthFormat(depthFormat),
-	mOrthographic(false), mOrthographicSize(0),
-	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
+	mRenderDepthNormals(renderDepthNormals),
+	mOrthographic(false), mOrthographicSize(.3f),
+	mFieldOfView(radians(70.f)), mPerspectiveSize(0),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_8_BIT),
+	mSampleCount(sampleCount),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	#pragma region create renderpass
-	vector<VkAttachmentDescription> attachments(3);
+	vector<VkAttachmentDescription> attachments(mRenderDepthNormals ? 3 : 2);
 	attachments[0].format = mRenderFormat;
 	attachments[0].samples = mSampleCount;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -30,41 +31,39 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	attachments[1].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[1].format = mDepthFormat;
 	attachments[1].samples = mSampleCount;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	attachments[2].format = mDepthFormat;
-	attachments[2].samples = mSampleCount;
-	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	if (mRenderDepthNormals) {
+		attachments[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+		attachments[2].samples = mSampleCount;
+		attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attachments[2].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	}
 
-	VkAttachmentReference colorAttachmentRef = {};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	VkAttachmentReference depthNormalAttachmentRef = {};
-	depthNormalAttachmentRef.attachment = 1;
-	depthNormalAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	VkAttachmentReference depthAttachmentRef = {};
-	depthAttachmentRef.attachment = 2;
+	depthAttachmentRef.attachment = 1;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentReference colorAttachments[]{
-		colorAttachmentRef, depthNormalAttachmentRef
-	};
+	VkAttachmentReference colorAttachments[2];
+	colorAttachments[0].attachment = 0;
+	colorAttachments[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachments[1].attachment = 2;
+	colorAttachments[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	vector<VkSubpassDescription> subpasses(1);
 	subpasses[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpasses[0].colorAttachmentCount = 2;
+	subpasses[0].colorAttachmentCount = mRenderDepthNormals ? 2 : 1;
 	subpasses[0].pColorAttachments = colorAttachments;
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
@@ -115,24 +114,25 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mViewport.minDepth = 0.f;
 	mViewport.maxDepth = 1.f;
 }
-Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
+Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
 	mRenderPass(VK_NULL_HANDLE), mFrameData(nullptr),
 	mMatricesDirty(true),
 	mRenderFormat(targetWindow->Format().format),
 	mDepthFormat(depthFormat),
-	mOrthographic(false), mOrthographicSize(0),
-	mFieldOfView(radians(70.f)), mPerspectiveBounds(float4(0.f)),
+	mRenderDepthNormals(renderDepthNormals),
+	mOrthographic(false), mOrthographicSize(.3f),
+	mFieldOfView(radians(70.f)), mPerspectiveSize(0),
 	mNear(.03f), mFar(500.f),
 	mPixelWidth(1600), mPixelHeight(900),
-	mSampleCount(VK_SAMPLE_COUNT_8_BIT),
+	mSampleCount(sampleCount),
 	mRenderPriority(0),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	mTargetWindow->mTargetCamera = this;
 
 	#pragma region create renderpass
-	vector<VkAttachmentDescription> attachments(3);
+	vector<VkAttachmentDescription> attachments(mRenderDepthNormals ? 3 : 2);
 	attachments[0].format = mRenderFormat;
 	attachments[0].samples = mSampleCount;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -142,41 +142,39 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat)
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	attachments[1].format = VK_FORMAT_R8G8B8A8_UNORM;
+	attachments[1].format = mDepthFormat;
 	attachments[1].samples = mSampleCount;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	attachments[2].format = mDepthFormat;
-	attachments[2].samples = mSampleCount;
-	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	if (mRenderDepthNormals) {
+		attachments[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+		attachments[2].samples = mSampleCount;
+		attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attachments[2].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	}
 
-	VkAttachmentReference colorAttachmentRef = {};
-	colorAttachmentRef.attachment = 0;
-	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	VkAttachmentReference depthNormalAttachmentRef = {};
-	depthNormalAttachmentRef.attachment = 1;
-	depthNormalAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	VkAttachmentReference depthAttachmentRef = {};
-	depthAttachmentRef.attachment = 2;
+	depthAttachmentRef.attachment = 1;
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentReference colorAttachments[]{
-		colorAttachmentRef, depthNormalAttachmentRef
-	};
+	VkAttachmentReference colorAttachments[2];
+	colorAttachments[0].attachment = 0;
+	colorAttachments[0].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachments[1].attachment = 2;
+	colorAttachments[1].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	vector<VkSubpassDescription> subpasses(1);
 	subpasses[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpasses[0].colorAttachmentCount = 2;
+	subpasses[0].colorAttachmentCount = mRenderDepthNormals ? 2 : 1;
 	subpasses[0].pColorAttachments = colorAttachments;
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
@@ -243,14 +241,27 @@ Camera::~Camera() {
 	safe_delete_array(mFrameData);
 }
 
-float4 Camera::WorldToClip(float3 worldPos) {
+float4 Camera::WorldToClip(const float3& worldPos) {
 	UpdateMatrices();
 	return mViewProjection * float4(worldPos, 1);
 }
-float3 Camera::ClipToWorldRay(float3 clipPos) {
+float3 Camera::ClipToWorld(const float3& clipPos) {
 	UpdateMatrices();
 	float4 wp = mInvViewProjection * float4(clipPos, 1);
-	return normalize(wp.xyz / wp.w - WorldPosition());
+	wp.xyz /= wp.w;
+	return wp.xyz;
+}
+Ray Camera::ScreenToWorldRay(const float2& uv) {
+	UpdateMatrices();
+	float2 clip = 2.f * uv - 1.f;
+	Ray ray;
+	float4 p0 = mInvViewProjection * float4(clip, 0, 1);
+	float4 p1 = mInvViewProjection * float4(clip, 1, 1);
+	p0.xyz /= p0.w;
+	p1.xyz /= p1.w;
+	ray.mOrigin = p0.xyz;
+	ray.mDirection = normalize(p1.xyz - p0.xyz);
+	return ray;
 }
 
 ::DescriptorSet* Camera::DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stages) {
@@ -329,12 +340,13 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	if (UpdateFramebuffer(backBufferIndex)) {
 		mFrameData[backBufferIndex].mColorBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
-		mFrameData[backBufferIndex].mDepthNormalBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 		mFrameData[backBufferIndex].mDepthBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
+		if (mRenderDepthNormals) mFrameData[backBufferIndex].mDepthNormalBuffer->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	}
 
 	CameraBuffer* buf = (CameraBuffer*)mFrameData[backBufferIndex].mUniformBuffer->MappedData();
 	buf->ViewProjection = ViewProjection();
+	buf->InvViewProjection = InverseViewProjection();
 	buf->Viewport = float4((float)mPixelWidth, (float)mPixelHeight, mNear, mFar);
 	buf->Position = WorldPosition();
 	buf->Right = WorldRotation() * float3(1, 0, 0);
@@ -342,10 +354,10 @@ void Camera::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIn
 	
 	VkClearValue clearValues[]{
 		{ .0f, .0f, .0f, 0.f },
-		{ .0f, .0f, .0f, 0.f },
 		{ 1.f, 0.f },
+		{ .0f, .0f, .0f, 0.f },
 	};
-	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, 3);
+	commandBuffer->BeginRenderPass(mRenderPass, { mPixelWidth, mPixelHeight }, mFrameData[backBufferIndex].mFramebuffer, clearValues, mRenderDepthNormals ? 3 : 2);
 	
 	mViewport.x = 0;
 	mViewport.y = 0;
@@ -378,18 +390,17 @@ bool Camera::UpdateFramebuffer(uint32_t backBufferIndex) {
 	VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
 	fd.mColorBuffer = new Texture(mName + "ColorBuffer", mDevice, mPixelWidth, mPixelHeight, 1, mRenderFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	fd.mDepthNormalBuffer = new Texture(mName + "DepthNormalBuffer", mDevice, mPixelWidth, mPixelHeight, 1, VK_FORMAT_R8G8B8A8_UNORM, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	fd.mDepthBuffer = new Texture(mName + "DepthBuffer", mDevice, mPixelWidth, mPixelHeight, 1, mDepthFormat , mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	if (mRenderDepthNormals) fd.mDepthNormalBuffer = new Texture(mName + "DepthNormalBuffer", mDevice, mPixelWidth, mPixelHeight, 1, VK_FORMAT_R8G8B8A8_UNORM, mSampleCount, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	VkImageView views[]{
-		fd.mColorBuffer->View(mDevice),
-		fd.mDepthNormalBuffer->View(mDevice),
-		fd.mDepthBuffer->View(mDevice)
-	};
+	VkImageView views[3];
+	views[0] = fd.mColorBuffer->View(mDevice);
+	views[1] = fd.mDepthBuffer->View(mDevice);
+	if (mRenderDepthNormals) views[2] = fd.mDepthNormalBuffer->View(mDevice);
 
 	VkFramebufferCreateInfo fb = {};
 	fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	fb.attachmentCount = 3;
+	fb.attachmentCount = mRenderDepthNormals ? 3 : 2;
 	fb.pAttachments = views;
 	fb.renderPass = *mRenderPass;
 	fb.width = mPixelWidth;
@@ -413,19 +424,16 @@ bool Camera::UpdateMatrices() {
 	float aspect = Aspect();
 
 	if (mOrthographic)
-		mProjection = float4x4::Orthographic(-mOrthographicSize / aspect, mOrthographicSize / aspect, -mOrthographicSize, mOrthographicSize, mNear, mFar);
+		mProjection = float4x4::Orthographic(mOrthographicSize, mOrthographicSize / aspect, mNear, mFar);
 	else {
 		if (mFieldOfView)
 			mProjection = float4x4::PerspectiveFov(mFieldOfView, aspect, mNear, mFar);
-		else {
-			float4 s = mPerspectiveBounds * mNear;
-			mProjection = float4x4::PerspectiveBounds(s.x, s.y, s.z, s.w, mNear, mFar);
-		}
+		else
+			mProjection = float4x4::Perspective(mPerspectiveSize.x, mPerspectiveSize.y, mNear, mFar);
 	}
 
-	mProjection[1][1] = -mProjection[1][1];
 
-	mViewProjection = mProjection * mView;
+	mViewProjection = transpose(mView * mProjection);
 	mInvViewProjection = inverse(mViewProjection);
 	
 	float3 corners[8]{

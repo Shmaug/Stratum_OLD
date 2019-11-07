@@ -40,7 +40,7 @@ struct v2f {
 	#else
 	float2 texcoord : TEXCOORD0;
 	#endif
-	float3 worldPos : TEXCOORD1;
+	float3 viewRay : TEXCOORD1;
 	float3 normal : NORMAL;
 };
 
@@ -60,17 +60,18 @@ v2f vsmain(uint id : SV_VertexId) {
 	};
 
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
-	float4 wp = mul(ObjectToWorld, float4(p, 0, 1.0));
-
+	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1.0));
 
 	#ifdef CANVAS_BOUNDS
 	o.texcoord.zw = abs(p);
 	#endif
 
-	o.position = mul(Camera.ViewProjection, wp);
+	o.position = mul(Camera.ViewProjection, worldPos);
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
 	o.normal = mul(float4(0, 0, 1, 1), WorldToObject).xyz;
-	o.worldPos = wp.xyz;
+
+	float4 p0 = mul(Camera.InvViewProjection, float4(o.position.xy / o.position.w, 0, 1));
+	o.viewRay = worldPos.xyz - p0.xyz / p0.w;
 
 	return o;
 }
@@ -95,5 +96,5 @@ void fsmain(v2f i,
 	clip(any(Bounds - i.texcoord.zw));
 	#endif
 	color = SampleFont(i.texcoord.xy) * Color;
-	depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
+	depthNormal = float4(normalize(i.normal) * .5 + .5, length(i.viewRay) / Camera.Viewport.w);
 }

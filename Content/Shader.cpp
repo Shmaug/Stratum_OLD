@@ -31,7 +31,7 @@ void ReadBindingsAndPushConstants(ifstream& file,
 	}
 
 	file.read(reinterpret_cast<char *>(&bc), sizeof(uint32_t));
-	for (unsigned int j = 0; j < bc; j++) {
+	for (uint32_t j = 0; j < bc; j++) {
 		string name;
 		uint32_t nlen;
 		file.read(reinterpret_cast<char *>(&nlen), sizeof(uint32_t));
@@ -80,7 +80,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 	uint32_t vc;
 	file.read(reinterpret_cast<char*>(&vc), sizeof(uint32_t));
-	for (unsigned int v = 0; v < vc; v++) {
+	for (uint32_t v = 0; v < vc; v++) {
 		set<string> keywords;
 
 		uint32_t kwc;
@@ -218,7 +218,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 			uint32_t stagec;
 			file.read(reinterpret_cast<char*>(&stagec), sizeof(uint32_t));
-			for (unsigned int i = 0; i < stagec; i++) {
+			for (uint32_t i = 0; i < stagec; i++) {
 				stages.push_back({});
 				VkPipelineShaderStageCreateInfo& stage = stages.back();
 				stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -332,6 +332,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 	mDynamicState.dynamicStateCount = (uint32_t)mDynamicStates.size();
 	mDynamicState.pDynamicStates = mDynamicStates.data();
 
+	file.read(reinterpret_cast<char*>(&mColorMask), sizeof(VkColorComponentFlags));
 	file.read(reinterpret_cast<char*>(&mRenderQueue), sizeof(uint32_t));
 	file.read(reinterpret_cast<char*>(&mRasterizationState.cullMode), sizeof(VkCullModeFlags));
 	file.read(reinterpret_cast<char*>(&mRasterizationState.polygonMode), sizeof(VkPolygonMode));
@@ -377,7 +378,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 		if (mStages.size() == 0) return VK_NULL_HANDLE;
 
 		VkPipelineColorBlendAttachmentState bs = {};
-		bs.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		bs.colorWriteMask = mShader->mColorMask;
 		switch (blend) {
 		case Opaque:
 			bs.blendEnable = VK_FALSE;
@@ -387,6 +388,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 			bs.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
 			bs.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			break;
 		case Alpha:
 			bs.blendEnable = VK_TRUE;
 			bs.colorBlendOp = VK_BLEND_OP_ADD;
@@ -415,11 +417,11 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 			bs.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 			break;
 		}
-		vector<VkPipelineColorBlendAttachmentState> blendAttachmentStates(renderPass->ColorAttachmentCount(), bs);
+		vector<VkPipelineColorBlendAttachmentState> blendAttachmentStates(renderPass->ColorAttachmentCount());
+		for (uint32_t i = 0; i < blendAttachmentStates.size(); i++) blendAttachmentStates[i] = bs;
 
 		VkPipelineRasterizationStateCreateInfo rasterState = mShader->mRasterizationState;
-		if (cullMode != VK_CULL_MODE_FLAG_BITS_MAX_ENUM)
-			rasterState.cullMode = cullMode;
+		if (cullMode != VK_CULL_MODE_FLAG_BITS_MAX_ENUM) rasterState.cullMode = cullMode;
 
 		VkPipelineColorBlendStateCreateInfo blendState = {};
 		blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;

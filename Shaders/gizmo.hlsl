@@ -28,7 +28,7 @@ struct Gizmo {
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[1024] : register(t1);
 
 struct v2f {
-	float4 pos : SV_Position;
+	float4 position : SV_Position;
 	float3 viewRay : TEXCOORD0;
 	float3 normal : NORMAL;
 	float4 color : COLOR0;
@@ -48,8 +48,11 @@ v2f vsmain(
 	Gizmo g = Gizmos[i];
 
 	float3 worldPos = g.Position + rotate(g.Rotation, vertex * g.Scale);
-	o.pos = mul(Camera.ViewProjection, float4(worldPos, 1));
-	o.viewRay = worldPos - Camera.Position;
+	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
+
+	float4 p0 = mul(Camera.InvViewProjection, float4(o.position.xy / o.position.w, 0, 1));
+	o.viewRay = worldPos - p0.xyz / p0.w;
+
 	o.normal = rotate(g.Rotation, float3(0,0,1));
 	o.color = g.Color;
 	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;

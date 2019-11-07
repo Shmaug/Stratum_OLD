@@ -24,7 +24,6 @@
 #undef abs
 #endif
 
-
 #define PI 3.1415926535897932384626433832795f
 
 #define rpt2(i) for (int i = 0; i < 2; i++)
@@ -1307,125 +1306,12 @@ struct quaternion {
 	}
 };
 
-// Column-major 2x2 matrix
-struct float2x2 {
-	float2 c1, c2;
-
-	inline float2x2(
-		float m11, float m21,
-		float m12, float m22) : c1(float2(m11, m12)), c2(float2(m21, m22)) {};
-	inline float2x2(const float2& c1, const float2& c2) : c1(c1), c2(c2) {};
-	inline float2x2(float s) : float2x2(s, 0, 0, s) {};
-	inline float2x2() : float2x2(1) {};
-
-	inline float2& operator[](int i) {
-		assert(i >= 0 && i < 2);
-		return reinterpret_cast<float2*>(this)[i];
-	}
-	inline float2 operator[](int i) const {
-		assert(i >= 0 && i < 2);
-		return reinterpret_cast<const float2*>(this)[i];
-	}
-
-	inline float2x2 operator=(const float2x2& m) {
-		c1 = m.c1;
-		c2 = m.c2;
-		return *this;
-	}
-
-	inline float2x2 operator*(const float& s) const {
-		return float2x2(c1 * s, c2 * s);
-	}
-	inline float2x2 operator*=(const float& s) {
-		c1 *= s;
-		c2 *= s;
-		return *this;
-	}
-	inline float2x2 operator/(const float& s) const { return operator *(1.f / s); }
-	inline float2x2 operator/=(const float& s) { return operator *=(1.f / s); }
-};
-// Column-major 3x3 matrix
-struct float3x3 {
-	float3 c1, c2, c3;
-
-	inline float3x3(
-		float m11, float m21, float m31,
-		float m12, float m22, float m32,
-		float m13, float m23, float m33 )
-		: c1(float3(m11, m12, m13)), c2(float3(m21, m22, m23)), c3(float3(m31, m32, m33)) {};
-	inline float3x3(const float3& c1, const float3& c2, const float3& c3)
-		: c1(c1), c2(c2), c3(c3) {};
-	inline float3x3(float s) : float3x3(
-		s, 0, 0,
-		0, s, 0,
-		0, 0, s ) {};
-	inline float3x3() : float3x3(1) {};
-	inline float3x3(const quaternion& q) : float3x3(1) {
-		float qxx = q.x * q.x;
-		float qyy = q.y * q.y;
-		float qzz = q.z * q.z;
-		float qxz = q.x * q.z;
-		float qxy = q.x * q.y;
-		float qyz = q.y * q.z;
-		float qwx = q.w * q.x;
-		float qwy = q.w * q.y;
-		float qwz = q.w * q.z;
-		c1[0] = 1 - 2 * (qyy + qzz);
-		c1[1] = 2 * (qxy + qwz);
-		c1[2] = 2 * (qxz - qwy);
-		c2[0] = 2 * (qxy - qwz);
-		c2[1] = 1 - 2 * (qxx + qzz);
-		c2[2] = 2 * (qyz + qwx);
-		c3[0] = 2 * (qxz + qwy);
-		c3[1] = 2 * (qyz - qwx);
-		c3[2] = 1 - 2 * (qxx + qyy);
-	}
-
-	inline float3x3(float angle, const float3& axis){
-		float c = cosf(angle);
-		float s = sinf(angle);
-
-		float t = 1 - c;
-		float x = axis.x;
-		float y = axis.y;
-		float z = axis.z;
-
-		c1 = { t * x * x + c,     t * x * y - s * z, t * x * z + s * y };
-		c2 = { t * x * y + s * z, t * y * y + c,     t * y * z - s * x };
-		c3 = { t * x * z - s * y, t * y * z + s * x, t * z * z + c };
-	}
-
-	inline float3& operator[](int i) {
-		assert(i >= 0 && i < 3);
-		return reinterpret_cast<float3*>(this)[i];
-	}
-	inline float3 operator[](int i) const {
-		assert(i >= 0 && i < 3);
-		return reinterpret_cast<const float3*>(this)[i];
-	}
-
-	inline float3x3 operator=(const float3x3& m) {
-		c1 = m.c1;
-		c2 = m.c2;
-		c3 = m.c3;
-		return *this;
-	}
-
-	inline float3x3 operator*(const float& s) const {
-		return float3x3(c1 * s, c2 * s, c3 * s);
-	}
-	inline float3x3 operator*=(const float& s) {
-		c1 *= s;
-		c2 *= s;
-		c3 *= s;
-		return *this;
-	}
-	inline float3x3 operator/(const float& s) const { return operator *(1.f / s); }
-	inline float3x3 operator/=(const float& s) { return operator *=(1.f / s); }
-};
 // Column-major 4x4 matrix
 struct float4x4 {
-	float4 c1, c2, c3, c4;
+	union {
+		float4 v[4];
+		struct { float4 c1, c2, c3, c4; };
+	};
 
 	inline float4x4(
 		float m11, float m21, float m31, float m41,
@@ -1451,125 +1337,102 @@ struct float4x4 {
 		float qwx = q.w * q.x;
 		float qwy = q.w * q.y;
 		float qwz = q.w * q.z;
-		c1[0] = 1 - 2 * (qyy + qzz);
-		c1[1] = 2 * (qxy + qwz);
-		c1[2] = 2 * (qxz - qwy);
-		c2[0] = 2 * (qxy - qwz);
-		c2[1] = 1 - 2 * (qxx + qzz);
-		c2[2] = 2 * (qyz + qwx);
-		c3[0] = 2 * (qxz + qwy);
-		c3[1] = 2 * (qyz - qwx);
-		c3[2] = 1 - 2 * (qxx + qyy);
-		c4[3] = 1;
+		v[0][0] = 1 - 2 * (qyy + qzz);
+		v[0][1] = 2 * (qxy + qwz);
+		v[0][2] = 2 * (qxz - qwy);
+		v[1][0] = 2 * (qxy - qwz);
+		v[1][1] = 1 - 2 * (qxx + qzz);
+		v[1][2] = 2 * (qyz + qwx);
+		v[2][0] = 2 * (qxz + qwy);
+		v[2][1] = 2 * (qyz - qwx);
+		v[2][2] = 1 - 2 * (qxx + qyy);
 	}
 
-	inline static float4x4 Look(const float3& eye, const float3& fwd, const float3& up) {
-		float3 right = normalize(cross(up, fwd));
-
-		float4x4 r(1.f);
-		r[0][0] = right.x; r[1][0] = right.y; r[2][0] = right.z;
-		r[0][1] = up.x;    r[1][1] = up.y;    r[2][1] = up.z;
-		r[0][2] = fwd.x;   r[1][2] = fwd.y;   r[2][2] = fwd.z;
-		r[3][0] = -dot(right, eye);
-		r[3][1] = -dot(up, eye);
-		r[3][2] = -dot(fwd, eye);
+	inline static float4x4 Look(const float3& p, const float3& fwd, const float3& up) {
+		float3 f[3];
+		f[0] = normalize(cross(up, fwd));
+		f[1] = cross(fwd, f[0]);
+		f[2] = fwd;
+		float4x4 r(1);
+		rpt3(i) r.v[0][i] = f[0].v[i];
+		rpt3(i) r.v[1][i] = f[1].v[i];
+		rpt3(i) r.v[2][i] = f[2].v[i];
+		rpt3(i) r.v[i][3] = -dot(f[i], p);
 		return r;
 	}
 	inline static float4x4 PerspectiveFov(float fovy, float aspect, float near, float far) {
-		float tanHalfFovy = tan(fovy / 2);
+		float df = 1 / (far - near);
+		float sy = 1 / tan(fovy / 2);
 		float4x4 r(0);
-		r[0][0] = 1 / (aspect * tanHalfFovy);
-		r[1][1] = 1 / (tanHalfFovy);
-		r[2][2] = far / (far - near);
-		r[2][3] = 1;
-		r[3][2] = -(far * near) / (far - near);
+		r[0][0] = sy / aspect;
+		r[1][1] = -sy;
+		r[2][2] = far * df;
+		r[2][3] = -far * near * df;
+		r[3][2] = 1;
 		return r;
 	}
-	inline static float4x4 PerspectiveBounds(float left, float right, float bottom, float top, float near, float far) {
+	inline static float4x4 Perspective(float width, float height, float near, float far) {
+		float df = 1 / (far - near);
 		float4x4 r(0);
-		r[0][0] = (2 * near) / (right - left);
-		r[1][1] = (2 * near) / (top - bottom);
-		r[2][0] = (right + left) / (right - left);
-		r[2][1] = (top + bottom) / (top - bottom);
-		r[2][2] = far / (far - near);
-		r[2][3] = 1;
-		r[3][2] = -(far * near) / (far - near);
+		r[0][0] = 2 * near / width;
+		r[1][1] = -2 * near / height;
+		r[2][2] = far * df;
+		r[2][3] = far * near * df;
+		r[3][2] = 1;
 		return r;
 	}
-	inline static float4x4 Orthographic(float left, float right, float bottom, float top, float near, float far) {
-		float4x4 r(0);
-		r[0][0] = 2 / (right - left);
-		r[1][1] = 2 / (top - bottom);
-		r[2][2] = 1 / (far - near);
-		r[3][0] = -(right + left) / (right - left);
-		r[3][1] = -(top + bottom) / (top - bottom);
-		r[3][2] = -near / (far - near);
+	inline static float4x4 Orthographic(float width, float height, float near, float far) {
+		float df = 1 / (far - near);
+		float4x4 r(1);
+		r[0][0] = 2 / width;
+		r[1][1] = 2 / height;
+		r[2][2] = df;
+		r[2][3] = -near * df;
 		return r;
 	}
 
-	inline static float4x4 Translate(const float3& v) {
-		return float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(v, 1));
+	inline static float4x4 Translate(const float3& p) {
+		float4x4 r(1);
+		r.v[3].xyz = p;
+		return r;
 	}
-	inline static float4x4 Scale(const float3& v) {
-		return float4x4(float4(v[0], 0, 0, 0), float4(0, v[1], 0, 0), float4(0, 0, v[2], 0), float4(0, 0, 0, 1));
+	inline static float4x4 Scale(const float3& p) {
+		return float4x4(float4(p[0], 0, 0, 0), float4(0, p[1], 0, 0), float4(0, 0, p[2], 0), float4(0, 0, 0, 1));
 	}
 
 	inline float4& operator[](int i) {
-		assert(i >= 0 && i < 4);
-		return reinterpret_cast<float4*>(this)[i];
+		return v[i];
 	}
 	inline float4 operator[](int i) const {
-		assert(i >= 0 && i < 4);
-		return reinterpret_cast<const float4*>(this)[i];
+		return v[i];
 	}
 
 	inline float4x4 operator=(const float4x4& m) {
-		c1 = m.c1;
-		c2 = m.c2;
-		c3 = m.c3;
-		c4 = m.c4;
+		rpt4(i) v[i] = m.v[i];
 		return *this;
 	}
 
 	inline float4x4 operator*(const float& s) const {
-		return float4x4(c1 * s, c2 * s, c3 * s, c4 * s);
+		float4x4 r;
+		rpt4(i) r.v[i] = v[i] * s;
+		return r;
 	}
 	inline float4x4 operator*=(const float& s) {
-		c1 *= s;
-		c2 *= s;
-		c3 *= s;
-		c4 *= s;
+		rpt4(i) v[i] += s;
 		return *this;
 	}
 	inline float4x4 operator/(const float& s) const { return operator *(1.f / s); }
 	inline float4x4 operator/=(const float& s) { return operator *=(1.f / s); }
 
-	inline float4 operator*(const float4& v) const {
-		float4 Mov0(v[0]);
-		float4 Mov1(v[1]);
-		float4 Mul0 = c1 * Mov0;
-		float4 Mul1 = c2 * Mov1;
-		float4 Add0 = Mul0 + Mul1;
-		float4 Mov2(v[2]);
-		float4 Mov3(v[3]);
-		float4 Mul2 = c3 * Mov2;
-		float4 Mul3 = c4 * Mov3;
-		float4 Add1 = Mul2 + Mul3;
-		float4 Add2 = Add0 + Add1;
-		return Add2;
+	inline float4 operator*(const float4& s) const {
+		float4 r = 0;
+		rpt4(i) r += v[i] * s.v[i];
+		return r;
 	}
 	inline float4x4 operator*(const float4x4& m) const {
-		float4 SrcB0 = m[0];
-		float4 SrcB1 = m[1];
-		float4 SrcB2 = m[2];
-		float4 SrcB3 = m[3];
-
-		float4x4 Result;
-		Result[0] = c1 * SrcB0[0] + c2 * SrcB0[1] + c3 * SrcB0[2] + c4 * SrcB0[3];
-		Result[1] = c1 * SrcB1[0] + c2 * SrcB1[1] + c3 * SrcB1[2] + c4 * SrcB1[3];
-		Result[2] = c1 * SrcB2[0] + c2 * SrcB2[1] + c3 * SrcB2[2] + c4 * SrcB2[3];
-		Result[3] = c1 * SrcB3[0] + c2 * SrcB3[1] + c3 * SrcB3[2] + c4 * SrcB3[3];
-		return Result;
+		float4x4 r;
+		rpt4(i) r.v[i] = (*this) * m.v[i];
+		return r;
 	}
 	inline float4x4 operator*=(const float4x4& m) {
 		*this = operator*(m);
@@ -1578,15 +1441,6 @@ struct float4x4 {
 };
 #pragma pack(pop)
 
-inline float determinant(const float2x2& m) {
-	return m[0][0] * m[1][1] - m[1][0] * m[0][1];
-}
-inline float determinant(const float3x3& m) {
-	return
-		+ m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2])
-		- m[1][0] * (m[0][1] * m[2][2] - m[2][1] * m[0][2])
-		+ m[2][0] * (m[0][1] * m[1][2] - m[1][1] * m[0][2]);
-}
 inline float determinant(const float4x4& m) {
 	float f00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
 	float f01 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
@@ -1604,25 +1458,6 @@ inline float determinant(const float4x4& m) {
 	return
 		m[0][0] * coef[0] + m[0][1] * coef[1] +
 		m[0][2] * coef[2] + m[0][3] * coef[3];
-}
-
-inline float2x2 inverse(const float2x2& m) {
-	return float2x2(
-		 m.c2[1], -m.c1[1],
-		-m.c2[0],  m.c1[0]) / determinant(m);
-}
-inline float3x3 inverse(const float3x3& m) {
-	float3x3 result;
-	result[0][0] =  m[1][1] * m[2][2] - m[2][1] * m[1][2];
-	result[1][0] = -m[1][0] * m[2][2] - m[2][0] * m[1][2];
-	result[2][0] =  m[1][0] * m[2][1] - m[2][0] * m[1][1];
-	result[0][1] = -m[0][1] * m[2][2] - m[2][1] * m[0][2];
-	result[1][1] =  m[0][0] * m[2][2] - m[2][0] * m[0][2];
-	result[2][1] = -m[0][0] * m[2][1] - m[2][0] * m[0][1];
-	result[0][2] =  m[0][1] * m[1][2] - m[1][1] * m[0][2];
-	result[1][2] = -m[0][0] * m[1][2] - m[1][0] * m[0][2];
-	result[2][2] =  m[0][0] * m[1][1] - m[1][0] * m[0][1];
-	return result / determinant(m);
 }
 inline float4x4 inverse(const float4x4& m) {
 	float c00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
@@ -1684,17 +1519,6 @@ inline quaternion normalize(const quaternion& q){
 	return q / length(q.xyzw);
 }
 
-inline float2x2 transpose(const float2x2& m) {
-	return float2x2(
-		m.c1[0], m.c1[1],
-		m.c2[0], m.c2[1] );
-}
-inline float3x3 transpose(const float3x3& m) {
-	return float3x3(
-		m.c1[0], m.c1[1], m.c1[2],
-		m.c2[0], m.c2[1], m.c2[2],
-		m.c3[0], m.c3[1], m.c3[2] );
-}
 inline float4x4 transpose(const float4x4& m) {
 	return float4x4(
 		m.c1[0], m.c1[1], m.c1[2], m.c1[3],
@@ -2011,13 +1835,13 @@ inline quaternion lerp(const quaternion& a, const quaternion& b, float t) {
 	return a + ba;
 }
 inline quaternion slerp(const quaternion& v0, quaternion v1, float t){
-	float d = dot(v0.xyz, v1.xyz);
-	if (d < 0){
+	float d = dot(v0.xyzw, v1.xyzw);
+	if (d < 0) {
 		v1.xyzw = -v1.xyzw;
 		d = -d;
 	}
 
-    if (d > .9995) return lerp(v0, v1, t);
+    if (d > .9995f) return normalize(lerp(v0, v1, t));
 
     float theta_0 = acosf(d);
     float theta = theta_0*t;
@@ -2026,7 +1850,7 @@ inline quaternion slerp(const quaternion& v0, quaternion v1, float t){
 
     float s0 = cosf(theta) - d * sin_theta / sin_theta_0;
     float s1 = sin_theta / sin_theta_0;
-	return normalize(v0 * s0 + v1 * s1);
+	return v0 * s0 + v1 * s1;
 }
 
 #undef rpt2

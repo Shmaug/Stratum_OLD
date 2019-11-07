@@ -58,10 +58,12 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	}
 	if (c) {
 		c->AddChild(mFpsText);
-		float d = c->Near() + .001f;
-		float3 r = inverse(c->WorldRotation()) * c->ClipToWorldRay(float3(-.95f, -.95f, 1.f));
-		mFpsText->LocalPosition(r * d / r.z);
-		mFpsText->TextScale(d * .015f);
+		float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.95f, -.95f, .001f)), 1)).xyz;
+		mFpsText->LocalPosition(lp);
+		mFpsText->TextScale((c->Near() + .001f) * .015f);
+
+		if (mInput->KeyDownFirst(GLFW_KEY_O))
+			c->Orthographic(!c->Orthographic());
 	}
 
 	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);

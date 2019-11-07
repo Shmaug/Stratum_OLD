@@ -216,32 +216,23 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 }
 
 VkCompareOp atocmp(const string& str) {
-	if (str == "less")
-		return VK_COMPARE_OP_LESS;
-	else if (str == "greater")
-		return VK_COMPARE_OP_GREATER;
-	else if (str == "lequal")
-		return VK_COMPARE_OP_LESS_OR_EQUAL;
-	else if (str == "gequal")
-		return VK_COMPARE_OP_GREATER_OR_EQUAL;
-	else if (str == "equal")
-		return VK_COMPARE_OP_EQUAL;
-	else if (str == "nequal")
-		return VK_COMPARE_OP_NOT_EQUAL;
-	else if (str == "never")
-		return VK_COMPARE_OP_NEVER;
-	else if (str == "always")
-		return VK_COMPARE_OP_ALWAYS;
+	if (str == "less")		return VK_COMPARE_OP_LESS;
+	if (str == "greater")	return VK_COMPARE_OP_GREATER;
+	if (str == "lequal")	return VK_COMPARE_OP_LESS_OR_EQUAL;
+	if (str == "gequal")	return VK_COMPARE_OP_GREATER_OR_EQUAL;
+	if (str == "equal")		return VK_COMPARE_OP_EQUAL;
+	if (str == "nequal")	return VK_COMPARE_OP_NOT_EQUAL;
+	if (str == "never")		return VK_COMPARE_OP_NEVER;
+	if (str == "always")	return VK_COMPARE_OP_ALWAYS;
 	return VK_COMPARE_OP_MAX_ENUM;
 }
-BlendMode atoblend(const string& str) {
-	if (str == "alpha")
-		return Alpha;
-	else if (str == "add")
-		return Additive;
-	else if (str == "multiply")
-		return Multiply;
-	return Opaque;
+VkColorComponentFlags atomask(const string& str) {
+	VkColorComponentFlags mask = 0;
+	if (str.find("r") != string::npos) mask |= VK_COLOR_COMPONENT_R_BIT;
+	if (str.find("g") != string::npos) mask |= VK_COLOR_COMPONENT_G_BIT;
+	if (str.find("b") != string::npos) mask |= VK_COLOR_COMPONENT_B_BIT;
+	if (str.find("a") != string::npos) mask |= VK_COLOR_COMPONENT_A_BIT;
+	return mask;
 }
 
 bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
@@ -258,6 +249,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 
 	uint32_t renderQueue = 1000;
 
+	VkColorComponentFlags colorMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
 	VkPolygonMode fillMode = VK_POLYGON_MODE_FILL;
 	BlendMode blendMode = Opaque;
@@ -277,7 +269,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 	while (getline(srcstream, line)) {
 		istringstream linestream(line);
 		vector<string> words{ istream_iterator<string>{linestream}, istream_iterator<string>{} };
-
+		
 		size_t kwc = variants.size();
 
 		for (auto it = words.begin(); it != words.end(); ++it) {
@@ -294,6 +286,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 						}
 						++it;
 					}
+				
 				} else if (*it == "vertex") {
 					if (++it == words.end()) return false;
 					stages[shaderc_vertex_shader] = *it;
@@ -318,27 +311,19 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					if (++it == words.end()) return false;
 					kernels.push_back(*it);
 
-				} else if (*it == "static_sampler") {
-					if (++it == words.end()) return false;
-					staticSamplers.push_back(*it);
-
-				} else if (*it == "array") {
-					if (++it == words.end()) return false;
-					string name = *it;
-					if (++it == words.end()) return false;
-					arrays.push_back(make_pair(name, (uint32_t)atoi(it->c_str())));
 				} else if (*it == "render_queue"){
 					if (++it == words.end()) return false;
 					renderQueue = atoi(it->c_str());
 
+				} else if (*it == "color_mask") {
+					if (++it == words.end()) return false;
+					colorMask = atomask(*it);
+
 				} else if (*it == "zwrite") {
 					if (++it == words.end()) return false;
-					if (*it == "true")
-						depthStencilState.depthWriteEnable = VK_TRUE;
-					else if (*it == "false")
-						depthStencilState.depthWriteEnable = VK_FALSE;
-					else
-						return false;
+					if (*it == "true") depthStencilState.depthWriteEnable = VK_TRUE;
+					else if (*it == "false") depthStencilState.depthWriteEnable = VK_FALSE;
+					else return false;
 
 				} else if (*it == "ztest") {
 					if (++it == words.end()) return false;
@@ -353,31 +338,38 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					if (++it == words.end()) return false;
 					depthStencilState.depthCompareOp = atocmp(*it);
 					if (depthStencilState.depthCompareOp == VK_COMPARE_OP_MAX_ENUM) return false;
+
 				} else if (*it == "cull") {
 					if (++it == words.end()) return false;
-					if (*it == "front")
-						cullMode = VK_CULL_MODE_FRONT_BIT;
-					else if (*it == "back")
-						cullMode = VK_CULL_MODE_BACK_BIT;
-					else if (*it == "false")
-						cullMode = VK_CULL_MODE_NONE;
-					else
-						return false;
+					if (*it == "front") cullMode = VK_CULL_MODE_FRONT_BIT;
+					else if (*it == "back") cullMode = VK_CULL_MODE_BACK_BIT;
+					else if (*it == "false") cullMode = VK_CULL_MODE_NONE;
+					else return false;
 
 				} else if (*it == "fill") {
 					if (++it == words.end()) return false;
-					if (*it == "solid")
-						fillMode = VK_POLYGON_MODE_FILL;
-					else if (*it == "line")
-						fillMode = VK_POLYGON_MODE_LINE;
-					else if (*it == "point")
-						fillMode = VK_POLYGON_MODE_POINT;
-					else
-						return false;
+					if (*it == "solid") fillMode = VK_POLYGON_MODE_FILL;
+					else if (*it == "line") fillMode = VK_POLYGON_MODE_LINE;
+					else if (*it == "point") fillMode = VK_POLYGON_MODE_POINT;
+					else return false;
 
 				} else if (*it == "blend") {
 					if (++it == words.end()) return false;
-					blendMode = atoblend(*it);
+					if (*it == "opaque") blendMode = Opaque;
+					else if (*it == "alpha") blendMode = Alpha;
+					else if (*it == "add") blendMode = Additive;
+					else if (*it == "multiply")	blendMode = Multiply;
+					else return false;
+
+				} else if (*it == "static_sampler") {
+					if (++it == words.end()) return false;
+					staticSamplers.push_back(*it);
+
+				} else if (*it == "array") {
+					if (++it == words.end()) return false;
+					string name = *it;
+					if (++it == words.end()) return false;
+					arrays.push_back(make_pair(name, (uint32_t)atoi(it->c_str())));
 				}
 				break;
 			}
@@ -492,6 +484,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 		}
 	}
 
+	output.write(reinterpret_cast<const char*>(&colorMask), sizeof(VkColorComponentFlags));
 	output.write(reinterpret_cast<const char*>(&renderQueue), sizeof(uint32_t));
 	output.write(reinterpret_cast<const char*>(&cullMode), sizeof(VkCullModeFlags));
 	output.write(reinterpret_cast<const char*>(&fillMode), sizeof(VkPolygonMode));
