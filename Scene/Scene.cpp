@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define MAX_INSTANCE_BATCH 1024
+#define INSTANCE_BATCH_SIZE 1024
 
 Scene::Scene(::DeviceManager* deviceManager, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mDeviceManager(deviceManager), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -126,10 +126,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * c);
 		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * c);
 
-		data.mShadowCamera = new Camera("ShadowCamera", device, VK_FORMAT_R16_UNORM, VK_FORMAT_D32_SFLOAT);
+		data.mShadowCamera = new Camera("ShadowCamera", device, VK_FORMAT_R16_UNORM, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, false);
 		data.mShadowCamera->PixelWidth(4096);
 		data.mShadowCamera->PixelHeight(4096);
-		data.mShadowCamera->SampleCount(VK_SAMPLE_COUNT_1_BIT);
 	}
 	DeviceData& data = mDeviceData.at(device);
 	data.mInstanceIndex[backBufferIndex] = 0;
@@ -138,7 +137,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	Buffer*& lb = data.mLightBuffers[backBufferIndex];
 	if (lb && lb->Size() < mLights.size() * sizeof(GPULight)) safe_delete(lb);
 	if (!lb) {
-		lb = new Buffer("Light Buffer", device, max(1u, mLights.size()) * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		lb = new Buffer("Light Buffer", device, max(1u, (uint32_t)mLights.size()) * (uint32_t)sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
 	mActiveLights.clear();
@@ -188,7 +187,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	PROFILER_BEGIN("Gather/Sort Renderers");
 	mRenderList.clear();
 	for (Renderer* r : mRenderers)
-		if (r->Visible() && camera->IntersectFrustum(r->Bounds()))
+		if (r->Visible() && camera->IntersectFrustum(r->Bounds()) && (materialOverride != mShadowMaterial.get() || r->CastShadows()))
 			mRenderList.push_back(r);
 	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
 		if (a->RenderQueue() == b->RenderQueue())
@@ -224,45 +223,59 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	uint32_t batchSize = 0;
 
 	for (Renderer* r : mRenderList) {
+		bool batched = false;
 		MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r);
-		if (cur && cur->Batchable(commandBuffer->Device())) {
-			if (batchStart && batchSize + 1 < MAX_INSTANCE_BATCH &&
-				(materialOverride || batchStart->Material() == cur->Material()) && batchStart->Mesh() == cur->Mesh()) {
+		if (cur) {
+			GraphicsShader* curShader = materialOverride ? materialOverride->GetShader(commandBuffer->Device()) : cur->Material()->GetShader(commandBuffer->Device());
+			if (curShader->mDescriptorBindings.count("Instances")) {
+				if (!batchStart || batchSize + 1 >= INSTANCE_BATCH_SIZE ||
+					(batchStart->Material() != cur->Material() && !materialOverride) || batchStart->Mesh() != cur->Mesh()) {
+					// render last batch
+					if (batchStart) {
+						BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
+						batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+						END_CMD_REGION(commandBuffer);
+					}
+
+					// start a new batch
+					batchSize = 0;
+					batchStart = cur;
+
+					if (data.mInstanceIndex[backBufferIndex] >= data.mInstanceDescriptorSets[backBufferIndex].size()) {
+						// create a new buffer and descriptorset
+						batchBuffer = new Buffer("Instance Batch", commandBuffer->Device(), sizeof(ObjectBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+						batchBuffer->Map();
+						data.mInstanceBuffers[backBufferIndex].push_back(batchBuffer);
+
+						batchDS = new DescriptorSet("Instance Batch", commandBuffer->Device()->DescriptorPool(), curShader->mDescriptorSetLayouts[PER_OBJECT]);
+						batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
+						data.mInstanceDescriptorSets[backBufferIndex].push_back(batchDS);
+					} else {
+						// fetch existing buffer and descriptorset
+						batchBuffer = data.mInstanceBuffers[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
+						batchDS = data.mInstanceDescriptorSets[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
+						if (batchDS->Layout() != curShader->mDescriptorSetLayouts[PER_OBJECT]) {
+							// update descriptorset to have correct layout
+							safe_delete(batchDS);
+							batchDS = new DescriptorSet("Instance Batch", commandBuffer->Device()->DescriptorPool(), curShader->mDescriptorSetLayouts[PER_OBJECT]);
+							batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
+							data.mInstanceDescriptorSets[backBufferIndex][data.mInstanceIndex[backBufferIndex]] = batchDS;
+						}
+					}
+					data.mInstanceIndex[backBufferIndex]++;
+
+					if (curShader->mDescriptorBindings.count("Lights"))
+						batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[backBufferIndex], LIGHT_BUFFER_BINDING);
+				}
 				// append to batch
-				((ObjectBuffer*)batchBuffer-> MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
-				((ObjectBuffer*)batchBuffer-> MappedData())[batchSize].WorldToObject = cur->WorldToObject();
+				((ObjectBuffer*)batchBuffer->MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
+				((ObjectBuffer*)batchBuffer->MappedData())[batchSize].WorldToObject = cur->WorldToObject();
 				batchSize++;
-			} else {
-				// not batchable
-				if (batchStart) {
-					BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-					batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
-					END_CMD_REGION(commandBuffer);
-				}
-				
-				batchSize = 0;
-				batchStart = cur;
-
-				if (data.mInstanceIndex[backBufferIndex] >= data.mInstanceDescriptorSets[backBufferIndex].size()) {
-					batchBuffer = new Buffer("Batch", commandBuffer->Device(), sizeof(ObjectBuffer) * MAX_INSTANCE_BATCH, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-					batchBuffer->Map();
-					batchDS = new DescriptorSet("BatchDS", commandBuffer->Device()->DescriptorPool(), cur->Material()->GetShader(commandBuffer->Device())->mDescriptorSetLayouts[PER_OBJECT]);
-					batchDS->CreateStorageBufferDescriptor(batchBuffer, OBJECT_BUFFER_BINDING);
-					data.mInstanceDescriptorSets[backBufferIndex].push_back(batchDS);
-					data.mInstanceBuffers[backBufferIndex].push_back(batchBuffer);
-				} else {
-					batchDS = data.mInstanceDescriptorSets[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
-					batchBuffer = data.mInstanceBuffers[backBufferIndex][data.mInstanceIndex[backBufferIndex]];
-				}
-				data.mInstanceIndex[backBufferIndex]++;
-				batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[backBufferIndex], LIGHT_BUFFER_BINDING);
-
+				batched = true;
 			}
-			// append to batch
-			((ObjectBuffer*)batchBuffer->MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
-			((ObjectBuffer*)batchBuffer->MappedData())[batchSize].WorldToObject = cur->WorldToObject();
-			batchSize++;
-		} else {
+		}
+
+		if (!batched) {
 			// render last batch
 			if (batchStart) {
 				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
@@ -270,7 +283,6 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 				END_CMD_REGION(commandBuffer);
 				batchStart = nullptr;
 			}
-			
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
 			r->Draw(camera, commandBuffer, backBufferIndex, materialOverride);
 			END_CMD_REGION(commandBuffer);

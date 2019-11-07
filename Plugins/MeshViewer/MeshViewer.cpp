@@ -655,6 +655,7 @@ bool MeshViewer::Init(Scene* scene) {
 	skybox->LocalScale(1e23f);
 	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->DeviceManager())));
 	skybox->Material(skyboxMat);
+	skybox->CastShadows(false);
 	mObjects.push_back(skybox.get());
 	mScene->AddObject(skybox);
 	
@@ -987,16 +988,17 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 		t *= 3.f;
 
 		float3 v = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
-		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), quaternion(float3(0, -atan2f(v.z, v.x), 0)), .1f));
+		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), quaternion(float3(0, -atan2f(v.z, v.x), 0)), .075f));
 		r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .05f, r->mBody->LocalPosition().z);
+
+		v = mScene->Cameras()[0]->WorldPosition() - r->mHead->WorldPosition();
+		quaternion q(float3(-atan2f(v.y, sqrtf(v.x*v.x + v.z*v.z)) - PI / 2, -atan2f(v.z, v.x) + PI / 2, 0));
+		q = inverse(r->mHead->Parent()->WorldRotation()) * q;
+		r->mHead->LocalRotation(slerp(r->mHead->LocalRotation(), q, .2f));
+		r->mHead->LocalPosition(r->mHead->LocalPosition().x, sinf(t + PI * .25f - .01f) * .01f, r->mHead->LocalPosition().z);
 
 		r->mRArm->LocalRotation(quaternion(float3(-sinf(t) * PI * .25f, 0, 0)));
 		r->mLArm->LocalRotation(quaternion(float3( sinf(t) * PI * .25f, 0, 0)));
-
-		v = mScene->Cameras()[0]->WorldPosition() - r->mHead->WorldPosition();
-		quaternion q(float3(atan2f(v.x, v.y), atan2f(v.z, v.x), 0));
-		r->mHead->LocalRotation(slerp(r->mHead->LocalRotation(), inverse(r->mHead->Parent()->WorldRotation()) * q, .1f));
-		r->mHead->LocalPosition(r->mHead->LocalPosition().x, sinf(t + PI * .25f - .01f) * .01f, r->mHead->LocalPosition().z);
 
 		x ^= 0x12f343a5;
 		x += 0xa234fab;

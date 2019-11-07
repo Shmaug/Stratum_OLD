@@ -18,13 +18,15 @@ public:
 	ENGINE_EXPORT MeshRenderer(const std::string& name);
 	ENGINE_EXPORT ~MeshRenderer();
 
+	inline virtual void CastShadows(bool c) { mCastShadows = c; }
+	inline virtual bool CastShadows() override { return mCastShadows; }
+
 	inline virtual void Mesh(::Mesh* m) { mMesh = m; Dirty(); }
 	inline virtual void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }
 	inline virtual ::Mesh* Mesh() const { return mMesh.index() == 0 ? std::get<::Mesh*>(mMesh) : std::get<std::shared_ptr<::Mesh>>(mMesh).get(); }
 
 	inline virtual std::shared_ptr<::Material> Material() const { return mMaterial; }
 	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
-	ENGINE_EXPORT bool Batchable(Device* device);
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
@@ -42,10 +44,8 @@ private:
 	uint32_t mCollisionMask;
 
 protected:
+	bool mCastShadows;
 	std::shared_ptr<::Material> mMaterial;
-	uint32_t mNeedsObjectData;
-	uint32_t mNeedsLightData;
-	VkPushConstantRange mLightCountRange;
 
 	OBB mOBB;
 	AABB mAABB;

@@ -16,7 +16,7 @@
 #include "pbr.hlsli"
 
 // per-object
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Objects : register(t0);
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Instances : register(t0);
 [[vk::binding(LIGHT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t1);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
@@ -69,13 +69,13 @@ v2f vsmain(
 	) {
 	v2f o;
 	
-	float4 wp = mul(Objects[instance].ObjectToWorld, float4(vertex, 1.0));
+	float4 wp = mul(Instances[instance].ObjectToWorld, float4(vertex, 1.0));
 	o.position = mul(Camera.ViewProjection, wp);
 	o.worldPos = wp.xyz;
 
-	o.normal = mul(float4(normal, 1), Objects[instance].WorldToObject).xyz;
+	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
 	#ifdef NORMAL_MAP
-	o.tangent = mul(tangent, Objects[instance].WorldToObject) * tangent.w;
+	o.tangent = mul(tangent, Instances[instance].WorldToObject) * tangent.w;
 	#endif
 
 	#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
@@ -93,7 +93,10 @@ void fsmain(v2f i,
 	float4 col = Color;
 	#endif
 
-	float3 view = Camera.Position - i.worldPos;
+	float4 p0 = mul(Camera.InvViewProjection, float4(i.position.xy, 1, 1));
+	float4 p1 = mul(Camera.InvViewProjection, float4(i.position.xy, 1, 1));
+	float3 view = i.worldPos - p0.xyz / p0.w;
+
 	float depth = length(view);
 	view /= depth;
 

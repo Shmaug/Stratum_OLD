@@ -15,8 +15,8 @@ public:
 		SBSHorizontal, SBSVertical
 	};
 
-	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
-	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT);
+	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
+	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
 	ENGINE_EXPORT virtual ~Camera();
 
 	inline ::Device* Device() const { return mDevice; }
@@ -27,8 +27,9 @@ public:
 	ENGINE_EXPORT virtual void EndRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	inline virtual ::RenderPass* RenderPass() const { return mRenderPass; }
 
-	ENGINE_EXPORT virtual float4 WorldToClip(float3 worldPos);
-	ENGINE_EXPORT virtual float3 ClipToWorldRay(float3 clipPos);
+	ENGINE_EXPORT virtual float4 WorldToClip(const float3& worldPos);
+	ENGINE_EXPORT virtual float3 ClipToWorld(const float3& clipPos);
+	ENGINE_EXPORT virtual Ray ScreenToWorldRay(const float2& uv);
 
 	inline virtual uint32_t RenderPriority() const { return mRenderPriority; }
 	inline virtual void RenderPriority(uint32_t x) { mRenderPriority = x; }
@@ -41,7 +42,7 @@ public:
 	inline virtual float Near() const { return mNear; }
 	inline virtual float Far() const { return mFar; }
 	inline virtual float FieldOfView() const { return mFieldOfView; }
-	inline virtual float4 PerspectiveBounds() const { return mPerspectiveBounds; }
+	inline virtual float2 PerspectiveSize() const { return mPerspectiveSize; }
 	inline virtual uint32_t PixelWidth()  const { return mPixelWidth;  }
 	inline virtual uint32_t PixelHeight() const { return mPixelHeight; }
 	inline virtual VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
@@ -50,8 +51,8 @@ public:
 	inline virtual void OrthographicSize(float s) { mOrthographicSize = s; mMatricesDirty = true; }
 	inline virtual void Near(float n) { mNear = n; mMatricesDirty = true; }
 	inline virtual void Far (float f) { mFar = f;  mMatricesDirty = true; }
-	inline virtual void FieldOfView(float f) { mPerspectiveBounds = float4(0.f); mFieldOfView = f; mMatricesDirty = true; }
-	inline virtual void PerspectiveBounds(const float4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; mMatricesDirty = true; }
+	inline virtual void FieldOfView(float f) { mPerspectiveSize = 0; mFieldOfView = f; mMatricesDirty = true; }
+	inline virtual void PerspectiveSize(const float2& p) { mPerspectiveSize = p; mFieldOfView = 0; mMatricesDirty = true; }
 	inline virtual void PixelWidth (uint32_t w) { mPixelWidth  = w; DirtyFramebuffers(); mMatricesDirty = true; }
 	inline virtual void PixelHeight(uint32_t h) { mPixelHeight = h; DirtyFramebuffers(); mMatricesDirty = true; }
 	inline virtual void SampleCount(VkSampleCountFlagBits s) { mSampleCount = s; DirtyFramebuffers(); }
@@ -75,6 +76,8 @@ private:
 	VkFormat mRenderFormat;
 	VkFormat mDepthFormat;
 
+	bool mRenderDepthNormals;
+
 	bool mOrthographic;
 	float mOrthographicSize;
 
@@ -84,7 +87,7 @@ private:
 	uint32_t mPixelWidth;
 	uint32_t mPixelHeight;
 	VkSampleCountFlagBits mSampleCount;
-	float4 mPerspectiveBounds;
+	float2 mPerspectiveSize;
 
 	float4x4 mView;
 	float4x4 mProjection;

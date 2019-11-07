@@ -65,7 +65,7 @@ public:
 	Shader* mShader;
 
 	inline GraphicsShader() : ShaderVariant() { mShader = nullptr; }
-	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM, BlendMode blendMode = Opaque);
+	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM, BlendMode blendMode = BLEND_MODE_MAX_ENUM);
 };
 
 class Shader : public Asset {
@@ -87,6 +87,7 @@ private:
 	friend class GraphicsShader;
 	std::set<std::string> mKeywords;
 
+	VkColorComponentFlags mColorMask;
 	uint32_t mRenderQueue;
 	BlendMode mBlendMode;
 	VkPipelineViewportStateCreateInfo mViewportState;

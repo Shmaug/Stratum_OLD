@@ -22,6 +22,7 @@ struct ObjectBuffer{
 };
 struct CameraBuffer {
 	float4x4 ViewProjection;
+	float4x4 InvViewProjection;
 	float4 Viewport;
 	float3 Up;
 	float _pad0;
