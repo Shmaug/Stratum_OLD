@@ -59,7 +59,7 @@ UIElement* UICanvas::Raycast(const Ray& worldRay) {
 	}
 	return hit;
 }
-void UICanvas::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
+void UICanvas::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, Material* materialOverride) {
 	if (mSortedElementsDirty) {
 		mSortedElements.clear();
 		for (const shared_ptr<UIElement>& e : mElements)
@@ -72,5 +72,5 @@ void UICanvas::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backB
 
 	for (UIElement* e : mSortedElements)
 		if (e->Visible())
-			e->Draw(camera, commandBuffer, backBufferIndex, materialOverride);
+			e->Draw(commandBuffer, backBufferIndex, camera, materialOverride);
 }

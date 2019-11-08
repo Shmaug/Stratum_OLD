@@ -40,6 +40,9 @@ public:
 	inline void Radius(float r) { mRadius = r; }
 	// Physical radius of the point/spot light
 	inline float Radius() const { return mRadius; }
+
+	inline void CastShadows(bool c) { mCastShadows = true; }
+	inline bool CastShadows() { return mCastShadows; }
 	
 	inline AABB Bounds() override {
 		switch (mType) {
@@ -62,4 +65,5 @@ private:
 	float mRange;
 	float mInnerSpotAngle;
 	float mOuterSpotAngle;
+	bool mCastShadows;
 };

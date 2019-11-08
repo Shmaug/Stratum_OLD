@@ -22,7 +22,7 @@ UIImage::~UIImage() {
 	}
 }
 
-void UIImage::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void UIImage::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
 	if (!Texture() || !mVisible) return;
 	if (mColor.a <= 0 && (!mOutline || mOutlineColor.a <= 0)) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/ui.shader");
@@ -41,7 +41,6 @@ void UIImage::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Texture(), BINDING_START + 0);
 	}
 
-
 	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 	VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
@@ -55,7 +54,7 @@ void UIImage::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	float2 bounds = Canvas()->Extent();
 
 	if (mColor.a > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		float4x4 mt = Canvas()->ObjectToWorld();
 		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
@@ -70,7 +69,7 @@ void UIImage::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	}
 
 	if (mOutline && mOutlineColor.a > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		float4x4 mt = Canvas()->ObjectToWorld();
 		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);

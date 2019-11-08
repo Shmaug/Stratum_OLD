@@ -19,6 +19,7 @@ add_library(Engine SHARED
 	"Core/DescriptorSet.cpp"
 	"Core/Device.cpp"
 	"Core/DeviceManager.cpp"
+	"Core/Framebuffer.cpp"
 	"Core/PluginManager.cpp"
 	"Core/RenderPass.cpp"
 	"Core/Sampler.cpp"

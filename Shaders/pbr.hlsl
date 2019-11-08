@@ -13,21 +13,23 @@
 #pragma static_sampler Sampler
 
 #include <shadercompat.h>
-#include "pbr.hlsli"
+#include "brdf.hlsli"
 
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Instances : register(t0);
 [[vk::binding(LIGHT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t1);
+[[vk::binding(SHADOW_ATLAS_BINDING, PER_OBJECT)]] Texture2D<float4> ShadowAtlas : register(t2);
+[[vk::binding(SHADOW_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ShadowData> Shadows : register(t3);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t2);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t3);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t4);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t5);
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t6);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t7);
-[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t8);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t4);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t5);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t6);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t7);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t8);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t9);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t10);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
@@ -47,14 +49,50 @@
 struct v2f {
 	float4 position : SV_Position;
 	float3 worldPos : TEXCOORD0;
+	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
 #ifdef NORMAL_MAP
 	float4 tangent : TANGENT;
 #endif
 #if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECGLOSS_MAP) || defined(OCCLUSION_MAP)
-	float2 texcoord : TEXCOORD1;
+	float2 texcoord : TEXCOORD2;
 #endif
 };
+
+float LightAttenuation(uint l, float3 worldPos, float3 normal, out float3 L) {
+	L = Lights[l].Direction;
+	float attenuation = 1;
+
+	if (Lights[l].ShadowIndex >= 0) {
+		ShadowData s = Shadows[Lights[l].ShadowIndex];
+		float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + normal * .001, 1));
+
+		float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
+		shadowPos /= shadowPos.w;
+		if (shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1 && z > 0 && z < s.Proj.w) {
+			shadowPos.y = -shadowPos.y;
+			float2 shadowUV = shadowPos.xy * .5 + .5;
+			float sz = ShadowAtlas.Sample(Sampler, shadowUV * s.ShadowST.xy + s.ShadowST.zw).r * s.Proj.w;
+			if (z > sz) return 0;
+		}
+	}
+
+	if (Lights[l].Type > LIGHT_SUN) {
+		L = Lights[l].WorldPosition - worldPos;
+		float d2 = dot(L, L);
+		L /= sqrt(d2);
+		attenuation *= 1 / max(d2, .0001);
+		float f = d2 * Lights[l].InvSqrRange;
+		f = saturate(1 - f * f);
+		attenuation *= f * f;
+		if (Lights[l].Type == LIGHT_SPOT) {
+			float a = saturate(dot(L, Lights[l].Direction) * Lights[l].SpotAngleScale + Lights[l].SpotAngleOffset);
+			attenuation *= a * a;
+		}
+	}
+
+	return attenuation;
+}
 
 v2f vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
@@ -69,15 +107,15 @@ v2f vsmain(
 	) {
 	v2f o;
 	
-	float4 wp = mul(Instances[instance].ObjectToWorld, float4(vertex, 1.0));
-	o.position = mul(Camera.ViewProjection, wp);
-	o.worldPos = wp.xyz;
+	float4 worldPos = mul(Instances[instance].ObjectToWorld, float4(vertex, 1.0));
+	o.position = mul(Camera.ViewProjection, worldPos);
+	o.screenPos = o.position;
+	o.worldPos = worldPos.xyz;
 
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
 	#ifdef NORMAL_MAP
 	o.tangent = mul(tangent, Instances[instance].WorldToObject) * tangent.w;
 	#endif
-
 	#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION)
 	o.texcoord = texcoord;
 	#endif
@@ -93,12 +131,19 @@ void fsmain(v2f i,
 	float4 col = Color;
 	#endif
 
-	float4 p0 = mul(Camera.InvViewProjection, float4(i.position.xy, 1, 1));
-	float4 p1 = mul(Camera.InvViewProjection, float4(i.position.xy, 1, 1));
-	float3 view = i.worldPos - p0.xyz / p0.w;
-
-	float depth = length(view);
-	view /= depth;
+	float3 view;
+	float depth;
+	if (Camera.ProjParams.w) {
+		view = float3(i.screenPos.xy / i.screenPos.w, Camera.Viewport.z);
+		view.x *= Camera.ProjParams.x; // aspect
+		view.xy *= Camera.ProjParams.y; // ortho size
+		view = mul(float4(view, 1), Camera.View).xyz;
+		view = -view;
+		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
+	} else {
+		view = normalize(Camera.Position - i.worldPos);
+		depth = i.screenPos.w;
+	}
 
 	float3 normal = normalize(i.normal);
 	#ifdef TWO_SIDED
@@ -129,24 +174,10 @@ void fsmain(v2f i,
 	float3 eval = 0;
 
 	for (uint l = 0; l < LightCount; l++) {
-		float3 toLight = Lights[l].Direction;
-		float attenuation = 1;
-		if (Lights[l].Type > LIGHT_SUN) {
-			toLight = Lights[l].WorldPosition - i.worldPos;
-			float d2 = dot(toLight, toLight);
-			toLight /= sqrt(d2);
-
-			attenuation = 1 / max(d2, .0001);
-			float f = d2 * Lights[l].InvSqrRange;
-			f = saturate(1 - f * f);
-			attenuation *= f * f;
-
-			if (Lights[l].Type == LIGHT_SPOT) {
-				float a = saturate(dot(toLight, Lights[l].Direction) * Lights[l].SpotAngleScale + Lights[l].SpotAngleOffset);
-				attenuation *= a * a;
-			}
-		}
-		eval += attenuation * Lights[l].Color * ShadePoint(material, toLight, normal, view);
+		float3 L;
+		float attenuation = LightAttenuation(l, i.worldPos, normal, L);
+		if (attenuation > 0.001)
+			eval += attenuation * Lights[l].Color * BRDF(material, L, normal, view);
 	}
 
 	float3 reflection = normalize(reflect(-view, normal));
@@ -156,9 +187,9 @@ void fsmain(v2f i,
 	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
 	float3 env = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb * EnvironmentStrength;
 	
-	eval += ShadeIndirect(material, normal, view, env, env);
+	eval += BRDFIndirect(material, normal, view, env, env);
 
-#	ifdef OCCLUSION_MAP
+	#ifdef OCCLUSION_MAP
 	eval *= OcclusionTexture.Sample(Sampler, i.texcoord).rgb;
 	#endif
 

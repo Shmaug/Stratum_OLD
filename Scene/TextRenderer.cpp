@@ -56,7 +56,7 @@ void TextRenderer::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void TextRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void TextRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mGlyphCount = 0;
@@ -79,7 +79,7 @@ void TextRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t b
 	if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/font.shader");
 	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
 
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera);
 	if (!layout) return;
 
 	// Create and assign descriptor sets
@@ -109,6 +109,6 @@ void TextRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t b
 	commandBuffer->mTriangleCount += data.mGlyphCount * 2;
 }
 
-void TextRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void TextRenderer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
 	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
 };

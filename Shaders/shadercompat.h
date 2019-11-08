@@ -10,7 +10,9 @@
 #define CAMERA_BUFFER_BINDING 0
 #define OBJECT_BUFFER_BINDING 1
 #define LIGHT_BUFFER_BINDING 2
-#define BINDING_START 3
+#define SHADOW_ATLAS_BINDING 3
+#define SHADOW_BUFFER_BINDING 4
+#define BINDING_START 4
 
 #define LIGHT_SUN 0
 #define LIGHT_POINT 1
@@ -21,9 +23,12 @@ struct ObjectBuffer{
 	float4x4 WorldToObject;
 };
 struct CameraBuffer {
+	float4x4 View;
+	float4x4 Projection;
 	float4x4 ViewProjection;
-	float4x4 InvViewProjection;
+	float4x4 InvProjection;
 	float4 Viewport;
+	float4 ProjParams;
 	float3 Up;
 	float _pad0;
 	float3 Right;
@@ -38,10 +43,16 @@ struct GPULight {
 	float SpotAngleScale;
 	float3 Color;
 	float SpotAngleOffset;
+	int ShadowIndex;
 	uint Type;
-	uint pad0;
 	uint pad1;
 	uint pad2;
+};
+
+struct ShadowData {
+	float4x4 WorldToShadow; // ViewProjection matrix for the shadow render
+	float4 Proj;
+	float4 ShadowST;
 };
 
 #ifdef __cplusplus

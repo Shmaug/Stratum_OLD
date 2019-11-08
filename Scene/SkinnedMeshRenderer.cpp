@@ -70,7 +70,7 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
@@ -113,12 +113,12 @@ void SkinnedMeshRenderer::PreRender(Camera* camera, CommandBuffer* commandBuffer
     }
 }
 
-void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, ::Material* materialOverride) {
+void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();
 	if (!material) return;
 
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), m->Topology());
+	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), camera, m->Topology());
 	if (!layout) return;
 	auto shader = material->GetShader(commandBuffer->Device());
 
@@ -159,7 +159,7 @@ void SkinnedMeshRenderer::Draw(Camera* camera, CommandBuffer* commandBuffer, uin
 	commandBuffer->mTriangleCount += m->IndexCount() / 3;
 }
 
-void SkinnedMeshRenderer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
 	if (mRig.size()){
 		for (auto b : mRig) {
 			Scene()->Gizmos()->DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));

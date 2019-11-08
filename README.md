@@ -37,6 +37,7 @@ BUILD_SHARED_LIBS=FALSE
 
 - Proper scene BVH
 - Shadow mapping
+- Move all camera uniforms to a single buffer
 - Tiled lighting
 - Atmospheric scattering
 - Linearly Transformed Cosine based area lights

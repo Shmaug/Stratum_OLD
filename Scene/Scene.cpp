@@ -16,16 +16,19 @@ Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
 		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++) {
 			safe_delete(kp.second.mLightBuffers[i]);
+			safe_delete(kp.second.mShadowBuffers[i]);
 			for (Buffer* b : kp.second.mInstanceBuffers[i])
 				safe_delete(b);
 			for (DescriptorSet* d : kp.second.mInstanceDescriptorSets[i])
 				safe_delete(d);
 		}
+		safe_delete_array(kp.second.mLightBuffers);
+		safe_delete_array(kp.second.mShadowBuffers);
 		safe_delete_array(kp.second.mInstanceIndex);
 		safe_delete_array(kp.second.mInstanceBuffers);
-		safe_delete_array(kp.second.mLightBuffers);
 		safe_delete_array(kp.second.mInstanceDescriptorSets);
-		safe_delete(kp.second.mShadowCamera);
+		safe_delete(kp.second.mShadowAtlasFramebuffer);
+		for (Camera* c : kp.second.mShadowCameras) safe_delete(c);
 	}
 	safe_delete(mGizmos);
 
@@ -113,22 +116,29 @@ void Scene::RemoveObject(Object* object) {
 }
 
 void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+	Camera* mainCamera = nullptr;
+	for (Camera* c : mCameras)
+		if (c->EnabledHierarchy()) {
+			mainCamera = c;
+			break;
+		}
+	if (!mainCamera) return;
+
 	Device* device = commandBuffer->Device();
 	
 	if (mDeviceData.count(device) == 0) {
 		DeviceData& data = mDeviceData[device];
 		uint32_t c = device->MaxFramesInFlight();
 		data.mLightBuffers = new Buffer*[c];
+		data.mShadowBuffers = new Buffer*[c];
 		data.mInstanceBuffers = new vector<Buffer*>[c];
 		data.mInstanceDescriptorSets = new vector<DescriptorSet*>[c];
 		data.mInstanceIndex = new uint32_t[c];
 		memset(data.mLightBuffers, 0, sizeof(Buffer*) * c);
+		memset(data.mShadowBuffers, 0, sizeof(Buffer*) * c);
 		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * c);
 		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * c);
-
-		data.mShadowCamera = new Camera("ShadowCamera", device, VK_FORMAT_R16_UNORM, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, false);
-		data.mShadowCamera->PixelWidth(4096);
-		data.mShadowCamera->PixelHeight(4096);
+		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, 8192, 8192, { VK_FORMAT_R8G8B8A8_UNORM }, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
 	}
 	DeviceData& data = mDeviceData.at(device);
 	data.mInstanceIndex[backBufferIndex] = 0;
@@ -140,21 +150,24 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		lb = new Buffer("Light Buffer", device, max(1u, (uint32_t)mLights.size()) * (uint32_t)sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		lb->Map();
 	}
+
+	Buffer*& sb = data.mShadowBuffers[backBufferIndex];
+	if (sb && sb->Size() < mLights.size() * sizeof(ShadowData)) safe_delete(sb);
+	if (!sb) {
+		sb = new Buffer("Shadow Buffer", device, max(1u, (uint32_t)mLights.size()) * (uint32_t)sizeof(ShadowData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		sb->Map();
+	}
+
 	mActiveLights.clear();
-	if (mLights.size()){
+	if (mLights.size()) {
+		uint32_t si = 0;
 		uint32_t li = 0;
 		GPULight* lights = (GPULight*)lb->MappedData();
+		ShadowData* shadows = (ShadowData*)sb->MappedData();
 		for (Light* l : mLights) {
 			if (!l->EnabledHierarchy()) continue;
 			mActiveLights.push_back(l);
 
-			if (l->Type() == Sun) {
-				data.mShadowCamera->Orthographic(true);
-				data.mShadowCamera->OrthographicSize(10);
-				data.mShadowCamera->LocalRotation(l->WorldRotation());
-				data.mShadowCamera->LocalPosition(l->WorldRotation() * float3(0, 0, -10));
-			}
-			
 			float cosInner = cosf(l->InnerSpotAngle());
 			float cosOuter = cosf(l->OuterSpotAngle());
 
@@ -166,22 +179,74 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 			lights[li].Direction = l->WorldRotation() * float3(0, 0, -1);
 			lights[li].Type = l->Type();
 
+			if (l->CastShadows()) {
+				Camera* sc;
+				if (data.mShadowCameras.size() <= si) {
+					sc = new Camera("ShadowCamera", data.mShadowAtlasFramebuffer);
+					sc->Framebuffer()->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+					data.mShadowCameras.push_back(sc);
+				} else
+					sc = data.mShadowCameras[si];
+
+				switch (l->Type()) {
+				case Sun:
+					sc->Orthographic(true);
+					sc->OrthographicSize(20);
+					sc->Near(1);
+					sc->Far(100);
+					sc->LocalRotation(l->WorldRotation());
+					sc->LocalPosition(mainCamera->WorldPosition() + l->WorldRotation() * float3(0, 0, -50));
+					break;
+				case Point:
+					break;
+				case Spot:
+					sc->Orthographic(false);
+					sc->FieldOfView(l->OuterSpotAngle()*2);
+					sc->Near(.001f);
+					sc->Far(l->Range());
+					sc->LocalRotation(l->WorldRotation());
+					sc->LocalPosition(l->WorldPosition());
+					break;
+				}
+
+				sc->ViewportX((si % 4) * 2048);
+				sc->ViewportY((si / 4) * 2048);
+				sc->ViewportWidth(2048);
+				sc->ViewportHeight(2048);
+
+				shadows[si].WorldToShadow = sc->ViewProjection();
+				shadows[si].ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / float4(sc->FramebufferWidth(), sc->FramebufferHeight(), sc->FramebufferWidth(), sc->FramebufferHeight());
+				shadows[si].Proj = float4(sc->Orthographic() ? 1 : 0, sc->Near(), sc->Far());
+				lights[li].ShadowIndex = (int32_t)si;
+				si++;
+			} else
+				lights[li].ShadowIndex = -1;
+
 			li++;
 		}
-	}
-	PROFILER_END;
 
-	PROFILER_BEGIN("Render Shadows");
-	bool g = mDrawGizmos;
-	mDrawGizmos = false;
-	//Render(data.mShadowCamera, commandBuffer, backBufferIndex, mShadowMaterial.get());
-	mDrawGizmos = g;
+		if (si > 0) {
+			PROFILER_BEGIN("Render Shadows");
+			data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+			data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer, backBufferIndex);
+
+			bool g = mDrawGizmos;
+			mDrawGizmos = false;
+			for (uint32_t i = 0; i < si; i++)
+				Render(data.mShadowCameras[i], commandBuffer, backBufferIndex, mShadowMaterial.get(), false);
+			mDrawGizmos = g;
+
+			vkCmdEndRenderPass(*commandBuffer);
+			data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+			PROFILER_END;
+		}
+	}
 	PROFILER_END;
 
 	mGizmos->PreFrame(device, backBufferIndex);
 }
 
-void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {
+void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride, bool startRenderPass) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
 	PROFILER_BEGIN("Gather/Sort Renderers");
@@ -206,15 +271,17 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PreRender(camera, commandBuffer, backBufferIndex);
+			p->PreRender(commandBuffer, backBufferIndex, camera);
 	for (Renderer* r : mRenderList)
-		r->PreRender(camera, commandBuffer, backBufferIndex, materialOverride);
+		r->PreRender(commandBuffer, backBufferIndex, camera, materialOverride);
 	PROFILER_END;
 
 	// combine MeshRenderers that have the same material and mesh
 	PROFILER_BEGIN("Draw");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
-	camera->BeginRenderPass(commandBuffer, backBufferIndex);
+	if (startRenderPass)
+		camera->Framebuffer()->BeginRenderPass(commandBuffer, backBufferIndex);
+	camera->Set(commandBuffer, backBufferIndex);
 	
 	DescriptorSet* batchDS = nullptr;
 	Buffer* batchBuffer = nullptr;
@@ -233,7 +300,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 					// render last batch
 					if (batchStart) {
 						BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-						batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+						batchStart->DrawInstanced(commandBuffer, backBufferIndex, camera, batchSize, *batchDS, materialOverride);
 						END_CMD_REGION(commandBuffer);
 					}
 
@@ -266,6 +333,10 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 
 					if (curShader->mDescriptorBindings.count("Lights"))
 						batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[backBufferIndex], LIGHT_BUFFER_BINDING);
+					if (curShader->mDescriptorBindings.count("Shadows"))
+						batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[backBufferIndex], SHADOW_BUFFER_BINDING);
+					if (curShader->mDescriptorBindings.count("ShadowAtlas"))
+						batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0), SHADOW_ATLAS_BINDING);
 				}
 				// append to batch
 				((ObjectBuffer*)batchBuffer->MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
@@ -279,19 +350,19 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 			// render last batch
 			if (batchStart) {
 				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-				batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+				batchStart->DrawInstanced(commandBuffer, backBufferIndex, camera, batchSize, *batchDS, materialOverride);
 				END_CMD_REGION(commandBuffer);
 				batchStart = nullptr;
 			}
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
-			r->Draw(camera, commandBuffer, backBufferIndex, materialOverride);
+			r->Draw(commandBuffer, backBufferIndex, camera, materialOverride);
 			END_CMD_REGION(commandBuffer);
 		}
 	}
 	// render last batch
 	if (batchStart) {
 		BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-		batchStart->DrawInstanced(camera, commandBuffer, backBufferIndex, batchSize, *batchDS, materialOverride);
+		batchStart->DrawInstanced(commandBuffer, backBufferIndex, camera, batchSize, *batchDS, materialOverride);
 		END_CMD_REGION(commandBuffer);
 	}
 	PROFILER_END;
@@ -302,19 +373,21 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy()) {
 				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
-				r->DrawGizmos(camera, commandBuffer, backBufferIndex);
+				r->DrawGizmos(commandBuffer, backBufferIndex, camera);
 				END_CMD_REGION(commandBuffer);
 			}
 
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
-				p->DrawGizmos(camera, commandBuffer, backBufferIndex);
-		mGizmos->Draw(commandBuffer, backBufferIndex);
+				p->DrawGizmos(commandBuffer, backBufferIndex, camera);
+		mGizmos->Draw(commandBuffer, backBufferIndex, camera);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
 
-	camera->EndRenderPass(commandBuffer, backBufferIndex);
+	if (startRenderPass)
+		vkCmdEndRenderPass(*commandBuffer);
+	
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
 
@@ -322,7 +395,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBu
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PostRender(camera, commandBuffer, backBufferIndex);
+			p->PostRender( commandBuffer, backBufferIndex, camera);
 	PROFILER_END;
 
 	camera->ResolveWindow(commandBuffer, backBufferIndex);

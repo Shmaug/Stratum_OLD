@@ -209,7 +209,7 @@ void Gizmos::PreFrame(Device* device, uint32_t backBufferIndex){
 	DeviceData& data = mDeviceData.at(device);
 	data.mBufferIndex[backBufferIndex] = 0;
 }
-void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
 	uint32_t instanceOffset = 0;
 	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
@@ -276,7 +276,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
 
 	if (wireCubeCount + wireCircleCount > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;
@@ -296,7 +296,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 	}
 
 	if (cubeCount + billboardCount > 0){
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;

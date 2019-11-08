@@ -28,7 +28,7 @@
 struct v2f {
 	float4 position : SV_Position;
 	float4 texcoord : TEXCOORD0;
-	float3 worldPos : TEXCOORD1;
+	float depth : TEXCOORD1;
 	float3 normal : NORMAL;
 };
 
@@ -43,14 +43,14 @@ v2f vsmain(uint index : SV_VertexID) {
 	};
 
 	float2 p = Offset + Extent * (positions[index] * 2 - 1);
-	float4 wp = mul(ObjectToWorld, float4(p, 0, 1.0));
+	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1.0));
 
 	v2f o;
-	o.position = mul(Camera.ViewProjection, wp);
+	o.position = mul(Camera.ViewProjection, worldPos);
+	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
 	o.texcoord.xy = positions[index];
 	o.texcoord.zw = abs(p);
 	o.normal = mul(float4(0, 0, 1, 1), WorldToObject).xyz;
-	o.worldPos = wp.xyz;
 
 	return o;
 }
@@ -60,5 +60,5 @@ void fsmain(v2f i,
 	out float4 depthNormal : SV_Target1) {
 	clip(any(Bounds - i.texcoord.zw));
 	color = MainTexture.SampleLevel(Sampler, i.texcoord.xy, 0) * Color;
-	depthNormal = float4(normalize(i.normal) * .5 + .5, length(Camera.Position - i.worldPos.xyz) / Camera.Viewport.w);
+	depthNormal = float4(normalize(i.normal) * .5 + .5, i.depth);
 }

@@ -1354,10 +1354,10 @@ struct float4x4 {
 		f[1] = cross(fwd, f[0]);
 		f[2] = fwd;
 		float4x4 r(1);
-		rpt3(i) r.v[0][i] = f[0].v[i];
-		rpt3(i) r.v[1][i] = f[1].v[i];
-		rpt3(i) r.v[2][i] = f[2].v[i];
-		rpt3(i) r.v[i][3] = -dot(f[i], p);
+		rpt3(i) r.v[i][0] = f[0].v[i];
+		rpt3(i) r.v[i][1] = f[1].v[i];
+		rpt3(i) r.v[i][2] = f[2].v[i];
+		rpt3(i) r.v[3][i] = -dot(f[i], p);
 		return r;
 	}
 	inline static float4x4 PerspectiveFov(float fovy, float aspect, float near, float far) {
@@ -1367,8 +1367,8 @@ struct float4x4 {
 		r[0][0] = sy / aspect;
 		r[1][1] = -sy;
 		r[2][2] = far * df;
-		r[2][3] = -far * near * df;
-		r[3][2] = 1;
+		r[3][2] = -far * near * df;
+		r[2][3] = 1;
 		return r;
 	}
 	inline static float4x4 Perspective(float width, float height, float near, float far) {
@@ -1377,17 +1377,17 @@ struct float4x4 {
 		r[0][0] = 2 * near / width;
 		r[1][1] = -2 * near / height;
 		r[2][2] = far * df;
-		r[2][3] = far * near * df;
-		r[3][2] = 1;
+		r[3][2] = -far * near * df;
+		r[2][3] = 1;
 		return r;
 	}
 	inline static float4x4 Orthographic(float width, float height, float near, float far) {
 		float df = 1 / (far - near);
 		float4x4 r(1);
 		r[0][0] = 2 / width;
-		r[1][1] = 2 / height;
+		r[1][1] = -2 / height;
 		r[2][2] = df;
-		r[2][3] = -near * df;
+		r[3][2] = -near * df;
 		return r;
 	}
 
@@ -1441,24 +1441,6 @@ struct float4x4 {
 };
 #pragma pack(pop)
 
-inline float determinant(const float4x4& m) {
-	float f00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
-	float f01 = m[2][1] * m[3][3] - m[3][1] * m[2][3];
-	float f02 = m[2][1] * m[3][2] - m[3][1] * m[2][2];
-	float f03 = m[2][0] * m[3][3] - m[3][0] * m[2][3];
-	float f04 = m[2][0] * m[3][2] - m[3][0] * m[2][2];
-	float f05 = m[2][0] * m[3][1] - m[3][0] * m[2][1];
-
-	float4 coef(
-		+(m[1][1] * f00 - m[1][2] * f01 + m[1][3] * f02),
-		-(m[1][0] * f00 - m[1][2] * f03 + m[1][3] * f04),
-		+(m[1][0] * f01 - m[1][1] * f03 + m[1][3] * f05),
-		-(m[1][0] * f02 - m[1][1] * f04 + m[1][2] * f05));
-
-	return
-		m[0][0] * coef[0] + m[0][1] * coef[1] +
-		m[0][2] * coef[2] + m[0][3] * coef[3];
-}
 inline float4x4 inverse(const float4x4& m) {
 	float c00 = m[2][2] * m[3][3] - m[3][2] * m[2][3];
 	float c02 = m[1][2] * m[3][3] - m[3][2] * m[1][3];
@@ -1787,7 +1769,6 @@ inline float3 abs(const float3& a) {
 	rpt3(i) r.v[i] = fabs(a.v[i]);
 	return r;
 }
-
 
 inline float4 min(const float4& a, const float4& b) {
 	float4 r;
