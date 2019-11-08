@@ -72,7 +72,7 @@ struct MaterialInfo {
 	float nv;
 };
 
-float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 viewDir) {
+float3 BRDF(MaterialInfo material, float3 light, float3 normal, float3 viewDir) {
 	float3 halfDir = normalize(light + viewDir);
 
 	float nl = saturate(dot(normal, light));
@@ -92,7 +92,7 @@ float3 ShadePoint(MaterialInfo material, float3 light, float3 normal, float3 vie
 
 	return material.diffuseColor * diffuseTerm + specularTerm * FresnelTerm(material.specularColor, lh);
 }
-float3 ShadeIndirect(MaterialInfo material, float3 normal, float3 viewDir, float3 diffuseLight, float3 specularLight) {
+float3 BRDFIndirect(MaterialInfo material, float3 normal, float3 viewDir, float3 diffuseLight, float3 specularLight) {
 	float surfaceReduction = 1.0 / (material.roughness * material.roughness + 1.0);
 	float grazingTerm = saturate((1 - material.perceptualRoughness) + (1 - material.oneMinusReflectivity));
 	return material.diffuseColor * diffuseLight + surfaceReduction * specularLight * FresnelLerp(material.specularColor, grazingTerm, material.nv);

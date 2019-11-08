@@ -54,7 +54,7 @@ public:
 	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
 	
 	ENGINE_EXPORT bool Visible();
-	virtual void Draw(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride) {}
+	virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, Material* materialOverride) {}
 	
 private:
 	friend class UICanvas;

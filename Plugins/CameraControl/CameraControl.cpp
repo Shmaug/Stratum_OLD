@@ -58,15 +58,22 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	}
 	if (c) {
 		c->AddChild(mFpsText);
-		float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.95f, -.95f, .001f)), 1)).xyz;
+		float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
+		lp.z = c->Near() + .0001f;
 		mFpsText->LocalPosition(lp);
-		mFpsText->TextScale((c->Near() + .001f) * .015f);
+
+		if (c->Orthographic()) {
+			mFpsText->TextScale(.028f * c->OrthographicSize());
+			c->OrthographicSize(c->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
+		} else {
+			mFpsText->TextScale(.0005f * tanf(c->FieldOfView() / 2));
+			mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
+		}
 
 		if (mInput->KeyDownFirst(GLFW_KEY_O))
 			c->Orthographic(!c->Orthographic());
 	}
 
-	mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 
 	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
@@ -103,6 +110,6 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	}
 }
 
-void CameraControl::PostRender(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void CameraControl::PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
 	mTriangleCount = commandBuffer->mTriangleCount;
 }

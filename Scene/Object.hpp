@@ -46,7 +46,7 @@ public:
 	ENGINE_EXPORT virtual AABB Bounds();
 	ENGINE_EXPORT virtual AABB BoundsHierarchy();
 
-	ENGINE_EXPORT virtual void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {};
+	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {};
 	
 	ENGINE_EXPORT bool EnabledHierarchy();
 

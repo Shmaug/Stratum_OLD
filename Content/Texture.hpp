@@ -33,6 +33,8 @@ public:
 	inline uint32_t Depth() const { return mDepth; }
 	inline uint32_t MipLevels() const { return mMipLevels; }
 	inline VkFormat Format() const { return mFormat; }
+	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
+	inline VkImageUsageFlags Usage() const { return mUsage; }
 
 	inline VkImage Image(Device* device) const { return mDeviceData.at(device).mImage; }
 	inline VkImageView View(Device* device) const { return mDeviceData.at(device).mView; }

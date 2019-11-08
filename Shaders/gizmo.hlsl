@@ -29,7 +29,7 @@ struct Gizmo {
 
 struct v2f {
 	float4 position : SV_Position;
-	float3 viewRay : TEXCOORD0;
+	float depth : TEXCOORD0;
 	float3 normal : NORMAL;
 	float4 color : COLOR0;
 	float2 texcoord : TEXCOORD1;
@@ -49,10 +49,7 @@ v2f vsmain(
 
 	float3 worldPos = g.Position + rotate(g.Rotation, vertex * g.Scale);
 	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
-
-	float4 p0 = mul(Camera.InvViewProjection, float4(o.position.xy / o.position.w, 0, 1));
-	o.viewRay = worldPos - p0.xyz / p0.w;
-
+	o.depth = o.position.w / Camera.Viewport.w;
 	o.normal = rotate(g.Rotation, float3(0,0,1));
 	o.color = g.Color;
 	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;
@@ -64,5 +61,5 @@ void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
 	color = MainTexture[i.textureIndex].Sample(Sampler, i.texcoord) * i.color;
-	depthNormal = float4(normalize(i.normal * .5 + .5), length(i.viewRay) / Camera.Viewport.w);
+	depthNormal = float4(normalize(i.normal * .5 + .5), i.depth);
 }

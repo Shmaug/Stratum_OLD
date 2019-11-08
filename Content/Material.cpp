@@ -51,7 +51,7 @@ GraphicsShader* Material::GetShader(Device* device) {
 	}
 }
 
-void Material::SetParameters(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, GraphicsShader* variant) {
+void Material::SetParameters(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, GraphicsShader* variant) {
 	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL&&
 		variant->mDescriptorBindings.size()) {
 		auto& data = mDeviceData[commandBuffer->Device()];
@@ -88,9 +88,9 @@ void Material::SetParameters(CommandBuffer* commandBuffer, uint32_t backBufferIn
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 	}
 
-	if (renderPass->Camera() && variant->mDescriptorBindings.count("Camera")) {
+	if (camera && variant->mDescriptorBindings.count("Camera")) {
 		auto binding = variant->mDescriptorBindings.at("Camera");
-		VkDescriptorSet camds = *renderPass->Camera()->DescriptorSet(backBufferIndex, binding.second.stageFlags);
+		VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex, binding.second.stageFlags);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
 
@@ -124,16 +124,16 @@ void Material::SetParameters(CommandBuffer* commandBuffer, uint32_t backBufferIn
 		vkCmdPushConstants(*commandBuffer, variant->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
 }
-VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, RenderPass* renderPass, const VertexInput* input, VkPrimitiveTopology topology) {
-	if (renderPass == VK_NULL_HANDLE) return VK_NULL_HANDLE;
+VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, uint32_t backBufferIndex, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
+	if (!commandBuffer->CurrentRenderPass()) throw runtime_error("Attempting to bind material outside of a RenderPass!");
 
-	GraphicsShader* variant = GetShader(renderPass->Device());
+	GraphicsShader* variant = GetShader(commandBuffer->Device());
 	if (!variant) return VK_NULL_HANDLE;
 
-	VkPipeline pipeline = variant->GetPipeline(renderPass, input, topology, mCullMode, mBlendMode);
+	VkPipeline pipeline = variant->GetPipeline(commandBuffer->CurrentRenderPass(), input, topology, mCullMode, mBlendMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-	SetParameters(commandBuffer, backBufferIndex, renderPass, variant);
+	SetParameters(commandBuffer, backBufferIndex, camera, variant);
 	
 	return variant->mPipelineLayout;
 }

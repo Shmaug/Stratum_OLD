@@ -1,10 +1,10 @@
 #include <Core/RenderPass.hpp>
-#include <Scene/Camera.hpp>
+#include <Core/Framebuffer.hpp>
 
 using namespace std;
 
 RenderPass::RenderPass(const string& name, ::Device* device, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)
-	: mName(name), mDevice(device), mCamera(nullptr) {
+	: mName(name), mDevice(device), mFramebuffer(nullptr) {
 	mRasterizationSamples = attachments[subpasses[0].pColorAttachments[0].attachment].samples;
 	mColorAttachmentCount = subpasses[0].colorAttachmentCount;
 
@@ -17,9 +17,9 @@ RenderPass::RenderPass(const string& name, ::Device* device, const std::vector<V
 	ThrowIfFailed(vkCreateRenderPass(*mDevice, &renderPassInfo, nullptr, &mRenderPass), "vkCreateRenderPass failed");
 	mDevice->SetObjectName(mRenderPass, mName + " RenderPass");
 }
-RenderPass::RenderPass(const string& name, ::Camera* camera, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)
-	: RenderPass(name, camera->Device(), attachments, subpasses) {
-	mCamera = camera;
+RenderPass::RenderPass(const string& name, ::Framebuffer* frameBuffer, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)
+	: RenderPass(name, frameBuffer->Device(), attachments, subpasses) {
+	mFramebuffer = frameBuffer;
 }
 RenderPass::~RenderPass() {
 	vkDestroyRenderPass(*mDevice, mRenderPass, nullptr);

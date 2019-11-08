@@ -35,12 +35,12 @@ struct Glyph {
 
 struct v2f {
 	float4 position : SV_Position;
+	float depth : TEXCOORD0;
 	#ifdef CANVAS_BOUNDS
-	float4 texcoord : TEXCOORD0;
+	float4 texcoord : TEXCOORD1;
 	#else
-	float2 texcoord : TEXCOORD0;
+	float2 texcoord : TEXCOORD1;
 	#endif
-	float3 viewRay : TEXCOORD1;
 	float3 normal : NORMAL;
 };
 
@@ -67,11 +67,9 @@ v2f vsmain(uint id : SV_VertexId) {
 	#endif
 
 	o.position = mul(Camera.ViewProjection, worldPos);
+	o.depth = o.position.w / Camera.Viewport.w;
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
 	o.normal = mul(float4(0, 0, 1, 1), WorldToObject).xyz;
-
-	float4 p0 = mul(Camera.InvViewProjection, float4(o.position.xy / o.position.w, 0, 1));
-	o.viewRay = worldPos.xyz - p0.xyz / p0.w;
 
 	return o;
 }
@@ -96,5 +94,5 @@ void fsmain(v2f i,
 	clip(any(Bounds - i.texcoord.zw));
 	#endif
 	color = SampleFont(i.texcoord.xy) * Color;
-	depthNormal = float4(normalize(i.normal) * .5 + .5, length(i.viewRay) / Camera.Viewport.w);
+	depthNormal = float4(normalize(i.normal) * .5 + .5, i.depth);
 }

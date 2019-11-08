@@ -31,10 +31,12 @@ private:
 
 	struct DeviceData {
 		Buffer** mLightBuffers;
+		Buffer** mShadowBuffers;
 		std::vector<Buffer*>* mInstanceBuffers;
 		std::vector<DescriptorSet*>* mInstanceDescriptorSets;
-		Camera* mShadowCamera;
+		Framebuffer* mShadowAtlasFramebuffer;
 		uint32_t* mInstanceIndex;
+		std::vector<Camera*> mShadowCameras;
 	};
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 
@@ -60,7 +62,7 @@ public:
 
 	ENGINE_EXPORT void Update(const FrameTime& frameTime);
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	ENGINE_EXPORT void Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr);
+	ENGINE_EXPORT void Render(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex, Material* materialOverride = nullptr, bool startRenderPass = true);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 

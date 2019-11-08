@@ -44,7 +44,7 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
-	PLUGIN_EXPORT void DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera);
 
 private:
 	float mLastClick;
@@ -685,6 +685,7 @@ bool MeshViewer::Init(Scene* scene) {
 	light0->Color(float3(1.f, .7f, .5f));
 	light0->LocalRotation(quaternion(radians(float3(45, 45, 0))));
 	light0->LocalPosition(light0->LocalRotation() * float3(0, 0, -3) + float3(0, 1, 0));
+	light0->CastShadows(true);
 	mObjects.push_back(light0.get());
 	mLights.push_back(light0.get());
 	mScene->AddObject(light0);
@@ -715,6 +716,7 @@ bool MeshViewer::Init(Scene* scene) {
 	light3->Color(float3(1.f, .95f, .9f));
 	light3->LocalRotation(quaternion(radians(float3(45, -45, 0))));
 	light3->LocalPosition(float3(0, 3, 0));
+	light3->CastShadows(true);
 	mLights.push_back(light3.get());
 	mObjects.push_back(light3.get());
 	mScene->AddObject(light3);
@@ -1005,7 +1007,7 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 	}
 }
 
-void MeshViewer::DrawGizmos(Camera* camera, CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
+void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
 	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	const Ray& ray = input->GetPointer(0)->mWorldRay;
