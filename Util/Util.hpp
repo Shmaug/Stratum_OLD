@@ -21,6 +21,7 @@
 #include <string>
 #include <iostream>
 #include <memory>
+#include <cstring>
 
 #include <vulkan/vulkan.h>
 

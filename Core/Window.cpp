@@ -296,8 +296,7 @@ void Window::CreateSwapchain(::Device* device) {
 		mFrameData[i] = FrameData();
 		mFrameData[i].mSwapchainImage = images[i];
 		mDevice->SetObjectName(images[i], mTitle + " Image " + to_string(i));
-
-
+		
 		VkImageMemoryBarrier barrier = {};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;

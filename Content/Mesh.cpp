@@ -139,18 +139,18 @@ Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* roo
 	}
 
 	quaternion q;
-	q.x = mat.c3.y - mat.c2.z;
-	q.y = mat.c1.z - mat.c3.x;
-	q.z = mat.c2.x - mat.c1.y;
-	q.w = sqrtf(1.f + mat.c1.x + mat.c2.y + mat.c3.z) * .5f;
+	q.x = mat[2].y - mat[1].z;
+	q.y = mat[0].z - mat[2].x;
+	q.z = mat[1].x - mat[0].y;
+	q.w = sqrtf(1.f + mat[0].x + mat[1].y + mat[2].z) * .5f;
 	q.xyz /= 4.f * q.w;
 
 	Bone* bone = new Bone(node->mName.C_Str(), (uint32_t)rig.size());
 	boneMap.emplace(node, bone);
 	rig.push_back(bone);
-	bone->LocalPosition(mat.c4.xyz * scale);
+	bone->LocalPosition(mat[3].xyz * scale);
 	bone->LocalRotation(q);
-	bone->LocalScale(length(mat.c1.xyz), length(mat.c2.xyz), length(mat.c3.xyz));
+	bone->LocalScale(length(mat[0].xyz), length(mat[1].xyz), length(mat[2].xyz));
 
 	if (parent) parent->AddChild(bone);
 	return bone;

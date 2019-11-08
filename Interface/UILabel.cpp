@@ -55,7 +55,7 @@ void UILabel::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camer
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
 	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {"CANVAS_BOUNDS"});
 
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr);
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera);
 	if (!layout) return;
 
 	if (!mDeviceData.count(commandBuffer->Device())) {

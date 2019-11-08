@@ -85,7 +85,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 		uint32_t kwc;
 		file.read(reinterpret_cast<char*>(&kwc), sizeof(uint32_t));
-		for (unsigned int i = 0; i < kwc; i++) {
+		for (uint32_t i = 0; i < kwc; i++) {
 			string keyword;
 			uint32_t kwlen;
 			file.read(reinterpret_cast<char*>(&kwlen), sizeof(uint32_t));
@@ -115,7 +115,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 			vector<vector<string>> staticSamplers(kernelc);
 
 			vector<uint3> workgroupSizes(kernelc);
-			for (unsigned int i = 0; i < kernelc; i++) {
+			for (uint32_t i = 0; i < kernelc; i++) {
 				string entryp;
 				uint32_t entryplen;
 				file.read(reinterpret_cast<char*>(&entryplen), sizeof(uint32_t));
@@ -171,14 +171,13 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 						if (static_sampler) {
 							Sampler* sampler = new Sampler(b.first, device, 12);
-							VkSampler vksampler = *sampler;
-							bindings[b.second.first].back().pImmutableSamplers = &vksampler;
+							bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
 							d.mStaticSamplers.push_back(sampler);
 						}
 					}
 
 					cv->mDescriptorSetLayouts.resize(bindings.size());
-					for (unsigned int b = 0; b < bindings.size(); b++) {
+					for (uint32_t b = 0; b < bindings.size(); b++) {
 						VkDescriptorSetLayoutCreateInfo descriptorSetLayout = {};
 						descriptorSetLayout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 						descriptorSetLayout.bindingCount = (uint32_t)bindings[b].size();
@@ -280,8 +279,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 
 					if (static_sampler) {
 						Sampler* sampler = new Sampler(b.first, device, 12);
-						VkSampler vksampler = *sampler;
-						bindings[b.second.first].back().pImmutableSamplers = &vksampler;
+						bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
 						d.mStaticSamplers.push_back(sampler);
 					}
 				}
