@@ -26,14 +26,14 @@ BoneTransform BoneTransform::Inverse() const {
 }
 
 void BoneTransform::FromMatrix(const float4x4& mat, float scale) {
-	mPosition = mat.c4.xyz * scale;
-	mScale.x = length(mat.c1.xyz);
-	mScale.y = length(mat.c2.xyz);
-	mScale.z = length(mat.c3.xyz);
-	mRotation.x = mat.c3.y - mat.c2.z;
-	mRotation.y = mat.c1.z - mat.c3.x;
-	mRotation.z = mat.c2.x - mat.c1.y;
-	mRotation.w = sqrtf(1.f + mat.c1.x + mat.c2.y + mat.c3.z) * .5f;
+	mPosition = mat[3].xyz * scale;
+	mScale.x = length(mat[0].xyz);
+	mScale.y = length(mat[1].xyz);
+	mScale.z = length(mat[2].xyz);
+	mRotation.x = mat[2].y - mat[1].z;
+	mRotation.y = mat[0].z - mat[2].x;
+	mRotation.z = mat[1].x - mat[0].y;
+	mRotation.w = sqrtf(1.f + mat[0].x + mat[1].y + mat[2].z) * .5f;
 	mRotation.xyz /= 4.f * mRotation.w;
 }
 

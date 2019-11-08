@@ -139,6 +139,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 		memset(data.mInstanceBuffers, 0, sizeof(vector<Buffer*>) * c);
 		memset(data.mInstanceDescriptorSets, 0, sizeof(vector<DescriptorSet*>) * c);
 		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, 8192, 8192, { VK_FORMAT_R8G8B8A8_UNORM }, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
+		data.mShadowAtlasFramebuffer->BufferUsage(data.mShadowAtlasFramebuffer->BufferUsage() | VK_IMAGE_USAGE_SAMPLED_BIT);
 	}
 	DeviceData& data = mDeviceData.at(device);
 	data.mInstanceIndex[backBufferIndex] = 0;
@@ -180,13 +181,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 			lights[li].Type = l->Type();
 
 			if (l->CastShadows()) {
-				Camera* sc;
-				if (data.mShadowCameras.size() <= si) {
-					sc = new Camera("ShadowCamera", data.mShadowAtlasFramebuffer);
-					sc->Framebuffer()->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-					data.mShadowCameras.push_back(sc);
-				} else
-					sc = data.mShadowCameras[si];
+				if (data.mShadowCameras.size() <= si)
+					data.mShadowCameras.push_back(new Camera("ShadowCamera", data.mShadowAtlasFramebuffer));
+				Camera* sc = data.mShadowCameras[si];
 
 				switch (l->Type()) {
 				case Sun:
@@ -227,7 +224,8 @@ void Scene::PreFrame(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
 
 		if (si > 0) {
 			PROFILER_BEGIN("Render Shadows");
-			data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+			if (data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0))
+				data.mShadowAtlasFramebuffer->ColorBuffer(backBufferIndex, 0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 			data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer, backBufferIndex);
 
 			bool g = mDrawGizmos;

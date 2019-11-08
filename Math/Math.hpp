@@ -1308,19 +1308,19 @@ struct quaternion {
 
 // Column-major 4x4 matrix
 struct float4x4 {
-	union {
-		float4 v[4];
-		struct { float4 c1, c2, c3, c4; };
-	};
+	float4 v[4];
 
 	inline float4x4(
 		float m11, float m21, float m31, float m41,
 		float m12, float m22, float m32, float m42,
 		float m13, float m23, float m33, float m43,
-		float m14, float m24, float m34, float m44)
-		: c1(float4(m11,m12,m13,m14)), c2(float4(m21,m22,m23,m24)), c3(float4(m31,m32,m33,m34)), c4(float4(m41,m42,m43,m44)) {};
-	inline float4x4(const float4& c1, const float4& c2, const float4& c3, const float4& c4)
-		: c1(c1), c2(c2), c3(c3), c4(c4) {};
+		float m14, float m24, float m34, float m44) {
+			v[0] = float4(m11,m12,m13,m14);
+			v[1] = float4(m21,m22,m23,m24);
+			v[2] = float4(m31,m32,m33,m34);
+			v[3] = float4(m41,m42,m43,m44);
+		};
+	inline float4x4(const float4& c1, const float4& c2, const float4& c3, const float4& c4) { v[0] = c1; v[1] = c2; v[2] = c3; v[3] = c4; };
 	inline float4x4(float s) : float4x4(
 		s, 0, 0, 0,
 		0, s, 0, 0,
@@ -1503,10 +1503,10 @@ inline quaternion normalize(const quaternion& q){
 
 inline float4x4 transpose(const float4x4& m) {
 	return float4x4(
-		m.c1[0], m.c1[1], m.c1[2], m.c1[3],
-		m.c2[0], m.c2[1], m.c2[2], m.c2[3],
-		m.c3[0], m.c3[1], m.c3[2], m.c3[3],
-		m.c4[0], m.c4[1], m.c4[2], m.c4[3] );
+		m[0][0], m[0][1], m[0][2], m[0][3],
+		m[1][0], m[1][1], m[1][2], m[1][3],
+		m[2][0], m[2][1], m[2][2], m[2][3],
+		m[3][0], m[3][1], m[3][2], m[3][3] );
 }
 
 namespace std {

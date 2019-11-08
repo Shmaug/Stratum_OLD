@@ -22,8 +22,8 @@ public:
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 	inline VkImageUsageFlags BufferUsage() const { return mUsage; }
 
-	inline Texture* ColorBuffer(uint32_t backBufferIndex, uint32_t i) { UpdateBuffers(backBufferIndex);  return mColorBuffers[backBufferIndex][i]; }
-	inline Texture* DepthBuffer(uint32_t backBufferIndex) { UpdateBuffers(backBufferIndex); return mDepthBuffers[backBufferIndex]; }
+	inline Texture* ColorBuffer(uint32_t backBufferIndex, uint32_t i) { return mColorBuffers[backBufferIndex][i]; }
+	inline Texture* DepthBuffer(uint32_t backBufferIndex) { return mDepthBuffers[backBufferIndex]; }
 
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }

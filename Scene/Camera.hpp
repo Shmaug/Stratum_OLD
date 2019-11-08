@@ -63,7 +63,7 @@ public:
 	inline virtual void FramebufferWidth (uint32_t w) { mFramebuffer->Width(w);  mMatricesDirty = true; }
 	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mMatricesDirty = true; }
 
-	inline virtual Framebuffer* Framebuffer() const { return mFramebuffer; }
+	inline virtual ::Framebuffer* Framebuffer() const { return mFramebuffer; }
 	inline virtual Texture* ColorBuffer(uint32_t backBufferIndex) const { return mFramebuffer->ColorBuffer(backBufferIndex, 0); }
 	inline virtual Texture* DepthNormalBuffer(uint32_t backBufferIndex) const { return mRenderDepthNormals ? mFramebuffer->ColorBuffer(backBufferIndex, 1) : nullptr; }
 	inline virtual Texture* DepthBuffer(uint32_t backBufferIndex) const { return mFramebuffer->DepthBuffer(backBufferIndex); }

@@ -10,7 +10,8 @@ public:
 	ENGINE_EXPORT Sampler(const std::string& name, Device* device, float maxLod, VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT, float maxAnisotropy = 16);
 	ENGINE_EXPORT ~Sampler();
 
-	inline operator VkSampler() { return mSampler; }
+	inline const ::VkSampler& VkSampler() const { return mSampler; }
+	inline operator ::VkSampler() const { return mSampler; }
 
 private:
 	float mMaxLod;
@@ -19,5 +20,5 @@ private:
 	float mMaxAnisotropy;
 
 	Device* mDevice;
-	VkSampler mSampler;
+	::VkSampler mSampler;
 };

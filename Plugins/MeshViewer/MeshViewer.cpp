@@ -621,7 +621,9 @@ void MeshViewer::LoadRobot() {
 		robot->mHead = neck.get();
 		robot->mLArm = lshoulder.get();
 		robot->mRArm = rshoulder.get();
-		robot->mBody->LocalPosition(i / 10, .5f, i % 10);
+		float x = (float)rand()/(float)RAND_MAX * 2 - 1;
+		float z = (float)rand()/(float)RAND_MAX * 2 - 1;
+		robot->mBody->LocalPosition(x*x*x * 100.f, .5f, z*z*z * 100.f);
 		mRobots.push_back(robot);
 	}
 
