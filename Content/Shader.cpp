@@ -184,7 +184,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 						descriptorSetLayout.pBindings = bindings[b].data();
 
 						vkCreateDescriptorSetLayout(*device, &descriptorSetLayout, nullptr, &cv->mDescriptorSetLayouts[b]);
-						device->SetObjectName(cv->mDescriptorSetLayouts[b], mName + " DescriptorSetLayout");
+						device->SetObjectName(cv->mDescriptorSetLayouts[b], mName + " DescriptorSetLayout", VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
 					}
 
 					vector<VkPushConstantRange> constants;
@@ -197,7 +197,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 					layout.pushConstantRangeCount = (uint32_t)constants.size();
 					layout.pPushConstantRanges = constants.data();
 					vkCreatePipelineLayout(*device, &layout, nullptr, &cv->mPipelineLayout);
-					device->SetObjectName(cv->mPipelineLayout, mName + " PipelineLayout");
+					device->SetObjectName(cv->mPipelineLayout, mName + " PipelineLayout", VK_OBJECT_TYPE_PIPELINE_LAYOUT);
 
 					VkComputePipelineCreateInfo pipeline = {};
 					pipeline.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -206,7 +206,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 					pipeline.basePipelineIndex = -1;
 					pipeline.basePipelineHandle = VK_NULL_HANDLE;
 					vkCreateComputePipelines(*device, device->PipelineCache(), 1, &pipeline, nullptr, &cv->mPipeline);
-					device->SetObjectName(cv->mPipeline, mName);
+					device->SetObjectName(cv->mPipeline, mName, VK_OBJECT_TYPE_PIPELINE);
 				}
 			}
 		} else {
@@ -292,7 +292,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 					descriptorSetLayout.pBindings = bindings[b].data();
 
 					vkCreateDescriptorSetLayout(*device, &descriptorSetLayout, nullptr, &gv->mDescriptorSetLayouts[b]);
-					device->SetObjectName(gv->mDescriptorSetLayouts[b], mName + " DescriptorSetLayout");
+					device->SetObjectName(gv->mDescriptorSetLayouts[b], mName + " DescriptorSetLayout", VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
 				}
 
 				vector<VkPushConstantRange> constants;
@@ -305,7 +305,7 @@ Shader::Shader(const string& name, ::DeviceManager* devices, const string& filen
 				layout.pushConstantRangeCount = (uint32_t)constants.size();
 				layout.pPushConstantRanges = constants.data();
 				vkCreatePipelineLayout(*device, &layout, nullptr, &gv->mPipelineLayout);
-				device->SetObjectName(gv->mPipelineLayout, mName + " PipelineLayout");
+				device->SetObjectName(gv->mPipelineLayout, mName + " PipelineLayout", VK_OBJECT_TYPE_PIPELINE_LAYOUT);
 			}
 		}
 	}
@@ -470,7 +470,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 
 		VkPipeline p;
 		vkCreateGraphicsPipelines(*renderPass->Device(), renderPass->Device()->PipelineCache(), 1, &info, nullptr, &p);
-		renderPass->Device()->SetObjectName(p, mShader->mName + " Variant");
+		renderPass->Device()->SetObjectName(p, mShader->mName + " Variant", VK_OBJECT_TYPE_PIPELINE);
 		mPipelines.emplace(instance, p);
 
 		const char* cullstr = "";

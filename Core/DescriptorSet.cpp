@@ -5,7 +5,7 @@ using namespace std;
 
 DescriptorSet::DescriptorSet(const string& name, DescriptorPool* pool, VkDescriptorSetLayout layout) : mDescriptorPool(pool), mLayout(layout) {
 	mDescriptorSet = pool->AllocateDescriptorSet(layout);
-	pool->Device()->SetObjectName(mDescriptorSet, name);
+	pool->Device()->SetObjectName(mDescriptorSet, name, VK_OBJECT_TYPE_DESCRIPTOR_SET);
 }
 DescriptorSet::~DescriptorSet() {
 	mDescriptorPool->FreeDescriptorSet(mDescriptorSet);

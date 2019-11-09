@@ -21,7 +21,7 @@ DescriptorPool::DescriptorPool(const string& name, ::Device* device) : mDevice(d
 	poolInfo.maxSets = 10000;
 
 	ThrowIfFailed(vkCreateDescriptorPool(*mDevice, &poolInfo, nullptr, &mDescriptorPool), "vkCreateDescriptorPool failed");
-	mDevice->SetObjectName(mDescriptorPool, name);
+	mDevice->SetObjectName(mDescriptorPool, name, VK_OBJECT_TYPE_DESCRIPTOR_POOL);
 }
 
 DescriptorPool::~DescriptorPool() {

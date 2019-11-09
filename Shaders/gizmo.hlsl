@@ -7,7 +7,7 @@
 #pragma blend alpha
 
 #pragma static_sampler Sampler
-#pragma array MainTexture 1024
+#pragma array MainTexture 128
 
 #include <shadercompat.h>
 

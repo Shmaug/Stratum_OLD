@@ -41,8 +41,8 @@ CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const 
 	mCompletionFence = make_shared<Fence>(device);
 	mTriangleCount = 0;
 
-	mDevice->SetObjectName(mCommandBuffer, name);
-	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
+	mDevice->SetObjectName(mCommandBuffer, name, VK_OBJECT_TYPE_COMMAND_BUFFER);
+	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence", VK_OBJECT_TYPE_FENCE);
 }
 CommandBuffer::~CommandBuffer() {
 	vkFreeCommandBuffers(*mDevice, mCommandPool, 1, &mCommandBuffer);
@@ -65,8 +65,8 @@ void CommandBuffer::Reset(const string& name) {
 	vkResetCommandBuffer(mCommandBuffer, 0);
 	mCompletionFence->Reset();
 
-	mDevice->SetObjectName(mCommandBuffer, name);
-	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence");
+	mDevice->SetObjectName(mCommandBuffer, name, VK_OBJECT_TYPE_COMMAND_BUFFER);
+	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence", VK_OBJECT_TYPE_FENCE);
 	mCurrentRenderPass = nullptr;
 	mCurrentCamera = nullptr;
 	mCurrentMaterial = nullptr;

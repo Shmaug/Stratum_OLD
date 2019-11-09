@@ -24,7 +24,7 @@ public:
 	inline VkQueue GraphicsQueue() const { return mGraphicsQueue; };
 	inline VkQueue PresentQueue() const { return mPresentQueue; };
 
-	ENGINE_EXPORT void SetObjectName(void* object, std::string name) const;
+	ENGINE_EXPORT void SetObjectName(void* object, const std::string& name, VkObjectType type) const;
 
 	ENGINE_EXPORT uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 	

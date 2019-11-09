@@ -30,7 +30,7 @@ void Camera::CreateDescriptorSet() {
 			VkDescriptorSetLayout layout;
 			binding.stageFlags = s;
 			vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &layout);
-			mDevice->SetObjectName(layout, mName + " DescriptorSetLayout");
+			mDevice->SetObjectName(layout, mName + " DescriptorSetLayout", VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
 			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), layout);
 			ds->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
 			mFrameData[i].mDescriptorSets.emplace(s, make_pair(layout, ds));
