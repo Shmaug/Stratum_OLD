@@ -81,7 +81,7 @@ void Buffer::Allocate(){
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	ThrowIfFailed(vkCreateBuffer(*mDevice, &bufferInfo, nullptr, &mBuffer), "vkCreateBuffer failed for " + mName);
-	mDevice->SetObjectName(mBuffer, mName);
+	mDevice->SetObjectName(mBuffer, mName, VK_OBJECT_TYPE_BUFFER);
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*mDevice, mBuffer, &memRequirements);
@@ -94,5 +94,5 @@ void Buffer::Allocate(){
 	ThrowIfFailed(vkAllocateMemory(*mDevice, &allocInfo, nullptr, &mMemory), "vkAllocateMemory failed for " + mName);
 
 	vkBindBufferMemory(*mDevice, mBuffer, mMemory, 0);
-	mDevice->SetObjectName(mMemory, mName + " Memory");
+	mDevice->SetObjectName(mMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
 }

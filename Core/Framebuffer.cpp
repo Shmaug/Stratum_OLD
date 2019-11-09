@@ -97,7 +97,7 @@ bool Framebuffer::UpdateBuffers(uint32_t backBufferIndex) {
 		fb.height = mHeight;
 		fb.layers = 1;
 		vkCreateFramebuffer(*mDevice, &fb, nullptr, &mFramebuffers[backBufferIndex]);
-		mDevice->SetObjectName(mFramebuffers[backBufferIndex], mName + " Framebuffer " + to_string(backBufferIndex));
+		mDevice->SetObjectName(mFramebuffers[backBufferIndex], mName + " Framebuffer " + to_string(backBufferIndex), VK_OBJECT_TYPE_FRAMEBUFFER);
 
 		return true;
 	}

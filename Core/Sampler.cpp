@@ -23,7 +23,7 @@ Sampler::Sampler(const string& name, Device* device, float maxLod, VkFilter filt
 	samplerInfo.mipLodBias = 0;
 
 	ThrowIfFailed(vkCreateSampler(*mDevice, &samplerInfo, nullptr, &mSampler), "vkCreateSampler failed");
-	mDevice->SetObjectName(mSampler, mName);
+	mDevice->SetObjectName(mSampler, mName, VK_OBJECT_TYPE_SAMPLER);
 }
 Sampler::~Sampler() {
 	vkDestroySampler(*mDevice, mSampler, nullptr);

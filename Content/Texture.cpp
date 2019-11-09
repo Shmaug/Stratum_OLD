@@ -356,7 +356,7 @@ void Texture::CreateImage() {
 
 	for (auto& d : mDeviceData) {
 		ThrowIfFailed(vkCreateImage(*d.first, &imageInfo, nullptr, &d.second.mImage), "vkCreateImage failed for " + mName);
-		d.first->SetObjectName(d.second.mImage, mName);
+		d.first->SetObjectName(d.second.mImage, mName, VK_OBJECT_TYPE_IMAGE);
 
 		VkMemoryRequirements memRequirements;
 		vkGetImageMemoryRequirements(*d.first, d.second.mImage, &memRequirements);
@@ -367,7 +367,7 @@ void Texture::CreateImage() {
 		allocInfo.memoryTypeIndex = d.first->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
 
 		ThrowIfFailed(vkAllocateMemory(*d.first, &allocInfo, nullptr, &d.second.mImageMemory), "vkAllocateMemory failed for " + mName);
-		d.first->SetObjectName(d.second.mImageMemory, mName + " Memory");
+		d.first->SetObjectName(d.second.mImageMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
 		vkBindImageMemory(*d.first, d.second.mImage, d.second.mImageMemory, 0);
 	}
 }
@@ -385,7 +385,7 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	for (auto& d : mDeviceData) {
 		viewInfo.image = d.second.mImage;
 		ThrowIfFailed(vkCreateImageView(*d.first, &viewInfo, nullptr, &d.second.mView), "vkCreateImageView failed for " + mName);
-		d.first->SetObjectName(d.second.mView, mName + " View");
+		d.first->SetObjectName(d.second.mView, mName + " View", VK_OBJECT_TYPE_IMAGE_VIEW);
 	}
 }
 

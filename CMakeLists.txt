@@ -81,7 +81,7 @@ if(WIN32)
 	target_link_libraries(ShaderCompiler
 		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"$ENV{VULKAN_SDK}/shaderc/install/lib/shaderc_shared.lib"
+		"${VKCAVE_HOME}/ThirdParty/shaderc/lib/shaderc_shared.lib"
 		"${VKCAVE_HOME}/ThirdParty/shaderc/third_party/spirv-cross/lib/spirv-cross-core.lib" )
 
 	target_link_libraries(Engine
@@ -111,7 +111,7 @@ if(WIN32)
 		target_link_libraries(VkCave "${VKCAVE_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
 	endif()
 
-	configure_file("$ENV{VULKAN_SDK}/shaderc/install/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
+	configure_file("${VKCAVE_HOME}/ThirdParty/shaderc/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 else()
 	target_link_libraries(ShaderCompiler
 		stdc++fs

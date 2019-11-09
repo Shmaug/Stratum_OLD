@@ -206,7 +206,7 @@ void Window::Fullscreen(bool fs) {
 void Window::CreateSwapchain(::Device* device) {
 	if (mSwapchain) DestroySwapchain();
 	mDevice = device;
-	mDevice->SetObjectName(mSurface, mTitle + " Surface");
+	mDevice->SetObjectName(mSurface, mTitle + " Surface", VK_OBJECT_TYPE_SURFACE_KHR);
 
 	#pragma region create swapchain
 	SwapChainSupportDetails swapChainSupport;
@@ -275,7 +275,7 @@ void Window::CreateSwapchain(::Device* device) {
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain), "vkCreateSwapchainKHR failed");
-	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain");
+	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain", VK_OBJECT_TYPE_SWAPCHAIN_KHR);
 	#pragma endregion
 
 	// get the back buffers
@@ -295,7 +295,7 @@ void Window::CreateSwapchain(::Device* device) {
 	for (uint32_t i = 0; i < mImageCount; i++) {
 		mFrameData[i] = FrameData();
 		mFrameData[i].mSwapchainImage = images[i];
-		mDevice->SetObjectName(images[i], mTitle + " Image " + to_string(i));
+		mDevice->SetObjectName(images[i], mTitle + " Image " + to_string(i), VK_OBJECT_TYPE_IMAGE);
 		
 		VkImageMemoryBarrier barrier = {};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -334,12 +334,12 @@ void Window::CreateSwapchain(::Device* device) {
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 		ThrowIfFailed(vkCreateImageView(*mDevice, &createInfo, nullptr, &mFrameData[i].mSwapchainImageView), "vkCreateImageView failed for swapchain");
-		mDevice->SetObjectName(mFrameData[i].mSwapchainImageView, mTitle + " Image View " + to_string(i));
+		mDevice->SetObjectName(mFrameData[i].mSwapchainImageView, mTitle + " Image View " + to_string(i), VK_OBJECT_TYPE_IMAGE_VIEW);
 
 		VkSemaphoreCreateInfo semaphoreInfo = {};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		ThrowIfFailed(vkCreateSemaphore(*mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]), "vkCreateSemaphore failed for swapchain");
-		mDevice->SetObjectName(mImageAvailableSemaphores[i], mTitle + " Image Available Semaphore " + to_string(i));
+		mDevice->SetObjectName(mImageAvailableSemaphores[i], mTitle + " Image Available Semaphore " + to_string(i), VK_OBJECT_TYPE_SEMAPHORE);
 	}
 
 	device->Execute(commandBuffer)->Wait();

@@ -65,13 +65,13 @@ Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector
 	VkPhysicalDeviceProperties properties = {};
 	vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
 	string name = "Device " + to_string(properties.deviceID) + ": " + properties.deviceName;
-	SetObjectName(mDevice, name);
+	SetObjectName(mDevice, name, VK_OBJECT_TYPE_DEVICE);
 	mLimits = properties.limits;
 
 	vkGetDeviceQueue(mDevice, mGraphicsQueueFamily, 0, &mGraphicsQueue);
 	vkGetDeviceQueue(mDevice, mPresentQueueFamily, 0, &mPresentQueue);
-	SetObjectName(mGraphicsQueue, name + " Graphics Queue");
-	SetObjectName(mPresentQueue, name + " Present Queue");
+	SetObjectName(mGraphicsQueue, name + " Graphics Queue", VK_OBJECT_TYPE_QUEUE);
+	SetObjectName(mPresentQueue, name + " Present Queue", VK_OBJECT_TYPE_QUEUE);
 	#pragma endregion
 
 	VkPipelineCacheCreateInfo cache = {};
@@ -99,12 +99,12 @@ void Device::FlushCommandBuffers() {
 	}
 }
 
-void Device::SetObjectName(void* object, string name) const {
+void Device::SetObjectName(void* object, const string& name, VkObjectType type) const {
 	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsObjectNameInfoEXT info = {};
 	info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
 	info.objectHandle = (uint64_t)object;
-	info.objectType = VK_OBJECT_TYPE_UNKNOWN;
+	info.objectType = type;
 	info.pObjectName = name.c_str();
 	SetDebugUtilsObjectNameEXT(mDevice, &info);
 	#endif
@@ -131,7 +131,7 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 		poolInfo.queueFamilyIndex = mGraphicsQueueFamily;
 		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		ThrowIfFailed(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &commandPool), "vkCreateCommandPool failed");
-		SetObjectName(commandPool, name + " Graphics Command Pool");
+		SetObjectName(commandPool, name + " Graphics Command Pool", VK_OBJECT_TYPE_COMMAND_POOL);
 	}
 
 	auto& commandBuffers = mCommandBuffers[commandPool];
