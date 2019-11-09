@@ -3,6 +3,10 @@ cmake_minimum_required (VERSION 2.8)
 option(ENABLE_DEBUG_LAYERS "Enable debug layers?" TRUE)
 set(VKCAVE_HOME ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "Directory of VkCave")
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+option(LINK_PERFTOOLS_PROFILER "Link gperftools profiler?" FALSE)
+endif()
+
 include(vkcave.cmake)
 
 add_library(Engine SHARED
@@ -131,6 +135,10 @@ else()
 		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
 	if (${ENABLE_DEBUG_LAYERS})
 		target_link_libraries(Engine "libVkLayer_utils.so")
+	endif()
+
+	if (${LINK_PERFTOOLS_PROFILER})
+		target_compile_options(Engine PUBLIC -Wl,--no-as-needed -lprofiler -Wl,--as-needed)
 	endif()
 
 	target_link_libraries(VkCave "${PROJECT_BINARY_DIR}/bin/libEngine.so" "libvulkan.so.1")
