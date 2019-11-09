@@ -92,6 +92,7 @@ void DeviceManager::CreateInstance() {
 		"VK_LAYER_KHRONOS_validation",
 		"VK_LAYER_LUNARG_core_validation",
 		"VK_LAYER_LUNARG_standard_validation",
+		"VK_LAYER_RENDERDOC_Capture"
 		#endif
 	};
 

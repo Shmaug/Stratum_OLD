@@ -7,10 +7,10 @@ else()
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftree-vectorize")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftree-vectorize")
 endif()
 if(MSVC)
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26451 /wd26812")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd26451 /wd26812")
 endif()
 
 function(link_plugin TARGET_NAME)

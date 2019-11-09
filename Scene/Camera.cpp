@@ -78,7 +78,8 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 
 	mTargetWindow->mTargetCamera = this;
 
-	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
+	vector<VkFormat> colorFormats;
+	colorFormats.push_back(targetWindow->Format().format);
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount);
 
@@ -169,14 +170,12 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = mTargetWindow->CurrentBackBuffer();
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
 		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
 		barrier.subresourceRange.layerCount = 1;
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
 			0,
 			0, nullptr,
 			0, nullptr,
@@ -190,7 +189,8 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdCopyImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			vkCmdCopyImage(*commandBuffer,
+				ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		} else {
 			VkImageResolve region = {};
@@ -199,14 +199,15 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdResolveImage(*commandBuffer, ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			vkCmdResolveImage(*commandBuffer,
+				ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
 		swap(barrier.oldLayout, barrier.newLayout);
 		swap(barrier.srcAccessMask, barrier.dstAccessMask);
 		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			0,
 			0, nullptr,
 			0, nullptr,

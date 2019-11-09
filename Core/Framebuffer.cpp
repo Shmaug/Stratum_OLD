@@ -105,10 +105,11 @@ bool Framebuffer::UpdateBuffers(uint32_t backBufferIndex) {
 }
 
 void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
-	if (UpdateBuffers(backBufferIndex))
+	if (UpdateBuffers(backBufferIndex)){
 		for (uint32_t i = 0; i < mColorFormats.size(); i++)
 			mColorBuffers[backBufferIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
-
+		mDepthBuffers[backBufferIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
+	}
 	vector<VkClearValue> clearValues(mColorFormats.size() + 1);
 	for (uint32_t i = 0; i < mColorFormats.size(); i++)
 		clearValues[i] = { .0f, .0f, .0f, 0.f };

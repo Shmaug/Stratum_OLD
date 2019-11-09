@@ -39,6 +39,7 @@ public:
 	inline VkImage Image(Device* device) const { return mDeviceData.at(device).mImage; }
 	inline VkImageView View(Device* device) const { return mDeviceData.at(device).mView; }
 
+	ENGINE_EXPORT static void TransitionImageLayout(VkImage image, VkFormat format, uint32_t mipLevels, VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 
 private:

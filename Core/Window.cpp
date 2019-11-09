@@ -204,7 +204,6 @@ void Window::Fullscreen(bool fs) {
 }
 
 void Window::CreateSwapchain(::Device* device) {
-	if (mSwapchain) DestroySwapchain();
 	mDevice = device;
 	mDevice->SetObjectName(mSurface, mTitle + " Surface", VK_OBJECT_TYPE_SURFACE_KHR);
 
@@ -273,7 +272,7 @@ void Window::CreateSwapchain(::Device* device) {
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.presentMode = presentMode;
 	createInfo.clipped = VK_TRUE;
-	createInfo.oldSwapchain = VK_NULL_HANDLE;
+	if (mSwapchain) createInfo.oldSwapchain = mSwapchain;
 	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain), "vkCreateSwapchainKHR failed");
 	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain", VK_OBJECT_TYPE_SWAPCHAIN_KHR);
 	#pragma endregion
@@ -291,33 +290,24 @@ void Window::CreateSwapchain(::Device* device) {
 
 	auto commandBuffer = device->GetCommandBuffer();
 
+	vector<VkImageMemoryBarrier> barriers(mImageCount);
+
 	// create per-frame objects
 	for (uint32_t i = 0; i < mImageCount; i++) {
 		mFrameData[i] = FrameData();
 		mFrameData[i].mSwapchainImage = images[i];
 		mDevice->SetObjectName(images[i], mTitle + " Image " + to_string(i), VK_OBJECT_TYPE_IMAGE);
 		
-		VkImageMemoryBarrier barrier = {};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = mFrameData[i].mSwapchainImage;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = 0;
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
+		barriers[i] = {};
+		barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		barriers[i].newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		barriers[i].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[i].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		barriers[i].image = mFrameData[i].mSwapchainImage;
+		barriers[i].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		barriers[i].subresourceRange.levelCount = 1;
+		barriers[i].subresourceRange.layerCount = 1;
 
 		VkImageViewCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -341,6 +331,13 @@ void Window::CreateSwapchain(::Device* device) {
 		ThrowIfFailed(vkCreateSemaphore(*mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]), "vkCreateSemaphore failed for swapchain");
 		mDevice->SetObjectName(mImageAvailableSemaphores[i], mTitle + " Image Available Semaphore " + to_string(i), VK_OBJECT_TYPE_SEMAPHORE);
 	}
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		(uint32_t)barriers.size(), barriers.data()
+	);
 
 	device->Execute(commandBuffer)->Wait();
 }
