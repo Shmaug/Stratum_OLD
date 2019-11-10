@@ -2,20 +2,17 @@
 
 #include <GLFW/glfw3.h>
 
-#include <Content/Texture.hpp>
-#include <Core/CommandBuffer.hpp>
+#include <Core/Device.hpp>
 #include <Input/MouseKeyboardInput.hpp>
 #include <Util/Util.hpp>
 
-class DeviceManager;
+class Instance;
 class Camera;
+class Texture;
 
 class Window {
 public:
 	ENGINE_EXPORT ~Window();
-
-	ENGINE_EXPORT VkImage AcquireNextImage();
-	ENGINE_EXPORT void Present(const std::vector<std::shared_ptr<Fence>>& fences);
 
 	inline bool Fullscreen() const { return mFullscreen; }
 	ENGINE_EXPORT void Fullscreen(bool fs);
@@ -23,8 +20,6 @@ public:
 	inline VkRect2D ClientRect() const { return mClientRect; };
 
 	inline std::string Title() const { return mTitle; }
-
-	inline MouseKeyboardInput* Input() const { return mInput; }
 
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
 	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
@@ -39,8 +34,11 @@ public:
 
 private:
 	friend class Camera;
-	friend class DeviceManager;
-	ENGINE_EXPORT Window(VkInstance instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex = -1);
+	friend class VkCAVE;
+	friend class Instance;
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex = -1);
+	ENGINE_EXPORT VkImage AcquireNextImage();
+	ENGINE_EXPORT void Present();
 
 	ENGINE_EXPORT static void WindowPosCallback(GLFWwindow* window, int x, int y);
 	ENGINE_EXPORT static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -49,14 +47,14 @@ private:
 	ENGINE_EXPORT static void ScrollCallback(GLFWwindow* window, double x, double y);
 	ENGINE_EXPORT static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
+	MouseKeyboardInput* mInput;
+
 	bool mFullscreen;
 	VkRect2D mWindowedRect;
 	VkRect2D mClientRect;
 	std::string mTitle;
 
-	MouseKeyboardInput* mInput;
-
-	VkInstance mInstance;
+	Instance* mInstance;
 	::Device* mDevice;
 
 	GLFWwindow* mWindow;
@@ -71,14 +69,13 @@ private:
 	struct FrameData {
 		VkImage mSwapchainImage;
 		VkImageView mSwapchainImageView;
-		std::vector<std::shared_ptr<Fence>> mFences;
-		inline FrameData() : mSwapchainImage(VK_NULL_HANDLE), mSwapchainImageView(VK_NULL_HANDLE) {};
+		Device::FrameContext* mFrameContext;
+		inline FrameData() : mSwapchainImage(VK_NULL_HANDLE), mSwapchainImageView(VK_NULL_HANDLE), mFrameContext(nullptr) {};
 	};
 	FrameData* mFrameData;
 
 	// semaphores for detecting when a swapchain image becomes available
-	std::vector<VkSemaphore> mImageAvailableSemaphores;
-	// next semaphore in mImageAvailableSemaphores
+	std::vector<std::shared_ptr<Semaphore>> mImageAvailableSemaphores;
 	uint32_t mImageAvailableSemaphoreIndex;
 
 	Camera* mTargetCamera;

@@ -73,7 +73,7 @@ bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
 		mBlendMode == rhs.mBlendMode;
 }
 
-Shader::Shader(const string& name, ::DeviceManager* devices, const string& filename)
+Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 	: mName(name), mViewportState({}), mRasterizationState({}), mDynamicState({}), mBlendMode(Opaque), mDepthStencilState({}) {
 	ifstream file(filename, ios::binary);
 	if (!file.is_open()) throw runtime_error("Could not load " + filename);

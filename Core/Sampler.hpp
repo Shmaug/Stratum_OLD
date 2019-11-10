@@ -1,7 +1,8 @@
 #pragma once
 
-#include <Core/Device.hpp>
 #include <Util/Util.hpp>
+
+class Device;
 
 class Sampler {
 public:

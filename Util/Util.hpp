@@ -14,14 +14,20 @@
 
 #include <stdexcept>
 #include <algorithm>
-#include <optional>
-#include <set>
-#include <vector>
 #include <fstream>
-#include <string>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <cstring>
+#include <mutex>
+#include <thread>
+#include <chrono>
+#include <unordered_map>
+#include <vector>
+#include <queue>
+#include <set>
+#include <variant>
+#include <optional>
 
 #include <vulkan/vulkan.h>
 
@@ -47,18 +53,6 @@
 
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
-
-struct SwapChainSupportDetails {
-	VkSurfaceCapabilitiesKHR mCapabilities;
-	std::vector<VkSurfaceFormatKHR> mFormats;
-	std::vector<VkPresentModeKHR> mPresentModes;
-	SwapChainSupportDetails() : mCapabilities({}), mFormats({}), mPresentModes({}) {};
-};
-struct FrameTime {
-	float mTotalTime;
-	float mDeltaTime;
-	uint32_t mFrameNumber;
-};
 
 enum BlendMode {
 	Opaque = 0,
@@ -164,6 +158,33 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	#else
 	printf("\x1B[0m");
 	#endif
+}
+
+template <typename T>
+inline T AlignUpWithMask(T value, size_t mask) {
+	return (T)(((size_t)value + mask) & ~mask);
+}
+template <typename T>
+inline T AlignDownWithMask(T value, size_t mask) {
+	return (T)((size_t)value & ~mask);
+}
+template <typename T>
+inline T AlignUp(T value, size_t alignment) {
+	return AlignUpWithMask(value, alignment - 1);
+}
+template <typename T>
+inline T AlignDown(T value, size_t alignment) {
+	return AlignDownWithMask(value, alignment - 1);
+}
+
+template <typename T>
+inline T DivideByMultiple(T value, size_t alignment) {
+	return (T)((value + alignment - 1) / alignment);
+}
+
+template <typename T>
+inline bool IsPowerOfTwo(T value) {
+	return 0 == (value & (value - 1));
 }
 
 
@@ -309,71 +330,6 @@ inline void ThrowIfFailed(VkResult result, const std::string& message){
 		std::cerr << code << ": " << message << std::endl;
 		throw std::runtime_error(code + (": " + message));
 	}
-}
-
-inline VkSampleCountFlagBits GetMaxUsableSampleCount(VkPhysicalDevice physicalDevice) {
-	VkPhysicalDeviceProperties physicalDeviceProperties;
-	vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
-
-	VkSampleCountFlags counts = std::min(physicalDeviceProperties.limits.framebufferColorSampleCounts, physicalDeviceProperties.limits.framebufferDepthSampleCounts);
-	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-	if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
-	if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
-	if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
-
-	return VK_SAMPLE_COUNT_1_BIT;
-}
-
-inline void QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface, SwapChainSupportDetails& details) {
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.mCapabilities);
-
-	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-
-	if (formatCount != 0) {
-		details.mFormats.resize(formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.mFormats.data());
-	}
-
-	uint32_t presentModeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
-
-	if (presentModeCount != 0) {
-		details.mPresentModes.resize(presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.mPresentModes.data());
-	}
-}
-
-inline bool FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily) {
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-	bool g = false;
-	bool p = false;
-
-	uint32_t i = 0;
-	for (const auto& queueFamily : queueFamilies) {
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			graphicsFamily = i;
-			g = true;
-		}
-
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-
-		if (queueFamily.queueCount > 0 && presentSupport) {
-			presentFamily = i;
-			p = true;
-		}
-
-		i++;
-	}
-
-	return g && p;
 }
 
 inline const char* FormatToString(VkFormat format) {

@@ -47,7 +47,7 @@ public:
 
 private:
 	friend class AssetManager;
-	ENGINE_EXPORT Font(const std::string& name, DeviceManager* deviceManager, const std::string& filename, float pixelSize, float scale);
+	ENGINE_EXPORT Font(const std::string& name, Instance* deviceManager, const std::string& filename, float pixelSize, float scale);
 
 	float mPixelSize;
 	float mAscender;

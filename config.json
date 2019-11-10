@@ -3,14 +3,17 @@
     {
       "window_rect": [ 160, 90, 1600, 900 ],
       "monitor": -1,
-      "device": 0,
-      "camera": {
-        "position": [ "0", "0", "0" ],
-        "rotation": [ "0", "0", "0" ],
-        "fov": "55",
-        "near": ".01",
-        "far": "1000"
-      }
+      "device": 0
+    }
+  ],
+  "cameras": [
+    {
+      "display_index":  0,
+      "position": [ "0", "0", "0" ],
+      "rotation": [ "0", "0", "0" ],
+      "fov": "55",
+      "near": ".01",
+      "far": "1000"
     }
   ]
 }

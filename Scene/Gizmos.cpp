@@ -71,8 +71,8 @@ Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0) {
 		indices[60 + 2*i+1] = 8 + (i+1) % CircleResolution;
 	}
 
-	for (uint32_t i = 0; i < scene->DeviceManager()->DeviceCount(); i++){
-		Device* device = scene->DeviceManager()->GetDevice(i);
+	for (uint32_t i = 0; i < scene->Instance()->DeviceCount(); i++){
+		Device* device = scene->Instance()->GetDevice(i);
 		DeviceData d = {};
 
 		d.mVertices = new Buffer("Gizmo Vertices", device, vertices, sizeof(GizmoVertex) * (8 + CircleResolution), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
@@ -188,7 +188,7 @@ void Gizmos::DrawWireCube(const float3& center, const float3& extents, const qua
 	g.Type = Cube;
 	mLineDrawList.push_back(g);
 }
-void Gizmos::DrawWireCircle(const float3& center, float radius, const quaternion& rotation, const float4& color){
+void Gizmos::DrawWireCircle(const float3& center, float radius, const quaternion& rotation, const float4& color) {
 	Gizmo g = {};
 	g.Color = color;
 	g.Position = center;
@@ -199,20 +199,21 @@ void Gizmos::DrawWireCircle(const float3& center, float radius, const quaternion
 	g.Type = Circle;
 	mLineDrawList.push_back(g);
 }
-void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& color){
+void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& color) {
 	DrawWireCircle(center, radius, quaternion(0,0,0,1), color);
 	DrawWireCircle(center, radius, quaternion(0, .70710678f, 0, .70710678f), color);
 	DrawWireCircle(center, radius, quaternion(.70710678f, 0, 0, .70710678f), color);
 }
 
-void Gizmos::PreFrame(Device* device, uint32_t backBufferIndex){
+void Gizmos::PreFrame(Device* device) {
 	DeviceData& data = mDeviceData.at(device);
-	data.mBufferIndex[backBufferIndex] = 0;
+	data.mBufferIndex[device->FrameContextIndex()] = 0;
 }
-void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
+void Gizmos::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 	uint32_t instanceOffset = 0;
 	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
 	uint32_t billboardCount = 0;
 	uint32_t cubeCount = 0;
@@ -233,23 +234,23 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera
 
 	Buffer* gizmoBuffer = nullptr;
 	DescriptorSet* gizmoDS = nullptr;
-	if (data.mInstanceBuffers[backBufferIndex].size() <= data.mBufferIndex[backBufferIndex]) {
+	if (data.mInstanceBuffers[frameContextIndex].size() <= data.mBufferIndex[frameContextIndex]) {
 		gizmoBuffer = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 		gizmoBuffer->Map();
 
-		gizmoDS = new DescriptorSet("Gizmos", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, OBJECT_BUFFER_BINDING);
+		gizmoDS = new DescriptorSet("Gizmos", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, 0, gizmoBuffer->Size(), OBJECT_BUFFER_BINDING);
 
-		data.mInstanceBuffers[backBufferIndex].push_back(make_pair(gizmoDS, gizmoBuffer));
+		data.mInstanceBuffers[frameContextIndex].push_back(make_pair(gizmoDS, gizmoBuffer));
 	} else {
-		Buffer*& b = data.mInstanceBuffers[backBufferIndex][data.mBufferIndex[backBufferIndex]].second;
-		gizmoDS = data.mInstanceBuffers[backBufferIndex][data.mBufferIndex[backBufferIndex]].first;
+		Buffer*& b = data.mInstanceBuffers[frameContextIndex][data.mBufferIndex[frameContextIndex]].second;
+		gizmoDS = data.mInstanceBuffers[frameContextIndex][data.mBufferIndex[frameContextIndex]].first;
 
 		if (b->Size() < sizeof(Gizmo) * total) {
 			safe_delete(b);
 			b = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 			b->Map();
-			gizmoDS->CreateStorageBufferDescriptor(b, OBJECT_BUFFER_BINDING);
+			gizmoDS->CreateStorageBufferDescriptor(b, 0, b->Size(), OBJECT_BUFFER_BINDING);
 		}
 
 		gizmoBuffer = b;
@@ -258,7 +259,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera
 	VkDescriptorSetLayoutBinding b = shader->mDescriptorBindings.at("MainTexture").second;
 	gizmoDS->CreateSampledTextureDescriptor(mTextures.data(), (uint32_t)mTextures.size(), b.descriptorCount, b.binding);
 
-	data.mBufferIndex[backBufferIndex]++;
+	data.mBufferIndex[frameContextIndex]++;
 
 	sort(mLineDrawList.begin(), mLineDrawList.end(), [&](const Gizmo& a, const Gizmo& b){
 		return a.Type < b.Type;
@@ -276,7 +277,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera
 		memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
 
 	if (wireCubeCount + wireCircleCount > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;
@@ -296,7 +297,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera
 	}
 
 	if (cubeCount + billboardCount > 0){
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;

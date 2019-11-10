@@ -4,7 +4,7 @@
 #include <unordered_map>
 
 #include <Content/Asset.hpp>
-#include <Core/DeviceManager.hpp>
+#include <Core/Instance.hpp>
 #include <Core/Sampler.hpp>
 #include <Core/RenderPass.hpp>
 
@@ -82,7 +82,7 @@ public:
 private:
 	friend class GraphicsShader;
 	friend class AssetManager;
-	ENGINE_EXPORT Shader(const std::string& name, DeviceManager* devices, const std::string& filename);
+	ENGINE_EXPORT Shader(const std::string& name, Instance* devices, const std::string& filename);
 
 	friend class GraphicsShader;
 	std::set<std::string> mKeywords;

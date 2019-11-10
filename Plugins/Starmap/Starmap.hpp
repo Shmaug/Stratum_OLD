@@ -12,7 +12,7 @@ public:
 	PLUGIN_EXPORT Starmap();
 	PLUGIN_EXPORT ~Starmap();
 
-	PLUGIN_EXPORT bool Init(Scene* scene, DeviceManager* deviceManager) override;
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
 
 private:
 	std::vector<std::shared_ptr<Object>> mObjects;

@@ -22,10 +22,10 @@ public:
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 	inline VkImageUsageFlags BufferUsage() const { return mUsage; }
 
-	inline Texture* ColorBuffer(uint32_t backBufferIndex, uint32_t i) { return mColorBuffers[backBufferIndex][i]; }
-	inline Texture* DepthBuffer(uint32_t backBufferIndex) { return mDepthBuffers[backBufferIndex]; }
+	inline Texture* ColorBuffer(uint32_t i) { return mColorBuffers[mDevice->FrameContextIndex()][i]; }
+	inline Texture* DepthBuffer() { return mDepthBuffers[mDevice->FrameContextIndex()]; }
 
-	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 	inline ::Device* Device() const { return mDevice; }
 
@@ -43,5 +43,5 @@ private:
 	std::vector<VkFormat> mColorFormats;
 	VkFormat mDepthFormat;
 
-	ENGINE_EXPORT bool UpdateBuffers(uint32_t backBufferIndex);
+	ENGINE_EXPORT bool UpdateBuffers();
 };

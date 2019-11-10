@@ -23,11 +23,11 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
 }
 
-void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
+void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();
 
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), camera, m->Topology());
+	VkPipelineLayout layout = commandBuffer->BindMaterial(material, m->VertexInput(), camera, m->Topology());
 	if (!layout) return;
 	auto shader = material->GetShader(commandBuffer->Device());
 
@@ -47,10 +47,10 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, uint32_t backBuff
 	commandBuffer->mTriangleCount += instanceCount * (m->IndexCount() / 3);
 }
 
-void MeshRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
-	DrawInstanced(commandBuffer, backBufferIndex, camera, 1, VK_NULL_HANDLE, materialOverride);
+void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
+	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, materialOverride);
 }
 
-void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
+void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer,  Camera* camera) {
 	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
 };

@@ -50,39 +50,42 @@ void UILabel::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void UILabel::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
+void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
 	if (!mVisible || !Font()) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
 	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {"CANVAS_BOUNDS"});
 
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera);
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera);
 	if (!layout) return;
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mGlyphCount = 0;
-		d.mDirty = new bool[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mGlyphBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
-		memset(d.mDirty, true, sizeof(bool) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
+		uint32_t c = commandBuffer->Device()->MaxFramesInFlight();
+		d.mDirty = new bool[c];
+		d.mGlyphBuffers = new Buffer*[c];
+		d.mDescriptorSets = new DescriptorSet*[c];
+		memset(d.mDirty, true, sizeof(bool) * c);
+		memset(d.mGlyphBuffers, 0, sizeof(Buffer*) * c);
+		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * c);
 	}
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
-	if (data.mDirty[backBufferIndex]) {
-		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[backBufferIndex]);
-		data.mDirty[backBufferIndex] = false;
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
+
+	if (data.mDirty[frameContextIndex]) {
+		data.mGlyphCount = BuildText(commandBuffer->Device(), data.mGlyphBuffers[frameContextIndex]);
+		data.mDirty[frameContextIndex] = false;
 	}
 	if (data.mGlyphCount == 0) return;
 
 	// Create and assign descriptor sets
-	if (!data.mDescriptorSets[backBufferIndex]) {
-		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
+	if (!data.mDescriptorSets[frameContextIndex]) {
+		data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
 	}
 	// Assign glyph buffer
-	data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[backBufferIndex], BINDING_START + 2);
+	data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[frameContextIndex], 0, data.mGlyphBuffers[frameContextIndex]->Size(), BINDING_START + 2);
 
 	float2 offset = AbsolutePosition();
 	switch (mHorizontalAnchor) {
@@ -115,7 +118,7 @@ void UILabel::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camer
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 	VkPushConstantRange boundsRange = shader->mPushConstants.at("Bounds");
 
-	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
+	VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);

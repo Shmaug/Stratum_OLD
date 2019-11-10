@@ -21,19 +21,24 @@ void Camera::CreateDescriptorSet() {
 		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 	};
 
-	mFrameData = new FrameData[mDevice->MaxFramesInFlight()];
-	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
-		mFrameData[i].mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, sizeof(CameraBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		mFrameData[i].mUniformBuffer->Map();
+	uint32_t c = mDevice->MaxFramesInFlight();
 
+	VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), mDevice->Limits().minUniformBufferOffsetAlignment);
+
+	mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, bufSize * c, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	mUniformBuffer->Map();
+	mDescriptorSets.resize(c);
+	for (uint32_t i = 0; i < c; i++) {
 		for (auto& s : combos) {
-			VkDescriptorSetLayout layout;
 			binding.stageFlags = s;
+			
+			VkDescriptorSetLayout layout;
 			vkCreateDescriptorSetLayout(*mDevice, &dslayoutinfo, nullptr, &layout);
 			mDevice->SetObjectName(layout, mName + " DescriptorSetLayout", VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT);
-			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice->DescriptorPool(), layout);
-			ds->CreateUniformBufferDescriptor(mFrameData[i].mUniformBuffer, CAMERA_BUFFER_BINDING);
-			mFrameData[i].mDescriptorSets.emplace(s, make_pair(layout, ds));
+			
+			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice, layout);
+			ds->CreateUniformBufferDescriptor(mUniformBuffer, bufSize * i, bufSize, CAMERA_BUFFER_BINDING);
+			mDescriptorSets[i].emplace(s, ds);
 		}
 	}
 
@@ -47,7 +52,6 @@ void Camera::CreateDescriptorSet() {
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
-	mFrameData(nullptr),
 	mMatricesDirty(true),
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
@@ -65,7 +69,6 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
-	mFrameData(nullptr),
 	mMatricesDirty(true),
 	mFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
@@ -87,7 +90,6 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 }
 Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr),
-	mFrameData(nullptr),
 	mMatricesDirty(true),
 	mFramebuffer(framebuffer),
 	mDeleteFramebuffer(false),
@@ -102,15 +104,13 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 
 Camera::~Camera() {
 	if (mTargetWindow) mTargetWindow->mTargetCamera = nullptr;
-	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
-		for (auto& s : mFrameData[i].mDescriptorSets) {
-			vkDestroyDescriptorSetLayout(*mDevice, s.second.first, nullptr);
-			safe_delete(s.second.second);
+	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
+		for (auto& s : mDescriptorSets[i]) {
+			vkDestroyDescriptorSetLayout(*mDevice, s.second->Layout(), nullptr);
+			safe_delete(s.second);
 		}
-		safe_delete(mFrameData[i].mUniformBuffer);
-	}
+	safe_delete(mUniformBuffer);
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
-	safe_delete_array(mFrameData);
 }
 
 float4 Camera::WorldToClip(const float3& worldPos) {
@@ -139,8 +139,8 @@ Ray Camera::ScreenToWorldRay(const float2& uv) {
 	return ray;
 }
 
-::DescriptorSet* Camera::DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stages) {
-	return mFrameData[backBufferIndex].mDescriptorSets.at(stages).second;
+::DescriptorSet* Camera::DescriptorSet(VkShaderStageFlags stages) {
+	return mDescriptorSets[mDevice->FrameContextIndex()].at(stages);
 }
 
 void Camera::PreRender() {
@@ -155,12 +155,12 @@ void Camera::PreRender() {
 		mViewport.height = (float)mFramebuffer->Height();
 	}
 }
-void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferIndex){
+void Camera::ResolveWindow(CommandBuffer* commandBuffer){
 	// resolve or copy render target to target window
 	if (mTargetWindow) {
 		PROFILER_BEGIN("Resolve/Copy RenderTarget");
 		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy");
-		ColorBuffer(backBufferIndex)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
+		ColorBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
 		VkImageMemoryBarrier barrier = {};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -190,7 +190,7 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			vkCmdCopyImage(*commandBuffer,
-				ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				ColorBuffer()->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		} else {
 			VkImageResolve region = {};
@@ -200,7 +200,7 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			vkCmdResolveImage(*commandBuffer,
-				ColorBuffer(backBufferIndex)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				ColorBuffer()->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
@@ -216,17 +216,18 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferInde
 		PROFILER_END;
 	}
 }
-void Camera::Set(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
-	CameraBuffer* buf = (CameraBuffer*)mFrameData[backBufferIndex].mUniformBuffer->MappedData();
-	buf->View = View();
-	buf->Projection = Projection();
-	buf->ViewProjection = ViewProjection();
-	buf->InvProjection = InverseProjection();
-	buf->Viewport = float4(mViewport.width, mViewport.height, mNear, mFar);
-	buf->ProjParams = float4(Aspect(), mOrthographicSize, mFieldOfView, mOrthographic ? 1 : 0);
-	buf->Position = WorldPosition();
-	buf->Right = WorldRotation() * float3(1, 0, 0);
-	buf->Up = WorldRotation() * float3(0, 1, 0);
+void Camera::Set(CommandBuffer* commandBuffer) {
+	UpdateMatrices();
+	CameraBuffer& buf = ((CameraBuffer*)mUniformBuffer->MappedData())[commandBuffer->Device()->FrameContextIndex()];
+	buf.View = mView;
+	buf.Projection = mProjection;
+	buf.ViewProjection = mViewProjection;
+	buf.InvProjection = mInvProjection;
+	buf.Viewport = float4(mViewport.width, mViewport.height, mNear, mFar);
+	buf.ProjParams = float4(Aspect(), mOrthographicSize, mFieldOfView, mOrthographic ? 1 : 0);
+	buf.Position = WorldPosition();
+	buf.Right = WorldRotation() * float3(1, 0, 0);
+	buf.Up = WorldRotation() * float3(0, 1, 0);
 	
 	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 	VkRect2D scissor{ {0, 0}, { mFramebuffer->Width(), mFramebuffer->Height() } };

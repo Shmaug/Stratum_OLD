@@ -1,33 +1,64 @@
-#include <cstring>
-
+#include <Core/Buffer.hpp>
 #include <Core/Device.hpp>
-#include <Core/DescriptorPool.hpp>
+#include <Core/Instance.hpp>
 #include <Core/CommandBuffer.hpp>
 #include <Core/Window.hpp>
 #include <Util/Util.hpp>
 
 using namespace std;
 
-Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector<const char*> validationLayers, VkSurfaceKHR surface, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex)
-	: mInstance(instance), mGraphicsQueueFamily(0), mPresentQueueFamily(0) {
+bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily) {
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	bool g = false;
+	bool p = false;
+
+	uint32_t i = 0;
+	for (const auto& queueFamily : queueFamilies) {
+		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			graphicsFamily = i;
+			g = true;
+		}
+
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+		if (queueFamily.queueCount > 0 && presentSupport) {
+			presentFamily = i;
+			p = true;
+		}
+
+		i++;
+	}
+
+	return g && p;
+}
+
+void Device::FrameContext::Reset() {
+	for (auto f : mFences)
+		f->Wait();
+	mFences.clear();
+	mSemaphores.clear();
+}
+
+Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, vector<const char*> deviceExtensions, vector<const char*> validationLayers)
+	: mInstance(instance), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
 
 	#ifdef ENABLE_DEBUG_LAYERS
-	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT");
-	CmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
-	CmdEndDebugUtilsLabelEXT   = (PFN_vkCmdEndDebugUtilsLabelEXT)  vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
+	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(*instance, "vkSetDebugUtilsObjectNameEXT");
+	CmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(*instance, "vkCmdBeginDebugUtilsLabelEXT");
+	CmdEndDebugUtilsLabelEXT   = (PFN_vkCmdEndDebugUtilsLabelEXT)  vkGetInstanceProcAddr(*instance, "vkCmdEndDebugUtilsLabelEXT");
 	#endif
 
 	mPhysicalDevice = physicalDevice;
-	mMaxMSAASamples = GetMaxUsableSampleCount(mPhysicalDevice);
+	mMaxMSAASamples = GetMaxUsableSampleCount();
 	mPhysicalDeviceIndex = physicalDeviceIndex;
 
 	#pragma region get queue info
-	if (!FindQueueFamilies(mPhysicalDevice, surface, mGraphicsQueueFamily, mPresentQueueFamily)){
-		cerr << "Failed to find queue families!" << endl;
-		throw runtime_error("Failed to find queue families!");
-	}
 	set<uint32_t> uniqueQueueFamilies{ mGraphicsQueueFamily, mPresentQueueFamily };
-
 	vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	float queuePriority = 1.0f;
 	for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -74,26 +105,59 @@ Device::Device(VkInstance instance, vector<const char*> deviceExtensions, vector
 	SetObjectName(mPresentQueue, name + " Present Queue", VK_OBJECT_TYPE_QUEUE);
 	#pragma endregion
 
+	#pragma region PipelineCache and DesriptorPool
 	VkPipelineCacheCreateInfo cache = {};
 	cache.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	vkCreatePipelineCache(mDevice, &cache, nullptr, &mPipelineCache);
+	
+	VkDescriptorPoolSize type_count[5] {
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			mLimits.maxDescriptorSetUniformBuffers },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	mLimits.maxDescriptorSetSampledImages },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				mLimits.maxDescriptorSetSampledImages },
+		{ VK_DESCRIPTOR_TYPE_SAMPLER,					mLimits.maxDescriptorSetSamplers },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			mLimits.maxDescriptorSetStorageBuffers },
+	};
 
-	mDescriptorPool = new ::DescriptorPool(name + " Descriptor Pool", this);
+	VkDescriptorPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	poolInfo.poolSizeCount = 5;
+	poolInfo.pPoolSizes = type_count;
+	poolInfo.maxSets = 10000;
+
+	ThrowIfFailed(vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mDescriptorPool), "vkCreateDescriptorPool failed");
+	SetObjectName(mDescriptorPool, name, VK_OBJECT_TYPE_DESCRIPTOR_POOL);
+	#pragma endregion
 }
 Device::~Device() {
 	FlushCommandBuffers();
-	safe_delete(mDescriptorPool);
+	vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
 	vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
 	for (auto& p : mCommandBuffers)
 		vkDestroyCommandPool(mDevice, p.first, nullptr);
 	vkDestroyDevice(mDevice, nullptr);
 }
 
+VkSampleCountFlagBits Device::GetMaxUsableSampleCount() {
+	VkPhysicalDeviceProperties physicalDeviceProperties;
+	vkGetPhysicalDeviceProperties(mPhysicalDevice, &physicalDeviceProperties);
+
+	VkSampleCountFlags counts = std::min(physicalDeviceProperties.limits.framebufferColorSampleCounts, physicalDeviceProperties.limits.framebufferDepthSampleCounts);
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+	if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+	if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+	if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+	if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+	if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+	return VK_SAMPLE_COUNT_1_BIT;
+}
+
 void Device::FlushCommandBuffers() {
 	lock_guard lock(mCommandPoolMutex);
 	for (auto& p : mCommandBuffers) {
 		while (p.second.size()) {
-			p.second.front()->mCompletionFence->Wait();
+			p.second.front()->mSignalFence->Wait();
 			p.second.pop();
 		}
 	}
@@ -140,7 +204,7 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 	// see if the command buffer at the front of the queue is done
 	if (commandBuffers.size() > 0) {
 		commandBuffer = commandBuffers.front();
-		if (commandBuffer->mCompletionFence->Signaled()) {
+		if (commandBuffer->mSignalFence->Signaled()) {
 			// reset and reuse the command buffer at the front of the queue
 			commandBuffers.pop();
 			commandBuffer->Reset(name);
@@ -159,22 +223,43 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 	return commandBuffer;
 }
 
-shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer) {
+shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool frameContext) {
 	lock_guard lock(mCommandPoolMutex);
 	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer), "vkEndCommandBuffer failed");
 
 	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+	VkSemaphore signalSemaphore = commandBuffer->mSignalSemaphore->operator VkSemaphore();
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount = 0;
-	submitInfo.signalSemaphoreCount = 0;
+	if (frameContext) {
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &signalSemaphore;
+	}
 	submitInfo.pWaitDstStageMask = &waitStages;
+	submitInfo.waitSemaphoreCount = 0;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer->mCommandBuffer;
-	vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, *commandBuffer->mCompletionFence);
-	
+	vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, *commandBuffer->mSignalFence);
+
+	if (frameContext) {
+		CurrentFrameContext()->mFences.push_back(commandBuffer->mSignalFence);
+		CurrentFrameContext()->mSemaphores.push_back(commandBuffer->mSignalSemaphore);
+	}
+
 	// store the command buffer in the queue
 	mCommandBuffers[commandBuffer->mCommandPool].push(commandBuffer);
-	return commandBuffer->mCompletionFence;
+	return commandBuffer->mSignalFence;
+}
+
+Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+	// TODO: cache these!!!
+	Buffer* b = new Buffer(name, this, size, usage, properties);
+	if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		b->Map();
+	return b;
+}
+DescriptorSet* Device::GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout) {
+	// TODO: cache these!!!
+	return new DescriptorSet(name, this, layout);
 }

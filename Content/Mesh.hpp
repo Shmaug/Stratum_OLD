@@ -6,7 +6,7 @@
 #include <Content/Asset.hpp>
 #include <Core/Buffer.hpp>
 #include <Math/Geometry.hpp>
-#include <Core/DeviceManager.hpp>
+#include <Core/Instance.hpp>
 #include <Util/Util.hpp>
 #include <Scene/Object.hpp>
 
@@ -28,13 +28,13 @@ public:
 	const std::string mName;
 
 	ENGINE_EXPORT Mesh(const std::string& name);
-	ENGINE_EXPORT Mesh(const std::string& name, ::DeviceManager* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	ENGINE_EXPORT Mesh(const std::string& name, ::Instance* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT ~Mesh() override;
 
-	ENGINE_EXPORT static Mesh* CreateCube(const std::string& name, DeviceManager* devices, float radius = 1.f);
+	ENGINE_EXPORT static Mesh* CreateCube(const std::string& name, Instance* devices, float radius = 1.f);
 	// Creates a plane facing the positive z axis
-	ENGINE_EXPORT static Mesh* CreatePlane(const std::string& name, DeviceManager* devices, float size = 1.f);
+	ENGINE_EXPORT static Mesh* CreatePlane(const std::string& name, Instance* devices, float size = 1.f);
 
 	inline std::shared_ptr<Buffer> VertexBuffer(Device* device) const { return mDeviceData.at(device).mVertexBuffer; }
 	inline std::shared_ptr<Buffer> IndexBuffer(Device* device) const { return mDeviceData.at(device).mIndexBuffer; }
@@ -54,7 +54,7 @@ public:
 
 private:
 	friend class AssetManager;
-	ENGINE_EXPORT Mesh(const std::string& name, ::DeviceManager* devices, const std::string& filename, float scale = 1.f);
+	ENGINE_EXPORT Mesh(const std::string& name, ::Instance* devices, const std::string& filename, float scale = 1.f);
 
 	const ::VertexInput* mVertexInput;
 	uint32_t mIndexCount;

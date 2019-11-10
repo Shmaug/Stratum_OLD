@@ -1,13 +1,11 @@
-#include <Core/DeviceManager.hpp>
-#include <Util/Util.hpp>
-
-#include <GLFW/glfw3.h>
+#include <Core/Instance.hpp>
+#include <Core/Device.hpp>
+#include <Core/Window.hpp>
 
 using namespace std;
 
-DeviceManager::DeviceManager()
-	: mInstance(VK_NULL_HANDLE), mGLFWInitialized(false), mMaxFramesInFlight(0) {}
-DeviceManager::~DeviceManager() {
+Instance::Instance() : mInstance(VK_NULL_HANDLE), mGLFWInitialized(false), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {}
+Instance::~Instance() {
 	if (mGLFWInitialized) glfwTerminate();
 
 	for (auto& w : mWindows)
@@ -21,7 +19,7 @@ DeviceManager::~DeviceManager() {
 	vkDestroyInstance(mInstance, nullptr);
 }
 
-VkPhysicalDevice DeviceManager::GetPhysicalDevice(uint32_t index, const vector<const char*>& extensions) const {
+VkPhysicalDevice Instance::GetPhysicalDevice(uint32_t index, const vector<const char*>& extensions) const {
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
 	if (deviceCount == 0) return VK_NULL_HANDLE;
@@ -55,7 +53,7 @@ VkPhysicalDevice DeviceManager::GetPhysicalDevice(uint32_t index, const vector<c
 	return VK_NULL_HANDLE;
 }
 
-void DeviceManager::CreateInstance() {
+void Instance::CreateInstance() {
 	if (mInstance != VK_NULL_HANDLE)
 		vkDestroyInstance(mInstance, nullptr);
 
@@ -71,14 +69,14 @@ void DeviceManager::CreateInstance() {
 		printf("Initialized glfw.\n");
 	}
 
-	vector<const char*> instanceExtensions {
+	vector<const char*> instanceExtensions{
 		#ifdef ENABLE_DEBUG_LAYERS
 		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 		#endif
 		//VK_KHR_SURFACE_EXTENSION_NAME,
 		//VK_KHR_DISPLAY_EXTENSION_NAME,
 	};
-	
+
 	// request GLFW extensions
 	uint32_t glfwExtensionCount = 0;
 	printf("Requesting glfw extensions... ");
@@ -87,19 +85,19 @@ void DeviceManager::CreateInstance() {
 	for (uint32_t i = 0; i < glfwExtensionCount; i++)
 		instanceExtensions.push_back(glfwExtensions[i]);
 
-	vector<const char*> validationLayers {
+	vector<const char*> validationLayers{
 		#ifdef ENABLE_DEBUG_LAYERS
 		"VK_LAYER_KHRONOS_validation",
 		"VK_LAYER_LUNARG_core_validation",
 		"VK_LAYER_LUNARG_standard_validation",
-		"VK_LAYER_RENDERDOC_Capture"
+		//"VK_LAYER_RENDERDOC_Capture"
 		#endif
 	};
 
-	#ifdef ENABLE_DEBUG_LAYERS
+#ifdef ENABLE_DEBUG_LAYERS
 	printf("Initializing with validation layers\n");
-	#endif
-	
+#endif
+
 	if (validationLayers.size()) {
 		uint32_t layerCount;
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -139,22 +137,20 @@ void DeviceManager::CreateInstance() {
 	ThrowIfFailed(vkCreateInstance(&createInfo, nullptr, &mInstance), "vkCreateInstance failed");
 	printf("Done.\n");
 }
-
-void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
-	vector<const char*> deviceExtensions {
+void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays) {
+	vector<const char*> deviceExtensions{
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME, // needed to obtain a swapchain
 	};
-
-	vector<const char*> validationLayers {
+	vector<const char*> validationLayers{
 		#ifdef ENABLE_DEBUG_LAYERS
 		"VK_LAYER_KHRONOS_validation",
 		"VK_LAYER_RENDERDOC_Capture",
 		#endif
 	};
 
-	uint32_t minImageCount = ~0;
-
 	MouseKeyboardInput* windowInput = new MouseKeyboardInput();
+
+	mMaxFramesInFlight = 0xFFFF;
 
 	// create windows
 	for (const auto& it : displays) {
@@ -170,18 +166,31 @@ void DeviceManager::Initialize(const vector<DisplayCreateInfo>& displays) {
 
 		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
 
-		auto w = new Window(mInstance, "VkCave " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
-		if (!mDevices[deviceIndex]) mDevices[deviceIndex] = new Device(mInstance, deviceExtensions, validationLayers, w->Surface(), physicalDevice, deviceIndex);
+		auto w = new Window(this, "VkCave " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mMonitor);
+		if (!mDevices[deviceIndex]) {
+			uint32_t gq, pq;
+			Device::FindQueueFamilies(physicalDevice, w->Surface(), gq, pq);
+			mDevices[deviceIndex] = new Device(this, physicalDevice, deviceIndex, gq, pq, deviceExtensions, validationLayers);
+		}
+		
 		w->CreateSwapchain(mDevices[deviceIndex]);
-		minImageCount = min(minImageCount, w->mImageCount);
 		mWindows.push_back(w);
+		mMaxFramesInFlight = min(mMaxFramesInFlight, w->mImageCount);
 	}
 
-	for (const auto& device : mDevices)
-		device->mMaxFramesInFlight = minImageCount;
+	for (Device* d : mDevices)
+		d->mFrameContexts.resize(mMaxFramesInFlight);
+
+	mStartTime = mClock.now();
+	mLastFrame = mClock.now();
 }
 
-bool DeviceManager::PollEvents() const {
+bool Instance::PollEvents() {
+	chrono::time_point<chrono::steady_clock> t1 = mClock.now();
+	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
+	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
+	mLastFrame = t1;
+
 	for (const auto& w : mWindows)
 		if (w->ShouldClose())
 			return false;
@@ -189,7 +198,14 @@ bool DeviceManager::PollEvents() const {
 	return true;
 }
 
-void DeviceManager::PresentWindows(const vector<shared_ptr<Fence>>& fences){
+void Instance::AdvanceFrame() {
 	for (Window* w : mWindows)
-		w->Present(fences);
+		// will wait on the semaphores signalled by the frame mMaxFramesInFlight ago
+		w->Present();
+
+	mFrameCount++;
+	for (uint32_t i = 0; i < mDevices.size(); i++) {
+		mDevices[i]->mFrameContextIndex = mFrameCount % mMaxFramesInFlight;
+		mDevices[i]->CurrentFrameContext()->Reset();
+	}
 }

@@ -30,7 +30,7 @@ bool DicomVis::Init(Scene* scene) {
 	return true;
 }
 
-void DicomVis::Update(const FrameTime& frameTime) {
+void DicomVis::Update() {
 
 }
 

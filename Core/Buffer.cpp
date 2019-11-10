@@ -1,5 +1,4 @@
 #include <Core/Buffer.hpp>
-#include <Core/Buffer.hpp>
 #include <Util/Util.hpp>
 
 #include <cstring>
@@ -28,6 +27,7 @@ Buffer::~Buffer() {
 }
 
 void* Buffer::Map() {
+	if (mMappedData) return mMappedData;
 	vkMapMemory(*mDevice, mMemory, 0, mSize, 0, &mMappedData);
 	return mMappedData;
 }
@@ -70,7 +70,7 @@ void Buffer::CopyFrom(const Buffer& other) {
 	VkBufferCopy copyRegion = {};
 	copyRegion.size = mSize;
 	vkCmdCopyBuffer(*commandBuffer, other.mBuffer, mBuffer, 1, &copyRegion);
-	mDevice->Execute(commandBuffer)->Wait();
+	mDevice->Execute(commandBuffer, false)->Wait();
 }
 
 void Buffer::Allocate(){

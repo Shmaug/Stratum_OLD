@@ -69,24 +69,25 @@ Framebuffer::~Framebuffer() {
 	safe_delete_array(mFramebuffers);
 }
 
-bool Framebuffer::UpdateBuffers(uint32_t backBufferIndex) {
-	if (mFramebuffers[backBufferIndex] == VK_NULL_HANDLE
-		|| mDepthBuffers[backBufferIndex]->Width() != mWidth || mDepthBuffers[backBufferIndex]->Height() != mHeight || mColorBuffers[backBufferIndex][0]->Usage() != mUsage) {
+bool Framebuffer::UpdateBuffers() {
+	uint32_t frameContextIndex = mDevice->FrameContextIndex();
+	if (mFramebuffers[frameContextIndex] == VK_NULL_HANDLE
+		|| mDepthBuffers[frameContextIndex]->Width() != mWidth || mDepthBuffers[frameContextIndex]->Height() != mHeight || mColorBuffers[frameContextIndex][0]->Usage() != mUsage) {
 
-		if (mFramebuffers[backBufferIndex] != VK_NULL_HANDLE)
-			vkDestroyFramebuffer(*mDevice, mFramebuffers[backBufferIndex], nullptr);
+		if (mFramebuffers[frameContextIndex] != VK_NULL_HANDLE)
+			vkDestroyFramebuffer(*mDevice, mFramebuffers[frameContextIndex], nullptr);
 
-		vector<VkImageView> views(mColorBuffers[backBufferIndex].size() + 1);
+		vector<VkImageView> views(mColorBuffers[frameContextIndex].size() + 1);
 
 		for (uint32_t i = 0; i < mColorFormats.size(); i++) {
-			safe_delete(mColorBuffers[backBufferIndex][i]);
-			mColorBuffers[backBufferIndex][i] = new Texture(mName + "ColorBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i], mSampleCount, VK_IMAGE_TILING_OPTIMAL, mUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			views[i] = mColorBuffers[backBufferIndex][i]->View(mDevice);
+			safe_delete(mColorBuffers[frameContextIndex][i]);
+			mColorBuffers[frameContextIndex][i] = new Texture(mName + "ColorBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i], mSampleCount, VK_IMAGE_TILING_OPTIMAL, mUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			views[i] = mColorBuffers[frameContextIndex][i]->View(mDevice);
 		}
 
-		safe_delete(mDepthBuffers[backBufferIndex]);
-		mDepthBuffers[backBufferIndex] = new Texture(mName + "DepthBuffer", mDevice, mWidth, mHeight, 1, mDepthFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		views[mColorBuffers[backBufferIndex].size()] = mDepthBuffers[backBufferIndex]->View(mDevice);
+		safe_delete(mDepthBuffers[frameContextIndex]);
+		mDepthBuffers[frameContextIndex] = new Texture(mName + "DepthBuffer", mDevice, mWidth, mHeight, 1, mDepthFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		views[mColorBuffers[frameContextIndex].size()] = mDepthBuffers[frameContextIndex]->View(mDevice);
 
 		VkFramebufferCreateInfo fb = {};
 		fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -96,24 +97,25 @@ bool Framebuffer::UpdateBuffers(uint32_t backBufferIndex) {
 		fb.width = mWidth;
 		fb.height = mHeight;
 		fb.layers = 1;
-		vkCreateFramebuffer(*mDevice, &fb, nullptr, &mFramebuffers[backBufferIndex]);
-		mDevice->SetObjectName(mFramebuffers[backBufferIndex], mName + " Framebuffer " + to_string(backBufferIndex), VK_OBJECT_TYPE_FRAMEBUFFER);
+		vkCreateFramebuffer(*mDevice, &fb, nullptr, &mFramebuffers[frameContextIndex]);
+		mDevice->SetObjectName(mFramebuffers[frameContextIndex], mName + " Framebuffer " + to_string(frameContextIndex), VK_OBJECT_TYPE_FRAMEBUFFER);
 
 		return true;
 	}
 	return false;
 }
 
-void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer, uint32_t backBufferIndex) {
-	if (UpdateBuffers(backBufferIndex)){
+void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
+	uint32_t frameContextIndex = mDevice->FrameContextIndex();
+	if (UpdateBuffers()){
 		for (uint32_t i = 0; i < mColorFormats.size(); i++)
-			mColorBuffers[backBufferIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
-		mDepthBuffers[backBufferIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
+			mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+		mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
 	}
 	vector<VkClearValue> clearValues(mColorFormats.size() + 1);
 	for (uint32_t i = 0; i < mColorFormats.size(); i++)
 		clearValues[i] = { .0f, .0f, .0f, 0.f };
 	clearValues[mColorFormats.size()] = { 1.f, 0.f };
 
-	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[backBufferIndex], clearValues.data(), (uint32_t)clearValues.size());
+	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], clearValues.data(), (uint32_t)clearValues.size());
 }
