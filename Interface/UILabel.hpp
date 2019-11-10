@@ -33,7 +33,7 @@ public:
 	inline float TextScale() const { return mTextScale; }
 	inline void TextScale(float sc) { mTextScale = sc; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
 	
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
 
 private:
 	struct DeviceData {

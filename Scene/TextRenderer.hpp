@@ -41,8 +41,8 @@ public:
 	inline virtual bool Visible() override { return mVisible && Font() && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
 
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) override;
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera);
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 

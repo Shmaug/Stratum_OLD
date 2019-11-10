@@ -1,4 +1,5 @@
 #include <Core/Sampler.hpp>
+#include <Core/Device.hpp>
 
 using namespace std;
 

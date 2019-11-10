@@ -9,7 +9,7 @@ class Font;
 class Mesh;
 class Shader;
 class Texture;
-class DeviceManager;
+class Instance;
 
 class AssetManager {
 public:
@@ -22,8 +22,8 @@ public:
 
 private:
 	friend class VkCAVE;
-	ENGINE_EXPORT AssetManager(DeviceManager* deviceManager);
+	ENGINE_EXPORT AssetManager(Instance* instance);
 
-	DeviceManager* mDeviceManager;
+	Instance* mInstance;
 	std::unordered_map<std::string, Asset*> mAssets;
 };

@@ -43,8 +43,8 @@ public:
 	PLUGIN_EXPORT ~MeshViewer();
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
-	PLUGIN_EXPORT void Update(const FrameTime& frameTime) override;
-	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera);
+	PLUGIN_EXPORT void Update() override;
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 
 private:
 	float mLastClick;
@@ -348,8 +348,8 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 					indices = indices16.data();
 				}
 
-				// mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(), aimesh, scale);
-				mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->DeviceManager(),
+				// mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->Instance(), aimesh, scale);
+				mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->Instance(),
 					vertices.data(), indices, (uint32_t)vertices.size(), (uint32_t)sizeof(Vertex), indexCount, &Vertex::VertexInput, indexType);
 			}
 
@@ -655,7 +655,7 @@ bool MeshViewer::Init(Scene* scene) {
 	mMaterials.push_back(skyboxMat);
 	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
 	skybox->LocalScale(1e23f);
-	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->DeviceManager())));
+	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->Instance())));
 	skybox->Material(skyboxMat);
 	skybox->CastShadows(false);
 	mObjects.push_back(skybox.get());
@@ -670,7 +670,7 @@ bool MeshViewer::Init(Scene* scene) {
 	groundMat->SetParameter("Roughness", .8f);
 	mMaterials.push_back(groundMat);
 	shared_ptr<MeshRenderer> ground = make_shared<MeshRenderer>("Ground");
-	ground->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Ground", mScene->DeviceManager(), 100.f)));
+	ground->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Ground", mScene->Instance(), 100.f)));
 	ground->Material(groundMat);
 	ground->LocalRotation(quaternion(float3(-PI * .5f, 0, 0)));
 	mObjects.push_back(ground.get());
@@ -918,7 +918,7 @@ bool MeshViewer::Init(Scene* scene) {
 	return true;
 }
 
-void MeshViewer::Update(const FrameTime& frameTime) {
+void MeshViewer::Update() {
 	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	if (mLoading) {
@@ -976,19 +976,19 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 
 		// Toggle menu on/off
 		if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
-			if (frameTime.mTotalTime - mLastClick < .2f) {
+			if (mScene->Instance()->TotalTime() - mLastClick < .2f) {
 				mPanel->mEnabled = !mPanel->mEnabled;
 				const InputPointer* ptr = input->GetPointer(0);
 				mPanel->LocalPosition(ptr->mWorldRay.mOrigin + ptr->mWorldRay.mDirection * 1.5f);
 				mPanel->LocalRotation(mScene->Cameras()[0]->WorldRotation());
 			}
-			mLastClick = frameTime.mTotalTime;
+			mLastClick = mScene->Instance()->TotalTime();
 		}
 	}
 
 	uint32_t x = 0;
 	for (Robot* r : mRobots) {
-		float t = frameTime.mTotalTime + (x % 100);
+		float t = mScene->Instance()->TotalTime() + (x % 100);
 		t *= 3.f;
 
 		float3 v = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
@@ -1009,7 +1009,7 @@ void MeshViewer::Update(const FrameTime& frameTime) {
 	}
 }
 
-void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
+void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	const Ray& ray = input->GetPointer(0)->mWorldRay;

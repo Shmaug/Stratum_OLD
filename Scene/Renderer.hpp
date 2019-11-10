@@ -8,6 +8,6 @@ public:
 	inline virtual uint32_t RenderQueue() { return 1000; }
 	virtual bool Visible() = 0;
 	virtual bool CastShadows() { return false; };
-	inline virtual void PreRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, Material* materialOverride) {};
-	virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, Material* materialOverride) = 0;
+	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, Material* materialOverride) {};
+	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Material* materialOverride) = 0;
 };

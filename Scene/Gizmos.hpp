@@ -5,6 +5,7 @@
 #include <Content/Texture.hpp>
 #include <Core/CommandBuffer.hpp>
 #include <Core/DescriptorSet.hpp>
+#include <Input/InputDevice.hpp>
 
 class Scene;
 
@@ -28,8 +29,8 @@ public:
 
 private:
 	friend class Scene;
-	ENGINE_EXPORT void PreFrame(Device* device, uint32_t backBufferIndex);
-	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera);
+	ENGINE_EXPORT void PreFrame(Device* device);
+	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera);
 
 	struct DeviceData {
 		Buffer* mVertices;

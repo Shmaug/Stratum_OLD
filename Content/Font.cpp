@@ -5,7 +5,7 @@
 
 using namespace std;
 
-Font::Font(const string& name, DeviceManager* deviceManager, const string& filename, float pixelSize, float scale)
+Font::Font(const string& name, Instance* deviceManager, const string& filename, float pixelSize, float scale)
 	: mName(name), mTexture(nullptr), mPixelSize(pixelSize), mAscender(0), mDescender(0), mLineSpace(0) {
 
 	memset(mGlyphs, 0, sizeof(FontGlyph) * 0xFF);

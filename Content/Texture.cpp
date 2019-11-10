@@ -9,7 +9,7 @@
 
 using namespace std;
 
-Texture::Texture(const string& name, ::DeviceManager* devices, const string& filename, bool srgb) : mName(name) {
+Texture::Texture(const string& name, ::Instance* devices, const string& filename, bool srgb) : mName(name) {
 	uint8_t* pixels = nullptr;
 	uint32_t size = 0;
 	int32_t x, y, channels;
@@ -129,7 +129,7 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 		TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
 		vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer.get(), d.mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 		GenerateMipMaps(commandBuffer.get());
-		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer));
+		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer, false));
 	}
 	for (auto& f : fences)
 		f->Wait();
@@ -141,7 +141,7 @@ Texture::Texture(const string& name, ::DeviceManager* devices, const string& fil
 
 	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), dataSize / 1000.f);
 }
-Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+Texture::Texture(const string& name, Instance* devices, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
 	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(mipLevels), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
 	if (mipLevels == 0) {
 		mMipLevels = (uint32_t)std::floor(std::log2(std::max(mWidth, mHeight))) + 1;
@@ -176,7 +176,7 @@ Texture::Texture(const string& name, DeviceManager* devices, void* pixels, VkDev
 		else
 			TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
-		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer));
+		fences.push_back(devices->GetDevice(i)->Execute(commandBuffer, false));
 	}
 	for (auto& f : fences)
 		f->Wait();
@@ -218,12 +218,12 @@ Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize 
 	else
 		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
-	device->Execute(commandBuffer)->Wait();
+	device->Execute(commandBuffer, false)->Wait();
 
 	delete uploadBuffer;
 }
 
-Texture::Texture(const string& name, DeviceManager* devices, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+Texture::Texture(const string& name, Instance* devices, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
 	: mName(name), mWidth(width), mHeight(height), mDepth(depth), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
 	
 	for (uint32_t i = 0; i < devices->DeviceCount(); i++)

@@ -69,7 +69,7 @@ void Starmap::RunTelnet() {
 		});
 }
 
-bool Starmap::Init(Scene* scene, DeviceManager* deviceManager) {
+bool Starmap::Init(Scene* scene) {
 	mScene = scene;
 
 	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");

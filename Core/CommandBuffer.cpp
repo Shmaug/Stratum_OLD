@@ -29,20 +29,29 @@ void Fence::Reset(){
 	vkResetFences(*mDevice, 1, &mFence);
 }
 
+Semaphore::Semaphore(Device* device) : mDevice(device) {
+	VkSemaphoreCreateInfo fenceInfo = {};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	ThrowIfFailed(vkCreateSemaphore(*mDevice, &fenceInfo, nullptr, &mSemaphore), "vkCreateSemaphore failed");
+}
+Semaphore::~Semaphore() {
+	vkDestroySemaphore(*mDevice, mSemaphore, nullptr);
+}
+
 CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const string& name)
-	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentMaterial(nullptr), mCurrentPipeline(VK_NULL_HANDLE) {
+	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentMaterial(nullptr), mCurrentPipeline(VK_NULL_HANDLE), mTriangleCount(0) {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = mCommandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
 	ThrowIfFailed(vkAllocateCommandBuffers(*mDevice, &allocInfo, &mCommandBuffer), "vkAllocateCommandBuffers failed");
-
-	mCompletionFence = make_shared<Fence>(device);
-	mTriangleCount = 0;
-
 	mDevice->SetObjectName(mCommandBuffer, name, VK_OBJECT_TYPE_COMMAND_BUFFER);
-	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence", VK_OBJECT_TYPE_FENCE);
+
+	mSignalFence = make_shared<Fence>(device);
+	mDevice->SetObjectName(mSignalFence->operator VkFence(), name, VK_OBJECT_TYPE_FENCE);
+	mSignalSemaphore = make_shared<Semaphore>(device);
+	mDevice->SetObjectName(mSignalSemaphore->operator VkSemaphore(), name, VK_OBJECT_TYPE_SEMAPHORE);
 }
 CommandBuffer::~CommandBuffer() {
 	vkFreeCommandBuffers(*mDevice, mCommandPool, 1, &mCommandBuffer);
@@ -63,10 +72,12 @@ void CommandBuffer::EndLabel() {
 
 void CommandBuffer::Reset(const string& name) {
 	vkResetCommandBuffer(mCommandBuffer, 0);
-	mCompletionFence->Reset();
-
 	mDevice->SetObjectName(mCommandBuffer, name, VK_OBJECT_TYPE_COMMAND_BUFFER);
-	mDevice->SetObjectName((VkFence)*mCompletionFence, name + " Fence", VK_OBJECT_TYPE_FENCE);
+	
+	mSignalFence->Reset();
+	mDevice->SetObjectName(mSignalFence->operator VkFence(), name + " Fence", VK_OBJECT_TYPE_FENCE);
+	mDevice->SetObjectName(mSignalSemaphore->operator VkSemaphore(), name + " Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
+
 	mCurrentRenderPass = nullptr;
 	mCurrentCamera = nullptr;
 	mCurrentMaterial = nullptr;
@@ -94,13 +105,13 @@ void CommandBuffer::EndRenderPass() {
 	mCurrentPipeline = VK_NULL_HANDLE;
 }
 
-VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, uint32_t backBufferIndex, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
+VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology);
 	if (mCurrentPipeline == pipeline) {
 		if (mCurrentCamera != camera) {
 			mCurrentCamera = camera;
 			if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera")) {
-				VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex, shader->mDescriptorBindings.at("Camera").second.stageFlags);
+				VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
 				vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 			}
 		}
@@ -109,19 +120,19 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, uint32_t back
 	mCurrentPipeline = pipeline;
 	vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera")) {
-		VkDescriptorSet camds = *camera->DescriptorSet(backBufferIndex, shader->mDescriptorBindings.at("Camera").second.stageFlags);
+		VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
 		vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
 	mCurrentCamera = camera;
 	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
 }
-VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBufferIndex, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
+VkPipelineLayout CommandBuffer::BindMaterial(Material* material, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
 	VkPipeline pipeline = material->GetShader(mDevice)->GetPipeline(mCurrentRenderPass, input, topology);
 	if (pipeline == mCurrentPipeline) {
 		GraphicsShader* shader = material->GetShader(mDevice);
 		if (material != mCurrentMaterial || mCurrentCamera != camera) {
-			material->SetParameters(this, backBufferIndex, camera, shader);
+			material->SetParameters(this, camera, shader);
 			mCurrentMaterial = material;
 			mCurrentCamera = camera;
 		}
@@ -131,5 +142,5 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, uint32_t backBu
 	mCurrentCamera = camera;
 	mCurrentPipeline = pipeline;
 	mCurrentMaterial = material;
-	return material->Bind(this, backBufferIndex, input, camera, topology);
+	return material->Bind(this, input, camera, topology);
 }

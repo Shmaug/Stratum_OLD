@@ -1,24 +1,28 @@
 #pragma once
 
-#include <queue>
-#include <mutex>
-#include <unordered_map>
-#include <thread>
-
+#include <Core/DescriptorSet.hpp>
 #include <Core/CommandBuffer.hpp>
+#include <Core/Instance.hpp>
 #include <Util/Util.hpp>
 
 class CommandBuffer;
-class DescriptorPool;
-class DeviceManager;
 class Fence;
 class Window;
 
 class Device {
 public:
+	class FrameContext {
+	public:
+		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is 'done'
+		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
+		inline FrameContext() : mFences({}), mSemaphores({}) {};
+		ENGINE_EXPORT void Reset();
+	};
+
+	ENGINE_EXPORT static bool FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily);
+
 	ENGINE_EXPORT ~Device();
 
-	inline uint32_t MaxFramesInFlight() const { return mMaxFramesInFlight; }
 	inline VkPhysicalDevice PhysicalDevice() const { return mPhysicalDevice; }
 	inline uint32_t PhysicalDeviceIndex() const { return mPhysicalDeviceIndex; }
 	inline VkQueue GraphicsQueue() const { return mGraphicsQueue; };
@@ -28,26 +32,37 @@ public:
 
 	ENGINE_EXPORT uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 	
+	ENGINE_EXPORT Buffer* GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
+	ENGINE_EXPORT DescriptorSet* GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout);
+
 	ENGINE_EXPORT std::shared_ptr<CommandBuffer> GetCommandBuffer(const std::string& name = "Command Buffer");
-	ENGINE_EXPORT std::shared_ptr<Fence> Execute(std::shared_ptr<CommandBuffer> commandBuffer);
+	ENGINE_EXPORT std::shared_ptr<Fence> Execute(std::shared_ptr<CommandBuffer> commandBuffer, bool frameContext = true);
 	ENGINE_EXPORT void FlushCommandBuffers();
 
+	ENGINE_EXPORT VkSampleCountFlagBits GetMaxUsableSampleCount();
+
+	inline uint32_t Device::MaxFramesInFlight() const { return mInstance->MaxFramesInFlight(); }
+	inline uint32_t FrameContextIndex() const { return mFrameContextIndex; }
+	inline FrameContext* CurrentFrameContext() { return &mFrameContexts[mFrameContextIndex]; }
+
 	inline const VkPhysicalDeviceLimits& Limits() const { return mLimits; }
-	inline VkInstance Instance() const { return mInstance; }
-	inline ::DescriptorPool* DescriptorPool() const { return mDescriptorPool; }
+	inline ::Instance* Instance() const { return mInstance; }
 	inline VkPipelineCache PipelineCache() const { return mPipelineCache; }
 
 	inline operator VkDevice() const { return mDevice; }
 
 private:
+	friend class DescriptorSet;
 	friend class CommandBuffer;
-	friend class DeviceManager;
-	ENGINE_EXPORT Device(VkInstance instance, std::vector<const char*> extensions, std::vector<const char*> validationLayers, VkSurfaceKHR surface, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex);
+	friend class ::Instance;
+	ENGINE_EXPORT Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueue, uint32_t presentQueue, std::vector<const char*> deviceExtensions, std::vector<const char*> validationLayers);
 
-	VkInstance mInstance;
+	::Instance* mInstance;
+	uint32_t mFrameContextIndex; // assigned by mInstance
+	std::vector<FrameContext> mFrameContexts;
+
 	VkPhysicalDeviceLimits mLimits;
 
-	uint32_t mMaxFramesInFlight;
 	uint32_t mMaxMSAASamples;
 	uint32_t mPhysicalDeviceIndex;
 	VkPhysicalDevice mPhysicalDevice;
@@ -60,7 +75,7 @@ private:
 	VkQueue mGraphicsQueue;
 	VkQueue mPresentQueue;
 
-	::DescriptorPool* mDescriptorPool;
+	VkDescriptorPool mDescriptorPool;
 
 	std::mutex mCommandPoolMutex;
 	std::unordered_map<std::thread::id, VkCommandPool> mCommandPools;

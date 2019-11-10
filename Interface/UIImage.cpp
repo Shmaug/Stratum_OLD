@@ -22,7 +22,7 @@ UIImage::~UIImage() {
 	}
 }
 
-void UIImage::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
+void UIImage::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
 	if (!Texture() || !mVisible) return;
 	if (mColor.a <= 0 && (!mOutline || mOutlineColor.a <= 0)) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/ui.shader");
@@ -36,9 +36,10 @@ void UIImage::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camer
 	}
 	DeviceData& data = mDeviceData[commandBuffer->Device()];
 
-	if (!data.mDescriptorSets[backBufferIndex]) {
-		data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		data.mDescriptorSets[backBufferIndex]->CreateSampledTextureDescriptor(Texture(), BINDING_START + 0);
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
+	if (!data.mDescriptorSets[frameContextIndex]) {
+		data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(Texture(), BINDING_START + 0);
 	}
 
 	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
@@ -47,14 +48,14 @@ void UIImage::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camer
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 	VkPushConstantRange extentRange = shader->mPushConstants.at("Extent");
 	VkPushConstantRange boundsRange = shader->mPushConstants.at("Bounds");
-	VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
+	VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 
 	float2 offset = AbsolutePosition();
 	float2 extent = AbsoluteExtent();
 	float2 bounds = Canvas()->Extent();
 
 	if (mColor.a > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		float4x4 mt = Canvas()->ObjectToWorld();
 		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
@@ -69,7 +70,7 @@ void UIImage::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camer
 	}
 
 	if (mOutline && mOutlineColor.a > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, backBufferIndex, nullptr, camera, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 		float4x4 mt = Canvas()->ObjectToWorld();
 		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);

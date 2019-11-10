@@ -70,36 +70,39 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
+void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
-		d.mDescriptorSets = new DescriptorSet*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mBoundLightBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mPoseBuffers = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
-		d.mVertices = new Buffer*[commandBuffer->Device()->MaxFramesInFlight()];
+		uint32_t c = commandBuffer->Device()->MaxFramesInFlight();
+		d.mDescriptorSets = new DescriptorSet*[c];
+		d.mBoundLightBuffers = new Buffer*[c];
+		d.mPoseBuffers = new Buffer*[c];
+		d.mVertices = new Buffer*[c];
         d.mMesh = nullptr;
-		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mBoundLightBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mPoseBuffers, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
-		memset(d.mVertices, 0, sizeof(Buffer*) * commandBuffer->Device()->MaxFramesInFlight());
+		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * c);
+		memset(d.mBoundLightBuffers, 0, sizeof(Buffer*) * c);
+		memset(d.mPoseBuffers, 0, sizeof(Buffer*) * c);
+		memset(d.mVertices, 0, sizeof(Buffer*) * c);
 	}
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
 	::Mesh* m = Mesh();
     if (data.mMesh != m) {
         data.mMesh = m;
-        safe_delete(data.mVertices[backBufferIndex]);
+        safe_delete(data.mVertices[frameContextIndex]);
     }
 
-    if (!data.mPoseBuffers[backBufferIndex]){
-        data.mPoseBuffers[backBufferIndex] = new Buffer(mName + " PoseBuffer", commandBuffer->Device(), mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        data.mPoseBuffers[backBufferIndex]->Map();
+    if (!data.mPoseBuffers[frameContextIndex]){
+        data.mPoseBuffers[frameContextIndex] = new Buffer(mName + " PoseBuffer", commandBuffer->Device(), mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        data.mPoseBuffers[frameContextIndex]->Map();
     }
-    if (!data.mVertices[backBufferIndex]){
-        data.mVertices[backBufferIndex] = new Buffer(mName + " VertexBuffer", commandBuffer->Device(), m->VertexBuffer(commandBuffer->Device())->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (!data.mVertices[frameContextIndex]){
+        data.mVertices[frameContextIndex] = new Buffer(mName + " VertexBuffer", commandBuffer->Device(), m->VertexBuffer(commandBuffer->Device())->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         VkBufferCopy region = {};
         region.size = m->VertexBuffer(commandBuffer->Device())->Size();
-        vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(commandBuffer->Device()), *data.mVertices[backBufferIndex], 1, &region);
+        vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(commandBuffer->Device()), *data.mVertices[frameContextIndex], 1, &region);
     }
 
     if (!mCopyRig) {
@@ -107,18 +110,18 @@ void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, uint32_t backB
 		if (mRigRoot) rigOffset = mRigRoot->WorldToObject();
 
 		// pose space -> bone space
-		float4x4* skin = (float4x4*)data.mPoseBuffers[backBufferIndex]->MappedData();
+		float4x4* skin = (float4x4*)data.mPoseBuffers[frameContextIndex]->MappedData();
 		for (uint32_t i = 0; i < mRig.size(); i++)
 			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
     }
 }
 
-void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) {
+void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
 	::Material* material = materialOverride ? materialOverride : mMaterial.get();
 	if (!material) return;
 
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, backBufferIndex, m->VertexInput(), camera, m->Topology());
+	VkPipelineLayout layout = commandBuffer->BindMaterial(material, m->VertexInput(), camera, m->Topology());
 	if (!layout) return;
 	auto shader = material->GetShader(commandBuffer->Device());
 
@@ -133,25 +136,27 @@ void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBuffer
 		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
 	}
 
-	if (shader->mDescriptorBindings.count("Lights")) {
-		if (!data.mDescriptorSets[backBufferIndex])
-			data.mDescriptorSets[backBufferIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device()->DescriptorPool(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
-		Buffer* lights = Scene()->LightBuffer(commandBuffer->Device(), backBufferIndex);
-		if (data.mBoundLightBuffers[backBufferIndex] != lights) {
-			data.mDescriptorSets[backBufferIndex]->CreateStorageBufferDescriptor(lights, shader->mDescriptorBindings.at("Lights").second.binding);
-			data.mBoundLightBuffers[backBufferIndex] = lights;
+	if (shader->mDescriptorBindings.count("Lights")) {
+		if (!data.mDescriptorSets[frameContextIndex])
+			data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
+
+		Buffer* lights = Scene()->LightBuffer(commandBuffer->Device(), frameContextIndex);
+		if (data.mBoundLightBuffers[frameContextIndex] != lights) {
+			data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(lights, 0, lights->Size(), shader->mDescriptorBindings.at("Lights").second.binding);
+			data.mBoundLightBuffers[frameContextIndex] = lights;
 		}
 
 		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
-		VkDescriptorSet objds = *data.mDescriptorSets[backBufferIndex];
+		VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	}
 
 	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *data.mVertices[backBufferIndex];
+	VkBuffer vb = *data.mVertices[frameContextIndex];
 	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
 	vkCmdBindIndexBuffer(*commandBuffer, *m->IndexBuffer(commandBuffer->Device()), 0, m->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, 0, 0, 0);
@@ -159,7 +164,7 @@ void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, uint32_t backBuffer
 	commandBuffer->mTriangleCount += m->IndexCount() / 3;
 }
 
-void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
+void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	if (mRig.size()){
 		for (auto b : mRig) {
 			Scene()->Gizmos()->DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));

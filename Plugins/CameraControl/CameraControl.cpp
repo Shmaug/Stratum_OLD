@@ -45,7 +45,7 @@ bool CameraControl::Init(Scene* scene) {
 	return true;
 }
 
-void CameraControl::Update(const FrameTime& frameTime) {
+void CameraControl::Update() {
 	if (mInput->KeyDownFirst(GLFW_KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	
@@ -98,7 +98,7 @@ void CameraControl::Update(const FrameTime& frameTime) {
 		if (Camera* c = dynamic_cast<Camera*>(mCameraPivot->Child(i)))
 			c->LocalPosition(0, 0, -mCameraDistance);
 
-	mFrameTimeAccum += frameTime.mDeltaTime;
+	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
 	if (mFrameTimeAccum > 1.f) {
 		mFps = mFrameCount / mFrameTimeAccum;
@@ -110,6 +110,6 @@ void CameraControl::Update(const FrameTime& frameTime) {
 	}
 }
 
-void CameraControl::PostRender(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) {
+void CameraControl::PostRender(CommandBuffer* commandBuffer, Camera* camera) {
 	mTriangleCount = commandBuffer->mTriangleCount;
 }

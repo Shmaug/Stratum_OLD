@@ -23,8 +23,8 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 	ENGINE_EXPORT virtual void PreRender();
-	ENGINE_EXPORT virtual void ResolveWindow(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
-	ENGINE_EXPORT virtual void Set(CommandBuffer* commandBuffer, uint32_t backBufferIndex);
+	ENGINE_EXPORT virtual void ResolveWindow(CommandBuffer* commandBuffer);
+	ENGINE_EXPORT virtual void Set(CommandBuffer* commandBuffer);
 
 	ENGINE_EXPORT virtual float4 WorldToClip(const float3& worldPos);
 	ENGINE_EXPORT virtual float3 ClipToWorld(const float3& clipPos);
@@ -64,11 +64,11 @@ public:
 	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mMatricesDirty = true; }
 
 	inline virtual ::Framebuffer* Framebuffer() const { return mFramebuffer; }
-	inline virtual Texture* ColorBuffer(uint32_t backBufferIndex) const { return mFramebuffer->ColorBuffer(backBufferIndex, 0); }
-	inline virtual Texture* DepthNormalBuffer(uint32_t backBufferIndex) const { return mRenderDepthNormals ? mFramebuffer->ColorBuffer(backBufferIndex, 1) : nullptr; }
-	inline virtual Texture* DepthBuffer(uint32_t backBufferIndex) const { return mFramebuffer->DepthBuffer(backBufferIndex); }
-	inline virtual Buffer* UniformBuffer(uint32_t backBufferIndex) const { return mFrameData[backBufferIndex].mUniformBuffer; }
-	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(uint32_t backBufferIndex, VkShaderStageFlags stage);
+	inline virtual Texture* ColorBuffer() const { return mFramebuffer->ColorBuffer(0); }
+	inline virtual Texture* DepthNormalBuffer() const { return mRenderDepthNormals ? mFramebuffer->ColorBuffer(1) : nullptr; }
+	inline virtual Texture* DepthBuffer() const { return mFramebuffer->DepthBuffer(); }
+	inline virtual Buffer* UniformBuffer() const { return mUniformBuffer; }
+	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(VkShaderStageFlags stage);
 
 	inline virtual float4x4 View() { UpdateMatrices(); return mView; }
 	inline virtual float4x4 Projection() { UpdateMatrices(); return mProjection; }
@@ -109,13 +109,10 @@ private:
 	::Framebuffer* mFramebuffer;
 	bool mDeleteFramebuffer;
 
-	struct FrameData {
-		Buffer* mUniformBuffer;
-		std::unordered_map<VkShaderStageFlags, std::pair<VkDescriptorSetLayout, ::DescriptorSet*>> mDescriptorSets;
-	};
-	FrameData* mFrameData;
+	Buffer* mUniformBuffer;
+	std::vector<std::unordered_map<VkShaderStageFlags, ::DescriptorSet*>> mDescriptorSets;
 
-	ENGINE_EXPORT void CreateDescriptorSet();
+	void CreateDescriptorSet();
 
 protected:
 	ENGINE_EXPORT virtual void Dirty();
