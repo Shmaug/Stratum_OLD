@@ -15,7 +15,15 @@ public:
 	public:
 		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is 'done'
 		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
+		
+		std::vector<Buffer*> mTempBuffers;
+		std::unordered_map<VkDescriptorSetLayout, std::queue<DescriptorSet*>> mTempDescriptorSets;
+
+		std::vector<Buffer*> mTempBuffersInUse;
+		std::vector<DescriptorSet*> mTempDescriptorSetsInUse;
+
 		inline FrameContext() : mFences({}), mSemaphores({}) {};
+		ENGINE_EXPORT ~FrameContext();
 		ENGINE_EXPORT void Reset();
 	};
 

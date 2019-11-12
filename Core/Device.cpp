@@ -7,6 +7,31 @@
 
 using namespace std;
 
+void Device::FrameContext::Reset() {
+	for (auto f : mFences)
+		f->Wait();
+	mFences.clear();
+	mSemaphores.clear();
+
+	for (Buffer* b : mTempBuffersInUse)
+		mTempBuffers.push_back(b);
+	for (DescriptorSet* ds : mTempDescriptorSetsInUse)
+		mTempDescriptorSets[ds->Layout()].push(ds);
+
+	mTempBuffersInUse.clear();
+	mTempDescriptorSetsInUse.clear();
+}
+Device::FrameContext::~FrameContext() {
+	Reset();
+	for (Buffer* b : mTempBuffers)
+		safe_delete(b);
+	for (auto kp : mTempDescriptorSets)
+		while (kp.second.size()) {
+			safe_delete(kp.second.front());
+			kp.second.pop();
+		}
+}
+
 bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily) {
 	uint32_t queueFamilyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
@@ -35,13 +60,6 @@ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, ui
 	}
 
 	return g && p;
-}
-
-void Device::FrameContext::Reset() {
-	for (auto f : mFences)
-		f->Wait();
-	mFences.clear();
-	mSemaphores.clear();
 }
 
 Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, vector<const char*> deviceExtensions, vector<const char*> validationLayers)
@@ -253,13 +271,40 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 }
 
 Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
-	// TODO: cache these!!!
-	Buffer* b = new Buffer(name, this, size, usage, properties);
-	if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-		b->Map();
+	FrameContext* frame = CurrentFrameContext();
+
+	vector<Buffer*>::iterator closest = frame->mTempBuffers.end();
+	for (auto it = frame->mTempBuffers.begin(); it != frame->mTempBuffers.end(); it++) {
+		if ((*it)->Size() >= size) {
+			if (closest == frame->mTempBuffers.end() || (*it)->Size() < (*closest)->Size())
+				closest = it;
+			if ((*closest)->Size() == size) break;
+		}
+	}
+
+	Buffer* b;
+	if (closest != frame->mTempBuffers.end()) {
+		b = *closest;
+		frame->mTempBuffers.erase(closest);
+	} else {
+		b = new Buffer(name, this, size, usage, properties);
+		if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) b->Map();
+	}
+	frame->mTempBuffersInUse.push_back(b);
 	return b;
 }
 DescriptorSet* Device::GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout) {
-	// TODO: cache these!!!
-	return new DescriptorSet(name, this, layout);
+	FrameContext* frame = CurrentFrameContext();
+
+	queue<DescriptorSet*>& sets = frame->mTempDescriptorSets[layout];
+
+	DescriptorSet* ds;
+	if (sets.size()) {
+		ds = sets.front();
+		sets.pop();
+	} else
+		ds = new DescriptorSet(name, this, layout);
+
+	frame->mTempDescriptorSetsInUse.push_back(ds);
+	return ds;
 }
