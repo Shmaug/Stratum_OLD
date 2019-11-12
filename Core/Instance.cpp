@@ -1,6 +1,7 @@
 #include <Core/Instance.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
+#include <Util/Profiler.hpp>
 
 using namespace std;
 
@@ -8,13 +9,11 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mGLFWInitialized(false), mFram
 Instance::~Instance() {
 	if (mGLFWInitialized) glfwTerminate();
 
-	for (auto& w : mWindows)
+	for (Window* w : mWindows)
 		safe_delete(w);
 
-	for (auto& d : mDevices) {
-		d->FlushCommandBuffers();
+	for (Device* d : mDevices)
 		safe_delete(d);
-	}
 
 	vkDestroyInstance(mInstance, nullptr);
 }
@@ -199,13 +198,16 @@ bool Instance::PollEvents() {
 }
 
 void Instance::AdvanceFrame() {
+
 	for (Window* w : mWindows)
 		// will wait on the semaphores signalled by the frame mMaxFramesInFlight ago
 		w->Present();
 
 	mFrameCount++;
+	PROFILER_BEGIN("Wait for GPU");
 	for (uint32_t i = 0; i < mDevices.size(); i++) {
 		mDevices[i]->mFrameContextIndex = mFrameCount % mMaxFramesInFlight;
 		mDevices[i]->CurrentFrameContext()->Reset();
 	}
+	PROFILER_END;
 }

@@ -45,7 +45,7 @@ public:
 
 	ENGINE_EXPORT std::shared_ptr<CommandBuffer> GetCommandBuffer(const std::string& name = "Command Buffer");
 	ENGINE_EXPORT std::shared_ptr<Fence> Execute(std::shared_ptr<CommandBuffer> commandBuffer, bool frameContext = true);
-	ENGINE_EXPORT void FlushCommandBuffers();
+	ENGINE_EXPORT void FlushFrames();
 
 	ENGINE_EXPORT VkSampleCountFlagBits GetMaxUsableSampleCount();
 

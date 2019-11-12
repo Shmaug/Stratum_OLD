@@ -69,8 +69,7 @@ private:
 	struct FrameData {
 		VkImage mSwapchainImage;
 		VkImageView mSwapchainImageView;
-		Device::FrameContext* mFrameContext;
-		inline FrameData() : mSwapchainImage(VK_NULL_HANDLE), mSwapchainImageView(VK_NULL_HANDLE), mFrameContext(nullptr) {};
+		inline FrameData() : mSwapchainImage(VK_NULL_HANDLE), mSwapchainImageView(VK_NULL_HANDLE) {};
 	};
 	FrameData* mFrameData;
 

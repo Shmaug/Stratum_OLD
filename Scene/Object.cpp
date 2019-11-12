@@ -19,7 +19,7 @@ Object::~Object() {
 bool Object::UpdateTransform() {
 	if (!mTransformDirty) return false;
 
-	mObjectToParent = float4x4::Translate(mLocalPosition) * float4x4(mLocalRotation) * float4x4::Scale(mLocalScale);
+	mObjectToParent = float4x4::TRS(mLocalPosition, mLocalRotation, mLocalScale);
 
 	if (mParent) {
 		mObjectToWorld = mParent->ObjectToWorld() * mObjectToParent;
@@ -85,13 +85,6 @@ void Object::Dirty() {
 			if (o == this) cerr << "Loop in heirarchy! " << c->mName << " -> " << mName << endl;
 			else objs.push(o);
 	}
-	
-	mHierarchyBoundsDirty = true;
-	Object* p = mParent;
-	while (p) {
-		p->mHierarchyBoundsDirty = true;
-		p = p->mParent;
-	}
 }
 
 AABB Object::Bounds() {
@@ -99,18 +92,6 @@ AABB Object::Bounds() {
 	return mBounds;
 }
 
-AABB Object::BoundsHierarchy() {
-	if (mHierarchyBoundsDirty) {
-		mHierarchyBounds = Bounds();
-		for (Object* c : mChildren){
-			AABB tmp = c->BoundsHierarchy();
-			if (tmp.mExtents.x != 0 || tmp.mExtents.y != 0 || tmp.mExtents.z != 0)
-				mHierarchyBounds.Encapsulate(tmp);
-		}
-		mHierarchyBoundsDirty = false;
-	}
-	return mHierarchyBounds;
-}
 bool Object::EnabledHierarchy() {
 	Object* o = this;
 	while (o) {

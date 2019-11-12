@@ -1328,24 +1328,19 @@ struct float4x4 {
 		0, 0, 0, s) {};
 	inline float4x4() : float4x4(1) {};
 	inline float4x4(const quaternion& q) : float4x4(1) {
-		float qxx = q.x * q.x;
-		float qyy = q.y * q.y;
-		float qzz = q.z * q.z;
-		float qxz = q.x * q.z;
-		float qxy = q.x * q.y;
-		float qyz = q.y * q.z;
-		float qwx = q.w * q.x;
-		float qwy = q.w * q.y;
-		float qwz = q.w * q.z;
-		v[0][0] = 1 - 2 * (qyy + qzz);
-		v[0][1] = 2 * (qxy + qwz);
-		v[0][2] = 2 * (qxz - qwy);
-		v[1][0] = 2 * (qxy - qwz);
-		v[1][1] = 1 - 2 * (qxx + qzz);
-		v[1][2] = 2 * (qyz + qwx);
-		v[2][0] = 2 * (qxz + qwy);
-		v[2][1] = 2 * (qyz - qwx);
-		v[2][2] = 1 - 2 * (qxx + qyy);
+		float3 q2 = q.xyz * q.xyz;
+		float3 qw = q.xyz * q.w;
+		float3 c = float3(q.x, q.x, q.y) * float3(q.z, q.y, q.z);
+
+		v[0][0] = 1 - 2 * (q2.y + q2.z);
+		v[0][1] = 2 * (c.y + qw.z);
+		v[0][2] = 2 * (c.x - qw.y);
+		v[1][0] = 2 * (c.y - qw.z);
+		v[1][1] = 1 - 2 * (q2.x + q2.z);
+		v[1][2] = 2 * (c.z + qw.x);
+		v[2][0] = 2 * (c.x + qw.y);
+		v[2][1] = 2 * (c.z - qw.x);
+		v[2][2] = 1 - 2 * (q2.x + q2.y);
 	}
 
 	inline static float4x4 Look(const float3& p, const float3& fwd, const float3& up) {
@@ -1398,6 +1393,13 @@ struct float4x4 {
 	}
 	inline static float4x4 Scale(const float3& p) {
 		return float4x4(float4(p[0], 0, 0, 0), float4(0, p[1], 0, 0), float4(0, 0, p[2], 0), float4(0, 0, 0, 1));
+	}
+
+	inline static float4x4 TRS(const float3& t, const quaternion& r, const float3& s) {
+		float4x4 rm(r);
+		rpt3(i) rm.v[i] *= s.v[i];
+		rm.v[3].xyz = t;
+		return rm;
 	}
 
 	inline float4& operator[](int i) {
