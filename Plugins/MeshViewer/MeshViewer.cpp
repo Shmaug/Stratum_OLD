@@ -367,9 +367,9 @@ Object* MeshViewer::LoadScene(fs::path path, float scale) {
 			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
 	}
 
-	AABB aabb = root->BoundsHierarchy();
+	AABB aabb = root->Bounds();
 	root->LocalScale(.5f / fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z));
-	aabb = root->BoundsHierarchy();
+	aabb = root->Bounds();
 	float3 offset = root->WorldPosition() - aabb.mCenter;
 	offset.y += aabb.mExtents.y;
 	root->LocalPosition(offset);

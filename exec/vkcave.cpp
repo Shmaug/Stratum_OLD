@@ -201,7 +201,7 @@ public:
 			if (failed) {
 				// flush all command buffers to make re-initialization cleaner
 				for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
-					mInstance->GetDevice(i)->FlushCommandBuffers();
+					mInstance->GetDevice(i)->FlushFrames();
 				continue;
 			}
 			PROFILER_END;
@@ -220,7 +220,7 @@ public:
 		}
 
 		for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
-			mInstance->GetDevice(i)->FlushCommandBuffers();
+			mInstance->GetDevice(i)->FlushFrames();
 
 		mPluginManager->UnloadPlugins();
 

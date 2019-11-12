@@ -109,6 +109,7 @@ private:
 	::Framebuffer* mFramebuffer;
 	bool mDeleteFramebuffer;
 
+	void** mUniformBufferPtrs;
 	Buffer* mUniformBuffer;
 	std::vector<std::unordered_map<VkShaderStageFlags, ::DescriptorSet*>> mDescriptorSets;
 

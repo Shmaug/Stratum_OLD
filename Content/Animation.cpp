@@ -13,7 +13,7 @@ BoneTransform BoneTransform::operator*(const BoneTransform& rhs) const {
 	return t;
 }
 float4x4 BoneTransform::ToMatrix() const {
-	return float4x4::Translate(mPosition) * float4x4(mRotation) * float4x4::Scale(mScale);
+	return float4x4::TRS(mPosition, mRotation, mScale);
 }
 
 BoneTransform BoneTransform::Inverse() const {

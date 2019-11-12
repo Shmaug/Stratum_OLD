@@ -148,7 +148,8 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	#pragma endregion
 }
 Device::~Device() {
-	FlushCommandBuffers();
+	FlushFrames();
+	mFrameContexts.clear();
 	vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
 	vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
 	for (auto& p : mCommandBuffers)
@@ -171,7 +172,7 @@ VkSampleCountFlagBits Device::GetMaxUsableSampleCount() {
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
-void Device::FlushCommandBuffers() {
+void Device::FlushFrames() {
 	lock_guard lock(mCommandPoolMutex);
 	for (auto& p : mCommandBuffers) {
 		while (p.second.size()) {
@@ -179,6 +180,8 @@ void Device::FlushCommandBuffers() {
 			p.second.pop();
 		}
 	}
+	for (FrameContext& frame : mFrameContexts)
+		frame.Reset();
 }
 
 void Device::SetObjectName(void* object, const string& name, VkObjectType type) const {

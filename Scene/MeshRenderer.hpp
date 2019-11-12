@@ -25,7 +25,7 @@ public:
 	inline virtual void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }
 	inline virtual ::Mesh* Mesh() const { return mMesh.index() == 0 ? std::get<::Mesh*>(mMesh) : std::get<std::shared_ptr<::Mesh>>(mMesh).get(); }
 
-	inline virtual std::shared_ptr<::Material> Material() const { return mMaterial; }
+	inline virtual ::Material* Material() { return mMaterial.get(); }
 	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }

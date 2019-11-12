@@ -124,13 +124,7 @@ VkImage Window::AcquireNextImage() {
 
 	if (mFrameData == nullptr) return VK_NULL_HANDLE;
 
-	PROFILER_BEGIN("Wait for GPU");
-	if (mFrameData[mCurrentBackBufferIndex].mFrameContext)
-		for (const auto& f : mFrameData[mCurrentBackBufferIndex].mFrameContext->mFences)
-			f->Wait();
-	PROFILER_END;
 	mDevice->CurrentFrameContext()->mSemaphores.push_back(mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]);
-	mFrameData[mCurrentBackBufferIndex].mFrameContext = mDevice->CurrentFrameContext();
 
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain was destroyed during CreateSwapchain (happens when window is minimized)
 	return mFrameData[mCurrentBackBufferIndex].mSwapchainImage;
@@ -141,7 +135,7 @@ void Window::Present() {
 
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
 	vector<VkSemaphore> waitSemaphores;
-	for (const shared_ptr<Semaphore>& s : mFrameData[frameContextIndex].mFrameContext->mSemaphores)
+	for (const shared_ptr<Semaphore>& s : mDevice->CurrentFrameContext()->mSemaphores)
 		waitSemaphores.push_back(*s);
 
 	VkPresentInfoKHR presentInfo = {};
@@ -152,8 +146,6 @@ void Window::Present() {
 	presentInfo.pSwapchains = &mSwapchain;
 	presentInfo.pImageIndices = &mCurrentBackBufferIndex;
 	vkQueuePresentKHR(mDevice->PresentQueue(), &presentInfo);
-
-	mFrameData[mCurrentBackBufferIndex].mFrameContext = mDevice->CurrentFrameContext();
 }
 
 GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
@@ -369,11 +361,8 @@ void Window::CreateSwapchain(::Device* device) {
 }
 
 void Window::DestroySwapchain() {
-	mDevice->FlushCommandBuffers();
+	mDevice->FlushFrames();
 	for (uint32_t i = 0; i < mImageCount; i++) {
-		for (const auto& f : mFrameData[i].mFrameContext->mFences)
-			f->Wait();
-
 		if (mFrameData[i].mSwapchainImageView != VK_NULL_HANDLE)
 			vkDestroyImageView(*mDevice, mFrameData[i].mSwapchainImageView, nullptr);
 		mFrameData[i].mSwapchainImageView = VK_NULL_HANDLE;

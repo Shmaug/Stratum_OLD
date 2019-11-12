@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define INSTANCE_BATCH_SIZE 1024
+#define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 1024
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
@@ -237,7 +237,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, Material* mater
 			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
 				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
 					if (ma->Mesh() == mb->Mesh())
-						return ma->Material().get() < mb->Material().get();
+						return ma->Material() < mb->Material();
 					else
 						return ma->Mesh() < mb->Mesh();
 		return a->RenderQueue() < b->RenderQueue();
@@ -263,7 +263,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, Material* mater
 	
 	DescriptorSet* batchDS = nullptr;
 	Buffer* batchBuffer = nullptr;
-
+	ObjectBuffer* curBatch = nullptr;
 	MeshRenderer* batchStart = nullptr;
 	uint32_t batchSize = 0;
 
@@ -288,6 +288,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, Material* mater
 					
 					batchBuffer = commandBuffer->Device()->GetTempBuffer("Instance Batch", sizeof(ObjectBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 					batchDS = commandBuffer->Device()->GetTempDescriptorSet("Instance Batch", curShader->mDescriptorSetLayouts[PER_OBJECT]);
+					curBatch = (ObjectBuffer*)batchBuffer->MappedData();
 					uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), OBJECT_BUFFER_BINDING);
 					if (curShader->mDescriptorBindings.count("Lights"))
@@ -298,8 +299,8 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, Material* mater
 						batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->ColorBuffer(0), SHADOW_ATLAS_BINDING);
 				}
 				// append to batch
-				((ObjectBuffer*)batchBuffer->MappedData())[batchSize].ObjectToWorld = cur->ObjectToWorld();
-				((ObjectBuffer*)batchBuffer->MappedData())[batchSize].WorldToObject = cur->WorldToObject();
+				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
+				curBatch[batchSize].WorldToObject = cur->WorldToObject();
 				batchSize++;
 				batched = true;
 			}
@@ -364,12 +365,9 @@ Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
 	Collider* closest = nullptr;
 	hitT = -1.f;
 
-	queue<Object*> nodes;
-	for (const auto& o : mObjects) nodes.push(o.get());
-	while (!nodes.empty()){
-		Object* n = nodes.front(); nodes.pop();
-		if (n->mEnabled && ray.Intersect(n->BoundsHierarchy()).x > 0) {
-			if (Collider* c = dynamic_cast<Collider*>(n)) {
+	for (const shared_ptr<Object>& n : mObjects) {
+		if (n->EnabledHierarchy()) {
+			if (Collider* c = dynamic_cast<Collider*>(n.get())) {
 				if ((c->CollisionMask() & mask) != 0) {
 					float t = ray.Intersect(c->ColliderBounds()).x;
 					if (t > 0 && (t < hitT || closest == nullptr)) {
@@ -378,8 +376,6 @@ Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
 					}
 				}
 			}
-			for (Object* c : n->mChildren)
-				nodes.push(c);
 		}
 	}
 

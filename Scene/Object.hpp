@@ -44,7 +44,6 @@ public:
 	inline virtual void LocalScale(float x) { mLocalScale.x = x; mLocalScale.y = x; mLocalScale.z = x; Dirty(); }
 
 	ENGINE_EXPORT virtual AABB Bounds();
-	ENGINE_EXPORT virtual AABB BoundsHierarchy();
 
 	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
 	
@@ -54,9 +53,6 @@ private:
 	friend class ::Scene;
 	::Scene* mScene;
 
-	bool mHierarchyBoundsDirty;
-	AABB mHierarchyBounds;
-	
 	bool mTransformDirty;
 	float3 mLocalPosition;
 	quaternion mLocalRotation;

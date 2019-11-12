@@ -22,9 +22,8 @@ void Camera::CreateDescriptorSet() {
 	};
 
 	uint32_t c = mDevice->MaxFramesInFlight();
-
 	VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), mDevice->Limits().minUniformBufferOffsetAlignment);
-
+	mUniformBufferPtrs = new void*[c];
 	mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, bufSize * c, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	mUniformBuffer->Map();
 	mDescriptorSets.resize(c);
@@ -39,6 +38,8 @@ void Camera::CreateDescriptorSet() {
 			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice, layout);
 			ds->CreateUniformBufferDescriptor(mUniformBuffer, bufSize * i, bufSize, CAMERA_BUFFER_BINDING);
 			mDescriptorSets[i].emplace(s, ds);
+
+			mUniformBufferPtrs[i] = (uint8_t*)mUniformBuffer->MappedData() + bufSize * i;
 		}
 	}
 
@@ -109,6 +110,7 @@ Camera::~Camera() {
 			vkDestroyDescriptorSetLayout(*mDevice, s.second->Layout(), nullptr);
 			safe_delete(s.second);
 		}
+	safe_delete_array(mUniformBufferPtrs);
 	safe_delete(mUniformBuffer);
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
 }
@@ -218,7 +220,7 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer){
 }
 void Camera::Set(CommandBuffer* commandBuffer) {
 	UpdateMatrices();
-	CameraBuffer& buf = ((CameraBuffer*)mUniformBuffer->MappedData())[commandBuffer->Device()->FrameContextIndex()];
+	CameraBuffer& buf = *(CameraBuffer*)mUniformBufferPtrs[commandBuffer->Device()->FrameContextIndex()];
 	buf.View = mView;
 	buf.Projection = mProjection;
 	buf.ViewProjection = mViewProjection;
@@ -297,9 +299,10 @@ void Camera::Dirty() {
 }
 bool Camera::IntersectFrustum(const AABB& aabb) {
 	UpdateMatrices();
-	float r = length(aabb.mExtents);
-	for (uint32_t i = 0; i < 6; i++)
-		if (dot(mFrustum[i].xyz, aabb.mCenter - mFrustum[i].xyz * mFrustum[i].w) < -r)
-			return false;
+	for (uint32_t i = 0; i < 6; i++) {
+		float r = dot(aabb.mExtents, abs(mFrustum[i].xyz));
+		float d = dot(aabb.mCenter, mFrustum[i].xyz) - mFrustum[i].w;
+		if (d <= -r) return false;
+	}
 	return true;
 }
