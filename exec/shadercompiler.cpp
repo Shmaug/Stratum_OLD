@@ -215,6 +215,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 	return false;
 }
 
+
 VkCompareOp atocmp(const string& str) {
 	if (str == "less")		return VK_COMPARE_OP_LESS;
 	if (str == "greater")	return VK_COMPARE_OP_GREATER;
@@ -234,6 +235,34 @@ VkColorComponentFlags atomask(const string& str) {
 	if (str.find("a") != string::npos) mask |= VK_COLOR_COMPONENT_A_BIT;
 	return mask;
 }
+VkFilter atofilter(const string& str) {
+	if (str == "nearest") return VK_FILTER_NEAREST;
+	if (str == "linear")  return VK_FILTER_LINEAR;
+	if (str == "cubic")   return VK_FILTER_CUBIC_IMG;
+	return VK_FILTER_MAX_ENUM;
+}
+VkSamplerAddressMode atoaddressmode(const string& str) {
+	if (str == "repeat")		    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	if (str == "mirrored_repeat")   return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	if (str == "clamp_edge")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	if (str == "clamp_border")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	if (str == "mirror_clamp_edge") return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+	return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
+}
+VkBorderColor atobordercolor(const string& str) {
+	if (str == "float_transparent_black") return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+	if (str == "int_transparent_black")	  return VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+	if (str == "float_opaque_black")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+	if (str == "int_opaque_black")		  return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	if (str == "float_opaque_white")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	if (str == "int_opaque_white")		  return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+	return VK_BORDER_COLOR_MAX_ENUM;
+}
+VkSamplerMipmapMode atomipmapmode(const string& str) {
+	if (str == "nearest") return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	if (str == "linear") return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	return VK_SAMPLER_MIPMAP_MODE_MAX_ENUM;
+}
 
 bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
 	string source;
@@ -244,7 +273,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 
 	unordered_map<shaderc_shader_kind, string> stages;
 	vector<string> kernels;
-	vector<string> staticSamplers;
+	vector<pair<string, VkSamplerCreateInfo>> staticSamplers;
 	vector<pair<string, uint32_t>> arrays; // name, size
 
 	uint32_t renderQueue = 1000;
@@ -363,7 +392,54 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 
 				} else if (*it == "static_sampler") {
 					if (++it == words.end()) return false;
-					staticSamplers.push_back(*it);
+					string name = *it;
+
+					VkSamplerCreateInfo samplerInfo = {};
+					samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+					samplerInfo.magFilter = VK_FILTER_LINEAR;
+					samplerInfo.minFilter = VK_FILTER_LINEAR;
+					samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					samplerInfo.anisotropyEnable = VK_TRUE;
+					samplerInfo.maxAnisotropy = 2;
+					samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+					samplerInfo.unnormalizedCoordinates = VK_FALSE;
+					samplerInfo.compareEnable = VK_FALSE;
+					samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+					samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+					samplerInfo.minLod = 0;
+					samplerInfo.maxLod = 12;
+					samplerInfo.mipLodBias = 0;
+
+					while (++it != words.end()) {
+						size_t eq = it->find('=');
+						if (eq == string::npos) continue;
+						string id = it->substr(0, eq);
+						string val = it->substr(eq + 1);
+						if (id == "magFilter")		    samplerInfo.magFilter = atofilter(val);
+						else if (id == "minFilter")		samplerInfo.minFilter = atofilter(val);
+						else if (id == "addressModeU")	samplerInfo.addressModeU = atoaddressmode(val);
+						else if (id == "addressModeV")	samplerInfo.addressModeV = atoaddressmode(val);
+						else if (id == "addressModeW")	samplerInfo.addressModeW = atoaddressmode(val);
+						else if (id == "addressMode")	samplerInfo.addressModeU = samplerInfo.addressModeV = samplerInfo.addressModeW = atoaddressmode(val);
+						else if (id == "maxAnisotropy") {
+							float aniso = (float)atof(val.c_str());
+							samplerInfo.anisotropyEnable = aniso <= 0 ? VK_FALSE : VK_TRUE;
+							samplerInfo.maxAnisotropy = aniso;
+						} else if (id == "borderColor")				samplerInfo.borderColor = atobordercolor(val);
+						else if (id == "unnormalizedCoordinates")	samplerInfo.unnormalizedCoordinates = val == "true" ? VK_TRUE : VK_FALSE;
+						else if (id == "compareOp") {
+							VkCompareOp cmp = atocmp(val);
+							samplerInfo.compareEnable = cmp == VK_COMPARE_OP_MAX_ENUM ? VK_FALSE : VK_TRUE;
+							samplerInfo.compareOp = cmp;
+						} else if (id == "mipmapMode") samplerInfo.mipmapMode = atomipmapmode(val);
+						else if (id == "minLod") samplerInfo.minLod = (float)atof(val.c_str());
+						else if (id == "maxLod") samplerInfo.maxLod = (float)atof(val.c_str());
+						else if (id == "mipLodBias") samplerInfo.mipLodBias = (float)atof(val.c_str());
+					}
+
+					staticSamplers.push_back(make_pair(name, samplerInfo));
 
 				} else if (*it == "array") {
 					if (++it == words.end()) return false;
@@ -399,10 +475,12 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 			output.write(reinterpret_cast<const char*>(&bc), sizeof(uint32_t));
 			for (const auto& b : descriptorBindings) {
 				uint32_t descriptorCount = b.second.second.descriptorCount;
+				VkSamplerCreateInfo samplerInfo;
 				uint32_t static_sampler = 0;
-				for (const string& s : staticSamplers)
-					if (s == b.first) {
+				for (const auto& s : staticSamplers)
+					if (s.first == b.first) {
 						static_sampler = 1;
+						samplerInfo = s.second;
 						break;
 					}
 				for (const auto& s : arrays)
@@ -420,6 +498,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 				output.write(reinterpret_cast<const char*>(&b.second.second.descriptorType), sizeof(uint32_t));
 				output.write(reinterpret_cast<const char*>(&b.second.second.stageFlags), sizeof(VkShaderStageFlagBits));
 				output.write(reinterpret_cast<const char*>(&static_sampler), sizeof(uint32_t));
+				if (static_sampler) output.write(reinterpret_cast<const char*>(&samplerInfo), sizeof(VkSamplerCreateInfo));
 			}
 
 			bc = (uint32_t)pushConstants.size();

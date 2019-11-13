@@ -37,16 +37,15 @@ struct CameraBuffer {
 };
 
 struct GPULight {
+	int4 ShadowIndex;
+	float4 CascadeSplits;
 	float3 WorldPosition;
 	float InvSqrRange;
 	float3 Direction;
 	float SpotAngleScale;
 	float3 Color;
 	float SpotAngleOffset;
-	int ShadowIndex;
 	uint Type;
-	uint pad1;
-	uint pad2;
 };
 
 struct ShadowData {

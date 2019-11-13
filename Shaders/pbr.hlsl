@@ -11,6 +11,7 @@
 #pragma render_queue 1000
 
 #pragma static_sampler Sampler
+#pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=greater
 
 #include <shadercompat.h>
 #include "brdf.hlsli"
@@ -18,7 +19,7 @@
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Instances : register(t0);
 [[vk::binding(LIGHT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t1);
-[[vk::binding(SHADOW_ATLAS_BINDING, PER_OBJECT)]] Texture2D<float4> ShadowAtlas : register(t2);
+[[vk::binding(SHADOW_ATLAS_BINDING, PER_OBJECT)]] Texture2D<float> ShadowAtlas : register(t2);
 [[vk::binding(SHADOW_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ShadowData> Shadows : register(t3);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
@@ -31,6 +32,7 @@
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t9);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t10);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 8, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -38,6 +40,7 @@
 	float Roughness;
 	float EnvironmentStrength;
 	uint LightCount;
+	float2 ShadowTexelSize;
 #ifdef NORMAL_MAP
 	float BumpStrength;
 #endif
@@ -59,34 +62,58 @@ struct v2f {
 #endif
 };
 
-float LightAttenuation(uint l, float3 worldPos, float3 normal, out float3 L) {
-	L = Lights[l].Direction;
+float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out float3 L) {
+	GPULight l = Lights[li];
+	L = l.Direction;
 	float attenuation = 1;
 
-	if (Lights[l].ShadowIndex >= 0) {
-		ShadowData s = Shadows[Lights[l].ShadowIndex];
-		float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + normal * .001, 1));
+	int si = -1;
+	if (depth < l.CascadeSplits[3]) si = l.ShadowIndex[3];
+	if (depth < l.CascadeSplits[2]) si = l.ShadowIndex[2];
+	if (depth < l.CascadeSplits[1]) si = l.ShadowIndex[1];
+	if (depth < l.CascadeSplits[0]) si = l.ShadowIndex[0];
+
+	if (si >= 0) {
+		ShadowData s = Shadows[si];
+
+		float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + normal * .005, 1));
 
 		float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
+		z *= s.Proj.y;
+		z -= .001;
+
 		shadowPos /= shadowPos.w;
-		if (shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1 && z > 0 && z < s.Proj.w) {
-			shadowPos.y = -shadowPos.y;
+
+		if (z > 0 && z < 1 && shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1) {
 			float2 shadowUV = shadowPos.xy * .5 + .5;
-			float sz = ShadowAtlas.Sample(Sampler, shadowUV * s.ShadowST.xy + s.ShadowST.zw).r * s.Proj.w;
-			if (z > sz) return 0;
+			shadowUV = shadowUV * s.ShadowST.xy + s.ShadowST.zw;
+
+			float shadow = 0;
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV, z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + ShadowTexelSize, z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV - ShadowTexelSize, z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x,  ShadowTexelSize.y), z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2( ShadowTexelSize.x, -ShadowTexelSize.y), z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2( ShadowTexelSize.x, 0), z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, 0), z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0,  ShadowTexelSize.y), z);
+			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, -ShadowTexelSize.y), z);
+			shadow *= 1.0 / 9.0;
+
+			attenuation = 1 - shadow;
 		}
 	}
 
-	if (Lights[l].Type > LIGHT_SUN) {
-		L = Lights[l].WorldPosition - worldPos;
+	if (l.Type > LIGHT_SUN) {
+		L = l.WorldPosition - worldPos;
 		float d2 = dot(L, L);
 		L /= sqrt(d2);
 		attenuation *= 1 / max(d2, .0001);
-		float f = d2 * Lights[l].InvSqrRange;
+		float f = d2 * l.InvSqrRange;
 		f = saturate(1 - f * f);
 		attenuation *= f * f;
-		if (Lights[l].Type == LIGHT_SPOT) {
-			float a = saturate(dot(L, Lights[l].Direction) * Lights[l].SpotAngleScale + Lights[l].SpotAngleOffset);
+		if (l.Type == LIGHT_SPOT) {
+			float a = saturate(dot(L, l.Direction) * l.SpotAngleScale + l.SpotAngleOffset);
 			attenuation *= a * a;
 		}
 	}
@@ -144,6 +171,7 @@ void fsmain(v2f i,
 		view = normalize(Camera.Position - i.worldPos);
 		depth = i.screenPos.w;
 	}
+	depth /= Camera.Viewport.w;
 
 	float3 normal = normalize(i.normal);
 	#ifdef TWO_SIDED
@@ -175,9 +203,9 @@ void fsmain(v2f i,
 
 	for (uint l = 0; l < LightCount; l++) {
 		float3 L;
-		float attenuation = LightAttenuation(l, i.worldPos, normal, L);
+		float attenuation = LightAttenuation(l, i.worldPos, normal, depth, L);
 		if (attenuation > 0.001)
-			eval += attenuation * Lights[l].Color * BRDF(material, L, normal, view);
+			eval += attenuation * Lights[l].Color* BRDF(material, L, normal, view);
 	}
 
 	float3 reflection = normalize(reflect(-view, normal));
@@ -198,5 +226,5 @@ void fsmain(v2f i,
 	#endif
 
 	color = float4(eval, 1);
-	depthNormal = float4(normal * .5 + .5, depth / Camera.Viewport.w);
+	depthNormal = float4(normal * .5 + .5, depth);
 }

@@ -18,6 +18,11 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 		memset(mColorBuffers[i].data(), 0, sizeof(Texture*) * colorFormats.size());
 	}
 
+	mClearValues.resize(mColorFormats.size() + 1);
+	for (uint32_t i = 0; i < mColorFormats.size(); i++)
+		mClearValues[i] = { .0f, .0f, .0f, 0.f };
+	mClearValues[mColorFormats.size()] = { 1.f, 0.f };
+
 	vector<VkAttachmentReference> colorAttachments(colorFormats.size());
 	vector<VkAttachmentDescription> attachments(colorFormats.size() + 1);
 	for (uint32_t i = 0; i < colorFormats.size(); i++) {
@@ -112,10 +117,6 @@ void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
 			mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 		mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
 	}
-	vector<VkClearValue> clearValues(mColorFormats.size() + 1);
-	for (uint32_t i = 0; i < mColorFormats.size(); i++)
-		clearValues[i] = { .0f, .0f, .0f, 0.f };
-	clearValues[mColorFormats.size()] = { 1.f, 0.f };
 
-	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], clearValues.data(), (uint32_t)clearValues.size());
+	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], mClearValues.data(), (uint32_t)mClearValues.size());
 }
