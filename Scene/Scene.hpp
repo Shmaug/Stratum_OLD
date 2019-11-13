@@ -38,6 +38,8 @@ public:
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
+	inline float2 ShadowTexelSize() const { return mShadowTexelSize; }
+
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
@@ -49,6 +51,9 @@ public:
 private:
 	friend class VkCAVE;
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
+
+	float2 mShadowTexelSize;
+	float4 mCascadeSplits;
 
 	struct DeviceData {
 		Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete

@@ -7,11 +7,14 @@ using namespace std;
 
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 1024
+#define SHADOW_ATLAS_RESOLUTION 8192
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
 	mGizmos = new ::Gizmos(this);
 	mShadowMaterial = make_shared<Material>("Shadow", mAssetManager->LoadShader("Shaders/shadow.shader"));
+	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
+	mCascadeSplits = float4(.077f, 1.f, 1.f, 1.f);// .203, .472f, 1.f);
 }
 Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
@@ -122,8 +125,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	
 	if (mDeviceData.count(device) == 0) {
 		DeviceData& data = mDeviceData[device];
-		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, 8192, 8192, { VK_FORMAT_R8G8B8A8_UNORM }, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
+		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, { VK_FORMAT_R32_SFLOAT }, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
 		data.mShadowAtlasFramebuffer->BufferUsage(data.mShadowAtlasFramebuffer->BufferUsage() | VK_IMAGE_USAGE_SAMPLED_BIT);
+		data.mShadowAtlasFramebuffer->ClearValue(0, { 1.f, 1.f, 1.f, 1.f });
 		uint32_t c = device->MaxFramesInFlight();
 		data.mLightBuffers = new Buffer*[c];
 		data.mShadowBuffers = new Buffer*[c];
@@ -139,11 +143,41 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	mActiveLights.clear();
 	if (mLights.size()) {
 		DeviceData& data = mDeviceData.at(device);
-		uint32_t si = 0;
 		uint32_t li = 0;
 		uint32_t frameContextIndex = device->FrameContextIndex();
 		GPULight* lights = (GPULight*)data.mLightBuffers[frameContextIndex]->MappedData();
 		ShadowData* shadows = (ShadowData*)data.mShadowBuffers[frameContextIndex]->MappedData();
+
+		uint32_t si = 0;
+		auto AddShadowCamera = [&](bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far) {
+			if (data.mShadowCameras.size() <= si)
+				data.mShadowCameras.push_back(new Camera("ShadowCamera", data.mShadowAtlasFramebuffer));
+			
+			Camera* sc = data.mShadowCameras[si];
+
+			sc->Orthographic(ortho);
+			if (ortho) sc->OrthographicSize(size);
+			else sc->FieldOfView(size);
+			sc->Near(near);
+			sc->Far(far);
+			sc->LocalPosition(pos);
+			sc->LocalRotation(rot);
+			
+			sc->ViewportX((float)((si % 4) * 1024));
+			sc->ViewportY((float)((si / 4) * 1024));
+			sc->ViewportWidth(1024);
+			sc->ViewportHeight(1024);
+
+			shadows[si].WorldToShadow = sc->ViewProjection();
+			shadows[si].ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
+			shadows[si].Proj = float4(sc->Orthographic() ? 1.f : 0.f, 1.f / far, near, far);
+			si++;
+		};
+
+		float ct = tanf(mainCamera->FieldOfView() * max(1, mainCamera->Aspect()) * .5f);
+		float3 cp = mainCamera->WorldPosition();
+		float3 fwd = mainCamera->WorldRotation().forward();
+
 		for (Light* l : mLights) {
 			if (!l->EnabledHierarchy()) continue;
 			mActiveLights.push_back(l);
@@ -158,66 +192,52 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			lights[li].SpotAngleOffset = -cosOuter * lights[li].SpotAngleScale;
 			lights[li].Direction = l->WorldRotation() * float3(0, 0, -1);
 			lights[li].Type = l->Type();
-
+			lights[li].ShadowIndex = -1;
+			lights[li].CascadeSplits = -1.f;
+			/*
 			if (l->CastShadows()) {
-				if (data.mShadowCameras.size() <= si)
-					data.mShadowCameras.push_back(new Camera("ShadowCamera", data.mShadowAtlasFramebuffer));
-				Camera* sc = data.mShadowCameras[si];
-
 				switch (l->Type()) {
-				case Sun:
-					sc->Orthographic(true);
-					sc->OrthographicSize(20);
-					sc->Near(1);
-					sc->Far(100);
-					sc->LocalRotation(l->WorldRotation());
-					sc->LocalPosition(mainCamera->WorldPosition() + l->WorldRotation() * float3(0, 0, -50));
+				case Sun: {
+					lights[li].CascadeSplits = mCascadeSplits;
+
+					for (uint32_t ci = 0; ci < 4; ci++) {
+						float mx = mainCamera->Far() * mCascadeSplits[ci];
+						float mn = ci == 0 ? mainCamera->Near() : mainCamera->Far() * mCascadeSplits[ci - 1];
+
+						lights[li].ShadowIndex[ci] = (int32_t)si;
+						AddShadowCamera(true, 2 * ct * mx, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -500, 500);
+					}
 					break;
+				}
 				case Point:
 					break;
 				case Spot:
-					sc->Orthographic(false);
-					sc->FieldOfView(l->OuterSpotAngle()*2);
-					sc->Near(.001f);
-					sc->Far(l->Range());
-					sc->LocalRotation(l->WorldRotation());
-					sc->LocalPosition(l->WorldPosition());
+					lights[li].CascadeSplits = 1.f;
+					lights[li].ShadowIndex = (int32_t)si;
+					AddShadowCamera(false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
 					break;
 				}
-
-				sc->ViewportX((float)((si % 4) * 2048));
-				sc->ViewportY((float)((si / 4) * 2048));
-				sc->ViewportWidth(2048);
-				sc->ViewportHeight(2048);
-
-				shadows[si].WorldToShadow = sc->ViewProjection();
-				shadows[si].ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / float4((float)sc->FramebufferWidth(), (float)sc->FramebufferHeight(), (float)sc->FramebufferWidth(), (float)sc->FramebufferHeight());
-				shadows[si].Proj = float4(sc->Orthographic() ? 1 : 0, sc->Near(), sc->Far());
-				lights[li].ShadowIndex = (int32_t)si;
-				si++;
-			} else
-				lights[li].ShadowIndex = -1;
+			}
+			*/
 
 			li++;
 			if (li >= MAX_GPU_LIGHTS) break;
 		}
 
-		if (si > 0) {
-			PROFILER_BEGIN("Render Shadows");
-			if (data.mShadowAtlasFramebuffer->ColorBuffer(0))
-				data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
-			data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
+		PROFILER_BEGIN("Render Shadows");
+		if (data.mShadowAtlasFramebuffer->ColorBuffer(0))
+			data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+		data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
 
-			bool g = mDrawGizmos;
-			mDrawGizmos = false;
-			for (uint32_t i = 0; i < si; i++)
-				Render(data.mShadowCameras[i], commandBuffer, mShadowMaterial.get(), false);
-			mDrawGizmos = g;
+		bool g = mDrawGizmos;
+		mDrawGizmos = false;
+		for (uint32_t i = 0; i < si; i++)
+			Render(data.mShadowCameras[i], commandBuffer, mShadowMaterial.get(), false);
+		mDrawGizmos = g;
 
-			vkCmdEndRenderPass(*commandBuffer);
-			data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-			PROFILER_END;
-		}
+		vkCmdEndRenderPass(*commandBuffer);
+		data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		PROFILER_END;
 	}
 	PROFILER_END;
 

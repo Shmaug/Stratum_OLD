@@ -7,7 +7,7 @@ using namespace std;
 void ReadBindingsAndPushConstants(ifstream& file,
 	unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& destBindings,
 	unordered_map<string, VkPushConstantRange>& destPushConstants,
-	vector<string>& destStaticSamplers) {
+	vector<pair<string, VkSamplerCreateInfo>>& destStaticSamplers) {
 
 	uint32_t bc;
 	file.read(reinterpret_cast<char*>(&bc), sizeof(uint32_t));
@@ -26,8 +26,11 @@ void ReadBindingsAndPushConstants(ifstream& file,
 		file.read(reinterpret_cast<char *>(&binding.second.stageFlags), sizeof(VkShaderStageFlagBits));
 		uint32_t static_sampler;
 		file.read(reinterpret_cast<char *>(&static_sampler), sizeof(uint32_t));
-		if (static_sampler)
-			destStaticSamplers.push_back(name);
+		if (static_sampler){
+			VkSamplerCreateInfo samplerInfo = {};
+			file.read(reinterpret_cast<char*>(&samplerInfo), sizeof(VkSamplerCreateInfo));
+			destStaticSamplers.push_back(make_pair(name, samplerInfo));
+		}
 	}
 
 	file.read(reinterpret_cast<char *>(&bc), sizeof(uint32_t));
@@ -112,7 +115,7 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 			entryPoints.resize(kernelc);
 			vector<unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>> descriptorBindings(kernelc);
 			vector<unordered_map<string, VkPushConstantRange>> pushConstants(kernelc);
-			vector<vector<string>> staticSamplers(kernelc);
+			vector<vector<pair<string, VkSamplerCreateInfo>>> staticSamplers(kernelc);
 
 			vector<uint3> workgroupSizes(kernelc);
 			for (uint32_t i = 0; i < kernelc; i++) {
@@ -162,18 +165,13 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 					for (const auto& b : cv->mDescriptorBindings) {
 						if (bindings.size() <= b.second.first) bindings.resize((size_t)b.second.first + 1);
 						bindings[b.second.first].push_back(b.second.second);
-						bool static_sampler = false;
 						for (const auto& s : staticSamplers[j])
-							if (s == b.first) {
-								static_sampler = true;
+							if (s.first == b.first) {
+								Sampler* sampler = new Sampler(b.first, device, s.second);
+								bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
+								d.mStaticSamplers.push_back(sampler);
 								break;
 							}
-
-						if (static_sampler) {
-							Sampler* sampler = new Sampler(b.first, device, 12);
-							bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
-							d.mStaticSamplers.push_back(sampler);
-						}
 					}
 
 					cv->mDescriptorSetLayouts.resize(bindings.size());
@@ -213,7 +211,7 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 			vector<VkPipelineShaderStageCreateInfo> stages;
 			unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>> descriptorBindings;
 			unordered_map<string, VkPushConstantRange> pushConstants;
-			vector<string> staticSamplers;
+			vector<pair<string, VkSamplerCreateInfo>> staticSamplers;
 
 			uint32_t stagec;
 			file.read(reinterpret_cast<char*>(&stagec), sizeof(uint32_t));
@@ -270,18 +268,13 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 					if (bindings.size() <= b.second.first) bindings.resize((size_t)b.second.first + 1);
 					bindings[b.second.first].push_back(b.second.second);
 
-					bool static_sampler = false;
 					for (const auto& s : staticSamplers)
-						if (s == b.first) {
-							static_sampler = true;
+						if (s.first == b.first) {
+							Sampler* sampler = new Sampler(b.first, device, s.second);
+							bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
+							d.mStaticSamplers.push_back(sampler);
 							break;
 						}
-
-					if (static_sampler) {
-						Sampler* sampler = new Sampler(b.first, device, 12);
-						bindings[b.second.first].back().pImmutableSamplers = &sampler->VkSampler();
-						d.mStaticSamplers.push_back(sampler);
-					}
 				}
 
 				gv->mDescriptorSetLayouts.resize(bindings.size());

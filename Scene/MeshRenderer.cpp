@@ -36,6 +36,11 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
 	}
+	if (shader->mPushConstants.count("ShadowTexelSize")) {
+		VkPushConstantRange strange = shader->mPushConstants.at("ShadowTexelSize");
+		float2 s = Scene()->ShadowTexelSize();
+		vkCmdPushConstants(*commandBuffer, layout, strange.stageFlags, strange.offset, strange.size, &s);
+	}
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
@@ -50,7 +55,3 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
 	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, materialOverride);
 }
-
-void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer,  Camera* camera) {
-	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
-};

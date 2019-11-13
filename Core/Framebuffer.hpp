@@ -22,6 +22,8 @@ public:
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 	inline VkImageUsageFlags BufferUsage() const { return mUsage; }
 
+	inline void ClearValue(uint32_t i, const VkClearValue& value) { mClearValues[i] = value; }
+
 	inline Texture* ColorBuffer(uint32_t i) { return mColorBuffers[mDevice->FrameContextIndex()][i]; }
 	inline Texture* DepthBuffer() { return mDepthBuffers[mDevice->FrameContextIndex()]; }
 
@@ -41,6 +43,7 @@ private:
 	VkImageUsageFlags mUsage;
 	VkSampleCountFlagBits mSampleCount;
 	std::vector<VkFormat> mColorFormats;
+	std::vector<VkClearValue> mClearValues;
 	VkFormat mDepthFormat;
 
 	ENGINE_EXPORT bool UpdateBuffers();
