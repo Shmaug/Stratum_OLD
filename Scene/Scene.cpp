@@ -14,7 +14,7 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mGizmos = new ::Gizmos(this);
 	mShadowMaterial = make_shared<Material>("Shadow", mAssetManager->LoadShader("Shaders/shadow.shader"));
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
-	mCascadeSplits = float4(.077f, 1.f, 1.f, 1.f);// .203, .472f, 1.f);
+	mCascadeSplits = float4(.005f, .1, .25f, 1.f);
 }
 Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
@@ -112,6 +112,29 @@ void Scene::RemoveObject(Object* object) {
 			it++;
 }
 
+void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far) {
+	if (dd->mShadowCameras.size() <= si)
+		dd->mShadowCameras.push_back(new Camera("ShadowCamera", dd->mShadowAtlasFramebuffer));
+	Camera* sc = dd->mShadowCameras[si];
+
+	sc->Orthographic(ortho);
+	if (ortho) sc->OrthographicSize(size);
+	else sc->FieldOfView(size);
+	sc->Near(near);
+	sc->Far(far);
+	sc->LocalPosition(pos);
+	sc->LocalRotation(rot);
+	
+	sc->ViewportX((float)((si % 8) * 1024));
+	sc->ViewportY((float)((si / 8) * 1024));
+	sc->ViewportWidth(1024);
+	sc->ViewportHeight(1024);
+
+	sd->WorldToShadow = sc->ViewProjection();
+	sd->ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
+	sd->Proj = float4(sc->Orthographic() ? 1.f : 0.f, 1.f / far, near, far);
+};
+
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	Camera* mainCamera = nullptr;
 	for (Camera* c : mCameras)
@@ -149,32 +172,8 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		ShadowData* shadows = (ShadowData*)data.mShadowBuffers[frameContextIndex]->MappedData();
 
 		uint32_t si = 0;
-		auto AddShadowCamera = [&](bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far) {
-			if (data.mShadowCameras.size() <= si)
-				data.mShadowCameras.push_back(new Camera("ShadowCamera", data.mShadowAtlasFramebuffer));
-			
-			Camera* sc = data.mShadowCameras[si];
 
-			sc->Orthographic(ortho);
-			if (ortho) sc->OrthographicSize(size);
-			else sc->FieldOfView(size);
-			sc->Near(near);
-			sc->Far(far);
-			sc->LocalPosition(pos);
-			sc->LocalRotation(rot);
-			
-			sc->ViewportX((float)((si % 4) * 1024));
-			sc->ViewportY((float)((si / 4) * 1024));
-			sc->ViewportWidth(1024);
-			sc->ViewportHeight(1024);
-
-			shadows[si].WorldToShadow = sc->ViewProjection();
-			shadows[si].ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
-			shadows[si].Proj = float4(sc->Orthographic() ? 1.f : 0.f, 1.f / far, near, far);
-			si++;
-		};
-
-		float ct = tanf(mainCamera->FieldOfView() * max(1, mainCamera->Aspect()) * .5f);
+		float ct = tanf(mainCamera->FieldOfView() * .5f) * max(1, mainCamera->Aspect());
 		float3 cp = mainCamera->WorldPosition();
 		float3 fwd = mainCamera->WorldRotation().forward();
 
@@ -190,22 +189,23 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			lights[li].Color = l->Color() * l->Intensity();
 			lights[li].SpotAngleScale = 1.f / fmaxf(.001f, cosInner - cosOuter);
 			lights[li].SpotAngleOffset = -cosOuter * lights[li].SpotAngleScale;
-			lights[li].Direction = l->WorldRotation() * float3(0, 0, -1);
+			lights[li].Direction = -l->WorldRotation().forward();
 			lights[li].Type = l->Type();
 			lights[li].ShadowIndex = -1;
 			lights[li].CascadeSplits = -1.f;
-			/*
+
 			if (l->CastShadows()) {
 				switch (l->Type()) {
 				case Sun: {
 					lights[li].CascadeSplits = mCascadeSplits;
+					lights[li].ShadowIndex = (int32_t)si;
 
 					for (uint32_t ci = 0; ci < 4; ci++) {
 						float mx = mainCamera->Far() * mCascadeSplits[ci];
-						float mn = ci == 0 ? mainCamera->Near() : mainCamera->Far() * mCascadeSplits[ci - 1];
+						float mn = (ci == 0) ? mainCamera->Near() : (mainCamera->Far() * mCascadeSplits[ci - 1]);
 
-						lights[li].ShadowIndex[ci] = (int32_t)si;
-						AddShadowCamera(true, 2 * ct * mx, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -500, 500);
+						AddShadowCamera(&data, si, &shadows[si], true, ct * mx, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -100, 500);
+						si++;
 					}
 					break;
 				}
@@ -214,11 +214,11 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Spot:
 					lights[li].CascadeSplits = 1.f;
 					lights[li].ShadowIndex = (int32_t)si;
-					AddShadowCamera(false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
+					AddShadowCamera(&data, si, &shadows[si], false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
+					si++;
 					break;
 				}
 			}
-			*/
 
 			li++;
 			if (li >= MAX_GPU_LIGHTS) break;

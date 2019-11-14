@@ -16,6 +16,8 @@
 #include <shadercompat.h>
 #include "brdf.hlsli"
 
+//#define SHOW_CASCADE_SPLITS
+
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Instances : register(t0);
 [[vk::binding(LIGHT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<GPULight> Lights : register(t1);
@@ -62,19 +64,23 @@ struct v2f {
 #endif
 };
 
+int CascadeSplit(uint l, float depth){
+	int si = 0;
+	if (depth < Lights[l].CascadeSplits[3]) si = 3;
+	if (depth < Lights[l].CascadeSplits[2]) si = 2;
+	if (depth < Lights[l].CascadeSplits[1]) si = 1;
+	if (depth < Lights[l].CascadeSplits[0]) si = 0;
+	return si;
+}
+
 float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out float3 L) {
 	GPULight l = Lights[li];
 	L = l.Direction;
 	float attenuation = 1;
-
-	int si = -1;
-	if (depth < l.CascadeSplits[3]) si = l.ShadowIndex[3];
-	if (depth < l.CascadeSplits[2]) si = l.ShadowIndex[2];
-	if (depth < l.CascadeSplits[1]) si = l.ShadowIndex[1];
-	if (depth < l.CascadeSplits[0]) si = l.ShadowIndex[0];
-
-	if (si >= 0) {
-		ShadowData s = Shadows[si];
+	
+	if (l.ShadowIndex >= 0) {
+		int ci = CascadeSplit(li, depth);
+		ShadowData s = Shadows[l.ShadowIndex + ci];
 
 		float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + normal * .005, 1));
 
@@ -103,7 +109,7 @@ float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out
 			attenuation = 1 - shadow;
 		}
 	}
-
+	
 	if (l.Type > LIGHT_SUN) {
 		L = l.WorldPosition - worldPos;
 		float d2 = dot(L, L);
@@ -201,12 +207,32 @@ void fsmain(v2f i,
 
 	float3 eval = 0;
 
+	#ifdef SHOW_CASCADE_SPLITS
+	static const float4 CascadeSplitColors[4] = {
+		float4(.5,  1, .5, 1),
+		float4( 1, .5, .5, 1),
+		float4( 1,  1, .5, 1),
+		float4(.5, .5,  1, 1),
+	};
+	float4 cascadeColor = 0;
+	#endif
+
 	for (uint l = 0; l < LightCount; l++) {
 		float3 L;
 		float attenuation = LightAttenuation(l, i.worldPos, normal, depth, L);
+		float3 lc = Lights[l].Color;
+		
+		#ifdef SHOW_CASCADE_SPLITS
+		if (Lights[l].Type == LIGHT_SUN) {
+			int ci = CascadeSplit(l, depth);
+			if (ci >= 0) cascadeColor += CascadeSplitColors[ci];
+		}
+		#endif
+
 		if (attenuation > 0.001)
-			eval += attenuation * Lights[l].Color* BRDF(material, L, normal, view);
+			eval += attenuation * lc * BRDF(material, L, normal, view);
 	}
+	
 
 	float3 reflection = normalize(reflect(-view, normal));
 
@@ -223,6 +249,10 @@ void fsmain(v2f i,
 
 	#ifdef EMISSION
 	eval.rgb += Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;
+	#endif
+
+	#ifdef SHOW_CASCADE_SPLITS
+	if (cascadeColor.w) eval = lerp(eval.rgb, cascadeColor.rgb / cascadeColor.w, .5);
 	#endif
 
 	color = float4(eval, 1);

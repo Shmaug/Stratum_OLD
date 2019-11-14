@@ -185,7 +185,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 }
 
 bool Instance::PollEvents() {
-	chrono::time_point<chrono::steady_clock> t1 = mClock.now();
+    chrono::system_clock::time_point t1 = mClock.now();
 	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
 	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
 	mLastFrame = t1;

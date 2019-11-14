@@ -77,4 +77,6 @@ private:
 	std::vector<Renderer*> mRenderers;
 	std::vector<Renderer*> mRenderList;
 	bool mDrawGizmos;
+
+	void AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
 };

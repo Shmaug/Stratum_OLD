@@ -109,7 +109,3 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 	commandBuffer->mTriangleCount += data.mGlyphCount * 2;
 }
-
-void TextRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	Scene()->Gizmos()->DrawWireCube(Bounds().mCenter, Bounds().mExtents, quaternion(), float4(1));
-};
