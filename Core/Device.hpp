@@ -49,7 +49,7 @@ public:
 
 	ENGINE_EXPORT VkSampleCountFlagBits GetMaxUsableSampleCount();
 
-	inline uint32_t Device::MaxFramesInFlight() const { return mInstance->MaxFramesInFlight(); }
+	inline uint32_t MaxFramesInFlight() const { return mInstance->MaxFramesInFlight(); }
 	inline uint32_t FrameContextIndex() const { return mFrameContextIndex; }
 	inline FrameContext* CurrentFrameContext() { return &mFrameContexts[mFrameContextIndex]; }
 

@@ -40,6 +40,7 @@ add_library(Engine SHARED
 	"Scene/Light.cpp"
 	"Scene/MeshRenderer.cpp"
 	"Scene/Scene.cpp"
+	"Scene/SplineRenderer.cpp"
 	"Scene/Object.cpp"
 	"Scene/SkinnedMeshRenderer.cpp"
 	"Scene/TextRenderer.cpp"

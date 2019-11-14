@@ -1,9 +1,5 @@
 #pragma once
 
-#include <memory>
-#include <variant>
-#include <unordered_map>
-
 #include <Content/Material.hpp>
 #include <Content/Mesh.hpp>
 #include <Core/DescriptorSet.hpp>
