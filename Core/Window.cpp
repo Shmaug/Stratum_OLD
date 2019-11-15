@@ -140,7 +140,7 @@ void Window::Present() {
 
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = waitSemaphores.size();
+	presentInfo.waitSemaphoreCount = (uint32_t)waitSemaphores.size();
 	presentInfo.pWaitSemaphores = waitSemaphores.data();
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &mSwapchain;
@@ -208,6 +208,7 @@ void Window::Fullscreen(bool fs) {
 }
 
 void Window::CreateSwapchain(::Device* device) {
+	if (mSwapchain) DestroySwapchain();
 	mDevice = device;
 	mDevice->SetObjectName(mSurface, mTitle + " Surface", VK_OBJECT_TYPE_SURFACE_KHR);
 
@@ -293,7 +294,6 @@ void Window::CreateSwapchain(::Device* device) {
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.presentMode = presentMode;
 	createInfo.clipped = VK_TRUE;
-	if (mSwapchain) createInfo.oldSwapchain = mSwapchain;
 	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain), "vkCreateSwapchainKHR failed");
 	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain", VK_OBJECT_TYPE_SWAPCHAIN_KHR);
 	#pragma endregion

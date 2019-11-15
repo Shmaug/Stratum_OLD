@@ -18,8 +18,8 @@ public:
 
     ENGINE_EXPORT void Points(const std::vector<float3>& pts);
 
-	inline virtual bool Visible() override { return mVisible && mSpline.size() > 2 && (mSpline.size() % 2) == 0 && EnabledHierarchy(); }
-	inline virtual uint32_t RenderQueue() override { return 5000; }
+	inline virtual bool Visible() override { return mVisible && mSpline.size() > 3 && EnabledHierarchy(); }
+	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
 	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
 	
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }

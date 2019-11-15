@@ -54,7 +54,7 @@ private:
 	Texture* mEnvironmentTexture;
 
 	// for editing lights
-	Light* mSelectedLight;
+	Object* mSelected;
 	vector<Light*> mLights;
 
 	vector<Object*> mObjects;
@@ -90,7 +90,7 @@ ENGINE_PLUGIN(MeshViewer)
 
 MeshViewer::MeshViewer()
 	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f),
-	mEnvironmentTexture(nullptr), mSelectedLight(nullptr), mPanel(nullptr), mDraggingPanel(false),
+	mEnvironmentTexture(nullptr), mSelected(nullptr), mPanel(nullptr), mDraggingPanel(false),
 	mFileLoadPanel(nullptr), mLightSettingsPanel(nullptr), mLoadBar(nullptr), mLoadProgress(0.f), mLoadText(nullptr), mTitleText(nullptr) {
 	mEnabled = true;
 }
@@ -415,10 +415,12 @@ void MeshViewer::LoadSpline() {
 		vector<float3> pts;
 		for (uint32_t i = 0; i < 8; i++){
 			float t = 2 * PI * i / 8.f;
-			pts.push_back(float3(cosf(t), 2.f + sinf(i), sinf(t)));
-			pts.push_back(float3(cosf(t) + sinf(t), 2.f + sinf(i)*1.2f, sinf(t) + cosf(t)));
+			pts.push_back(float3(cosf(t), 2.f + sinf((float)i), sinf(t)));
+			pts.push_back(float3(cosf(t) + sinf(t), 2.f + sinf((float)i)*1.2f, sinf(t) + cosf(t)));
 		}
 		spline->Points(pts);
+		mScene->AddObject(spline);
+		mObjects.push_back(spline.get());
 		mLoaded.emplace("_Spline", spline.get());
 	}
 }
@@ -576,7 +578,7 @@ bool MeshViewer::Init(Scene* scene) {
 	loadText->Extent(1, 0, 0, .01f);
 	mLoadText = loadText.get();
 
-	auto AddButton = [&](const string& name, const string& title){
+	auto AddButton = [&](const string& name, const string& text){
 		shared_ptr<UIImage> bg = panel->AddElement<UIImage>(name, panel.get());
 		bg->Texture(white);
 		bg->Color(float4(0));
@@ -592,7 +594,7 @@ bool MeshViewer::Init(Scene* scene) {
 		btn->Font(font);
 		btn->Extent(.9f, 1, 0, 0);
 		btn->TextScale(bg->AbsoluteExtent().y * 2);
-		btn->Text(title);
+		btn->Text(text);
 		bg->AddChild(btn.get());
 	};
 
@@ -626,7 +628,6 @@ bool MeshViewer::Init(Scene* scene) {
 	colorLabel->Text("Color");
 	lightLayout->AddChild(colorLabel.get());
 
-
 	shared_ptr<UILabel> intensityLabel = panel->AddElement<UILabel>("Intensity Label", panel.get());
 	intensityLabel->VerticalAnchor(TextAnchor::Middle);
 	intensityLabel->HorizontalAnchor(TextAnchor::Minimum);
@@ -636,7 +637,6 @@ bool MeshViewer::Init(Scene* scene) {
 	intensityLabel->Text("Intensity");
 	lightLayout->AddChild(intensityLabel.get());
 	
-
 	shared_ptr<UILabel> typeLabel = panel->AddElement<UILabel>("Type Label", panel.get());
 	typeLabel->VerticalAnchor(TextAnchor::Middle);
 	typeLabel->HorizontalAnchor(TextAnchor::Minimum);
@@ -645,7 +645,6 @@ bool MeshViewer::Init(Scene* scene) {
 	typeLabel->TextScale(.02f);
 	typeLabel->Text("Type");
 	lightLayout->AddChild(typeLabel.get());
-
 
 	shared_ptr<UILabel> radiusLabel = panel->AddElement<UILabel>("Radius Label", panel.get());
 	radiusLabel->VerticalAnchor(TextAnchor::Middle);
@@ -656,7 +655,6 @@ bool MeshViewer::Init(Scene* scene) {
 	radiusLabel->Text("Radius");
 	lightLayout->AddChild(radiusLabel.get());
 
-
 	shared_ptr<UILabel> rangeLabel = panel->AddElement<UILabel>("Range Label", panel.get());
 	rangeLabel->VerticalAnchor(TextAnchor::Middle);
 	rangeLabel->HorizontalAnchor(TextAnchor::Minimum);
@@ -666,7 +664,6 @@ bool MeshViewer::Init(Scene* scene) {
 	rangeLabel->Text("Range");
 	lightLayout->AddChild(rangeLabel.get());
 
-
 	shared_ptr<UILabel> outerAngleLabel = panel->AddElement<UILabel>("Outer Angle Label", panel.get());
 	outerAngleLabel->VerticalAnchor(TextAnchor::Middle);
 	outerAngleLabel->HorizontalAnchor(TextAnchor::Minimum);
@@ -675,7 +672,6 @@ bool MeshViewer::Init(Scene* scene) {
 	outerAngleLabel->TextScale(.02f);
 	outerAngleLabel->Text("Outer Angle");
 	lightLayout->AddChild(outerAngleLabel.get());
-
 
 	shared_ptr<UILabel> innerAngleLabel = panel->AddElement<UILabel>("Inner Angle Label", panel.get());
 	innerAngleLabel->VerticalAnchor(TextAnchor::Middle);
@@ -802,35 +798,40 @@ void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	bool change = input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
 
 	// manipulate selection
-	if (mSelectedLight) {
-		mLightSettingsPanel->mVisible = true;
-		mFileLoadPanel->mVisible = false;
-		switch (mSelectedLight->Type()) {
+	Light* selectedLight = nullptr;
+	if (mSelected) {
+		selectedLight = dynamic_cast<Light*>(mSelected);
+		if (selectedLight) {
+			mLightSettingsPanel->mVisible = true;
+			mFileLoadPanel->mVisible = false;
+
+			switch (selectedLight->Type()) {
 			case LightType::Spot:
-				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
-					mSelectedLight->Range() * tanf(mSelectedLight->InnerSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				gizmos->DrawWireCircle(
-					mSelectedLight->WorldPosition() + mSelectedLight->WorldRotation() * float3(0,0,mSelectedLight->Range()),
-					mSelectedLight->Range() * tanf(mSelectedLight->OuterSpotAngle() * .5f), mSelectedLight->WorldRotation(), float4(mSelectedLight->Color(), .5f));
+					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				break;
 
 			case LightType::Point:
-				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Radius(), float4(mSelectedLight->Color(), .5f));
-				gizmos->DrawWireSphere(mSelectedLight->WorldPosition(), mSelectedLight->Range(), float4(mSelectedLight->Color(), .1f));
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
 				break;
 			}
+		}
 
 		if (input->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
-			quaternion r = mSelectedLight->WorldRotation();
-			if (mScene->Gizmos()->RotationHandle(input->GetPointer(0), mSelectedLight->WorldPosition(), r)) {
-				mSelectedLight->LocalRotation(r);
+			quaternion r = mSelected->WorldRotation();
+			if (mScene->Gizmos()->RotationHandle(input->GetPointer(0), mSelected->WorldPosition(), r)) {
+				mSelected->LocalRotation(r);
 				change = false;
 			}
-		}else{
-			float3 p = mSelectedLight->WorldPosition();
+		} else {
+			float3 p = mSelected->WorldPosition();
 			if (mScene->Gizmos()->PositionHandle(input->GetPointer(0), camera->WorldRotation(), p)) {
-				mSelectedLight->LocalPosition(p);
+				mSelected->LocalPosition(p);
 				change = false;
 			}
 		}
@@ -840,22 +841,20 @@ void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	}
 
 	// change selection
-	Light* sl = mSelectedLight;
-	if (change) mSelectedLight = nullptr;
+	if (change) mSelected = nullptr;
 	for (Light* light : mLights) {
 		float lt = ray.Intersect(Sphere(light->WorldPosition(), .09f)).x;
 		bool hover = lt > 0 && (hitT < 0 || lt < hitT);
-		if (hover) hitT = lt;
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
-		gizmos->DrawBillboard(light->WorldPosition(), hover && light != sl ? .09f : .075f, camera->WorldRotation(), float4(col, 1), 
+		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
 			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
 
-		if (hover){
+		if (hover) {
+			hitT = lt;
 			if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
 				light->mEnabled = !light->mEnabled;
-			if (change)
-				mSelectedLight = light;
+			if (change) mSelected = light;
 		}
 	}
 }

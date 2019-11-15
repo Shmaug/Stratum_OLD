@@ -226,7 +226,7 @@ void Camera::Set(CommandBuffer* commandBuffer) {
 	buf.ViewProjection = mViewProjection;
 	buf.InvProjection = mInvProjection;
 	buf.Viewport = float4(mViewport.width, mViewport.height, mNear, mFar);
-	buf.ProjParams = float4(Aspect(), mOrthographicSize, mFieldOfView, mOrthographic ? 1 : 0);
+	buf.ProjParams = float4(Aspect(), mOrthographicSize, mFieldOfView, mOrthographic ? 1.f : 0.f);
 	buf.Position = WorldPosition();
 	buf.Right = WorldRotation() * float3(1, 0, 0);
 	buf.Up = WorldRotation() * float3(0, 1, 0);

@@ -48,7 +48,7 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	attachments[colorFormats.size()].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference depthAttachmentRef = {};
-	depthAttachmentRef.attachment = colorFormats.size();
+	depthAttachmentRef.attachment = (uint32_t)colorFormats.size();
 	depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	vector<VkSubpassDescription> subpasses(1);
