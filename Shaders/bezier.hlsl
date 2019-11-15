@@ -9,33 +9,40 @@
 //#define SHOW_CASCADE_SPLITS
 
 // per-object
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<float3> Spline : register(t0);
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] RWStructuredBuffer<float3> Spline : register(t0);
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4x4 ObjectToWorld;
 	uint CurveCount;
 	uint CurveResolution;
 	float4 Color;
 };
 
-
-float3 SplineRenderer::Evaluate(float t) {
-    if (t < 0) t += (int)abs(t) + 1;
+float3 Bezier(float3 p0, float3 p1, float3 p2, float3 p3, float t){
+    float u = 1 - t;
+    float u2 = u*u;
+    float t2 = t*t;
+    return u2*u * p0 + 3 * u2*t+p1 + 3*u*t2*p2 + t*t2*p3;
+}
+float3 Evaluate(float t) {
+    if (t < 0) t += floor(abs(t)) + 1;
     if (t > 1) t -= floor(t);
 
     uint curveIndex = t*CurveCount;
+    uint n = 2*CurveCount;
 
     float3 p0,p1,p2,p3;
     if (curveIndex == 0) {
-        p0 = mSpline[0];
-        p1 = mSpline[1];
-        p2 = mSpline[2];
-        p3 = mSpline[3];
+        p0 = Spline[0];
+        p1 = Spline[1];
+        p2 = Spline[2];
+        p3 = Spline[3];
     } else if (curveIndex == CurveCount-1) {
-        p0 = Spline[Spline.size()-1];
-        p1 = 2*Spline[Spline.size()-1] - Spline[mSpline.size()-2];
-        p2 = 2*Spline[0] - mSpline[1];
+        p0 = Spline[n-1];
+        p1 = 2*Spline[n-1] - Spline[n-2];
+        p2 = 2*Spline[0] - Spline[1];
         p3 = Spline[0];
     } else {
         p0 = Spline[curveIndex*2 + 1];
@@ -44,28 +51,24 @@ float3 SplineRenderer::Evaluate(float t) {
         p3 = Spline[curveIndex*2 + 3];
     }
     
-    return Bezier(p0, p1, p2, p3, t*n - curveIndex);
+    return Bezier(p0, p1, p2, p3, t*CurveCount - curveIndex);
 }
 
-v2f vsmain(uint instance : SV_InstanceID) {
-	v2f o;
-	float4 worldPos = mul(Points[instance].ObjectToWorld, float4(vertex, 1.0));
-	o.position = mul(Camera.ViewProjection, worldPos);
-	o.screenPos = o.position;
-	return o;
+void vsmain(uint v : SV_VertexID, out float4 position : SV_Target0, out float4 screenPos : TEXCOORD0) {
+	float4 worldPos = mul(ObjectToWorld, float4(Evaluate((float)v / (CurveResolution - 1.0)), 1.0));
+	position = mul(Camera.ViewProjection, worldPos);
+	screenPos = position;
 }
 
-void fsmain(v2f i,
+void fsmain(in float4 screenPos : TEXCOORD0,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
 		
 	float depth;
 	if (Camera.ProjParams.w)
-		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
+		depth = screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
 	else
-		view = normalize(Camera.Position - i.worldPos);
-		depth = i.screenPos.w;
-	}
+		depth = screenPos.w;
 	depth /= Camera.Viewport.w;
 
 	color = Color;

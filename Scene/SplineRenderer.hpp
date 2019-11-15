@@ -25,6 +25,8 @@ public:
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 protected:
+	virtual bool UpdateTransform() override;
+
     std::unordered_map<Device*, std::pair<bool, Buffer*>*> mPointBuffers;
 
 	uint32_t mCurveResolution;
