@@ -1253,6 +1253,22 @@ struct quaternion {
 		xyz = axis * sinf(angle);
 		w = cosf(angle);
 	};
+	inline quaternion(const float3& v1, const float3& v2){
+		float d = dot(v1, v2);
+		if (d < -0.999999f) {
+			float3 tmp = cross(float3(1, 0, 0), v1);
+			if (dot(tmp, tmp) < 1e-5f) tmp = cross(float3(0, 1, 0), v1);
+			xyz = normalize(tmp) * sinf(PI / 2);
+			w = cosf(PI / 2);
+		} else if (d > 0.999999f) {
+			xyz = 0;
+			w = 1;
+		} else {
+			xyz = cross(v1, v2);
+			w = 1 + d;
+			xyzw /= length(xyzw);
+		}
+	}
 
 	inline quaternion() : quaternion(0, 0, 0, 1) {};
 

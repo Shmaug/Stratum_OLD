@@ -99,12 +99,11 @@ Gizmos::~Gizmos() {
 	}
 }
 
-bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position){
-	float radius = .15f;
+bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position, float radius, const float4& color){
 	float t = input->mWorldRay.Intersect(Sphere(position, radius)).x;
 	float lt = input->mLastWorldRay.Intersect(Sphere(position, radius)).x;
 
-	DrawWireCircle(position, radius, plane, float4(1,1,1,1));
+	DrawWireCircle(position, radius, plane, color);
 	
 	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
 
@@ -142,12 +141,12 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 }
 
 void Gizmos::DrawLine(const float3& p0, const float3& p1, const float4& color){
-	float3 v = p1 - p0;
-	float l = length(v);
-	v /= l;
-	float3 axis = cross(float3(0,0,1), v);
-	float angle = length(axis);
-	DrawWireCube((p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(asinf(angle), axis / angle), color);
+	float3 v1 = float3(0,0,1);
+	float3 v2 = p1 - p0;
+	float l = length(v2);
+	v2 /= l;
+
+	DrawWireCube((p0 + p1) * .5f, float3(0, 0, l * .5f), quaternion(v1, v2), color);
 }
 void Gizmos::DrawBillboard(const float3& center, const float2& extents, const quaternion& rotation, const float4& color, Texture* texture, const float4& textureST){
 	Gizmo g = {};
