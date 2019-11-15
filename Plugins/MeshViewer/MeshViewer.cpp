@@ -5,6 +5,7 @@
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/SkinnedMeshRenderer.hpp>
+#include <Scene/SplineRenderer.hpp>
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIImage.hpp>
 #include <Interface/UILabel.hpp>
@@ -78,9 +79,11 @@ private:
 	float mLoadProgress;
 	std::thread mLoadThread;
 
+	Robot* AddRobot();
+
 	void LoadRobot();
+	void LoadSpline();
 	void LoadAsync(fs::path filename, float scale = .05f);
-	Object* LoadScene(fs::path filename, float scale = .05f);
 };
 
 ENGINE_PLUGIN(MeshViewer)
@@ -138,247 +141,6 @@ const ::VertexInput Vertex::VertexInput {
 		}
 	}
 };
-Object* MeshViewer::LoadScene(fs::path path, float scale) {
-	mLoadProgress = 0;
-	
-	Texture* brdfTexture  = mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false);
-
-	unordered_map<uint32_t, shared_ptr<Mesh>> meshes;
-	unordered_map<uint32_t, shared_ptr<Material>> materials;
-
-	const aiScene* aiscene = aiImportFile(path.string().c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs  | aiProcess_MakeLeftHanded);
-	if (!aiscene) {
-		cerr << "Failed to open " << path.string() <<  ": " << aiGetErrorString() << endl;
-		return nullptr;
-	}
-
-	uint32_t meshCount = 0;
-	queue<aiNode*> aiNodes;
-	aiNodes.push(aiscene->mRootNode);
-	while (!aiNodes.empty()){
-		aiNode* node = aiNodes.front();
-		aiNodes.pop();
-		meshCount += node->mNumMeshes;
-		for (uint32_t i = 0; i < node->mNumChildren; i++)
-			aiNodes.push(node->mChildren[i]);
-	}
-	
-	queue<pair<aiNode*, Object*>> nodes;
-	nodes.push(make_pair(aiscene->mRootNode, nullptr));
-	Object* root = nullptr;
-
-	uint32_t meshNum = 0;
-	uint32_t renderQueueOffset = 0;
-
-	while(!nodes.empty()) {
-		pair<aiNode*, Object*> nodepair = nodes.front();
-		nodes.pop();
-
-		aiNode* node = nodepair.first;
-
-		aiVector3D s;
-		aiQuaternion r;
-		aiVector3D t;
-		node->mTransformation.Decompose(s, r, t);
-
-		t *= scale;
-		
-		shared_ptr<Object> nodeobj = make_shared<Object>(node->mName.C_Str());
-		nodepair.second->AddChild(nodeobj.get());
-		nodeobj->LocalPosition(t.x, t.y, t.z);
-		nodeobj->LocalRotation(quaternion(r.x, r.y, r.z, r.w));
-		nodeobj->LocalScale(s.x, s.y, s.z);
-
-		if (nodepair.first == aiscene->mRootNode)
-			root = nodeobj.get();
-
-		for (uint32_t i = 0; i < node->mNumMeshes; i++) {
-			aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
-			aiMaterial* aimat = aiscene->mMaterials[aimesh->mMaterialIndex];
-
-			mLoadProgress = (float)meshNum / (float)meshCount;
-
-			if ((aimesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) == 0) continue;
-
-			shared_ptr<Material>& material = materials[aimesh->mMaterialIndex];
-			if (!material) {
-				VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-				BlendMode blendMode = BLEND_MODE_MAX_ENUM;
-				bool twoSided = false;
-				aiColor3D emissionFac;
-				aiColor4D color;
-				aiString matname, diffuse, normal, metalroughness, emission, occlusion, specgloss;
-				aiString alphaMode;
-				float metallic, roughness;
-				aimat->Get(AI_MATKEY_NAME, matname);
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, color) != aiReturn::aiReturn_SUCCESS)
-					color.r = color.g = color.b = color.a = 1;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic) != aiReturn::aiReturn_SUCCESS) metallic = 0.f;
-				if (aimat->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness) != aiReturn::aiReturn_SUCCESS) roughness = .5f;
-				if (aimat->Get(AI_MATKEY_TWOSIDED, twoSided) == aiReturn::aiReturn_SUCCESS && twoSided) cullMode = VK_CULL_MODE_NONE;
-				if (aimat->Get(AI_MATKEY_COLOR_EMISSIVE, emissionFac) != aiReturn::aiReturn_SUCCESS) emissionFac.r = emissionFac.g = emissionFac.b = 0;
-				if (aimat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == aiReturn::aiReturn_SUCCESS && strcmp(alphaMode.C_Str(), "BLEND") == 0) blendMode = Alpha;
-				aimat->Get(AI_MATKEY_GLTF_PBRSPECULARGLOSSINESS, specgloss);
-
-				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &diffuse);
-				aimat->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalroughness);
-				aimat->GetTexture(aiTextureType_LIGHTMAP, 0, &occlusion);
-				aimat->GetTexture(aiTextureType_NORMALS, 0, &normal);
-				aimat->GetTexture(aiTextureType_EMISSIVE, 0, &emission);
-
-				material = make_shared<Material>(matname.C_Str(), mPBRShader);
-				material->CullMode(cullMode);
-				material->BlendMode(blendMode);
-				material->SetParameter("BrdfTexture", brdfTexture);
-				material->SetParameter("Color", float4(color.r, color.g, color.b, color.a));
-				material->SetParameter("Metallic", metallic);
-				material->SetParameter("Roughness", roughness);
-				material->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-				material->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-				if (twoSided) material->EnableKeyword("TWO_SIDED");
-
-				if (diffuse != aiString("") && diffuse.C_Str()[0] != '*') {
-					if (path.has_parent_path())
-						diffuse = path.parent_path().string() + "/" + diffuse.C_Str();
-					material->EnableKeyword("COLOR_MAP");
-					material->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture(diffuse.C_Str()));
-				}
-				if (specgloss != aiString("") && specgloss.C_Str()[0] != '*') {
-					if (path.has_parent_path())
-						specgloss = path.parent_path().string() + "/" + specgloss.C_Str();
-					material->EnableKeyword("SPECGLOSS_MAP");
-					material->SetParameter("SpecGlossTexture", mScene->AssetManager()->LoadTexture(specgloss.C_Str()));
-				}
-				if (normal != aiString("") && normal.C_Str()[0] != '*'){
-					if (path.has_parent_path())
-						normal = path.parent_path().string() + "/" + normal.C_Str();
-					material->EnableKeyword("NORMAL_MAP");
-					material->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture(normal.C_Str(), false));
-				}
-				if (occlusion != aiString("") && occlusion.C_Str()[0] != '*') {
-					if (path.has_parent_path())
-						occlusion = path.parent_path().string() + "/" + occlusion.C_Str();
-					material->EnableKeyword("OCCLUSION_MAP");
-					material->SetParameter("OcclusionTexture", mScene->AssetManager()->LoadTexture(occlusion.C_Str(), false));
-				}
-				if (emission != aiString("") && emission.C_Str()[0] != '*') {
-					if (path.has_parent_path())
-						emission = path.parent_path().string() + "/" + emission.C_Str();
-					material->EnableKeyword("EMISSION");
-					material->SetParameter("Emission", float3(emissionFac.r, emissionFac.g, emissionFac.b));
-					material->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture(emission.C_Str()));
-				} else if (emissionFac.r > 0 || emissionFac.g > 0 || emissionFac.b > 0) {
-					material->EnableKeyword("EMISSION");
-					material->SetParameter("Emission", float3(emissionFac.r, emissionFac.g, emissionFac.b));
-					material->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
-				}
-
-				material->RenderQueue(material->RenderQueue() + renderQueueOffset);
-				mMaterials.push_back(material);
-				renderQueueOffset++;
-			}
-
-			shared_ptr<Mesh>& mesh = meshes[node->mMeshes[i]];
-			if (!mesh) {
-				const aiMesh* aimesh = aiscene->mMeshes[node->mMeshes[i]];
-				vector<Vertex> vertices(aimesh->mNumVertices);
-				memset(vertices.data(), 0, sizeof(Vertex) * aimesh->mNumVertices);
-
-				float3 mn, mx;
-
-				// append vertices, keep track of bounding box
-				for (uint32_t j = 0; j < aimesh->mNumVertices; j++) {
-					Vertex& vertex = vertices[j];
-
-					vertex.position = float3((float)aimesh->mVertices[j].x, (float)aimesh->mVertices[j].y, (float)aimesh->mVertices[j].z);
-					if (aimesh->HasNormals()) vertex.normal = float3((float)aimesh->mNormals[j].x, (float)aimesh->mNormals[j].y, (float)aimesh->mNormals[j].z);
-					if (aimesh->HasTangentsAndBitangents()) {
-						vertex.tangent = float4((float)aimesh->mTangents[j].x, (float)aimesh->mTangents[j].y, (float)aimesh->mTangents[j].z, 1.f);
-						float3 bt = float3((float)aimesh->mBitangents[j].x, (float)aimesh->mBitangents[j].y, (float)aimesh->mBitangents[j].z);
-						vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
-					}
-					if (aimesh->HasTextureCoords(0)) vertex.uv = float2((float)aimesh->mTextureCoords[0][j].x, (float)aimesh->mTextureCoords[0][j].y);
-					vertex.position *= scale;
-
-					float vp = .5f * (float)j / (float)aimesh->mNumVertices;
-					mLoadProgress = ((float)meshNum + vp) / (float)meshCount;
-				}
-
-				bool use32bit = aimesh->mNumVertices > 0xFFFF;
-				vector<uint16_t> indices16;
-				vector<uint32_t> indices32;
-
-				if (use32bit)
-					for (uint32_t j = 0; j < aimesh->mNumFaces; j++) {
-						const aiFace& f = aimesh->mFaces[j];
-						if (f.mNumIndices == 0) continue;
-						indices32.push_back(f.mIndices[0]);
-						if (f.mNumIndices == 2) indices32.push_back(f.mIndices[1]);
-						for (uint32_t j = 2; j < f.mNumIndices; j++) {
-							indices32.push_back(f.mIndices[j - 1]);
-							indices32.push_back(f.mIndices[j]);
-						}
-						float fp = .5f + .5f * (float)j / (float)aimesh->mNumFaces;
-						mLoadProgress = ((float)meshNum + fp) / (float)meshCount;
-					} else {
-						for (uint32_t j = 0; j < aimesh->mNumFaces; j++) {
-							const aiFace& f = aimesh->mFaces[j];
-							if (f.mNumIndices == 0) continue;
-							indices16.push_back(f.mIndices[0]);
-							if (f.mNumIndices == 2) indices16.push_back(f.mIndices[1]);
-							for (uint32_t j = 2; j < f.mNumIndices; j++) {
-								indices16.push_back(f.mIndices[j - 1]);
-								indices16.push_back(f.mIndices[j]);
-							}
-							float fp = .5f + .5f * (float)j / (float)aimesh->mNumFaces;
-							mLoadProgress = ((float)meshNum + fp) / (float)meshCount;
-						}
-					}
-
-				void* indices;
-				VkIndexType indexType;
-				uint32_t indexCount;
-				if (use32bit) {
-					indexCount = (uint32_t)indices32.size();
-					indexType = VK_INDEX_TYPE_UINT32;
-					indices = indices32.data();
-				} else {
-					indexCount = (uint32_t)indices16.size();
-					indexType = VK_INDEX_TYPE_UINT16;
-					indices = indices16.data();
-				}
-
-				// mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->Instance(), aimesh, scale);
-				mesh = make_shared<Mesh>(aimesh->mName.C_Str(), mScene->Instance(),
-					vertices.data(), indices, (uint32_t)vertices.size(), (uint32_t)sizeof(Vertex), indexCount, &Vertex::VertexInput, indexType);
-			}
-
-			// TODO: load weights...
-
-			shared_ptr<MeshRenderer> meshRenderer = make_shared<MeshRenderer>(node->mName.C_Str() + string(".") + aimesh->mName.C_Str());
-			nodeobj.get()->AddChild(meshRenderer.get());
-			meshRenderer->Mesh(mesh);
-			meshRenderer->Material(material);
-
-			meshNum++;
-		}
-
-		for (uint32_t i = 0; i < node->mNumChildren; i++)
-			nodes.push(make_pair(node->mChildren[i], nodeobj.get()));
-	}
-
-	AABB aabb = root->Bounds();
-	root->LocalScale(.5f / fmaxf(fmaxf(aabb.mExtents.x, aabb.mExtents.y), aabb.mExtents.z));
-	aabb = root->Bounds();
-	float3 offset = root->WorldPosition() - aabb.mCenter;
-	offset.y += aabb.mExtents.y;
-	root->LocalPosition(offset);
-
-	mLoaded.emplace(path.string(), root);
-
-	mLoading = false;
-	return root;
-}
 
 void MeshViewer::LoadAsync(fs::path path, float scale) {
 	// disable all the other models
@@ -420,214 +182,245 @@ void MeshViewer::LoadAsync(fs::path path, float scale) {
 	}
 }
 
-void MeshViewer::LoadRobot() {
+Robot* MeshViewer::AddRobot() {
 	Mesh* antennaMesh = mScene->AssetManager()->LoadMesh("Assets/robot/antenna_s.obj", 1.f);
 	Mesh* headMesh = mScene->AssetManager()->LoadMesh("Assets/robot/head_s.obj", 1.f);
 	Mesh* limbMesh = mScene->AssetManager()->LoadMesh("Assets/robot/limb_s.obj", 1.f);
 	Mesh* bodyMesh = mScene->AssetManager()->LoadMesh("Assets/robot/body_s.obj", 1.f);
 	Mesh* eyeMesh = mScene->AssetManager()->LoadMesh ("Assets/robot/eyeball_s.obj", 1.f);
 
-	auto metal = make_shared<Material>("RobotMetal", mPBRShader);
-	metal->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
-	metal->SetParameter("Color", float4(.9f));
-	metal->SetParameter("Metallic", 1.f);
-	metal->SetParameter("Roughness", .025f);
-	metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+	static shared_ptr<Material> metal =nullptr;
+	static shared_ptr<Material> facem = nullptr;
+	static shared_ptr<Material> eye = nullptr;
 
-	auto facem = make_shared<Material>("RobotFace", mPBRShader);
-	facem->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
-	facem->SetParameter("Color", float4(.01f));
-	facem->SetParameter("Metallic", 1.f);
-	facem->SetParameter("Roughness", .01f);
-	facem->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	facem->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-
-	auto eye = make_shared<Material>("RobotEye", mPBRShader);
-	eye->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
-	eye->SetParameter("Color", float4(0.2f, 0.5f, 0.75f));
-	eye->SetParameter("Metallic", 0.f);
-	eye->SetParameter("Roughness", .025f);
-	eye->SetParameter("Emission", float3(.5f, .75f, 1.f));
-	eye->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
-	eye->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	eye->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-	eye->EnableKeyword("EMISSION");
-
-	for (int i = 0; i < 100; i++) {
-		shared_ptr<MeshRenderer> body = make_shared<MeshRenderer>("Body");
-		mScene->AddObject(body);
-		mObjects.push_back(body.get());
-		body->LocalRotation(quaternion(0, 1, 0, 0));
-		body->LocalScale(float3(.625f, .219f, 1.f) * .2f);
-		body->Mesh(bodyMesh);
-		body->Material(metal);
-
-		shared_ptr<MeshRenderer> bottom = make_shared<MeshRenderer>("Bottom");
-		mScene->AddObject(bottom);
-		mObjects.push_back(bottom.get());
-		body->AddChild(bottom.get());
-		bottom->LocalPosition(0.f, -.99965f, 0.f);
-		bottom->LocalRotation(quaternion(1, 0, 0, 0));
-		bottom->LocalScale(1.0203343629837036f, 9.632735252380371f, 1.0203343629837036f);
-		bottom->Mesh(headMesh);
-		bottom->Material(metal);
-
-		shared_ptr<MeshRenderer> top = make_shared<MeshRenderer>("Top");
-		mScene->AddObject(top);
-		mObjects.push_back(top.get());
-		body->AddChild(top.get());
-		top->LocalPosition(0, 1.003046f, 0);
-		top->LocalRotation(quaternion(0, 1, 0, 0));
-		top->LocalScale(1.02033436f, 0.9687414f, 1.02033436f);
-		top->Mesh(headMesh);
-		top->Material(metal);
-
-		shared_ptr<Object> head = make_shared<Object>("Head");
-		mScene->AddObject(head);
-		mObjects.push_back(head.get());
-		body->AddChild(head.get());
-		head->LocalPosition(-7.604217557855009e-07f, 5.057405471801758f, -0.001944709219969809f);
-		head->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, .5f));
-		head->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
-
-		shared_ptr<Object> neck = make_shared<Object>("Neck");
-		mScene->AddObject(neck);
-		mObjects.push_back(neck.get());
-		head->AddChild(neck.get());
-
-		shared_ptr<MeshRenderer> htop = make_shared<MeshRenderer>("Head Top");
-		mScene->AddObject(htop);
-		mObjects.push_back(htop.get());
-		neck->AddChild(htop.get());
-		htop->LocalPosition(0.0019446611404418945f, 4.753257769607444e-07f, -0.3489670753479004f);
-		htop->LocalRotation(quaternion(0.5000003576278687f, 0.4999997615814209f, 0.5000002980232239f, 0.4999997913837433f));
-		htop->LocalScale(.6117526888847351f, 0.9861886501312256f, 0.9283669590950012f);
-		htop->Mesh(headMesh);
-		htop->Material(metal);
-
-		shared_ptr<MeshRenderer> face = make_shared<MeshRenderer>("Face");
-		mScene->AddObject(face);
-		mObjects.push_back(face.get());
-		htop->AddChild(face.get());
-		face->LocalPosition(-0.46354931592941284f, 0.4908345341682434f, 0.0016714046942070127f);
-		face->LocalRotation(quaternion(-0.5031242370605469f, 0.8642140626907349f, -2.5014125881739346e-08f, -1.1258141974224145e-08f));
-		face->LocalScale(0.5513290166854858f, 0.3918508291244507f, 0.7281637787818909f);
-		face->Mesh(headMesh);
-		face->Material(facem);
-
-		shared_ptr<MeshRenderer> leye = make_shared<MeshRenderer>("LEye");
-		mScene->AddObject(leye);
-		mObjects.push_back(leye.get());
-		face->AddChild(leye.get());
-		leye->LocalPosition(0.04395657777786255f, 0.6733275651931763f, -0.48340997099876404f);
-		leye->LocalRotation(quaternion(-0.024556323885917664f, 0.17886871099472046f, 0.5156598091125488f, 0.8375547528266907f));
-		leye->LocalScale(4.487833499908447f, 4.02925968170166f, 3.8776533603668213f);
-		leye->Mesh(eyeMesh);
-		leye->Material(eye);
-
-		shared_ptr<MeshRenderer> reye = make_shared<MeshRenderer>("REye");
-		mScene->AddObject(reye);
-		mObjects.push_back(reye.get());
-		face->AddChild(reye.get());
-		reye->LocalPosition(0.04395657777786255f, 0.6733278036117554f, 0.4880000650882721f);
-		reye->LocalRotation(quaternion(-0.5141682028770447f, 0.5729449391365051f, -0.18911446630954742f, 0.6095907688140869f));
-		reye->LocalScale(4.66795015335083f, 3.7310101985931396f, 3.7737956047058105f);
-		reye->Mesh(eyeMesh);
-		reye->Material(eye);
-
-		shared_ptr<MeshRenderer> hbtm = make_shared<MeshRenderer>("Head Bottom");
-		mScene->AddObject(hbtm);
-		mObjects.push_back(hbtm.get());
-		htop->AddChild(hbtm.get());
-		hbtm->LocalPosition(-3.698136089892723e-13f, 2.384185791015625e-07f, -4.2254308237897986e-21f);
-		hbtm->LocalRotation(quaternion(1.0f, -9.635839433030924e-07f, -1.7729925616549735e-07, 5.971345728994493e-08));
-		hbtm->LocalScale(1.0f, 0.24752794206142426f, 0.9999998211860657f);
-		hbtm->Mesh(headMesh);
-		hbtm->Material(metal);
-
-		shared_ptr<MeshRenderer> rantenna = make_shared<MeshRenderer>("RAntenna");
-		mScene->AddObject(rantenna);
-		mObjects.push_back(rantenna.get());
-		htop->AddChild(rantenna.get());
-		rantenna->LocalPosition(0.01295844092965126f, 1.0729432106018066f, -0.7886744141578674f);
-		rantenna->LocalRotation(quaternion(-0.15088200569152832f, 0.695493221282959f, -0.13628718256950378f, 0.6891658902168274f));
-		rantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
-		rantenna->Mesh(antennaMesh);
-		rantenna->Material(metal);
-		shared_ptr<MeshRenderer> lantenna = make_shared<MeshRenderer>("LAntenna");
-		mScene->AddObject(lantenna);
-		mObjects.push_back(lantenna.get());
-		htop->AddChild(lantenna.get());
-		lantenna->LocalPosition(0.012958616018295288f, 1.0729432106018066f, 0.739460825920105f);
-		lantenna->LocalRotation(quaternion(0.15088188648223877f, -0.6954931616783142f, -0.13628722727298737f, 0.6891659498214722f));
-		lantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
-		lantenna->Mesh(antennaMesh);
-		lantenna->Material(metal);
-
-		shared_ptr<Object> rarm = make_shared<Object>("RArm");
-		mScene->AddObject(rarm);
-		mObjects.push_back(rarm.get());
-		body->AddChild(rarm.get());
-		rarm->LocalPosition(-4.6921653051867906e-07f, 0.5858743190765381f, -1.1581997871398926f);
-		rarm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
-		rarm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
-
-		shared_ptr<MeshRenderer> rarmm = make_shared<MeshRenderer>("RArm");
-		mScene->AddObject(rarmm);
-		mObjects.push_back(rarmm.get());
-		rarmm->LocalPosition(-0.06043827533721924f, 3.438727560478583e-07f, -0.8278734683990479f);
-		rarmm->LocalRotation(quaternion(0.7071068286895752, 1.5700925641616852e-16, 1.403772174824528e-22, 0.7071067094802856f));
-		rarmm->LocalScale(0.734440267086029f, 1.9024626016616821f, 1.9024626016616821f);
-		rarmm->Mesh(limbMesh);
-		rarmm->Material(metal);
-
-		shared_ptr<Object> larm = make_shared<Object>("LArm");
-		mScene->AddObject(larm);
-		mObjects.push_back(larm.get());
-		body->AddChild(larm.get());
-		larm->LocalPosition(-6.312293976407091e-07f, 0.5858747959136963f, 1.1582022905349731f);
-		larm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
-		larm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
-
-		shared_ptr<MeshRenderer> larmm = make_shared<MeshRenderer>("LArm");
-		mScene->AddObject(larmm);
-		mObjects.push_back(larmm.get());
-		larmm->LocalPosition(-0.0005675554275512695f, 3.438727844695677e-07f, -0.827873706817627f);
-		larmm->LocalRotation(quaternion(0.7071068286895752f, 1.570089917183725e-16f, -3.7433923820535783e-23f, 0.7071067094802856f));
-		larmm->LocalScale(0.7344402074813843f, 1.9024626016616821f, 1.9024626016616821f);
-		larmm->Mesh(limbMesh);
-		larmm->Material(metal);
-
-		shared_ptr<Object> lshoulder = make_shared<Object>("LShoulder");
-		mScene->AddObject(lshoulder);
-		mObjects.push_back(lshoulder.get());
-		larm->AddChild(lshoulder.get());
-		lshoulder->AddChild(larmm.get());
-
-		shared_ptr<Object> rshoulder = make_shared<Object>("LShoulder");
-		mScene->AddObject(rshoulder);
-		mObjects.push_back(rshoulder.get());
-		rarm->AddChild(rshoulder.get());
-		rshoulder->AddChild(rarmm.get());
-
-		shared_ptr<Object> b = make_shared<Object>("Robot");
-		mScene->AddObject(b);
-		mObjects.push_back(b.get());
-		b->AddChild(body.get());
-
-		Robot* robot = new Robot();
-		robot->mBody = b.get();
-		robot->mHead = neck.get();
-		robot->mLArm = lshoulder.get();
-		robot->mRArm = rshoulder.get();
-		float x = (float)rand()/(float)RAND_MAX * 2 - 1;
-		float z = (float)rand()/(float)RAND_MAX * 2 - 1;
-		robot->mBody->LocalPosition(x*x*x * 100.f, .5f, z*z*z * 100.f);
-		mRobots.push_back(robot);
+	if (!metal) {
+		metal = make_shared<Material>("RobotMetal", mPBRShader);
+		metal->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+		metal->SetParameter("Color", float4(.9f));
+		metal->SetParameter("Metallic", 1.f);
+		metal->SetParameter("Roughness", .025f);
+		metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+		metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	}
 
+	if (!facem) {
+		facem = make_shared<Material>("RobotFace", mPBRShader);
+		facem->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+		facem->SetParameter("Color", float4(.01f));
+		facem->SetParameter("Metallic", 1.f);
+		facem->SetParameter("Roughness", .01f);
+		facem->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+		facem->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+	}
+
+	if (!eye){
+		eye = make_shared<Material>("RobotEye", mPBRShader);
+		eye->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
+		eye->SetParameter("Color", float4(0.2f, 0.5f, 0.75f));
+		eye->SetParameter("Metallic", 0.f);
+		eye->SetParameter("Roughness", .025f);
+		eye->SetParameter("Emission", float3(.5f, .75f, 1.f));
+		eye->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
+		eye->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+		eye->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+		eye->EnableKeyword("EMISSION");
+	}
+
+	shared_ptr<MeshRenderer> body = make_shared<MeshRenderer>("Body");
+	mScene->AddObject(body);
+	mObjects.push_back(body.get());
+	body->LocalRotation(quaternion(0, 1, 0, 0));
+	body->LocalScale(float3(.625f, .219f, 1.f) * .2f);
+	body->Mesh(bodyMesh);
+	body->Material(metal);
+
+	shared_ptr<MeshRenderer> bottom = make_shared<MeshRenderer>("Bottom");
+	mScene->AddObject(bottom);
+	mObjects.push_back(bottom.get());
+	body->AddChild(bottom.get());
+	bottom->LocalPosition(0.f, -.99965f, 0.f);
+	bottom->LocalRotation(quaternion(1, 0, 0, 0));
+	bottom->LocalScale(1.0203343629837036f, 9.632735252380371f, 1.0203343629837036f);
+	bottom->Mesh(headMesh);
+	bottom->Material(metal);
+
+	shared_ptr<MeshRenderer> top = make_shared<MeshRenderer>("Top");
+	mScene->AddObject(top);
+	mObjects.push_back(top.get());
+	body->AddChild(top.get());
+	top->LocalPosition(0, 1.003046f, 0);
+	top->LocalRotation(quaternion(0, 1, 0, 0));
+	top->LocalScale(1.02033436f, 0.9687414f, 1.02033436f);
+	top->Mesh(headMesh);
+	top->Material(metal);
+
+	shared_ptr<Object> head = make_shared<Object>("Head");
+	mScene->AddObject(head);
+	mObjects.push_back(head.get());
+	body->AddChild(head.get());
+	head->LocalPosition(-7.604217557855009e-07f, 5.057405471801758f, -0.001944709219969809f);
+	head->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, .5f));
+	head->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<Object> neck = make_shared<Object>("Neck");
+	mScene->AddObject(neck);
+	mObjects.push_back(neck.get());
+	head->AddChild(neck.get());
+
+	shared_ptr<MeshRenderer> htop = make_shared<MeshRenderer>("Head Top");
+	mScene->AddObject(htop);
+	mObjects.push_back(htop.get());
+	neck->AddChild(htop.get());
+	htop->LocalPosition(0.0019446611404418945f, 4.753257769607444e-07f, -0.3489670753479004f);
+	htop->LocalRotation(quaternion(0.5000003576278687f, 0.4999997615814209f, 0.5000002980232239f, 0.4999997913837433f));
+	htop->LocalScale(.6117526888847351f, 0.9861886501312256f, 0.9283669590950012f);
+	htop->Mesh(headMesh);
+	htop->Material(metal);
+
+	shared_ptr<MeshRenderer> face = make_shared<MeshRenderer>("Face");
+	mScene->AddObject(face);
+	mObjects.push_back(face.get());
+	htop->AddChild(face.get());
+	face->LocalPosition(-0.46354931592941284f, 0.4908345341682434f, 0.0016714046942070127f);
+	face->LocalRotation(quaternion(-0.5031242370605469f, 0.8642140626907349f, -2.5014125881739346e-08f, -1.1258141974224145e-08f));
+	face->LocalScale(0.5513290166854858f, 0.3918508291244507f, 0.7281637787818909f);
+	face->Mesh(headMesh);
+	face->Material(facem);
+
+	shared_ptr<MeshRenderer> leye = make_shared<MeshRenderer>("LEye");
+	mScene->AddObject(leye);
+	mObjects.push_back(leye.get());
+	face->AddChild(leye.get());
+	leye->LocalPosition(0.04395657777786255f, 0.6733275651931763f, -0.48340997099876404f);
+	leye->LocalRotation(quaternion(-0.024556323885917664f, 0.17886871099472046f, 0.5156598091125488f, 0.8375547528266907f));
+	leye->LocalScale(4.487833499908447f, 4.02925968170166f, 3.8776533603668213f);
+	leye->Mesh(eyeMesh);
+	leye->Material(eye);
+
+	shared_ptr<MeshRenderer> reye = make_shared<MeshRenderer>("REye");
+	mScene->AddObject(reye);
+	mObjects.push_back(reye.get());
+	face->AddChild(reye.get());
+	reye->LocalPosition(0.04395657777786255f, 0.6733278036117554f, 0.4880000650882721f);
+	reye->LocalRotation(quaternion(-0.5141682028770447f, 0.5729449391365051f, -0.18911446630954742f, 0.6095907688140869f));
+	reye->LocalScale(4.66795015335083f, 3.7310101985931396f, 3.7737956047058105f);
+	reye->Mesh(eyeMesh);
+	reye->Material(eye);
+
+	shared_ptr<MeshRenderer> hbtm = make_shared<MeshRenderer>("Head Bottom");
+	mScene->AddObject(hbtm);
+	mObjects.push_back(hbtm.get());
+	htop->AddChild(hbtm.get());
+	hbtm->LocalPosition(-3.698136089892723e-13f, 2.384185791015625e-07f, -4.2254308237897986e-21f);
+	hbtm->LocalRotation(quaternion(1.0f, -9.635839433030924e-07f, -1.7729925616549735e-07, 5.971345728994493e-08));
+	hbtm->LocalScale(1.0f, 0.24752794206142426f, 0.9999998211860657f);
+	hbtm->Mesh(headMesh);
+	hbtm->Material(metal);
+
+	shared_ptr<MeshRenderer> rantenna = make_shared<MeshRenderer>("RAntenna");
+	mScene->AddObject(rantenna);
+	mObjects.push_back(rantenna.get());
+	htop->AddChild(rantenna.get());
+	rantenna->LocalPosition(0.01295844092965126f, 1.0729432106018066f, -0.7886744141578674f);
+	rantenna->LocalRotation(quaternion(-0.15088200569152832f, 0.695493221282959f, -0.13628718256950378f, 0.6891658902168274f));
+	rantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
+	rantenna->Mesh(antennaMesh);
+	rantenna->Material(metal);
+	shared_ptr<MeshRenderer> lantenna = make_shared<MeshRenderer>("LAntenna");
+	mScene->AddObject(lantenna);
+	mObjects.push_back(lantenna.get());
+	htop->AddChild(lantenna.get());
+	lantenna->LocalPosition(0.012958616018295288f, 1.0729432106018066f, 0.739460825920105f);
+	lantenna->LocalRotation(quaternion(0.15088188648223877f, -0.6954931616783142f, -0.13628722727298737f, 0.6891659498214722f));
+	lantenna->LocalScale(0.36139366030693054f, 0.19080094993114471f, 0.5534285306930542f);
+	lantenna->Mesh(antennaMesh);
+	lantenna->Material(metal);
+
+	shared_ptr<Object> rarm = make_shared<Object>("RArm");
+	mScene->AddObject(rarm);
+	mObjects.push_back(rarm.get());
+	body->AddChild(rarm.get());
+	rarm->LocalPosition(-4.6921653051867906e-07f, 0.5858743190765381f, -1.1581997871398926f);
+	rarm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
+	rarm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<MeshRenderer> rarmm = make_shared<MeshRenderer>("RArm");
+	mScene->AddObject(rarmm);
+	mObjects.push_back(rarmm.get());
+	rarmm->LocalPosition(-0.06043827533721924f, 3.438727560478583e-07f, -0.8278734683990479f);
+	rarmm->LocalRotation(quaternion(0.7071068286895752, 1.5700925641616852e-16, 1.403772174824528e-22, 0.7071067094802856f));
+	rarmm->LocalScale(0.734440267086029f, 1.9024626016616821f, 1.9024626016616821f);
+	rarmm->Mesh(limbMesh);
+	rarmm->Material(metal);
+
+	shared_ptr<Object> larm = make_shared<Object>("LArm");
+	mScene->AddObject(larm);
+	mObjects.push_back(larm.get());
+	body->AddChild(larm.get());
+	larm->LocalPosition(-6.312293976407091e-07f, 0.5858747959136963f, 1.1582022905349731f);
+	larm->LocalRotation(quaternion(-0.5000000596046448f, -0.5000000596046448f, -0.4999999701976776f, 0.5f));
+	larm->LocalScale(0.9999998807907104f, 1.6000767946243286f, 4.570376873016357f);
+
+	shared_ptr<MeshRenderer> larmm = make_shared<MeshRenderer>("LArm");
+	mScene->AddObject(larmm);
+	mObjects.push_back(larmm.get());
+	larmm->LocalPosition(-0.0005675554275512695f, 3.438727844695677e-07f, -0.827873706817627f);
+	larmm->LocalRotation(quaternion(0.7071068286895752f, 1.570089917183725e-16f, -3.7433923820535783e-23f, 0.7071067094802856f));
+	larmm->LocalScale(0.7344402074813843f, 1.9024626016616821f, 1.9024626016616821f);
+	larmm->Mesh(limbMesh);
+	larmm->Material(metal);
+
+	shared_ptr<Object> lshoulder = make_shared<Object>("LShoulder");
+	mScene->AddObject(lshoulder);
+	mObjects.push_back(lshoulder.get());
+	larm->AddChild(lshoulder.get());
+	lshoulder->AddChild(larmm.get());
+
+	shared_ptr<Object> rshoulder = make_shared<Object>("LShoulder");
+	mScene->AddObject(rshoulder);
+	mObjects.push_back(rshoulder.get());
+	rarm->AddChild(rshoulder.get());
+	rshoulder->AddChild(rarmm.get());
+
+	shared_ptr<Object> b = make_shared<Object>("Robot");
+	mScene->AddObject(b);
+	mObjects.push_back(b.get());
+	b->AddChild(body.get());
+
+	Robot* robot = new Robot();
+	robot->mBody = b.get();
+	robot->mHead = neck.get();
+	robot->mLArm = lshoulder.get();
+	robot->mRArm = rshoulder.get();
+	mRobots.push_back(robot);
+	return robot;
+}
+
+void MeshViewer::LoadRobot() {
+	for (int i = 0; i < 100; i++) {
+		float t = 2 * PI * (float)rand() / (float)RAND_MAX;
+		float r = (float)rand() / (float)RAND_MAX;
+		AddRobot()->mBody->LocalPosition(100.f*r*r*float3(cosf(t), 0, sinf(t)));
+	}
 	mLoading = false;
+}
+
+void MeshViewer::LoadSpline() {
+	for (auto& l : mLoaded) l.second->mEnabled = false;
+
+	if (mLoaded.count("_Spline"))
+		mLoaded.at("_Spline")->mEnabled = true;
+	else {
+		shared_ptr<SplineRenderer> spline = make_shared<SplineRenderer>("Spline");
+		vector<float3> pts;
+		for (uint32_t i = 0; i < 8; i++){
+			float t = 2 * PI * i / 8.f;
+			pts.push_back(float3(cosf(t), 2.f + sinf(i), sinf(t)));
+			pts.push_back(float3(cosf(t) + sinf(t), 2.f + sinf(i)*1.2f, sinf(t) + cosf(t)));
+		}
+		spline->Points(pts);
+		mLoaded.emplace("_Spline", spline.get());
+	}
 }
 
 void GetFiles(const string& path, vector<fs::path>& files) {
@@ -783,50 +576,36 @@ bool MeshViewer::Init(Scene* scene) {
 	loadText->Extent(1, 0, 0, .01f);
 	mLoadText = loadText.get();
 
+	auto AddButton = [&](const string& name, const string& title){
+		shared_ptr<UIImage> bg = panel->AddElement<UIImage>(name, panel.get());
+		bg->Texture(white);
+		bg->Color(float4(0));
+		bg->Extent(1, 0, 0, .015f);
+		bg->Outline(false);
+		bg->mRecieveRaycast = true;
+		fileLayout->AddChild(bg.get());
+		mLoadFileButtons.push_back(bg.get());
+
+		shared_ptr<UILabel> btn = panel->AddElement<UILabel>(name, panel.get());
+		btn->VerticalAnchor(TextAnchor::Middle);
+		btn->HorizontalAnchor(TextAnchor::Minimum);
+		btn->Font(font);
+		btn->Extent(.9f, 1, 0, 0);
+		btn->TextScale(bg->AbsoluteExtent().y * 2);
+		btn->Text(title);
+		bg->AddChild(btn.get());
+	};
+
 	vector<fs::path> files;
 	GetFiles("Assets", files);
 	for (auto f : files) {
 		string ext = f.extension().string();
 		if (ext != ".obj" && ext != ".fbx" && ext != ".gltf" && ext != ".glb") continue;
-
-		shared_ptr<UIImage> bg = panel->AddElement<UIImage>(f.string(), panel.get());
-		bg->Texture(white);
-		bg->Color(float4(0));
-		bg->Extent(1, 0, 0, .015f);
-		bg->Outline(false);
-		bg->mRecieveRaycast = true;
-		fileLayout->AddChild(bg.get());
-		mLoadFileButtons.push_back(bg.get());
-
-		shared_ptr<UILabel> btn = panel->AddElement<UILabel>(f.string(), panel.get());
-		btn->VerticalAnchor(TextAnchor::Middle);
-		btn->HorizontalAnchor(TextAnchor::Minimum);
-		btn->Font(font);
-		btn->Extent(.9f, 1, 0, 0);
-		btn->TextScale(bg->AbsoluteExtent().y * 2);
-		btn->Text(f.filename().string());
-		bg->AddChild(btn.get());
+		AddButton(f.string(), f.filename().string());
 	}
 
-	{
-		shared_ptr<UIImage> bg = panel->AddElement<UIImage>("Robot", panel.get());
-		bg->Texture(white);
-		bg->Color(float4(0));
-		bg->Extent(1, 0, 0, .015f);
-		bg->Outline(false);
-		bg->mRecieveRaycast = true;
-		fileLayout->AddChild(bg.get());
-		mLoadFileButtons.push_back(bg.get());
-
-		shared_ptr<UILabel> btn = panel->AddElement<UILabel>("Robot", panel.get());
-		btn->VerticalAnchor(TextAnchor::Middle);
-		btn->HorizontalAnchor(TextAnchor::Minimum);
-		btn->Font(font);
-		btn->Extent(.9f, 1, 0, 0);
-		btn->TextScale(bg->AbsoluteExtent().y * 2);
-		btn->Text("Robot");
-		bg->AddChild(btn.get());
-	}
+	AddButton("_Robot", "Robot");
+	AddButton("_Spline", "Spline");
 
 	fileLayout->UpdateLayout();
 	#pragma endregion
@@ -961,8 +740,10 @@ void MeshViewer::Update() {
 						i->Color(float4(1, 1, 1, .25f));
 						i->Outline(true);
 						if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
-							if (elem->mName == "Robot")
+							if (elem->mName == "_Robot")
 								LoadRobot();
+							else if (elem->mName == "_Spline")
+								LoadSpline();
 							else
 								LoadAsync(elem->mName, 1);
 						}
