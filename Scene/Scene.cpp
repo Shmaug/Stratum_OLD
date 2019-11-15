@@ -14,7 +14,7 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mGizmos = new ::Gizmos(this);
 	mShadowMaterial = make_shared<Material>("Shadow", mAssetManager->LoadShader("Shaders/shadow.shader"));
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
-	mCascadeSplits = float4(.005f, .1, .25f, 1.f);
+	mCascadeSplits = float4(.005f, .1f, .25f, 1.f);
 }
 Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
@@ -173,7 +173,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 		uint32_t si = 0;
 
-		float ct = tanf(mainCamera->FieldOfView() * .5f) * max(1, mainCamera->Aspect());
+		float ct = tanf(mainCamera->FieldOfView() * .5f) * max(1.f, mainCamera->Aspect());
 		float3 cp = mainCamera->WorldPosition();
 		float3 fwd = mainCamera->WorldRotation().forward();
 

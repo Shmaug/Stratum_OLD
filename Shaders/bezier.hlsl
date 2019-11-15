@@ -9,11 +9,11 @@
 //#define SHOW_CASCADE_SPLITS
 
 // per-object
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] RWStructuredBuffer<float3> Spline : register(t0);
+[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<float3> Spline : register(t0);
 // per-camera
-[[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
+[[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b0);
 
-[[vk::push_constant]] cbuffer PushConstants : register(b2) {
+[[vk::push_constant]] cbuffer PushConstants : register(b1) {
 	float4x4 ObjectToWorld;
 	uint CurveCount;
 	uint CurveResolution;
@@ -28,7 +28,7 @@ float3 Bezier(float3 p0, float3 p1, float3 p2, float3 p3, float t){
 }
 float3 Evaluate(float t) {
     if (t < 0) t += floor(abs(t)) + 1;
-    if (t > 1) t -= floor(t);
+    if (t >= 1) t -= floor(t);
 
     uint curveIndex = t*CurveCount;
     uint n = 2*CurveCount;
@@ -55,7 +55,8 @@ float3 Evaluate(float t) {
 }
 
 void vsmain(uint v : SV_VertexID, out float4 position : SV_Target0, out float4 screenPos : TEXCOORD0) {
-	float4 worldPos = mul(ObjectToWorld, float4(Evaluate((float)v / (CurveResolution - 1.0)), 1.0));
+	//float4 worldPos = mul(ObjectToWorld, float4(Evaluate((float)v / (float)CurveResolution), 1.0));
+	float4 worldPos = mul(ObjectToWorld, float4(0, 1, (v - CurveResolution*.5f)*.1f, 1.0));
 	position = mul(Camera.ViewProjection, worldPos);
 	screenPos = position;
 }

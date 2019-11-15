@@ -54,8 +54,8 @@ private:
 	VkInstance mInstance;
 
 	std::chrono::high_resolution_clock mClock;
-	std::chrono::system_clock::time_point mStartTime;
-	std::chrono::system_clock::time_point mLastFrame;
+	std::chrono::high_resolution_clock::time_point mStartTime;
+	std::chrono::high_resolution_clock::time_point mLastFrame;
 	float mTotalTime;
 	float mDeltaTime;
 

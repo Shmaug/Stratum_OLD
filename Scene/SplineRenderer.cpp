@@ -16,21 +16,21 @@ float3 BezierDerivative(const float3& p0, const float3& p1, const float3& p2, co
     return 3*u2*(p1-p0) + 6*u*t*(p2-p1) + 3*t2*(p3-p2);
 }
 
-SplineRenderer::SplineRenderer(const string& name) : Object(name), Renderer(), mCurveResolution(1024) {}
+SplineRenderer::SplineRenderer(const string& name) : Object(name), Renderer(), mCurveResolution(1024) { mVisible = true; }
 SplineRenderer::~SplineRenderer() {
     for (auto d : mPointBuffers){
         for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
-            safe_delete(d.second);
+            safe_delete(d.second[i].second);
         safe_delete_array(d.second);
     }
 }
 
 float3 SplineRenderer::Evaluate(float t) {
     if (t < 0) t += (uint32_t)fabsf(t) + 1;
-    if (t > 1) t -= (uint32_t)t;
+    if (t >= 1) t -= (uint32_t)t;
 
     uint32_t curveCount = (uint32_t)mSpline.size() / 2;
-    uint32_t curveIndex = t*curveCount;
+    uint32_t curveIndex = (uint32_t)(t*curveCount);
 
     float3 p0,p1,p2,p3;
     if (curveIndex == 0) {
@@ -57,7 +57,7 @@ float3 SplineRenderer::Derivative(float t){
     if (t > 1) t -= (uint32_t)t;
 
     uint32_t curveCount = (uint32_t)mSpline.size() / 2 - 1;
-    uint32_t curveIndex = t*curveCount;
+    uint32_t curveIndex = (uint32_t)(t*curveCount);
 
     float3 p0,p1,p2,p3;
     if (curveIndex == 0) {
@@ -111,7 +111,7 @@ void SplineRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Materi
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
 	if (!layout) return;
 
-    if (mPointBuffers.count(commandBuffer->Device())) {
+    if (!mPointBuffers.count(commandBuffer->Device())) {
         pair<bool, Buffer*>* d = new pair<bool, Buffer*>[commandBuffer->Device()->MaxFramesInFlight()];
         mPointBuffers.emplace(commandBuffer->Device(), d);
         for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++){
@@ -145,5 +145,5 @@ void SplineRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Materi
     vkCmdPushConstants(*commandBuffer, layout, nrange.stageFlags, nrange.offset, nrange.size, &n);
     vkCmdPushConstants(*commandBuffer, layout, rrange.stageFlags, rrange.offset, rrange.size, &mCurveResolution);
     vkCmdPushConstants(*commandBuffer, layout, crange.stageFlags, crange.offset, crange.size, &color);
-    vkCmdDraw(*commandBuffer, mCurveResolution, 1, 0, 0);
+    //vkCmdDraw(*commandBuffer, mCurveResolution, 1, 0, 0);
 }

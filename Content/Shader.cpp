@@ -461,38 +461,37 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 		info.basePipelineHandle = VK_NULL_HANDLE;
 		info.renderPass = *renderPass;
 
-		VkPipeline p;
-		vkCreateGraphicsPipelines(*renderPass->Device(), renderPass->Device()->PipelineCache(), 1, &info, nullptr, &p);
-		renderPass->Device()->SetObjectName(p, mShader->mName + " Variant", VK_OBJECT_TYPE_PIPELINE);
-		mPipelines.emplace(instance, p);
-
+		#pragma region print
 		const char* cullstr = "";
-		if (cullMode == VK_CULL_MODE_NONE)
-			cullstr = "VK_CULL_MODE_NONE";
-		if (cullMode & VK_CULL_MODE_BACK_BIT)
-			cullstr = "VK_CULL_MODE_BACK";
-		if (cullMode & VK_CULL_MODE_FRONT_BIT)
-			cullstr = "VK_CULL_MODE_FRONT";
-		if (cullMode == VK_CULL_MODE_FRONT_AND_BACK)
-			cullstr = "VK_CULL_MODE_FRONT_AND_BACK";
-		
+		if (cullMode == VK_CULL_MODE_NONE) cullstr = "VK_CULL_MODE_NONE";
+		if (cullMode & VK_CULL_MODE_BACK_BIT) cullstr = "VK_CULL_MODE_BACK";
+		if (cullMode & VK_CULL_MODE_FRONT_BIT) cullstr = "VK_CULL_MODE_FRONT";
+		if (cullMode == VK_CULL_MODE_FRONT_AND_BACK) cullstr = "VK_CULL_MODE_FRONT_AND_BACK";
+
 		const char* blendstr = "";
-		switch (blend){
+		switch (blend) {
 		case Opaque: blendstr = "Opaque"; break;
-		case Alpha: blendstr = "Alpha"; break;
+		case Alpha:  blendstr = "Alpha"; break;
 		case Additive: blendstr = "Additive"; break;
 		case Multiply: blendstr = "Multiply"; break;
 		}
 
-		string kw = ""; 
+		string kw = "";
 		for (const auto& d : mShader->mDeviceData)
 			for (const auto& k : d.second.mGraphicsVariants)
 				if (k.second == this) {
 					kw = k.first;
 					break;
 				}
-		printf_color(Green, "%s [%s]: Generating graphics pipeline  %s  %s  %s\n",
-			mShader->mName.c_str(), kw.c_str(), blendstr, cullstr, TopologyToString(topology));
+		printf_color(Green, "%s [%s]: Generating graphics pipeline  %s  %s  %s ...\n", mShader->mName.c_str(), kw.c_str(), blendstr, cullstr, TopologyToString(topology));
+		#pragma endregion
+
+		VkPipeline p;
+		vkCreateGraphicsPipelines(*renderPass->Device(), renderPass->Device()->PipelineCache(), 1, &info, nullptr, &p);
+		renderPass->Device()->SetObjectName(p, mShader->mName + " Variant", VK_OBJECT_TYPE_PIPELINE);
+		mPipelines.emplace(instance, p);
+
+		printf_color(Green, "Done\n");
 
 		return p;
 	}
