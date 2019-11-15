@@ -24,14 +24,14 @@ float3 Bezier(float3 p0, float3 p1, float3 p2, float3 p3, float t){
     float u = 1 - t;
     float u2 = u*u;
     float t2 = t*t;
-    return u2*u * p0 + 3 * u2*t+p1 + 3*u*t2*p2 + t*t2*p3;
+    return u2*u*p0 + 3*u2*t*p1 + 3*u*t2*p2 + t*t2*p3;
 }
 float3 Evaluate(float t) {
     if (t < 0) t += floor(abs(t)) + 1;
     if (t >= 1) t -= floor(t);
 
-    uint curveIndex = t*CurveCount;
-    uint n = 2*CurveCount;
+    uint curveIndex = (uint)(t*CurveCount);
+    uint n = (uint)(2*CurveCount);
 
     float3 p0,p1,p2,p3;
     if (curveIndex == 0) {
@@ -54,9 +54,8 @@ float3 Evaluate(float t) {
     return Bezier(p0, p1, p2, p3, t*CurveCount - curveIndex);
 }
 
-void vsmain(uint v : SV_VertexID, out float4 position : SV_Target0, out float4 screenPos : TEXCOORD0) {
-	//float4 worldPos = mul(ObjectToWorld, float4(Evaluate((float)v / (float)CurveResolution), 1.0));
-	float4 worldPos = mul(ObjectToWorld, float4(0, 1, (v - CurveResolution*.5f)*.1f, 1.0));
+void vsmain(uint v : SV_VertexID, out float4 position : SV_Position, out float4 screenPos : TEXCOORD0) {
+	float4 worldPos = mul(ObjectToWorld, float4(Evaluate((float)v / ((float)CurveResolution-1)), 1.0));
 	position = mul(Camera.ViewProjection, worldPos);
 	screenPos = position;
 }

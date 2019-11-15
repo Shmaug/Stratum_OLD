@@ -70,6 +70,8 @@ private:
 	UILabel* mLoadText;
 	UIImage* mLoadBar;
 
+	SplineRenderer* mSpline;
+
 	vector<Robot*> mRobots;
 
 	Shader* mPBRShader;
@@ -90,7 +92,7 @@ ENGINE_PLUGIN(MeshViewer)
 
 MeshViewer::MeshViewer()
 	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f),
-	mEnvironmentTexture(nullptr), mSelected(nullptr), mPanel(nullptr), mDraggingPanel(false),
+	mEnvironmentTexture(nullptr), mSelected(nullptr), mPanel(nullptr), mDraggingPanel(false), mSpline(nullptr),
 	mFileLoadPanel(nullptr), mLightSettingsPanel(nullptr), mLoadBar(nullptr), mLoadProgress(0.f), mLoadText(nullptr), mTitleText(nullptr) {
 	mEnabled = true;
 }
@@ -198,7 +200,7 @@ Robot* MeshViewer::AddRobot() {
 		metal->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 		metal->SetParameter("Color", float4(.9f));
 		metal->SetParameter("Metallic", 1.f);
-		metal->SetParameter("Roughness", .025f);
+		metal->SetParameter("Roughness", 0);
 		metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 		metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
 	}
@@ -397,7 +399,7 @@ Robot* MeshViewer::AddRobot() {
 }
 
 void MeshViewer::LoadRobot() {
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 1; i++) {
 		float t = 2 * PI * (float)rand() / (float)RAND_MAX;
 		float r = (float)rand() / (float)RAND_MAX;
 		AddRobot()->mBody->LocalPosition(100.f*r*r*float3(cosf(t), 0, sinf(t)));
@@ -415,13 +417,16 @@ void MeshViewer::LoadSpline() {
 		vector<float3> pts;
 		for (uint32_t i = 0; i < 8; i++){
 			float t = 2 * PI * i / 8.f;
-			pts.push_back(float3(cosf(t), 2.f + sinf((float)i), sinf(t)));
-			pts.push_back(float3(cosf(t) + sinf(t), 2.f + sinf((float)i)*1.2f, sinf(t) + cosf(t)));
+			float3 p(3*cosf(t), 3.f + sinf((float)i), 3*sinf(t));
+			pts.push_back(p);
+			pts.push_back(p + float3(.5f*sinf(t), .3f*cosf((float)i), .5f*cosf(t)));
 		}
 		spline->Points(pts);
 		mScene->AddObject(spline);
 		mObjects.push_back(spline.get());
 		mLoaded.emplace("_Spline", spline.get());
+
+		mSpline = spline.get();
 	}
 }
 
@@ -768,9 +773,19 @@ void MeshViewer::Update() {
 		float t = mScene->Instance()->TotalTime() + (x % 100);
 		t *= 3.f;
 
+
+
 		float3 v = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
-		r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), quaternion(float3(0, -atan2f(v.z, v.x), 0)), .075f));
-		r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .05f, r->mBody->LocalPosition().z);
+		if (mSpline){
+			static float t2 = 0;
+			t2 += mScene->Instance()->DeltaTime() * .1f  / length(mSpline->Derivative(t2));
+			//float t2 = t * .01f;
+			r->mBody->LocalPosition(mSpline->Evaluate(t2));
+			r->mBody->LocalRotation(quaternion(float3(0,1,0), normalize(mSpline->Derivative(t2))));
+		}else{
+			r->mBody->LocalRotation(slerp(r->mBody->LocalRotation(), quaternion(float3(0, -atan2f(v.z, v.x), 0)), .075f));
+			r->mBody->LocalPosition(r->mBody->LocalPosition().x, .6f + sinf(t + PI * .25f) * .05f, r->mBody->LocalPosition().z);
+		}
 
 		v = mScene->Cameras()[0]->WorldPosition() - r->mHead->WorldPosition();
 		quaternion q(float3(-atan2f(v.y, sqrtf(v.x*v.x + v.z*v.z)) - PI / 2, -atan2f(v.z, v.x) + PI / 2, 0));
@@ -780,6 +795,7 @@ void MeshViewer::Update() {
 
 		r->mRArm->LocalRotation(quaternion(float3(-sinf(t) * PI * .25f, 0, 0)));
 		r->mLArm->LocalRotation(quaternion(float3( sinf(t) * PI * .25f, 0, 0)));
+
 
 		x ^= 0x12f343a5;
 		x += 0xa234fab;

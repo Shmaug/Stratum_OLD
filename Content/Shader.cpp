@@ -14,16 +14,16 @@ void ReadBindingsAndPushConstants(ifstream& file,
 	for (uint32_t j = 0; j < bc; j++) {
 		string name;
 		uint32_t nlen;
-		file.read(reinterpret_cast<char *>(&nlen), sizeof(uint32_t));
+		file.read(reinterpret_cast<char*>(&nlen), sizeof(uint32_t));
 		name.resize(nlen);
-		file.read(const_cast<char *>(name.data()), nlen);
+		file.read(const_cast<char*>(name.data()), nlen);
 
 		auto &binding = destBindings[name];
-		file.read(reinterpret_cast<char *>(&binding.first), sizeof(uint32_t));
-		file.read(reinterpret_cast<char *>(&binding.second.binding), sizeof(uint32_t));
-		file.read(reinterpret_cast<char *>(&binding.second.descriptorCount), sizeof(uint32_t));
-		file.read(reinterpret_cast<char *>(&binding.second.descriptorType), sizeof(uint32_t));
-		file.read(reinterpret_cast<char *>(&binding.second.stageFlags), sizeof(VkShaderStageFlagBits));
+		file.read(reinterpret_cast<char*>(&binding.first), sizeof(uint32_t));
+		file.read(reinterpret_cast<char*>(&binding.second.binding), sizeof(uint32_t));
+		file.read(reinterpret_cast<char*>(&binding.second.descriptorCount), sizeof(uint32_t));
+		file.read(reinterpret_cast<char*>(&binding.second.descriptorType), sizeof(uint32_t));
+		file.read(reinterpret_cast<char*>(&binding.second.stageFlags), sizeof(VkShaderStageFlagBits));
 		uint32_t static_sampler;
 		file.read(reinterpret_cast<char *>(&static_sampler), sizeof(uint32_t));
 		if (static_sampler){
