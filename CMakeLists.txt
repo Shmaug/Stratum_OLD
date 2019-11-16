@@ -40,14 +40,13 @@ add_library(Engine SHARED
 	"Scene/Light.cpp"
 	"Scene/MeshRenderer.cpp"
 	"Scene/Scene.cpp"
-	"Scene/SplineRenderer.cpp"
 	"Scene/Object.cpp"
 	"Scene/SkinnedMeshRenderer.cpp"
 	"Scene/TextRenderer.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Profiler.cpp" )
-add_executable(ShaderCompiler "exec/shadercompiler.cpp")
-add_executable(VkCave "exec/vkcave.cpp" "ThirdParty/json11.cpp")
+add_executable(ShaderCompiler "run/shadercompiler.cpp")
+add_executable(VkCave "run/vkcave.cpp" "ThirdParty/json11.cpp")
 
 set_target_properties(Engine VkCave ShaderCompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine VkCave ShaderCompiler PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")

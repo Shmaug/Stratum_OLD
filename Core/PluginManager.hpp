@@ -25,13 +25,18 @@ private:
 	friend class VkCAVE;
 
 	#ifdef WINDOWS
-	std::vector<HMODULE> mPluginModules;
+	typedef HMODULE PluginHandle;
 	#else
-	std::vector<void*> mPluginModules;
+	typedef void* PluginHandle;
 	#endif
 
+	std::vector<PluginHandle> mPluginModules;
 	std::vector<EnginePlugin*> mPlugins;
 
+	ENGINE_EXPORT EnginePlugin* CreatePlugin(PluginHandle handle);
+	ENGINE_EXPORT void UnloadPlugin(PluginHandle handle);
+	ENGINE_EXPORT PluginHandle LoadPlugin(const std::string& filename, bool errmsg);
+	
 	ENGINE_EXPORT void LoadPlugins(Scene* scene);
 	ENGINE_EXPORT void UnloadPlugins();
 };
