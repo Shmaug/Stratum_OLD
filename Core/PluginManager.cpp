@@ -42,7 +42,7 @@ EnginePlugin* PluginManager::CreatePlugin(PluginHandle handle) {
 
 PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bool errmsg) {
 	#ifdef WINDOWS
-	HMODULE m = LoadLibraryW(filename.c_str());
+	HMODULE m = LoadLibraryA(filename.c_str());
 	if (m == NULL) {
 		if (errmsg) fprintf(stderr, "Failed to load library!\n");
 		return NULL_PLUGIN;

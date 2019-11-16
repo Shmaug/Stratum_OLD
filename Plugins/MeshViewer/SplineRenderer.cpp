@@ -146,13 +146,13 @@ void SplineRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 	MouseKeyboardInput* input = Scene()->InputManager()->GetFirst<MouseKeyboardInput>();
 	const Ray& ray = input->GetPointer(0)->mWorldRay;
-    for (uint i = 0; i < mSpline.size(); i++) {
+    for (uint32_t i = 0; i < mSpline.size(); i++) {
         float3 p = mSpline[i];
         if (Scene()->Gizmos()->PositionHandle(input->GetPointer(0), camera->WorldRotation(), p, .1f, float4(1,.1f,1,1)))
             mSpline[i] = p;
     }
 
-    for (uint i = 0; i < mSpline.size() / 2; i++){
+    for (uint32_t i = 0; i < mSpline.size() / 2; i++){
         uint32_t curveCount = (uint32_t)mSpline.size() / 2;
         uint32_t n = (uint32_t)mSpline.size();
 
