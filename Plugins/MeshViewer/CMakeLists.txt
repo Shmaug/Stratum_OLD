@@ -4,7 +4,7 @@ add_library(MeshViewer MODULE "MeshViewer.cpp" "SplineRenderer.cpp")
 link_plugin(MeshViewer)
 
 if(WIN32)
-target_link_libraries(MeshViewer "${PROJECT_BINARY_DIR}/bin/Plugins/libEnvironment.dll")
+#target_link_libraries(MeshViewer "${PROJECT_BINARY_DIR}/bin/Plugins/Environment.dll")
 else()
 target_link_libraries(MeshViewer "${PROJECT_BINARY_DIR}/bin/Plugins/libEnvironment.so")
 endif()
