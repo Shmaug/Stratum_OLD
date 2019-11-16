@@ -1,24 +1,15 @@
 #include <Core/EnginePlugin.hpp>
-#include <thread>
-#include <unordered_map>
 
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/SkinnedMeshRenderer.hpp>
-#include <Scene/SplineRenderer.hpp>
 #include <Interface/UICanvas.hpp>
 #include <Interface/UIImage.hpp>
 #include <Interface/UILabel.hpp>
 #include <Interface/UILayout.hpp>
 #include <Util/Profiler.hpp>
 
-#include <Plugins/CameraControl/CameraControl.hpp>
-
-#include <assimp/scene.h>
-#include <assimp/cimport.h>
-#include <assimp/postprocess.h>
-#include <assimp/material.h>
-#include <assimp/pbrmaterial.h>
+#include <Plugins/Environment/Environment.hpp>
 
 #ifdef __GNUC__
 #include <experimental/filesystem>
@@ -27,6 +18,8 @@ namespace fs = std::experimental::filesystem;
 #include <filesystem>
 namespace fs = std::filesystem;
 #endif
+
+#include "SplineRenderer.hpp"
 
 using namespace std;
 
@@ -49,9 +42,6 @@ public:
 
 private:
 	float mLastClick;
-
-	float mEnvironmentStrength;
-	Texture* mEnvironmentTexture;
 
 	// for editing lights
 	Object* mSelected;
@@ -91,8 +81,8 @@ private:
 ENGINE_PLUGIN(MeshViewer)
 
 MeshViewer::MeshViewer()
-	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0), mEnvironmentStrength(1.f),
-	mEnvironmentTexture(nullptr), mSelected(nullptr), mPanel(nullptr), mDraggingPanel(false), mSpline(nullptr),
+	: mScene(nullptr), mPBRShader(nullptr), mLoading(false), mLastClick(0),
+	mSelected(nullptr), mPanel(nullptr), mDraggingPanel(false), mSpline(nullptr),
 	mFileLoadPanel(nullptr), mLightSettingsPanel(nullptr), mLoadBar(nullptr), mLoadProgress(0.f), mLoadText(nullptr), mTitleText(nullptr) {
 	mEnabled = true;
 }
@@ -102,49 +92,9 @@ MeshViewer::~MeshViewer() {
 		mScene->RemoveObject(obj);
 }
 
-struct Vertex {
-	float3 position;
-	float3 normal;
-	float4 tangent;
-	float2 uv;
-
-	static const ::VertexInput VertexInput;
-};
-const ::VertexInput Vertex::VertexInput {
-	{
-		0, // binding
-		sizeof(Vertex), // stride
-		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
-	},
-	{
-		{
-			0, // location
-			0, // binding
-			VK_FORMAT_R32G32B32_SFLOAT, // format
-			offsetof(Vertex, position) // offset
-		},
-		{
-			1, // location
-			0, // binding
-			VK_FORMAT_R32G32B32_SFLOAT, // format
-			offsetof(Vertex, normal) // offset
-		},
-		{
-			2, // location
-			0, // binding
-			VK_FORMAT_R32G32B32A32_SFLOAT, // format
-			offsetof(Vertex, tangent) // offset
-		},
-		{
-			3, // location
-			0, // binding
-			VK_FORMAT_R32G32_SFLOAT, // format
-			offsetof(Vertex, uv) // offset
-		}
-	}
-};
-
 void MeshViewer::LoadAsync(fs::path path, float scale) {
+	Environment* env = mScene->PluginManager()->GetPlugin<Environment>();
+
 	// disable all the other models
 	for (auto& l : mLoaded)
 		l.second->mEnabled = false;
@@ -164,8 +114,8 @@ void MeshViewer::LoadAsync(fs::path path, float scale) {
 		material->SetParameter("Color", float4(1.f));
 		material->SetParameter("Metallic", 0.f);
 		material->SetParameter("Roughness", .5f);
-		material->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-		material->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+		material->SetParameter("ReflectionTexture", env->ReflectionMap());
+		material->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 		
 		if (mesh->Rig()) {
 			shared_ptr<SkinnedMeshRenderer> meshRenderer = make_shared<SkinnedMeshRenderer>(path.filename().string());
@@ -191,6 +141,8 @@ Robot* MeshViewer::AddRobot() {
 	Mesh* bodyMesh = mScene->AssetManager()->LoadMesh("Assets/robot/body_s.obj", 1.f);
 	Mesh* eyeMesh = mScene->AssetManager()->LoadMesh ("Assets/robot/eyeball_s.obj", 1.f);
 
+	Environment* env = mScene->PluginManager()->GetPlugin<Environment>();
+	
 	static shared_ptr<Material> metal =nullptr;
 	static shared_ptr<Material> facem = nullptr;
 	static shared_ptr<Material> eye = nullptr;
@@ -201,8 +153,8 @@ Robot* MeshViewer::AddRobot() {
 		metal->SetParameter("Color", float4(.9f));
 		metal->SetParameter("Metallic", 1.f);
 		metal->SetParameter("Roughness", 0);
-		metal->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-		metal->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+		metal->SetParameter("ReflectionTexture", env->ReflectionMap());
+		metal->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 	}
 
 	if (!facem) {
@@ -211,8 +163,8 @@ Robot* MeshViewer::AddRobot() {
 		facem->SetParameter("Color", float4(.01f));
 		facem->SetParameter("Metallic", 1.f);
 		facem->SetParameter("Roughness", .01f);
-		facem->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-		facem->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+		facem->SetParameter("ReflectionTexture", env->ReflectionMap());
+		facem->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 	}
 
 	if (!eye){
@@ -223,8 +175,8 @@ Robot* MeshViewer::AddRobot() {
 		eye->SetParameter("Roughness", .025f);
 		eye->SetParameter("Emission", float3(.5f, .75f, 1.f));
 		eye->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
-		eye->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-		eye->SetParameter("EnvironmentStrength", mEnvironmentStrength);
+		eye->SetParameter("ReflectionTexture", env->ReflectionMap());
+		eye->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 		eye->EnableKeyword("EMISSION");
 	}
 
@@ -399,7 +351,7 @@ Robot* MeshViewer::AddRobot() {
 }
 
 void MeshViewer::LoadRobot() {
-	for (int i = 0; i < 1; i++) {
+	for (int i = 0; i < 100; i++) {
 		float t = 2 * PI * (float)rand() / (float)RAND_MAX;
 		float r = (float)rand() / (float)RAND_MAX;
 		AddRobot()->mBody->LocalPosition(100.f*r*r*float3(cosf(t), 0, sinf(t)));
@@ -443,39 +395,7 @@ bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
 	Texture* white = mScene->AssetManager()->LoadTexture("Assets/white.png");
-
-	mEnvironmentTexture = mScene->AssetManager()->LoadTexture("Assets/sky.hdr", false);
-	mEnvironmentStrength = .5f;
-
 	mPBRShader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
-
-	#pragma region Skybox and Ground
-	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
-	skyboxMat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	mMaterials.push_back(skyboxMat);
-	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
-	skybox->LocalScale(1e23f);
-	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->Instance())));
-	skybox->Material(skyboxMat);
-	skybox->CastShadows(false);
-	mObjects.push_back(skybox.get());
-	mScene->AddObject(skybox);
-	
-	shared_ptr<Material> groundMat = make_shared<Material>("Ground", mPBRShader);
-	groundMat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	groundMat->SetParameter("EnvironmentStrength", mEnvironmentStrength);
-	groundMat->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
-	groundMat->SetParameter("Color", float4(.9f, .9f, .9f, 1));
-	groundMat->SetParameter("Metallic", 0.f);
-	groundMat->SetParameter("Roughness", .8f);
-	mMaterials.push_back(groundMat);
-	shared_ptr<MeshRenderer> ground = make_shared<MeshRenderer>("Ground");
-	ground->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Ground", mScene->Instance(), 100.f)));
-	ground->Material(groundMat);
-	ground->LocalRotation(quaternion(float3(-PI * .5f, 0, 0)));
-	mObjects.push_back(ground.get());
-	mScene->AddObject(ground);
-	#pragma endregion
 
 	#pragma region Lights
 	shared_ptr<Light> light0 = make_shared<Light>("Spot");
@@ -727,35 +647,34 @@ void MeshViewer::Update() {
 		const Ray& ray = input->GetPointer(0)->mWorldRay;
 		float hitT;
 		Collider* hit = mScene->Raycast(ray, hitT);
-		if (hit){
+		if (hit) {
 			if (hit == mPanel) {
 				UIElement* elem = mPanel->Raycast(ray);
-
 				if (elem == mTitleText) {
 					if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT))
 						mDraggingPanel = true;
-				}
-
-				for (UIImage* i : mLoadFileButtons) {
-					if (!mLoading && i == elem) {
-						i->Color(float4(1, 1, 1, .25f));
-						i->Outline(true);
-						if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
-							if (elem->mName == "_Robot")
-								LoadRobot();
-							else if (elem->mName == "_Spline")
-								LoadSpline();
-							else
-								LoadAsync(elem->mName, 1);
+				} else {
+					for (UIImage* i : mLoadFileButtons) {
+						if (!mLoading && i == elem) {
+							i->Color(float4(1, 1, 1, .25f));
+							i->Outline(true);
+							if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT)) {
+								if (elem->mName == "_Robot")
+									LoadRobot();
+								else if (elem->mName == "_Spline")
+									LoadSpline();
+								else
+									LoadAsync(elem->mName, 1);
+							}
+						} else {
+							i->Color(float4(0));
+							i->Outline(false);
 						}
-					} else {
-						i->Color(float4(0));
-						i->Outline(false);
 					}
 				}
 			}
 		}
-
+		
 		// Toggle menu on/off
 		if (input->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT)) {
 			if (mScene->Instance()->TotalTime() - mLastClick < .2f) {
@@ -773,13 +692,11 @@ void MeshViewer::Update() {
 		float t = mScene->Instance()->TotalTime() + (x % 100);
 		t *= 3.f;
 
-
-
 		float3 v = mScene->Cameras()[0]->WorldPosition() - r->mBody->WorldPosition();
 		if (mSpline){
-			static float t2 = 0;
-			t2 += mScene->Instance()->DeltaTime() * .1f  / length(mSpline->Derivative(t2));
-			//float t2 = t * .01f;
+			//static float t2 = 0;
+			//t2 += mScene->Instance()->DeltaTime() * .1f  / length(mSpline->Derivative(t2));
+			float t2 = t * .01f;
 			r->mBody->LocalPosition(mSpline->Evaluate(t2));
 			r->mBody->LocalRotation(quaternion(float3(0,1,0), normalize(mSpline->Derivative(t2))));
 		}else{

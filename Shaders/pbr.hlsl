@@ -29,7 +29,7 @@
 [[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t4);
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t5);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> BrdfTexture : register(t6);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t7);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> ReflectionTexture : register(t7);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t8);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t9);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t10);
@@ -40,7 +40,7 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
-	float EnvironmentStrength;
+	float ReflectionStrength;
 	uint LightCount;
 	float2 ShadowTexelSize;
 #ifdef NORMAL_MAP
@@ -237,11 +237,11 @@ void fsmain(v2f i,
 	float3 reflection = normalize(reflect(-view, normal));
 
 	uint texWidth, texHeight, numMips;
-	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	ReflectionTexture.GetDimensions(0, texWidth, texHeight, numMips);
 	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	float3 env = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb * EnvironmentStrength;
+	float3 env = ReflectionTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb * ReflectionStrength;
 	
-	eval += BRDFIndirect(material, normal, view, env, env);
+	eval += BRDFIndirect(material, normal, view, 0, env);
 
 	#ifdef OCCLUSION_MAP
 	eval *= OcclusionTexture.Sample(Sampler, i.texcoord).rgb;

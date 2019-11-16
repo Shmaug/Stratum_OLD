@@ -1,4 +1,4 @@
-#include <Scene/SplineRenderer.hpp>
+#include "SplineRenderer.hpp"
 #include <Core/CommandBuffer.hpp>
 
 using namespace std;
