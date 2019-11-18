@@ -23,13 +23,23 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
 }
 
-void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride) {
-	::Material* material = materialOverride ? materialOverride : mMaterial.get();
-
+void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, Scene::PassType pass) {
+	if (!mMaterial) return;
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, m->VertexInput(), camera, m->Topology());
+	if (!m) return;
+
+	switch (pass) {
+	case Scene::PassType::Main:
+		mMaterial->DisableKeyword("DEPTH_PASS");
+		break;
+	case Scene::PassType::Depth:
+		mMaterial->EnableKeyword("DEPTH_PASS");
+		break;
+	}
+
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology());
 	if (!layout) return;
-	auto shader = material->GetShader(commandBuffer->Device());
+	auto shader = mMaterial->GetShader(commandBuffer->Device());
 
 	if (shader->mPushConstants.count("LightCount")) {
 		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
@@ -52,6 +62,6 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	commandBuffer->mTriangleCount += instanceCount * (m->IndexCount() / 3);
 }
 
-void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
-	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, materialOverride);
+void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, pass);
 }

@@ -26,9 +26,9 @@ public:
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) override;
 	
-	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, ::Material* materialOverride);
+	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, Scene::PassType pass);
 
 	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
 	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }

@@ -12,6 +12,8 @@ CameraControl::CameraControl()
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
+	for (Camera* c : mCameras)
+		mScene->RemoveObject(c);
 	mScene->RemoveObject(mCameraPivot);
 	mScene->RemoveObject(mFpsText);
 }
@@ -19,28 +21,36 @@ CameraControl::~CameraControl() {
 bool CameraControl::Init(Scene* scene) {
 	mScene = scene;
 
-	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
-
-	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
-	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
-
-	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
-	fpsText->Font(font);
-	fpsText->Text("");
-	fpsText->VerticalAnchor(Maximum);
-	fpsText->HorizontalAnchor(Minimum);
-	mScene->AddObject(fpsText);
-	mFpsText = fpsText.get();
-
 	shared_ptr<Object> cameraPivot = make_shared<Object>("CameraPivot");
 	mScene->AddObject(cameraPivot);
 	mCameraPivot = cameraPivot.get();
 	mCameraPivot->LocalPosition(0, .5f, 0);
 
-	for (auto& camera : mScene->Cameras()) {
-		mCameraPivot->AddChild(camera);
-		camera->LocalPosition(0, 0, -mCameraDistance);
-	}
+	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
+	mScene->AddObject(camera);
+	camera->Near(.01f);
+	camera->Far(1000.f);
+	camera->FieldOfView(radians(65.f));
+
+	mCameraPivot->AddChild(camera.get());
+	camera->LocalPosition(0, 0, -mCameraDistance);
+
+	mCameras.push_back(camera.get());
+
+	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
+	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
+
+	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
+	mScene->AddObject(fpsText);
+	fpsText->Font(font);
+	fpsText->Text("");
+	fpsText->VerticalAnchor(Maximum);
+	fpsText->HorizontalAnchor(Minimum);
+	mFpsText = fpsText.get();
+
+	camera->AddChild(mFpsText);
+
+	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	return true;
 }
@@ -49,31 +59,20 @@ void CameraControl::Update() {
 	if (mInput->KeyDownFirst(GLFW_KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	
-	Camera* c = nullptr;
-	for (Camera* a : mScene->Cameras()) {
-		if (a->EnabledHierarchy()) {
-			c = a;
-			break;
-		}
-	}
-	if (c) {
-		c->AddChild(mFpsText);
-		float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
-		lp.z = c->Near() + .0001f;
-		mFpsText->LocalPosition(lp);
-
-		if (c->Orthographic()) {
-			mFpsText->TextScale(.028f * c->OrthographicSize());
-			c->OrthographicSize(c->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
-		} else {
-			mFpsText->TextScale(.0005f * tanf(c->FieldOfView() / 2));
-			mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
-		}
-
-		if (mInput->KeyDownFirst(GLFW_KEY_O))
-			c->Orthographic(!c->Orthographic());
+	Camera* c = mCameras[0];
+	float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
+	lp.z = c->Near() + .0001f;
+	mFpsText->LocalPosition(lp);
+	if (c->Orthographic()) {
+		mFpsText->TextScale(.028f * c->OrthographicSize());
+		c->OrthographicSize(c->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
+	} else {
+		mFpsText->TextScale(.0005f * tanf(c->FieldOfView() / 2));
+		mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 	}
 
+	if (mInput->KeyDownFirst(GLFW_KEY_O))
+		c->Orthographic(!c->Orthographic());
 
 	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);

@@ -39,8 +39,8 @@ void Camera::CreateDescriptorSet() {
 			ds->CreateUniformBufferDescriptor(mUniformBuffer, bufSize * i, bufSize, CAMERA_BUFFER_BINDING);
 			mDescriptorSets[i].emplace(s, ds);
 
-			mUniformBufferPtrs[i] = (uint8_t*)mUniformBuffer->MappedData() + bufSize * i;
 		}
+		mUniformBufferPtrs[i] = (uint8_t*)mUniformBuffer->MappedData() + bufSize * i;
 	}
 
 	mViewport.x = 0;

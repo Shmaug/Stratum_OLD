@@ -125,33 +125,33 @@ inline double grad(int hash, const double3& p) {
 inline float simplexf(float p) {
     int i0 = (int)floor(p);
     int i1 = i0 + 1;
-    int x0 = p - i0;
-    float2 x(x0, x0 - 1);
+    int x0 = (int)(p - i0);
+    float2 x((float)x0, (float)(x0 - 1));
     float2 t = 1 - x*x;
     t *= t;
     t *= t;
     float2 g(gradf(perm[i0 & 0xff], x.x), gradf(perm[i1 & 0xff], x.y));
     float2 n = t * n * g;
-    return 0.395 * dot(n, 1);
+    return 0.395f * dot(n, 1.f);
 }
 inline float simplexf(const float2& p) {
     static const float F2 = 0.36602540378f; // F2 = 0.5*(sqrt(3.0)-1.0)
     static const float G2 = 0.2113248654f;  // G2 = (3.0-sqrt(3.0))/6.0
-    float s = dot(p, 1) * F2;
+    float s = dot(p, 1.f) * F2;
     float2 ps = p + s;
     int2 ij = floor(ps);
-    float t = (float)dot((float2)ij, 1.0) * G2;
+    float t = (float)dot((float2)ij, 1.f) * G2;
     float2 p0 = p - (ij - t);
     int2 ij1(0, 1);
-    if (p0.x > p0.y) { ij1 = int2(1,0); }
+    if (p0.x > p0.y) { ij1 = int2(1, 0); }
 
     float2 p1 = p0 - ij1 + G2;
     float2 p2 = p0 - 1 + 2 * G2;
 
     ij = ij % 256;
-    float t0 = .5f - dot(p0 * p0, 1);
-    float t1 = .5f - dot(p1 * p1, 1);
-    float t2 = .5f - dot(p2 * p2, 1);
+    float t0 = .5f - dot(p0 * p0, 1.f);
+    float t1 = .5f - dot(p1 * p1, 1.f);
+    float t2 = .5f - dot(p2 * p2, 1.f);
 
     float3 n = 0;
     if (t0 >= 0){
@@ -166,12 +166,12 @@ inline float simplexf(const float2& p) {
         t2 *= t2;
         n.z = t2 * t2 * gradf(perm[ij.x + 1 + perm[ij.y + 1]], p2);
     }
-    return 40.0 * dot(n, 1);
+    return 40.f * dot(n, 1.f);
 }
 inline float simplexf(const float3& p) {
     static const float F3 = 1.f / 3.f;
     static const float G3 = 1.f / 6.f;
-    float s = dot(p, 1) * F3;
+    float s = dot(p, 1.f) * F3;
     float3 ps = p + s;
     int3 ijk = floor(ps);
 
@@ -214,7 +214,7 @@ inline float simplexf(const float3& p) {
         t.w *= t.w;
         n.w = t.w * t.w * gradf(perm[ijk.x + 1 + perm[ijk.y + 1 + perm[ijk.z + 1]]], p3);
     }
-    return 32.f * dot(n, 1);
+    return 32.f * dot(n, 1.f);
 }
 
 inline double simplex(double p) {

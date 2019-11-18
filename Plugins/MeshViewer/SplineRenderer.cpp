@@ -94,52 +94,6 @@ bool SplineRenderer::UpdateTransform(){
     return true;
 }
 
-void SplineRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
-    return;
-
-    if (materialOverride) return;
-    if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/bezier.shader");
-    GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
-	if (!layout) return;
-
-    if (!mPointBuffers.count(commandBuffer->Device())) {
-        pair<bool, Buffer*>* d = new pair<bool, Buffer*>[commandBuffer->Device()->MaxFramesInFlight()];
-        mPointBuffers.emplace(commandBuffer->Device(), d);
-        for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++){
-            d[i].first = true;
-            d[i].second = nullptr;
-        }
-    }
-    auto& p = mPointBuffers.at(commandBuffer->Device())[commandBuffer->Device()->FrameContextIndex()];
-    if (p.first || !p.second){
-        safe_delete(p.second);
-        p.second = new Buffer(mName, commandBuffer->Device(), mSpline.size() * sizeof(float3), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        p.second->Map();
-        memcpy(p.second->MappedData(), mSpline.data(), mSpline.size() * sizeof(float3));
-        p.first = false;
-    }
-
-    DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);
-    ds->CreateStorageBufferDescriptor(p.second, 0, p.second->Size(), shader->mDescriptorBindings.at("Spline").second.binding);
-    VkDescriptorSet d = *ds;
-    vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &d, 0, nullptr);
-
-    uint32_t n = (uint32_t)mSpline.size() / 2;
-    float4 color = 1;
-
-    VkPushConstantRange orange = shader->mPushConstants.at("ObjectToWorld");
-    VkPushConstantRange nrange = shader->mPushConstants.at("CurveCount");
-    VkPushConstantRange rrange = shader->mPushConstants.at("CurveResolution");
-    VkPushConstantRange crange = shader->mPushConstants.at("Color");
-    float4x4 o2w = ObjectToWorld();
-    vkCmdPushConstants(*commandBuffer, layout, orange.stageFlags, orange.offset, orange.size, &o2w);
-    vkCmdPushConstants(*commandBuffer, layout, nrange.stageFlags, nrange.offset, nrange.size, &n);
-    vkCmdPushConstants(*commandBuffer, layout, rrange.stageFlags, rrange.offset, rrange.size, &mCurveResolution);
-    vkCmdPushConstants(*commandBuffer, layout, crange.stageFlags, crange.offset, crange.size, &color);
-    vkCmdDraw(*commandBuffer, mCurveResolution, 1, 0, 0);
-}
-
 void SplineRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
     for (float t = 0; t <= 1.f; t += 1.f / 1024.f)
         Scene()->Gizmos()->DrawLine(Evaluate(t - 1.f / 1024.f), Evaluate(t), float4(1));

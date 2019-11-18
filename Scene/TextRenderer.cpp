@@ -56,7 +56,7 @@ void TextRenderer::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
+void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		d.mGlyphCount = 0;

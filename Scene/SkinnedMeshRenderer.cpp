@@ -70,7 +70,7 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
+void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		uint32_t c = commandBuffer->Device()->MaxFramesInFlight();
@@ -116,14 +116,23 @@ void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera
     }
 }
 
-void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
-	::Material* material = materialOverride ? materialOverride : mMaterial.get();
-	if (!material) return;
-
+void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+	if (!mMaterial) return;
 	::Mesh* m = Mesh();
-	VkPipelineLayout layout = commandBuffer->BindMaterial(material, m->VertexInput(), camera, m->Topology());
+	if (!m) return;
+
+	switch (pass) {
+	case Scene::PassType::Main:
+		mMaterial->DisableKeyword("DEPTH_PASS");
+		break;
+	case Scene::PassType::Depth:
+		mMaterial->EnableKeyword("DEPTH_PASS");
+		break;
+	}
+
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology());
 	if (!layout) return;
-	auto shader = material->GetShader(commandBuffer->Device());
+	auto shader = mMaterial->GetShader(commandBuffer->Device());
 
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
@@ -142,7 +151,7 @@ void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, ::M
 		if (!data.mDescriptorSets[frameContextIndex])
 			data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 
-		Buffer* lights = Scene()->LightBuffer(commandBuffer->Device(), frameContextIndex);
+		Buffer* lights = Scene()->LightBuffer(commandBuffer->Device());
 		if (data.mBoundLightBuffers[frameContextIndex] != lights) {
 			data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(lights, 0, lights->Size(), shader->mDescriptorBindings.at("Lights").second.binding);
 			data.mBoundLightBuffers[frameContextIndex] = lights;
