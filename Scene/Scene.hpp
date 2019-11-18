@@ -11,10 +11,10 @@
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
 #include <Scene/Collider.hpp>
-#include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
 class VkCAVE;
+class Renderer;
 
 /*
 Holds scene Objects. In general, plugins will add objects during their lifetime,
@@ -24,17 +24,24 @@ to free the memory.
 */
 class Scene {
 public:
+	enum PassType {
+		Depth,
+		Main
+	};
+
 	ENGINE_EXPORT ~Scene();
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);
 
 	ENGINE_EXPORT void Update();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void Render(Camera* camera, CommandBuffer* commandBuffer, Material* materialOverride = nullptr, bool startRenderPass = true);
+	ENGINE_EXPORT void Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass = PassType::Main, bool startRenderPass = true);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 
-	inline Buffer* LightBuffer(Device* device, uint32_t backBufferIndex) const { return mDeviceData.at(device).mLightBuffers[backBufferIndex]; }
+	inline Buffer* LightBuffer(Device* device) const { return mDeviceData.at(device).mLightBuffers[device->FrameContextIndex()]; }
+	inline Buffer* ShadowBuffer(Device* device) const { return mDeviceData.at(device).mShadowBuffers[device->FrameContextIndex()]; }
+	inline Texture* ShadowAtlas(Device* device) const { return mDeviceData.at(device).mShadowAtlasFramebuffer->ColorBuffer(0); }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
@@ -64,7 +71,6 @@ private:
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 
 	std::vector<Light*> mActiveLights;
-	std::shared_ptr<Material> mShadowMaterial;
 
 	::AssetManager* mAssetManager;
 	::Instance* mInstance;

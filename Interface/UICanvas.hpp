@@ -39,7 +39,7 @@ public:
 	inline virtual bool Visible() override { return mVisible && EnabledHierarchy(); };
 	inline virtual void RenderQueue(uint32_t rq) { mRenderQueue = rq; }
 	inline virtual uint32_t RenderQueue() override { return mRenderQueue; }
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) override;
 
 private:
 	friend class UIElement;

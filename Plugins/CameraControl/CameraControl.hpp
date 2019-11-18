@@ -28,6 +28,7 @@ private:
 
 	TextRenderer* mFpsText;
 	Object* mCameraPivot;
+	std::vector<Camera*> mCameras;
 
 	float mFrameTimeAccum;
 	float mFps;

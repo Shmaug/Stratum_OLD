@@ -50,10 +50,10 @@ void UILabel::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) {
+void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 	if (!mVisible || !Font()) return;
 	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
-	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {"CANVAS_BOUNDS"});
+	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), { "CANVAS_BOUNDS" });
 
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera);
 	if (!layout) return;

@@ -110,7 +110,6 @@ void MeshViewer::LoadAsync(fs::path path, float scale) {
 		Mesh* mesh = mScene->AssetManager()->LoadMesh(path.string().c_str(), scale);
 
 		auto material = make_shared<Material>(path.filename().string(), mPBRShader);
-		material->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 		material->SetParameter("Color", float4(1.f));
 		material->SetParameter("Metallic", 0.f);
 		material->SetParameter("Roughness", .5f);
@@ -149,7 +148,6 @@ Robot* MeshViewer::AddRobot() {
 
 	if (!metal) {
 		metal = make_shared<Material>("RobotMetal", mPBRShader);
-		metal->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 		metal->SetParameter("Color", float4(.9f));
 		metal->SetParameter("Metallic", 1.f);
 		metal->SetParameter("Roughness", 0);
@@ -159,7 +157,6 @@ Robot* MeshViewer::AddRobot() {
 
 	if (!facem) {
 		facem = make_shared<Material>("RobotFace", mPBRShader);
-		facem->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 		facem->SetParameter("Color", float4(.01f));
 		facem->SetParameter("Metallic", 1.f);
 		facem->SetParameter("Roughness", .01f);
@@ -169,7 +166,6 @@ Robot* MeshViewer::AddRobot() {
 
 	if (!eye){
 		eye = make_shared<Material>("RobotEye", mPBRShader);
-		eye->SetParameter("BrdfTexture", mScene->AssetManager()->LoadTexture("Assets/BrdfLut.png", false));
 		eye->SetParameter("Color", float4(0.2f, 0.5f, 0.75f));
 		eye->SetParameter("Metallic", 0.f);
 		eye->SetParameter("Roughness", .025f);

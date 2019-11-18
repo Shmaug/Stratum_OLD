@@ -11,8 +11,6 @@
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
-#include <cstring>
-
 class TextRenderer : public Renderer {
 public:
 	bool mVisible;
@@ -41,7 +39,7 @@ public:
 	inline virtual bool Visible() override { return mVisible && Font() && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
 
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) override;
 
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 

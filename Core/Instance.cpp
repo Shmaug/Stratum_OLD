@@ -68,13 +68,10 @@ void Instance::CreateInstance() {
 		printf("Initialized glfw.\n");
 	}
 
-	vector<const char*> instanceExtensions{
-		#ifdef ENABLE_DEBUG_LAYERS
-		VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-		#endif
-		//VK_KHR_SURFACE_EXTENSION_NAME,
-		//VK_KHR_DISPLAY_EXTENSION_NAME,
-	};
+	set<string> instanceExtensions;
+	#ifdef ENABLE_DEBUG_LAYERS
+	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	#endif
 
 	// request GLFW extensions
 	uint32_t glfwExtensionCount = 0;
@@ -82,21 +79,16 @@ void Instance::CreateInstance() {
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	printf("Done.\n");
 	for (uint32_t i = 0; i < glfwExtensionCount; i++)
-		instanceExtensions.push_back(glfwExtensions[i]);
+		instanceExtensions.insert(glfwExtensions[i]);
+	instanceExtensions.insert(VK_KHR_SURFACE_EXTENSION_NAME);
 
-	vector<const char*> validationLayers{
-		#ifdef ENABLE_DEBUG_LAYERS
-		"VK_LAYER_KHRONOS_validation",
-		"VK_LAYER_LUNARG_core_validation",
-		"VK_LAYER_LUNARG_standard_validation",
-		//"VK_LAYER_RENDERDOC_Capture"
-		#endif
-	};
-
-#ifdef ENABLE_DEBUG_LAYERS
-	printf("Initializing with validation layers\n");
-#endif
-
+	vector<const char*> validationLayers;
+	#ifdef ENABLE_DEBUG_LAYERS
+	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
+	//validationLayers.push_back("VK_LAYER_RENDERDOC_Capture");
+	#endif
 	if (validationLayers.size()) {
 		uint32_t layerCount;
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -125,11 +117,15 @@ void Instance::CreateInstance() {
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_1;
 
+	vector<const char*> exts;
+	for (const string& s : instanceExtensions)
+		exts.push_back(s.c_str());
+
 	VkInstanceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
-	createInfo.enabledExtensionCount = (uint32_t)instanceExtensions.size();
-	createInfo.ppEnabledExtensionNames = instanceExtensions.data();
+	createInfo.enabledExtensionCount = (uint32_t)exts.size();
+	createInfo.ppEnabledExtensionNames = exts.data();
 	createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
 	createInfo.ppEnabledLayerNames = validationLayers.data();
 	printf("Creating vulkan instance... ");
@@ -138,14 +134,15 @@ void Instance::CreateInstance() {
 }
 void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays) {
 	vector<const char*> deviceExtensions{
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME, // needed to obtain a swapchain
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
-	vector<const char*> validationLayers{
-		#ifdef ENABLE_DEBUG_LAYERS
-		"VK_LAYER_KHRONOS_validation",
-		"VK_LAYER_RENDERDOC_Capture",
-		#endif
-	};
+	vector<const char*> validationLayers;
+	#ifdef ENABLE_DEBUG_LAYERS
+	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
+	validationLayers.push_back("VK_LAYER_RENDERDOC_Capture");
+	#endif
 
 	MouseKeyboardInput* windowInput = new MouseKeyboardInput();
 

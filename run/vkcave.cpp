@@ -50,18 +50,7 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 #endif
 
 struct Configuration {
-	struct CameraInfo {
-		uint32_t mTargetWindowIndex;
-		float mFieldOfView;
-		float mNear;
-		float mFar;
-		float3 mPosition;
-		float3 mRotation;
-	};
-
 	vector<Instance::DisplayCreateInfo> mDisplays;
-	vector<CameraInfo> mCameras;
-
 	bool mDebugMessenger;
 };
 
@@ -101,7 +90,7 @@ private:
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras()) {
 			if (!camera->EnabledHierarchy()) continue;
-			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), nullptr);
+			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Scene::PassType::Main);
 		}
 		PROFILER_END;
 
@@ -156,21 +145,8 @@ public:
 		printf("Done.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
-
-		printf("Creating %d window cameras... ", (int)displays.size());
-		for (uint32_t i = 0; i < config->mCameras.size(); i++) {
-			auto w = mInstance->GetWindow(config->mCameras[i].mTargetWindowIndex);
-			auto camera = make_shared<Camera>("Camera", w);
-			camera->LocalPosition(config->mCameras[i].mPosition);
-			camera->LocalRotation(quaternion(radians(config->mCameras[i].mRotation)));
-			camera->FieldOfView(radians(config->mCameras[i].mFieldOfView));
-			camera->Near(config->mCameras[i].mNear);
-			camera->Far(config->mCameras[i].mFar);
-			mScene->AddObject(camera);
-		}
 		for (uint32_t i = 0; i < mInstance->WindowCount(); i++)
 			mInputManager->RegisterInputDevice(mInstance->GetWindow(i)->mInput);
-		printf("Done.\n");
 	}
 
 	VkCAVE* Loop() {
@@ -283,37 +259,6 @@ void ReadConfig(const string& file, Configuration& config) {
 			config.mDisplays.push_back(info);
 		}
 	}
-	auto& cameras = json["cameras"];
-	if (cameras.is_array()) {
-		for (const auto& camera : cameras.array_items()) {
-			auto& pos = camera["position"];
-			auto& rot = camera["rotation"];
-			auto& fov = camera["fov"];
-			auto& near = camera["near"];
-			auto& far = camera["far"];
-			auto& idx = camera["display_index"];
-
-			Configuration::CameraInfo info = {};
-
-			if (pos.is_array() && pos.array_items().size() == 3) {
-				info.mPosition.x = (float)atof(pos.array_items()[0].string_value().c_str());
-				info.mPosition.y = (float)atof(pos.array_items()[1].string_value().c_str());
-				info.mPosition.z = (float)atof(pos.array_items()[2].string_value().c_str());
-			}
-			if (rot.is_array() && rot.array_items().size() == 3) {
-				info.mRotation.x = (float)atof(rot.array_items()[0].string_value().c_str());
-				info.mRotation.y = (float)atof(rot.array_items()[1].string_value().c_str());
-				info.mRotation.z = (float)atof(rot.array_items()[2].string_value().c_str());
-			}
-			if (fov.is_string()) info.mFieldOfView = (float)atof(fov.string_value().c_str());
-			if (near.is_string()) info.mNear = (float)atof(near.string_value().c_str());
-			if (far.is_string()) info.mFar = (float)atof(far.string_value().c_str());
-			if (idx.is_number()) info.mTargetWindowIndex = (int)idx.number_value();
-
-			config.mCameras.push_back(info);
-		}
-	}
-
 	printf("Read %s\n", file.c_str());
 }
 

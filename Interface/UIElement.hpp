@@ -1,7 +1,7 @@
 #pragma once
 
 #include <set>
-#include <Scene/Object.hpp>
+#include <Scene/Scene.hpp>
 
 class UICanvas;
 class InputPointer;
@@ -54,7 +54,7 @@ public:
 	inline float2 AbsoluteExtent() { UpdateTransform(); return mAbsoluteExtent; }
 	
 	ENGINE_EXPORT bool Visible();
-	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Material* materialOverride) {}
+	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera) {}
 	
 private:
 	friend class UICanvas;

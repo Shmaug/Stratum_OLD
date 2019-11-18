@@ -3,7 +3,6 @@
 #include <Content/Shader.hpp>
 #include <Core/Buffer.hpp>
 #include <Scene/Renderer.hpp>
-#include <Scene/Scene.hpp>
 #include <Util/Util.hpp>
 
 class SplineRenderer : public Renderer {
@@ -20,7 +19,6 @@ public:
 
 	inline virtual bool Visible() override { return mVisible && mSpline.size() > 3 && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, ::Material* materialOverride) override;
 	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }

@@ -17,7 +17,7 @@ public:
 	inline void Color(const float4& c) { mColor = c; }
 	inline float4 Color() const { return mColor; }
 
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera, ::Material* materialOverride) override;
+	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, uint32_t backBufferIndex, Camera* camera) override;
 
 private:
 	struct DeviceData {
