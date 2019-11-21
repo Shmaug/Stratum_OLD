@@ -11,7 +11,7 @@ TerrainRenderer::QuadNode::QuadNode(TerrainRenderer* terrain, QuadNode* parent, 
 	mTriangleMask = 0;
 }
 TerrainRenderer::QuadNode::~QuadNode() {
-	safe_delete(mChildren);
+	safe_delete_array(mChildren);
 }
 
 void TerrainRenderer::QuadNode::Split() {
@@ -46,7 +46,7 @@ void TerrainRenderer::QuadNode::Split() {
 }
 void TerrainRenderer::QuadNode::Join() {
 	if (!mChildren) return;
-	safe_delete(mChildren);
+	safe_delete_array(mChildren);
 	ComputeTriangleFanMask();
 	UpdateNeighbors();
 }
@@ -80,6 +80,11 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 	if (l) l->ComputeTriangleFanMask();
 	if (d) d->ComputeTriangleFanMask();
 	if (u) u->ComputeTriangleFanMask();
+}
+
+bool TerrainRenderer::QuadNode::ShouldSplit(const float2& camPos) {
+	float2 v = mSize - abs(mPosition - camPos);	
+	return mVertexResolution < mTerrain->mMaxVertexResolution && v.x > 0 && v.y > 0;
 }
 
 TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::LeftNeighbor() {
@@ -152,15 +157,17 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::BackNeighbor() {
 }
 
 
-TerrainRenderer::TerrainRenderer(const string& name, float size, float height) : Object(name), Renderer(), mRootNode(nullptr), mSize(size), mHeight(height) {
+TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
+ : Object(name), Renderer(), mRootNode(nullptr), mSize(size), mHeight(height), mMaxVertexResolution(2.f) {
 	mVisible = true;
 	mRootNode = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
-	mLeafNodes.push_back(mRootNode);
 }
 TerrainRenderer::~TerrainRenderer() {
     safe_delete(mRootNode);
+	for (auto d : mIndexBuffers)
+		safe_delete(d.second);
 }
 
 bool TerrainRenderer::UpdateTransform(){
@@ -186,15 +193,41 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 
     GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
-	vector<QuadNode*> nodes = mLeafNodes;
-	sort(nodes.begin(), nodes.end(), [](QuadNode* a, QuadNode* b) {
+	// Create node buffer
+	float3 lc = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
+	float2 cp = float2(lc.x, lc.z);
+	vector<QuadNode*> leafNodes;
+	queue<QuadNode*> nodes;
+	nodes.push(mRootNode);
+	while(nodes.size()){
+		QuadNode* n = nodes.front();
+		nodes.pop();
+
+		bool split = n->ShouldSplit(cp);
+
+		if (!n->mChildren && split)
+			n->Split();
+		else if (n->mParent && !split)
+			n->Join();
+
+		if (n->mChildren)
+			for (uint32_t i = 0; i < 4; i++)
+				nodes.push(&n->mChildren[i]);
+		else
+			leafNodes.push_back(n);
+	}
+		
+	sort(leafNodes.begin(), leafNodes.end(), [](QuadNode* a, QuadNode* b) {
 		return a->mTriangleMask < b->mTriangleMask;
 	});
-	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", nodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
-	for (uint32_t i = 0; i < nodes.size(); i++)
-		bn[i] = float4(nodes[i]->mPosition.x, 0, nodes[i]->mPosition.y, nodes[i]->mSize);
+	for (QuadNode* n : leafNodes) {
+		*bn = float4(n->mPosition.x, 0, n->mPosition.y, n->mSize);
+		bn++;
+	}
 
+	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);
 	objds->CreateStorageBufferDescriptor(nodeBuffer, 0, nodeBuffer->Size(), OBJECT_BUFFER_BINDING);
 	if (shader->mDescriptorBindings.count("Lights")) {
@@ -220,7 +253,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 		float2 s = Scene()->ShadowTexelSize();
 		vkCmdPushConstants(*commandBuffer, layout, strange.stageFlags, strange.offset, strange.size, &s);
 	}
-	if (shader->mPushConstants.count("WorldToObject")) {
+	if (shader->mPushConstants.count("ObjectToWorld")) {
 		VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 		float4x4 mt = ObjectToWorld();
 		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
@@ -230,28 +263,40 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 		float4x4 mt = WorldToObject();
 		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
 	}
+	if (shader->mPushConstants.count("TerrainHeight")) {
+		VkPushConstantRange th = shader->mPushConstants.at("TerrainHeight");
+		vkCmdPushConstants(*commandBuffer, layout, th.stageFlags, th.offset, th.size, &mHeight);
+	}
+	#pragma endregion
 
-	if (mIndexBuffers.count(commandBuffer->Device())) {
+	if (mIndexBuffers.count(commandBuffer->Device()) == 0) {
 		vector<uint16_t> indices;
 		for (uint8_t i = 0; i < 16; i++) {
 			mIndexOffsets[i] = (uint32_t)indices.size();
 			GenerateTriangles(i, QuadNode::Resolution, indices);
 			mIndexCounts[i] = (uint32_t)indices.size() - mIndexOffsets[i];
 		}
-		Buffer* b = new Buffer(mName + " Indices", commandBuffer->Device(), indices.data(), indices.size() * sizeof(uint16_t), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		mIndexBuffers.emplace(commandBuffer->Device(), new Buffer(mName + " Indices", commandBuffer->Device(), indices.data(), indices.size() * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 	}
 
 	vkCmdBindIndexBuffer(*commandBuffer, *mIndexBuffers.at(commandBuffer->Device()), 0, VK_INDEX_TYPE_UINT16);
 
+	uint32_t i = 0;
 	uint32_t si = 0;
-	for (uint32_t i = 0; i < nodes.size(); i++) {
-		if (nodes[i]->mTriangleMask != nodes[si]->mTriangleMask) {
-			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[nodes[si]->mTriangleMask], (uint32_t)nodes.size(), mIndexOffsets[nodes[si]->mTriangleMask], 0, i - si);
+	QuadNode* sn = leafNodes[0];
+	for (QuadNode* n : leafNodes) {
+		if (n->mTriangleMask != sn->mTriangleMask) {
+			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], (uint32_t)leafNodes.size(), mIndexOffsets[sn->mTriangleMask], 0, i - si);
+			sn = n;
 			si = i;
+			commandBuffer->mTriangleCount += (uint32_t)leafNodes.size() * mIndexCounts[sn->mTriangleMask] / 3;
 		}
+		i++;
 	}
-	if (nodes.size() > si + 1)
-		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[nodes[si]->mTriangleMask], (uint32_t)nodes.size(), mIndexOffsets[nodes[si]->mTriangleMask], 0, nodes.size() - si);
+	if (leafNodes.size() >= si + 1){
+		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], (uint32_t)leafNodes.size(), mIndexOffsets[sn->mTriangleMask], 0, leafNodes.size() - si - 1);
+		commandBuffer->mTriangleCount += (uint32_t)leafNodes.size() * mIndexCounts[sn->mTriangleMask] / 3;
+	}
 }
 
 void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

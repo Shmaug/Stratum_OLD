@@ -7,8 +7,9 @@
 using namespace std;
 
 #define INSTANCE_BATCH_SIZE 4096
-#define MAX_GPU_LIGHTS 1024
-#define SHADOW_ATLAS_RESOLUTION 8192
+#define MAX_GPU_LIGHTS 64
+#define SHADOW_ATLAS_RESOLUTION 2048
+#define SHADOW_RESOLUTION 512
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -125,8 +126,8 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 	sc->LocalPosition(pos);
 	sc->LocalRotation(rot);
 	
-	sc->ViewportX((float)((si % 8) * 1024));
-	sc->ViewportY((float)((si / 8) * 1024));
+	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
+	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
 	sc->ViewportWidth(1024);
 	sc->ViewportHeight(1024);
 
@@ -161,11 +162,16 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			data.mShadowBuffers[i]->Map();
 		}
 	}
+	DeviceData& data = mDeviceData.at(device);
 
-	PROFILER_BEGIN("Gather Lights");
+	PROFILER_BEGIN("Lighting");
+	if (data.mShadowAtlasFramebuffer->ColorBuffer(0))
+		data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
+	data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
+
 	mActiveLights.clear();
 	if (mLights.size()) {
-		DeviceData& data = mDeviceData.at(device);
+		PROFILER_BEGIN("Gather Lights");
 		uint32_t li = 0;
 		uint32_t frameContextIndex = device->FrameContextIndex();
 		GPULight* lights = (GPULight*)data.mLightBuffers[frameContextIndex]->MappedData();
@@ -223,22 +229,21 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			li++;
 			if (li >= MAX_GPU_LIGHTS) break;
 		}
+		PROFILER_END;
 
 		PROFILER_BEGIN("Render Shadows");
-		if (data.mShadowAtlasFramebuffer->ColorBuffer(0))
-			data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
-		data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
-
+		BEGIN_CMD_REGION(commandBuffer, "Render Shadows");
 		bool g = mDrawGizmos;
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++)
 			Render(data.mShadowCameras[i], commandBuffer, PassType::Depth, false);
 		mDrawGizmos = g;
-
-		vkCmdEndRenderPass(*commandBuffer);
-		data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
+
+	vkCmdEndRenderPass(*commandBuffer);
+	data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	PROFILER_END;
 
 	mGizmos->PreFrame(device);

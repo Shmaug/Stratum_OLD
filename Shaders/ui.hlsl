@@ -45,6 +45,8 @@ v2f vsmain(uint index : SV_VertexID) {
 	float2 p = Offset + Extent * (positions[index] * 2 - 1);
 	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1.0));
 
+	worldPos.xyz -= Camera.Position;
+
 	v2f o;
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;

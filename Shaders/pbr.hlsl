@@ -68,7 +68,7 @@ struct v2f {
 	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
 	#ifdef NEED_TANGENT
-	float4 tangent : TANGENT;
+	float3 tangent : TANGENT;
 	#endif
 	#ifdef NEED_TEXCOORD
 	float2 texcoord : TEXCOORD2;
@@ -89,6 +89,8 @@ v2f vsmain(
 	v2f o;
 	
 	float4 worldPos = mul(Instances[instance].ObjectToWorld, float4(vertex, 1.0));
+	worldPos.xyz -= Camera.Position;
+
 	o.position = mul(Camera.ViewProjection, worldPos);
 	#ifdef DEPTH_PASS
 	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
@@ -98,7 +100,7 @@ v2f vsmain(
 
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
 	#ifdef NEED_TANGENT
-	o.tangent = mul(tangent, Instances[instance].WorldToObject) * tangent.w;
+	o.tangent = mul(tangent, Instances[instance].WorldToObject).xyz * tangent.w;
 	#endif
 	#ifdef NEED_TEXCOORD
 	o.texcoord = texcoord;
@@ -126,7 +128,7 @@ void fsmain(v2f i,
 		view = -view;
 		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
 	} else {
-		view = normalize(Camera.Position - i.worldPos);
+		view = normalize(-i.worldPos);
 		depth = i.screenPos.w;
 	}
 	depth /= Camera.Viewport.w;
@@ -172,7 +174,7 @@ void fsmain(v2f i,
 	material.emission = 0;
 	#endif
 	
-	float3 eval = EvaluateLighting(material, i.worldPos, normal, view, depth);
+	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
 	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }

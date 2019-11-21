@@ -131,7 +131,7 @@ inline float simplexf(float p) {
     t *= t;
     t *= t;
     float2 g(gradf(perm[i0 & 0xff], x.x), gradf(perm[i1 & 0xff], x.y));
-    float2 n = t * n * g;
+    float2 n = t * g;
     return 0.395f * dot(n, 1.f);
 }
 inline float simplexf(const float2& p) {
@@ -226,7 +226,7 @@ inline double simplex(double p) {
     t *= t;
     t *= t;
     double2 g(grad(perm[i0 & 0xff], x.x), grad(perm[i1 & 0xff], x.y));
-    double2 n = t * n * g;
+    double2 n = t * g;
     return 0.395 * dot(n, 1);
 }
 inline double simplex(const double2& p) {

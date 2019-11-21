@@ -48,6 +48,8 @@ private:
 		PLUGIN_EXPORT QuadNode(TerrainRenderer* terrain, QuadNode* parent, uint32_t siblingIndex, uint32_t lod, const float2& pos, float size);
 		PLUGIN_EXPORT ~QuadNode();
 
+		PLUGIN_EXPORT bool ShouldSplit(const float2& camPos);
+
 		PLUGIN_EXPORT void Split();
 		PLUGIN_EXPORT void Join();
 
@@ -66,9 +68,9 @@ private:
 
 	float mSize;
 	float mHeight;
+	float mMaxVertexResolution;
 
 	QuadNode* mRootNode;
-	std::vector<QuadNode*> mLeafNodes;
     std::shared_ptr<::Material> mMaterial;
 	AABB mAABB;
 

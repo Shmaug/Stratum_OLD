@@ -70,6 +70,8 @@ public:
 	inline virtual Buffer* UniformBuffer() const { return mUniformBuffer; }
 	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(VkShaderStageFlags stage);
 
+	// Note: The view matrix is calculated placing the camera at the origin. To transform from world->view, one must apply:
+	// view * (worldPos-cameraPos)
 	inline virtual float4x4 View() { UpdateMatrices(); return mView; }
 	inline virtual float4x4 Projection() { UpdateMatrices(); return mProjection; }
 	inline virtual float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }

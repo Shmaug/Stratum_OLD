@@ -143,7 +143,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 	}
 
 	sort(mPlugins.begin(), mPlugins.end(), [](const auto& a, const auto& b) {
-		return a->Priority() < b->Priority();
+		return a->Priority() > b->Priority();
 	});
 
 	for (const auto& p : mPlugins)

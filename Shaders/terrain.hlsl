@@ -23,7 +23,7 @@
 [[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t4);
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t5);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> ReflectionTexture : register(t6);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> MaskTexture : register(t7); // rgb -> rgh, hgt, ao
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> MaskTexture : register(t7); // rgb -> rough, height, ao
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
 
@@ -33,9 +33,11 @@
 	float ReflectionStrength;
 	uint LightCount;
 	float2 ShadowTexelSize;
+	float TerrainHeight;
 };
 
 #include "brdf.hlsli"
+#include "noise.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -45,6 +47,7 @@ struct v2f {
 	float3 worldPos : TEXCOORD0;
 	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
+	float3 tangent : TANGENT;
 #endif
 };
 
@@ -52,13 +55,22 @@ v2f vsmain(
 	uint v : SV_VertexID,
 	uint instance : SV_InstanceID ) {
 
-	float3 vertex = float3(v % GRID_SIZE, 0, v / GRID_SIZE) / (GRID_SIZE - 1) - .5;
-	float3 normal = float3(0, 1, 0);
+	float3 vertex = float3(v % GRID_SIZE, 0, v / GRID_SIZE);
+	vertex.xz = vertex.xz / (GRID_SIZE - 2) - .5;
 
 	vertex = vertex * Nodes[instance].w + Nodes[instance].xyz;
 
+	float3 noise = fbm(vertex.xz);
+	noise.x *= .5;
+	noise *= TerrainHeight;
+	vertex.y = noise.x;
+	float3 tangent = normalize(float3(1, noise.y, 0));
+	float3 bitangent = normalize(float3(0, noise.z, 1));
+	float3 normal = normalize(cross(bitangent, tangent));
+
 	v2f o;
 	float4 worldPos = mul(ObjectToWorld, float4(vertex, 1.0));
+	worldPos.xyz -= Camera.Position;
 	o.position = mul(Camera.ViewProjection, worldPos);
 	#ifdef DEPTH_PASS
 	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
@@ -66,6 +78,7 @@ v2f vsmain(
 	o.worldPos = worldPos.xyz;
 	o.screenPos = o.position;
 	o.normal = mul(float4(normal, 1), WorldToObject).xyz;
+	o.tangent = mul(float4(tangent, 1), WorldToObject).xyz;
 	#endif
 	return o;
 }
@@ -87,18 +100,43 @@ void fsmain(v2f i,
 		view = -view;
 		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
 	} else {
-		view = normalize(Camera.Position - i.worldPos);
+		view = normalize(-i.worldPos);
 		depth = i.screenPos.w;
 	}
 	depth /= Camera.Viewport.w;
 
-	float4 col = MainTexture.Sample(Sampler, i.worldPos.xz);
-	float4 bump = NormalTexture.Sample(Sampler, i.worldPos.xz);
-	float4 mask = MaskTexture.Sample(Sampler, i.worldPos.xz);
-	bump.xyz = bump.xyz * 2 - 1;
-
 	float3 normal = normalize(i.normal);
+	float3 tangent = normalize(i.tangent);
+	float3 bitangent = normalize(cross(tangent, normal));
+	
+	float4 col = 0;
+	float3 bump = 0;
+	float4 mask = 0;
 
+	// tri-planar
+	float3 blend = abs(normal);
+	blend /= dot(blend * blend, 1);
+	float3 sgn = sign(normal);
+
+	float3 wp = frac(i.worldPos + Camera.Position);
+
+	if (blend.x > 0) {
+		col  += blend.x * MainTexture.Sample(Sampler, wp.yz);
+		mask += blend.x * MaskTexture.Sample(Sampler, wp.yz);
+		bump += blend.x * sgn.x * (NormalTexture.Sample(Sampler, wp.yz).xyz * 2 - 1);
+	}
+	if (blend.y > 0) {
+		col  += blend.y * MainTexture.Sample(Sampler, wp.xz);
+		mask += blend.y * MaskTexture.Sample(Sampler, wp.xz);
+		bump += blend.y * sgn.y * (NormalTexture.Sample(Sampler, wp.xz).xyz * 2 - 1);
+	}
+	if (blend.z > 0) {
+		col  += blend.z * MainTexture.Sample(Sampler, wp.xy);
+		mask += blend.z * MaskTexture.Sample(Sampler, wp.xy);
+		bump += blend.z * sgn.z * (NormalTexture.Sample(Sampler, wp.xy).xyz * 2 - 1);
+	}
+	bump = normalize(bump);
+	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 
 	MaterialInfo material;
 	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, 0, material.specular, material.oneMinusReflectivity);
@@ -107,7 +145,7 @@ void fsmain(v2f i,
 	material.occlusion = mask.b;
 	material.emission = 0;
 
-	float3 eval = EvaluateLighting(material, i.worldPos, normal, view, depth);
+	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
 	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }
