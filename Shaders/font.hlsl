@@ -61,6 +61,7 @@ v2f vsmain(uint id : SV_VertexId) {
 
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
 	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1.0));
+	worldPos.xyz -= Camera.Position;
 
 	#ifdef CANVAS_BOUNDS
 	o.texcoord.zw = abs(p);

@@ -117,13 +117,13 @@ Camera::~Camera() {
 
 float4 Camera::WorldToClip(const float3& worldPos) {
 	UpdateMatrices();
-	return mViewProjection * float4(worldPos, 1);
+	return mViewProjection * float4(worldPos - WorldPosition(), 1);
 }
 float3 Camera::ClipToWorld(const float3& clipPos) {
 	UpdateMatrices();
 	float4 wp = mInvViewProjection * float4(clipPos, 1);
 	wp.xyz /= wp.w;
-	return wp.xyz;
+	return wp.xyz + WorldPosition();
 }
 Ray Camera::ScreenToWorldRay(const float2& uv) {
 	UpdateMatrices();
@@ -243,7 +243,7 @@ bool Camera::UpdateMatrices() {
 	float3 up = WorldRotation() * float3(0, 1, 0);
 	float3 fwd = WorldRotation() * float3(0, 0, 1);
 
-	mView = float4x4::Look(WorldPosition(), fwd, up);
+	mView = float4x4::Look(float3(0), fwd, up);
 
 	if (mOrthographic)
 		mProjection = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);

@@ -45,17 +45,28 @@ bool TerrainSystem::Init(Scene* scene) {
 	mat->SetParameter("ReflectionTexture", env->ReflectionMap());
 	mat->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 4096.f, 512.f);
+	mat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
+	mat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
+	mat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_msk.png", false));
+
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 4096.f, 256.f);
 	mScene->AddObject(terrain);
 	terrain->Material(mat);
 	mTerrain = terrain.get();
 	mObjects.push_back(mTerrain);
 
+	shared_ptr<Light> sun = make_shared<Light>("Sun");
+	mScene->AddObject(sun);
+	sun->CastShadows(true);
+	sun->Color(float3(1, .99f, .95f));
+	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
+	sun->Type(Sun);
+	mObjects.push_back(sun.get());
+
 	return true;
 }
 
 void TerrainSystem::Update() {
-
 }
 
 void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

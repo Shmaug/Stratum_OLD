@@ -48,6 +48,8 @@ v2f vsmain(
 	Gizmo g = Gizmos[i];
 
 	float3 worldPos = g.Position + rotate(g.Rotation, vertex * g.Scale);
+	worldPos.xyz -= Camera.Position;
+	
 	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
 	o.depth = o.position.w / Camera.Viewport.w;
 	o.normal = rotate(g.Rotation, float3(0,0,1));
