@@ -28,8 +28,6 @@ float3 noised(float2 p) {
 float3 fbm(float2 p) {
     static const float2x2 m2 = float2x2(.8, -.6, .6, .8);
 
-    p *= .005;
-
     float3 value = 0;
     float amplitude = 1;
     for(uint i=0; i < 3; i++) {

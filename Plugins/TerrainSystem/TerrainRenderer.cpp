@@ -172,7 +172,7 @@ TerrainRenderer::~TerrainRenderer() {
 
 bool TerrainRenderer::UpdateTransform(){
     if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(float3(0, mHeight / 2, 0), float3(mSize, mHeight, mSize) / 2) * ObjectToWorld();
+	mAABB = AABB(float3(0, 0, 0), float3(mSize, mHeight, mSize) / 2) * ObjectToWorld();
     return true;
 }
 
@@ -286,16 +286,16 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 	QuadNode* sn = leafNodes[0];
 	for (QuadNode* n : leafNodes) {
 		if (n->mTriangleMask != sn->mTriangleMask) {
-			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], (uint32_t)leafNodes.size(), mIndexOffsets[sn->mTriangleMask], 0, i - si);
+			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
+			commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
 			sn = n;
 			si = i;
-			commandBuffer->mTriangleCount += (uint32_t)leafNodes.size() * mIndexCounts[sn->mTriangleMask] / 3;
 		}
 		i++;
 	}
-	if (leafNodes.size() >= si + 1){
-		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], (uint32_t)leafNodes.size(), mIndexOffsets[sn->mTriangleMask], 0, leafNodes.size() - si - 1);
-		commandBuffer->mTriangleCount += (uint32_t)leafNodes.size() * mIndexCounts[sn->mTriangleMask] / 3;
+	if (i > si){
+		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
+		commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
 	}
 }
 

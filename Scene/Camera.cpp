@@ -136,7 +136,7 @@ Ray Camera::ScreenToWorldRay(const float2& uv) {
 	} else {
 		float4 p1 = mInvViewProjection * float4(clip, .1f, 1);
 		ray.mOrigin = WorldPosition();
-		ray.mDirection = normalize(p1.xyz / p1.w - ray.mOrigin);
+		ray.mDirection = normalize(p1.xyz / p1.w);
 	}
 	return ray;
 }
@@ -240,10 +240,7 @@ void Camera::Set(CommandBuffer* commandBuffer) {
 bool Camera::UpdateMatrices() {
 	if (!mMatricesDirty) return false;
 
-	float3 up = WorldRotation() * float3(0, 1, 0);
-	float3 fwd = WorldRotation() * float3(0, 0, 1);
-
-	mView = float4x4::Look(float3(0), fwd, up);
+	mView = float4x4::Look(float3(0), WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
 
 	if (mOrthographic)
 		mProjection = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
@@ -272,7 +269,7 @@ bool Camera::UpdateMatrices() {
 	};
 	for (uint32_t i = 0; i < 8; i++) {
 		float4 c = mInvViewProjection * float4(corners[i], 1);
-		corners[i] = c.xyz / c.w;
+		corners[i] = c.xyz / c.w + WorldPosition();
 	}
 
 	mFrustum[0].xyz = normalize(cross(corners[1] - corners[0], corners[2] - corners[0])); // near
