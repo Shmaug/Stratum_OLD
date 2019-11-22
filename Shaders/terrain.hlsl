@@ -60,17 +60,16 @@ v2f vsmain(
 
 	vertex = vertex * Nodes[instance].w + Nodes[instance].xyz;
 
-	float3 noise = fbm(vertex.xz);
-	noise.x *= .5;
-	noise *= TerrainHeight;
-	vertex.y = noise.x;
-	float3 tangent = normalize(float3(1, noise.y, 0));
-	float3 bitangent = normalize(float3(0, noise.z, 1));
-	float3 normal = normalize(cross(bitangent, tangent));
+	float3 noise = fbm(vertex.xz * .005).yxz;
+	vertex.y = noise.y * TerrainHeight * .5;
 
-	v2f o;
+	float3 tangent = normalize(float3(1, noise.x, 0));
+	float3 normal = normalize(float3(-noise.x, 1, -noise.z));
+
 	float4 worldPos = mul(ObjectToWorld, float4(vertex, 1.0));
 	worldPos.xyz -= Camera.Position;
+
+	v2f o;
 	o.position = mul(Camera.ViewProjection, worldPos);
 	#ifdef DEPTH_PASS
 	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
@@ -107,7 +106,7 @@ void fsmain(v2f i,
 
 	float3 normal = normalize(i.normal);
 	float3 tangent = normalize(i.tangent);
-	float3 bitangent = normalize(cross(tangent, normal));
+	float3 bitangent = normalize(cross(normal, tangent));
 	
 	float4 col = 0;
 	float3 bump = 0;
@@ -136,7 +135,7 @@ void fsmain(v2f i,
 		bump += blend.z * sgn.z * (NormalTexture.Sample(Sampler, wp.xy).xyz * 2 - 1);
 	}
 	bump = normalize(bump);
-	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
+	//normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 
 	MaterialInfo material;
 	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, 0, material.specular, material.oneMinusReflectivity);
@@ -144,9 +143,9 @@ void fsmain(v2f i,
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	material.occlusion = mask.b;
 	material.emission = 0;
-
 	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
-	color = float4(eval, 1);
+	eval = normal.y > .99;
+	color = float4(normal > .99, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }
 

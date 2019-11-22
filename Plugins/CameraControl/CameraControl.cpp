@@ -47,7 +47,6 @@ bool CameraControl::Init(Scene* scene) {
 	fpsText->VerticalAnchor(Maximum);
 	fpsText->HorizontalAnchor(Minimum);
 	mFpsText = fpsText.get();
-
 	camera->AddChild(mFpsText);
 
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
@@ -61,7 +60,7 @@ void CameraControl::Update() {
 	
 	Camera* c = mCameras[0];
 	float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
-	lp.z = c->Near() + .0001f;
+	lp.z = c->Near() + .00001f;
 	mFpsText->LocalPosition(lp);
 	if (c->Orthographic()) {
 		mFpsText->TextScale(.028f * c->OrthographicSize());

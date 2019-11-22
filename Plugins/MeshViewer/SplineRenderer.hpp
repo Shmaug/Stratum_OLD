@@ -9,17 +9,18 @@ class SplineRenderer : public Renderer {
 public:
 	bool mVisible;
 
-	ENGINE_EXPORT SplineRenderer(const std::string& name);
-	ENGINE_EXPORT ~SplineRenderer();
+	PLUGIN_EXPORT SplineRenderer(const std::string& name);
+	PLUGIN_EXPORT ~SplineRenderer();
 
-    ENGINE_EXPORT float3 Derivative(float t);
-    ENGINE_EXPORT float3 Evaluate(float t);
+    PLUGIN_EXPORT float3 Derivative(float t);
+    PLUGIN_EXPORT float3 Evaluate(float t);
 
-    ENGINE_EXPORT void Points(const std::vector<float3>& pts);
+    PLUGIN_EXPORT void Points(const std::vector<float3>& pts);
 
 	inline virtual bool Visible() override { return mVisible && mSpline.size() > 3 && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
+	inline virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {}
+	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
