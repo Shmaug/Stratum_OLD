@@ -26,10 +26,10 @@ using namespace std;
 #ifdef ENABLE_DEBUG_LAYERS
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void* pUserData) {
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT){
-		printf_color(BoldRed, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-		throw runtime_error("");
+		fprintf_color(BoldRed, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+		throw;
 	} else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-		printf_color(BoldYellow, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+		fprintf_color(BoldYellow, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 	else
 		printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 
@@ -67,19 +67,19 @@ private:
 	#endif
 
 	void Render() {
+		PROFILER_BEGIN("Sort Cameras");
+		// sort cameras so that RenderDepth of 0 is last
+		sort(mScene->mCameras.begin(), mScene->mCameras.end(), [](const auto& a, const auto& b) {
+			return a->RenderPriority() < b->RenderPriority();
+		});
+		PROFILER_END;
+
 		PROFILER_BEGIN("Get CommandBuffers");
 		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
 		for (uint32_t i = 0; i < mScene->Instance()->DeviceCount(); i++) {
 			shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->GetDevice(i)->GetCommandBuffer();
 			commandBuffers.emplace(commandBuffer->Device(), commandBuffer);
 		}
-		PROFILER_END;
-
-		PROFILER_BEGIN("Sort Cameras");
-		// sort cameras so that RenderDepth of 0 is last
-		sort(mScene->mCameras.begin(), mScene->mCameras.end(), [](const auto& a, const auto& b) {
-			return a->RenderPriority() < b->RenderPriority();
-		});
 		PROFILER_END;
 
 		PROFILER_BEGIN("Scene Pre Frame");
@@ -106,9 +106,16 @@ public:
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
 	{
+		bool useglfw = false;
+		bool directMode = false;
+		for (auto& d : config->mDisplays)
+			if (d.mDirectDisplay >= 0)
+				directMode = true;
+			else
+				useglfw = true;
+
 		printf("Initializing...\n");
-		mInstance = new Instance();
-		mInstance->CreateInstance();
+		mInstance = new Instance(directMode, useglfw);
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
 		mAssetManager = new AssetManager(mInstance);
@@ -132,16 +139,8 @@ public:
 		#endif
 		
 		// initialize device, create windows and logical devices
-		
-		vector<Instance::DisplayCreateInfo> displays;
-
-		if (config && config->mDisplays.size())
-			displays = config->mDisplays;
-		 else
-			displays = { {{ {0, 0}, {0, 0} }, -1, 0 } };
-
 		printf("Creating devices and displays... ");
-		mInstance->CreateDevicesAndWindows(displays);
+		mInstance->CreateDevicesAndWindows(config->mDisplays);
 		printf("Done.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
@@ -168,11 +167,13 @@ public:
 
 			PROFILER_BEGIN("Acquire Swapchain Images");
 			bool failed = false;
+			std::vector<uint32_t> wi(mInstance->DeviceCount());
 			// advance window swapchains
 			for (uint32_t i = 0; i < mInstance->WindowCount(); i++) {
 				Window* w = mInstance->GetWindow(i);
-				if (w->AcquireNextImage() == VK_NULL_HANDLE)
+				if (w->AcquireNextImage(w->mDevice->CurrentFrameContext()->mSemaphores[wi[w->mDevice->PhysicalDeviceIndex()]]) == VK_NULL_HANDLE)
 					failed = true;
+				wi[w->mDevice->PhysicalDeviceIndex()]++;
 			}
 			if (failed) {
 				// flush all command buffers to make re-initialization cleaner
@@ -216,11 +217,11 @@ public:
 	}
 };
 
-void ReadConfig(const string& file, Configuration& config) {
+bool ReadConfig(const string& file, Configuration& config) {
 	ifstream stream(file);
 	if (!stream.is_open()) {
 		printf("Failed to open %s\n", file.c_str());
-		return;
+		return false;
 	}
 	stringstream buffer;
 	buffer << stream.rdbuf();
@@ -230,18 +231,19 @@ void ReadConfig(const string& file, Configuration& config) {
 
 	if (json.is_null()) {
 		printf("Failed to read %s: %s\n", file.c_str(), err.c_str());
-		return;
+		return false;
 	}
 
 	auto& displays = json["displays"];
 	if (displays.is_array()) {
 		for (const auto& d : displays.array_items()) {
-			Instance::DisplayCreateInfo info = {};
-			auto& rect = d["window_rect"];
-			auto& monitor = d["monitor"];
 			auto& device = d["device"];
-			auto& camera = d["camera"];
+			auto& rect = d["window_rect"];
+			auto& direct = d["direct_display"];
 
+			Instance::DisplayCreateInfo info = {};
+			info.mDevice = device.is_number() ? device.int_value() : -1;
+			info.mDirectDisplay = direct.is_number() ? direct.int_value() : -1;
 			if (rect.is_array() && rect.array_items().size() == 4 &&
 				rect.array_items()[0].is_number() &&
 				rect.array_items()[1].is_number() &&
@@ -251,15 +253,13 @@ void ReadConfig(const string& file, Configuration& config) {
 				info.mWindowPosition.offset.y = (int)rect.array_items()[1].number_value();
 				info.mWindowPosition.extent.width = (int)rect.array_items()[2].number_value();
 				info.mWindowPosition.extent.height = (int)rect.array_items()[3].number_value();
-			}
-
-			if (monitor.is_number()) info.mMonitor = (int)monitor.number_value();
-			if (device.is_number()) info.mDevice = (int)device.number_value();
+			} else
+				info.mWindowPosition = { { 160, 90 }, { 1600, 900 } };
 
 			config.mDisplays.push_back(info);
 		}
 	}
-	printf("Read %s\n", file.c_str());
+	return true;
 }
 
 int main(int argc, char* argv[]) {
@@ -275,7 +275,12 @@ int main(int argc, char* argv[]) {
 		if (argc > 1) file = argv[1];
 
 		Configuration config = {};
-		ReadConfig(file, config);
+		if (!ReadConfig(file, config)){
+			config.mDisplays.push_back({});
+			config.mDisplays[0].mDevice = 0;
+			config.mDisplays[0].mWindowPosition = { { 160, 90 }, { 1600, 900 } };
+			config.mDisplays[0].mDirectDisplay = -1;
+		}
 		if (argc > 2)
 			config.mDebugMessenger = strcmp(argv[2], "-nodebug") != 0;
 		else

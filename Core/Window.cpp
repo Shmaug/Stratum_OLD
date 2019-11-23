@@ -50,10 +50,14 @@ void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	win->mInput->mCurrent.mScrollDelta.y += (float)y;
 }
 
-Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex)
+Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position)
 	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
-	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
-	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
+	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mPhysicalDevice(VK_NULL_HANDLE),
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr)
+	#ifndef WINDOWS
+	, mXDisplay(nullptr)
+	#endif
+	{
 
 	if (position.extent.width == 0 || position.extent.height == 0) {
 		position.extent.width = 1600;
@@ -65,8 +69,8 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	if (mWindow == nullptr) {
 		const char* msg;
 		glfwGetError(&msg);
-		printf("Failed to create GLFW window! %s\n", msg);
-		throw runtime_error("Failed to create GLFW window!");
+		fprintf_color(Red, stderr, "Failed to create GLFW window: %s\n", msg);
+		throw;
 	}
 
 	glfwSetWindowPos(mWindow, position.offset.x, position.offset.y);
@@ -86,35 +90,130 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	if (glfwCreateWindowSurface(*instance, mWindow, nullptr, &mSurface) != VK_SUCCESS) {
 		const char* msg;
 		glfwGetError(&msg);
-		printf("Failed to create GLFW window surface! %s\n", msg);
-		throw runtime_error("Failed to create GLFW window surface!");
+		fprintf_color(Red, stderr, "Failed to create GLFW window surface: %s\n", msg);
+		throw;
 	}
 
 	glfwGetWindowPos(mWindow, &mClientRect.offset.x, &mClientRect.offset.y);
 	glfwGetWindowSize(mWindow, (int*)&mClientRect.extent.width, (int*)&mClientRect.extent.height);
 	mWindowedRect = mClientRect;
+}
+Window::Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex)
+	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(""), mSwapchainSize({}), mFullscreen(true), mClientRect({}), mWindowedRect({}), mInput(nullptr),
+	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mWindow(nullptr), mPhysicalDevice(device),
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
+	
+	VkDisplayKHR display = VK_NULL_HANDLE;
+	VkDisplayModeKHR displayMode = VK_NULL_HANDLE;
+	
+	#ifndef WINDOWS
+	{
+	using namespace x11;
+	auto vkAcquireXlibDisplayEXT = (PFN_vkAcquireXlibDisplayEXT)vkGetInstanceProcAddr(*mInstance, "vkAcquireXlibDisplayEXT");
+	auto vkGetRandROutputDisplayEXT = (PFN_vkGetRandROutputDisplayEXT)vkGetInstanceProcAddr(*mInstance, "vkGetRandROutputDisplayEXT");
 
-	int monitorCount;
-	GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
-	if (monitorIndex > -1 && monitorIndex < monitorCount) {
-		auto monitor = monitors[monitorIndex];
-		auto mode = glfwGetVideoMode(monitor);
-
-		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
-		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
-		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
-		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-
-		mFullscreen = true;
+	mXDisplay = XOpenDisplay(nullptr);
+	if (!mXDisplay){
+		fprintf_color(Red, stderr, "Failed to open X display!\n");
+		throw;
 	}
+	auto screens = XRRGetScreenResources(mXDisplay, DefaultRootWindow(mXDisplay));
+	if (!screens){
+		fprintf_color(Red, stderr, "Failed to get xrandr screen resources!\n");
+		throw;
+	}
+
+	vkGetRandROutputDisplayEXT(device, mXDisplay, screens->outputs[0], &display);
+    for (uint32_t i = 0; i < screens->ncrtc; i++)
+        XRRFreeCrtcInfo(XRRGetCrtcInfo(mXDisplay, screens, screens->crtcs[i]));
+    XRRFreeScreenResources(screens);
+	
+	ThrowIfFailed(vkAcquireXlibDisplayEXT(mPhysicalDevice, mXDisplay, display), "Failed to acquire X display!");
+	}
+	#endif
+
+	if (!display) {
+		uint32_t displayPropertyCount;
+		vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, nullptr);
+		vector<VkDisplayPropertiesKHR> displayProperties(displayPropertyCount);
+		vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, displayProperties.data());
+		
+		uint32_t biggest = 0;
+		for (uint32_t i = 0; i < displayPropertyCount; i++){
+			uint32_t modeCount;
+			vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, nullptr);
+			vector<VkDisplayModePropertiesKHR> modes(modeCount);
+			vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, modes.data());
+
+			for (uint32_t j = 0; j < modeCount; j++){
+				if (modes[j].parameters.visibleRegion.width > biggest || modes[j].parameters.visibleRegion.height > biggest){
+					biggest = max(modes[j].parameters.visibleRegion.width, modes[j].parameters.visibleRegion.height);
+					displayMode = modes[j].displayMode;
+					display = displayProperties[i].display;
+				}
+			}
+		}
+	}
+	if (display == VK_NULL_HANDLE){
+		fprintf_color(Red, stderr, "Failed to find a display.\n");
+		throw;
+	}
+
+	uint32_t displayPlaneCount;
+	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(device, &displayPlaneCount, nullptr);
+	vector<VkDisplayPlanePropertiesKHR> displayPlanes(displayPlaneCount);
+	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(device, &displayPlaneCount, displayPlanes.data());
+
+	uint32_t planeIndex = 0;
+	for(uint32_t i = 0; i < displayPlaneCount; i++) {
+		vector<VkDisplayKHR> displays(10);
+		uint32_t displayCount = 10;
+		vkGetDisplayPlaneSupportedDisplaysKHR(device, i, &displayCount, displays.data());
+
+		// Find a display that matches the current plane
+		planeIndex = UINT32_MAX;
+		for (uint32_t j = 0; j < displayCount; j++) {
+			if(display == displays[j]) {
+				planeIndex = i;
+				break;
+			}
+		}
+		if (planeIndex != UINT32_MAX)
+			break;
+	}
+
+	VkDisplayPlaneCapabilitiesKHR planeCapabilities;
+	vkGetDisplayPlaneCapabilitiesKHR(device, displayMode, planeIndex, &planeCapabilities);
+
+	mSwapchainSize = planeCapabilities.maxDstExtent;
+
+	VkDisplaySurfaceCreateInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR;
+	if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR)
+		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR;
+	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR)
+		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
+	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR)
+		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR;
+	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR)
+		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
+	info.transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	info.planeStackIndex = displayPlanes[planeIndex].currentStackIndex;
+	info.globalAlpha = 1.f;
+	info.imageExtent = mSwapchainSize;
+	info.displayMode = displayMode;
+	ThrowIfFailed(vkCreateDisplayPlaneSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateDisplayPlaneSurfaceKHR failed!");
 }
 Window::~Window() {
+	#ifndef WINDOWS
+	if (mXDisplay) x11::XCloseDisplay(mXDisplay);
+	#endif
 	DestroySwapchain();
 	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
-	glfwDestroyWindow(mWindow);
+	if (mWindow) glfwDestroyWindow(mWindow);
 }
 
-VkImage Window::AcquireNextImage() {
+VkImage Window::AcquireNextImage(vector<shared_ptr<Semaphore>>& signalSemaphores) {
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
 	mImageAvailableSemaphoreIndex = (mImageAvailableSemaphoreIndex + 1) % (uint32_t)mImageAvailableSemaphores.size();
@@ -124,19 +223,14 @@ VkImage Window::AcquireNextImage() {
 
 	if (mFrameData == nullptr) return VK_NULL_HANDLE;
 
-	mDevice->CurrentFrameContext()->mSemaphores.push_back(mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]);
+	signalSemaphores.push_back(mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]);
 
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain was destroyed during CreateSwapchain (happens when window is minimized)
 	return mFrameData[mCurrentBackBufferIndex].mSwapchainImage;
 }
 
-void Window::Present() {
+void Window::Present(const vector<VkSemaphore>& waitSemaphores) {
 	if (mSwapchain == VK_NULL_HANDLE) return;
-
-	uint32_t frameContextIndex = mDevice->FrameContextIndex();
-	vector<VkSemaphore> waitSemaphores;
-	for (const shared_ptr<Semaphore>& s : mDevice->CurrentFrameContext()->mSemaphores)
-		waitSemaphores.push_back(*s);
 
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -184,6 +278,7 @@ GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
 }
 
 void Window::Fullscreen(bool fs) {
+	if (!mWindow) return;
 	if (fs) {
 		mWindowedRect = mClientRect;
 
@@ -211,6 +306,7 @@ void Window::CreateSwapchain(::Device* device) {
 	if (mSwapchain) DestroySwapchain();
 	mDevice = device;
 	mDevice->SetObjectName(mSurface, mTitle + " Surface", VK_OBJECT_TYPE_SURFACE_KHR);
+	if (!mPhysicalDevice) mPhysicalDevice = mDevice->PhysicalDevice();
 
 	#pragma region create swapchain
 	// query support
@@ -218,20 +314,25 @@ void Window::CreateSwapchain(::Device* device) {
 	vector<VkSurfaceFormatKHR> formats;
 	vector<VkPresentModeKHR> presentModes;
 
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mDevice->PhysicalDevice(), mSurface, &capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &capabilities);
 	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(mDevice->PhysicalDevice(), mSurface, &formatCount, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(mPhysicalDevice, mSurface, &formatCount, nullptr);
 	if (formatCount != 0) {
 		formats.resize(formatCount);
 		vkGetPhysicalDeviceSurfaceFormatsKHR(mDevice->PhysicalDevice(), mSurface, &formatCount, formats.data());
 	}
 	uint32_t presentModeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(mDevice->PhysicalDevice(), mSurface, &presentModeCount, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(mPhysicalDevice, mSurface, &presentModeCount, nullptr);
 	if (presentModeCount != 0) {
 		presentModes.resize(presentModeCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(mDevice->PhysicalDevice(), mSurface, &presentModeCount, presentModes.data());
 	}
-
+	uint32_t graphicsFamily, presentFamily;
+	if (!Device::FindQueueFamilies(mPhysicalDevice, mSurface, graphicsFamily, presentFamily)) {
+		fprintf_color(Red, stderr, "Failed to find queue families");
+		throw;
+	}
+	uint32_t queueFamilyIndices[] = { graphicsFamily, presentFamily };
 
 	// find the size of the swapchain
 	if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max() && capabilities.currentExtent.width != 0)
@@ -248,14 +349,14 @@ void Window::CreateSwapchain(::Device* device) {
 	// find a preferrable surface format 
 	mFormat = formats[0];
 	for (const auto& availableFormat : formats)
-		if (availableFormat.format == VK_FORMAT_R8G8B8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+		if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM) {
 			mFormat = availableFormat;
 			break;
 		}
 
 	// find the best present mode
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	if (!mFullscreen) {
+	if (!mWindow || !mFullscreen) {
 		for (const auto& availablePresentMode : presentModes)
 			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
 				presentMode = availablePresentMode;
@@ -278,22 +379,36 @@ void Window::CreateSwapchain(::Device* device) {
 	createInfo.imageExtent = mSwapchainSize;
 	createInfo.imageArrayLayers = 1;
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	uint32_t graphicsFamily, presentFamily;
-	if (!Device::FindQueueFamilies(mDevice->PhysicalDevice(), mSurface, graphicsFamily, presentFamily)) throw runtime_error("Failed to find queue families");
-	uint32_t queueFamilyIndices[] = { graphicsFamily, presentFamily };
 	if (graphicsFamily != presentFamily) {
 		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		createInfo.queueFamilyIndexCount = 2;
 		createInfo.pQueueFamilyIndices = queueFamilyIndices;
-	} else {
+	} else
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		createInfo.queueFamilyIndexCount = 0; // Optional
-		createInfo.pQueueFamilyIndices = nullptr; // Optional
-	}
-	createInfo.preTransform = capabilities.currentTransform;
+	createInfo.preTransform = capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : capabilities.currentTransform;
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	std::vector<VkCompositeAlphaFlagBitsKHR> compositeAlphaFlags = {
+		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+		VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+		VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+	};
+	for (auto& compositeAlphaFlag : compositeAlphaFlags) {
+		if (capabilities.supportedCompositeAlpha & compositeAlphaFlag) {
+			createInfo.compositeAlpha = compositeAlphaFlag;
+			break;
+		};
+	}
 	createInfo.presentMode = presentMode;
 	createInfo.clipped = VK_TRUE;
+	
+	VkBool32 sfcSupport;
+	vkGetPhysicalDeviceSurfaceSupportKHR(mPhysicalDevice, presentFamily, mSurface, &sfcSupport);
+	if (!sfcSupport) {
+		fprintf_color(Red, stderr, "Surface not supported by device!");
+		throw;
+	}
+
 	ThrowIfFailed(vkCreateSwapchainKHR(*mDevice, &createInfo, nullptr, &mSwapchain), "vkCreateSwapchainKHR failed");
 	mDevice->SetObjectName(mSwapchain, mTitle + " Swapchain", VK_OBJECT_TYPE_SWAPCHAIN_KHR);
 	#pragma endregion

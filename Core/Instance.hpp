@@ -9,15 +9,15 @@ class Device;
 class Instance {
 public:
 	struct DisplayCreateInfo {
-		VkRect2D mWindowPosition;
-		int mMonitor;
 		int mDevice;
+
+		VkRect2D mWindowPosition;
+		
+		int mDirectDisplay;
 	};
 
 	ENGINE_EXPORT ~Instance();
 
-	// Creates the VkInstance
-	ENGINE_EXPORT void CreateInstance();
 	// Initializes devices and windows according to the DisplayCreateInfos passed in
 	ENGINE_EXPORT void CreateDevicesAndWindows(const std::vector<DisplayCreateInfo>& displays);
 
@@ -40,7 +40,7 @@ public:
 
 private:
 	friend class VkCAVE;
-	ENGINE_EXPORT Instance();
+	ENGINE_EXPORT Instance(bool supportDirectDisplay, bool useGLFW);
 
 	// Asks GLFW if any windows should be closed, and polls GLFW events. Also computes DeltaTime and TotalTime
 	ENGINE_EXPORT bool PollEvents();
@@ -58,6 +58,4 @@ private:
 	std::chrono::high_resolution_clock::time_point mLastFrame;
 	float mTotalTime;
 	float mDeltaTime;
-
-	bool mGLFWInitialized;
 };

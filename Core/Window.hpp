@@ -2,6 +2,15 @@
 
 #include <GLFW/glfw3.h>
 
+#ifndef WINDOWS
+namespace x11 {
+	#include <X11/Xlib.h>
+	#include <X11/extensions/Xrandr.h>
+	#include <vulkan/vulkan_xlib.h>
+	#include <vulkan/vulkan_xlib_xrandr.h>
+}
+#endif
+
 #include <Core/Device.hpp>
 #include <Input/MouseKeyboardInput.hpp>
 #include <Util/Util.hpp>
@@ -29,16 +38,17 @@ public:
 	inline VkSurfaceKHR Surface() const { return mSurface; }
 	inline VkSurfaceFormatKHR Format() const { return mFormat; }
 
-	inline bool ShouldClose() const { return glfwWindowShouldClose(mWindow); }
+	inline bool ShouldClose() const { return mWindow ? glfwWindowShouldClose(mWindow) : false; }
 	inline ::Device* Device() const { return mDevice; }
 
 private:
 	friend class Camera;
 	friend class VkCAVE;
 	friend class Instance;
-	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, int monitorIndex = -1);
-	ENGINE_EXPORT VkImage AcquireNextImage();
-	ENGINE_EXPORT void Present();
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position);
+	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex);
+	ENGINE_EXPORT VkImage AcquireNextImage(std::vector<std::shared_ptr<Semaphore>>& signalSemaphores);
+	ENGINE_EXPORT void Present(const std::vector<VkSemaphore>& waitSemaphores);
 
 	ENGINE_EXPORT static void WindowPosCallback(GLFWwindow* window, int x, int y);
 	ENGINE_EXPORT static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -56,6 +66,11 @@ private:
 
 	Instance* mInstance;
 	::Device* mDevice;
+	VkPhysicalDevice mPhysicalDevice;
+
+	#ifndef WINDOWS
+	x11::Display* mXDisplay;
+	#endif
 
 	GLFWwindow* mWindow;
 	VkSurfaceKHR mSurface;

@@ -144,8 +144,8 @@ void fsmain(v2f i,
 	material.occlusion = mask.b;
 	material.emission = 0;
 	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
-	eval = normal.y > .99;
-	color = float4(normal > .99, 1);
+	//eval = normal > .9;
+	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }
 

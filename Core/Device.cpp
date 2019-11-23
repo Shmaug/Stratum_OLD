@@ -11,7 +11,9 @@ void Device::FrameContext::Reset() {
 	for (auto f : mFences)
 		f->Wait();
 	mFences.clear();
-	mSemaphores.clear();
+
+	for (uint32_t i = 0; i < mSemaphores.size(); i++)
+		mSemaphores[i].clear();
 
 	for (Buffer* b : mTempBuffersInUse)
 		mTempBuffers.push_back(b);
@@ -63,7 +65,7 @@ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, ui
 }
 
 Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, vector<const char*> deviceExtensions, vector<const char*> validationLayers)
-	: mInstance(instance), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
+	: mInstance(instance), mWindowCount(0), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(*instance, "vkSetDebugUtilsObjectNameEXT");
@@ -93,7 +95,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 
-	VkPhysicalDeviceDescriptorIndexingFeaturesEXT indexingFeatures{};
+	VkPhysicalDeviceDescriptorIndexingFeaturesEXT indexingFeatures = {};
 	indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
 	indexingFeatures.pNext = nullptr;
 	indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
@@ -203,7 +205,8 @@ uint32_t Device::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags prope
 		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
 
-	throw runtime_error("failed to find suitable memory type!");
+	fprintf_color(BoldRed, stderr, "Failed to find suitable memory type!");
+	throw;
 }
 
 shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
@@ -238,7 +241,6 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 	VkCommandBufferBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	beginInfo.pInheritanceInfo = nullptr; // Optional
 	ThrowIfFailed(vkBeginCommandBuffer(commandBuffer->mCommandBuffer, &beginInfo), "vkBeginCommandBuffer failed");
 
 	return commandBuffer;
@@ -248,25 +250,28 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 	lock_guard lock(mCommandPoolMutex);
 	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer), "vkEndCommandBuffer failed");
 
-	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-	VkSemaphore signalSemaphore = commandBuffer->mSignalSemaphore->operator VkSemaphore();
+	vector<VkSemaphore> semaphores;
+	vector<VkPipelineStageFlags> waitStages;
+	if (frameContext) {		
+		CurrentFrameContext()->mFences.push_back(commandBuffer->mSignalFence);
+		semaphores.resize(commandBuffer->mSignalSemaphores.size());
+		for (uint32_t i = 0; i < commandBuffer->mSignalSemaphores.size(); i++) {
+			if (!commandBuffer->mSignalSemaphores[i]) commandBuffer->mSignalSemaphores[i] = make_shared<Semaphore>(this);
+			semaphores.push_back(*commandBuffer->mSignalSemaphores[i]);
+			CurrentFrameContext()->mSemaphores[i].push_back(commandBuffer->mSignalSemaphores[i]);
+			waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+		}
+	}
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	if (frameContext) {
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &signalSemaphore;
-	}
-	submitInfo.pWaitDstStageMask = &waitStages;
+	submitInfo.pWaitDstStageMask = waitStages.data();
+	submitInfo.signalSemaphoreCount = (uint32_t)semaphores.size();
+	submitInfo.pSignalSemaphores = semaphores.data();
 	submitInfo.waitSemaphoreCount = 0;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer->mCommandBuffer;
 	vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, *commandBuffer->mSignalFence);
-
-	if (frameContext) {
-		CurrentFrameContext()->mFences.push_back(commandBuffer->mSignalFence);
-		CurrentFrameContext()->mSemaphores.push_back(commandBuffer->mSignalSemaphore);
-	}
 
 	// store the command buffer in the queue
 	mCommandBuffers[commandBuffer->mCommandPool].push(commandBuffer);
