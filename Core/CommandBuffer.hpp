@@ -69,7 +69,7 @@ private:
 	VkCommandBuffer mCommandBuffer;
 	VkCommandPool mCommandPool;
 	std::shared_ptr<Fence> mSignalFence;
-	std::shared_ptr<Semaphore> mSignalSemaphore;
+	std::vector<std::shared_ptr<Semaphore>> mSignalSemaphores;
 
 	RenderPass* mCurrentRenderPass;
 	Camera* mCurrentCamera;

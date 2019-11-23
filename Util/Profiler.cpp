@@ -23,7 +23,10 @@ void Profiler::BeginSample(const string& label, bool resume = false) {
 	mCurrentSample->mStartTime = mTimer.now();
 }
 void Profiler::EndSample() {
-	if (!mCurrentSample->mParent) throw runtime_error("Mismatch between BeginSample() and EndSample()!");
+	if (!mCurrentSample->mParent) {
+		fprintf_color(Red, stderr, "Error: Attempt to end nonexistant Profiler sample!");
+		throw;
+	}
 	mCurrentSample->mTime += mTimer.now() - mCurrentSample->mStartTime;
 	mCurrentSample = mCurrentSample->mParent;
 }

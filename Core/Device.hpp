@@ -13,7 +13,7 @@ class Device {
 public:
 	class FrameContext {
 	public:
-		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is 'done'
+		std::vector<std::vector<std::shared_ptr<Semaphore>>> mSemaphores; // semaphores that signal when this frame is 'done'
 		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
 		
 		std::vector<Buffer*> mTempBuffers;
@@ -68,6 +68,7 @@ private:
 	::Instance* mInstance;
 	uint32_t mFrameContextIndex; // assigned by mInstance
 	std::vector<FrameContext> mFrameContexts;
+	uint32_t mWindowCount;
 
 	VkPhysicalDeviceLimits mLimits;
 

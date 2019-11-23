@@ -53,7 +53,8 @@ public:
 		case Sun:
 			return AABB(float3(), float3(1e20f));
 		}
-		throw std::runtime_error("Invalid light type!");
+		fprintf_color(BoldRed, stderr, "Invalid light type!");
+		throw;
 	}
 
 private:

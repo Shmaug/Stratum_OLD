@@ -159,6 +159,88 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	printf("\x1B[0m");
 	#endif
 }
+template<typename... Args>
+inline void fprintf_color(ConsoleColor color, _IO_FILE* str, Args&&... a) {
+	#ifdef WINDOWS
+	int c = 0;
+	switch(color) {
+		case Red:
+		case BoldRed:
+		c = FOREGROUND_RED;
+		break;
+		case Green:
+		case BoldGreen:
+		c = FOREGROUND_GREEN;
+		break;
+		case Blue:
+		case BoldBlue:
+		c = FOREGROUND_BLUE;
+		break;
+		case Yellow:
+		case BoldYellow:
+		c = FOREGROUND_RED | FOREGROUND_GREEN;
+		break;
+		case Cyan:
+		case BoldCyan:
+		c = FOREGROUND_BLUE | FOREGROUND_GREEN;
+		break;
+		case Magenta:
+		case BoldMagenta:
+		c = FOREGROUND_RED | FOREGROUND_BLUE;
+		break;
+	}
+	if (color >= 6) c |= FOREGROUND_INTENSITY;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), c);
+	#else
+	switch(color) {
+		case Red:
+		fprintf(str, "\x1B[0;31m");
+		break;
+		case Green:
+		fprintf(str, "\x1B[0;32m");
+		break;
+		case Blue:
+		fprintf(str, "\x1B[0;34m");
+		break;
+		case Yellow:
+		fprintf(str, "\x1B[0;33m");
+		break;
+		case Cyan:
+		fprintf(str, "\x1B[0;36m");
+		break;
+		case Magenta:
+		fprintf(str, "\x1B[0;35m");
+		break;
+
+		case BoldRed:
+		fprintf(str, "\x1B[1;31m");
+		break;
+		case BoldGreen:
+		fprintf(str, "\x1B[1;32m");
+		break;
+		case BoldBlue:
+		fprintf(str, "\x1B[1;34m");
+		break;
+		case BoldYellow:
+		fprintf(str, "\x1B[1;33m");
+		break;
+		case BoldCyan:
+		fprintf(str, "\x1B[1;36m");
+		break;
+		case BoldMagenta:
+		fprintf(str, "\x1B[1;35m");
+		break;
+	}
+	#endif
+
+	fprintf(str, std::forward<Args>(a)...);
+
+	#ifdef WINDOWS
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	#else
+	fprintf(str, "\x1B[0m");
+	#endif
+}
 
 template <typename T>
 inline T AlignUpWithMask(T value, size_t mask) {
@@ -326,9 +408,8 @@ inline void ThrowIfFailed(VkResult result, const std::string& message){
 			case VK_ERROR_FRAGMENTATION_EXT: code = "VK_ERROR_FRAGMENTATION_EXT"; break;
 			case VK_ERROR_NOT_PERMITTED_EXT: code = "VK_ERROR_NOT_PERMITTED_EXT"; break;
 		}
-
-		std::cerr << code << ": " << message << std::endl;
-		throw std::runtime_error(code + (": " + message));
+		fprintf_color(Red, stderr, "%s: %s\n", message.c_str(), code);
+		throw;
 	}
 }
 

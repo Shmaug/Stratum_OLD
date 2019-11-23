@@ -128,6 +128,8 @@ else()
 		pthread
 		X11
 		"libvulkan.so.1"
+		"libX11.so"
+		"libXrandr.so"
 		"${VKCAVE_HOME}/ThirdParty/glfw/lib64/libglfw3.a"
 		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libassimp.a"
 		"${VKCAVE_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"

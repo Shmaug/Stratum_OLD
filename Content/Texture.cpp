@@ -58,7 +58,10 @@ Texture::Texture(const string& name, ::Instance* devices, const string& filename
 			pixels = (uint8_t*)stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
 			size = 1;
 		}
-		if (!pixels) throw runtime_error("Failed to load image");
+		if (!pixels) {
+			fprintf_color(BoldRed, stderr, "Failed to load image: %s\n", filename.c_str());
+			throw;
+		}
 		if (desiredChannels > 0) channels = desiredChannels;
 
 		stbifree = true;

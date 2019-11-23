@@ -50,8 +50,6 @@ CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const 
 
 	mSignalFence = make_shared<Fence>(device);
 	mDevice->SetObjectName(mSignalFence->operator VkFence(), name, VK_OBJECT_TYPE_FENCE);
-	mSignalSemaphore = make_shared<Semaphore>(device);
-	mDevice->SetObjectName(mSignalSemaphore->operator VkSemaphore(), name, VK_OBJECT_TYPE_SEMAPHORE);
 }
 CommandBuffer::~CommandBuffer() {
 	vkFreeCommandBuffers(*mDevice, mCommandPool, 1, &mCommandBuffer);
@@ -76,7 +74,6 @@ void CommandBuffer::Reset(const string& name) {
 	
 	mSignalFence->Reset();
 	mDevice->SetObjectName(mSignalFence->operator VkFence(), name + " Fence", VK_OBJECT_TYPE_FENCE);
-	mDevice->SetObjectName(mSignalSemaphore->operator VkSemaphore(), name + " Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
 
 	mCurrentRenderPass = nullptr;
 	mCurrentCamera = nullptr;
