@@ -25,15 +25,16 @@ float3 noised(float2 p) {
                   du * (u.yx*(va-vb-vc+vd) + float2(vb,vc) - va));
 }
 
-float3 fbm(float2 p) {
-    static const float2x2 m2 = float2x2(.8, -.6, .6, .8);
-
-    float3 value = 0;
+float fbm(float2 p) {
+    float value = 0;
+	float2 tot = 0;
     float amplitude = 1;
-    for(uint i=0; i < 3; i++) {
-        value += amplitude * noised(p);
+    for(uint i = 0; i < 5; i++) {
+		float3 signal = noised(p);
+		tot += signal.yz;
+		value += amplitude * signal.x / (1 + dot(tot, tot));
 		amplitude *= .5;
-        p = 2*mul(m2,p);
+        p *= 2;
     }
 
 	return value * .5;

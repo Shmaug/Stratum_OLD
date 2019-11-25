@@ -46,25 +46,23 @@ struct v2f {
 #else
 	float3 worldPos : TEXCOORD0;
 	float4 screenPos : TEXCOORD1;
-	float3 normal : NORMAL;
-	float3 tangent : TANGENT;
+	float3 terrainPos : TEXCOORD2;
 #endif
 };
+
+float SampleTerrain(float2 xz) {
+	float noise = fbm(xz * .005);
+	return noise * TerrainHeight * .5;
+}
 
 v2f vsmain(
 	uint v : SV_VertexID,
 	uint instance : SV_InstanceID ) {
 
-	float3 vertex = float3(v % GRID_SIZE, 0, v / GRID_SIZE);
-	vertex.xz = vertex.xz / (GRID_SIZE - 2) - .5;
-
+	float3 vertex = float3(v / GRID_SIZE, 0, v % GRID_SIZE);
+	vertex.xz = vertex.xz / (GRID_SIZE - 1) - .5;
 	vertex = vertex * Nodes[instance].w + Nodes[instance].xyz;
-
-	float3 noise = fbm(vertex.xz * .005).yxz;
-	vertex.y = noise.y * TerrainHeight * .5;
-
-	float3 tangent = normalize(float3(1, noise.x, 0));
-	float3 normal = normalize(float3(-noise.x, 1, -noise.z));
+	vertex.y = SampleTerrain(vertex.xz);
 
 	float4 worldPos = mul(ObjectToWorld, float4(vertex, 1.0));
 	worldPos.xyz -= Camera.Position;
@@ -76,8 +74,7 @@ v2f vsmain(
 	#else
 	o.worldPos = worldPos.xyz;
 	o.screenPos = o.position;
-	o.normal = mul(float4(normal, 1), WorldToObject).xyz;
-	o.tangent = mul(float4(tangent, 1), WorldToObject).xyz;
+	o.terrainPos = vertex;
 	#endif
 	return o;
 }
@@ -99,15 +96,16 @@ void fsmain(v2f i,
 		view = -view;
 		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
 	} else {
-		view = normalize(-i.worldPos);
+		view = normalize(-i.worldPos.xyz);
 		depth = i.screenPos.w;
 	}
 	depth /= Camera.Viewport.w;
 
-	float3 normal = normalize(i.normal);
-	float3 tangent = normalize(i.tangent);
-	float3 bitangent = normalize(cross(normal, tangent));
-	
+	const float e = .001;
+	float3 tangent   = normalize(float3(e, SampleTerrain(float2(i.terrainPos.x + e, i.terrainPos.z)) - i.terrainPos.y, 0));
+	float3 bitangent = normalize(float3(0, SampleTerrain(float2(i.terrainPos.x, i.terrainPos.z - e)) - i.terrainPos.y, -e));
+	float3 normal = normalize(cross(tangent, bitangent));
+
 	float4 col = 0;
 	float3 bump = 0;
 	float4 mask = 0;
@@ -144,9 +142,8 @@ void fsmain(v2f i,
 	material.occlusion = mask.b;
 	material.emission = 0;
 	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
-	//eval = normal > .9;
+	eval = normal * .5 + .5;
 	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }
-
 #endif

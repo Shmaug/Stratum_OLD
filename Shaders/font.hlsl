@@ -26,8 +26,8 @@ struct Glyph {
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4x4 ObjectToWorld;
-	float4x4 WorldToObject;
+	float4x4 WorldViewProjection;
+	float3 WorldNormal;
 	float4 Color;
 	float2 Offset;
 	float2 Bounds;
@@ -41,7 +41,6 @@ struct v2f {
 	#else
 	float2 texcoord : TEXCOORD1;
 	#endif
-	float3 normal : NORMAL;
 };
 
 v2f vsmain(uint id : SV_VertexId) {
@@ -60,17 +59,14 @@ v2f vsmain(uint id : SV_VertexId) {
 	};
 
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
-	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1.0));
-	worldPos.xyz -= Camera.Position;
 
 	#ifdef CANVAS_BOUNDS
 	o.texcoord.zw = abs(p);
 	#endif
 
-	o.position = mul(Camera.ViewProjection, worldPos);
+	o.position = mul(WorldViewProjection, float4(p, 0, 1));
 	o.depth = o.position.w / Camera.Viewport.w;
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
-	o.normal = mul(float4(0, 0, 1, 1), WorldToObject).xyz;
 
 	return o;
 }
@@ -95,5 +91,5 @@ void fsmain(v2f i,
 	clip(any(Bounds - i.texcoord.zw));
 	#endif
 	color = SampleFont(i.texcoord.xy) * Color;
-	depthNormal = float4(normalize(i.normal) * .5 + .5, i.depth);
+	depthNormal = float4(normalize(WorldNormal) * .5 + .5, i.depth);
 }
