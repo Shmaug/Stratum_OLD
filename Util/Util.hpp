@@ -160,7 +160,11 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	#endif
 }
 template<typename... Args>
+#ifdef WINDOWS
+inline void fprintf_color(ConsoleColor color, FILE* str, Args&&... a) {
+#else
 inline void fprintf_color(ConsoleColor color, _IO_FILE* str, Args&&... a) {
+#endif
 	#ifdef WINDOWS
 	int c = 0;
 	switch(color) {
