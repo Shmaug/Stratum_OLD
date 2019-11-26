@@ -45,13 +45,22 @@ bool TerrainSystem::Init(Scene* scene) {
 	mat->SetParameter("ReflectionTexture", env->ReflectionMap());
 	mat->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 
-	mat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
-	mat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
-	mat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/grass/grass1_msk.png", false));
+	mat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
+	mat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
+	mat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_msk.png", false));
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 4096.f, 256.f);
+	mat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/ground/ground3_col.jpg"));
+	mat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/ground/ground3_nrm.jpg", false));
+	mat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/ground/ground3_msk.jpg", false));
+
+	mat->SetParameter("MainTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_col.jpg"));
+	mat->SetParameter("NormalTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_nrm.jpg", false));
+	mat->SetParameter("MaskTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_msk.png", false));
+
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 10000.f, 256.f);
 	mScene->AddObject(terrain);
 	terrain->Material(mat);
+	terrain->LocalPosition(0, -128.f, 0);
 	mTerrain = terrain.get();
 	mObjects.push_back(mTerrain);
 

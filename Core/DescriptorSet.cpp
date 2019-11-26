@@ -87,6 +87,22 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture** textures, uint32_t 
 	write.descriptorCount = arraySize;
 	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
 }
+void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t index, uint32_t binding, VkImageLayout layout) {
+	VkDescriptorImageInfo info = {};
+	info.imageLayout = layout;
+	info.imageView = texture->View(mDevice);
+	info.sampler = VK_NULL_HANDLE;
+
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = mDescriptorSet;
+	write.dstBinding = binding;
+	write.dstArrayElement = index;
+	write.pImageInfo = &info;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	write.descriptorCount = 1;
+	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
+}
 void DescriptorSet::CreateSampledTextureDescriptor(Texture** textures, uint32_t count, uint32_t arraySize, uint32_t binding, VkImageLayout layout) {
 	vector<VkDescriptorImageInfo> infos(arraySize);
 	for (uint32_t i = 0; i < arraySize; i++){
@@ -119,6 +135,22 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t bi
 	write.dstSet = mDescriptorSet;
 	write.dstBinding = binding;
 	write.dstArrayElement = 0;
+	write.pImageInfo = &info;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	write.descriptorCount = 1;
+	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
+}
+void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t index, uint32_t binding, VkImageLayout layout) {
+	VkDescriptorImageInfo info = {};
+	info.imageLayout = layout;
+	info.imageView = texture->View(mDevice);
+	info.sampler = VK_NULL_HANDLE;
+
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = mDescriptorSet;
+	write.dstBinding = binding;
+	write.dstArrayElement = index;
 	write.pImageInfo = &info;
 	write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	write.descriptorCount = 1;

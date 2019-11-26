@@ -29,20 +29,11 @@ bool CameraControl::Init(Scene* scene) {
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
 	camera->Near(.01f);
-	camera->Far(1000.f);
+	camera->Far(8192.f);
 	camera->FieldOfView(radians(65.f));
 	camera->LocalPosition(0, 0, -mCameraDistance);
 	mCameras.push_back(camera.get());
 	mCameraPivot->AddChild(camera.get());
-
-	//shared_ptr<Camera> camera2 = make_shared<Camera>("Camera2", mScene->Instance()->GetWindow(1));
-	//mScene->AddObject(camera2);
-	//camera2->Near(.01f);
-	//camera2->Far(1000.f);
-	//camera2->FieldOfView(radians(65.f));
-	//camera2->LocalPosition(0, 0, -mCameraDistance);
-	//mCameras.push_back(camera2.get());
-	//mCameraPivot->AddChild(camera2.get());
 
 	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
 	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
