@@ -52,35 +52,21 @@ struct v2f {
 #endif
 };
 
-float SampleTerrain(float2 p) {
-	float n = .25*fbm3(p * .01);
-
-	float b = billow2(p * .00015);
-	b = tanh(70 * (b + .1));
-
-	n += .75*ridged8(p * .0015) * (b*.5 + .5);
-
-	return TerrainHeight * n;
-}
-
-void triplanar(uint index, float3 p, float3 blend, out float4 color, out float4 mask, out float3 bump) {
-	color = 0;
-	mask = 0;
-	bump = 0;
+void triplanar(uint index, uint topIndex, float3 p, float3 blend, inout float4 color, inout float4 mask, inout float3 bump, float weight) {
 	if (blend.x > 0) {
-		color += blend.x * MainTextures[index].Sample(Sampler, p.yz);
-		mask  += blend.x * MaskTextures[index].Sample(Sampler, p.yz);
-		bump  += blend.x * (NormalTextures[index].Sample(Sampler, p.yz).xyz * 2 - 1);
+		color += blend.x * MainTextures[index].Sample(Sampler, p.yz) * weight;
+		mask  += blend.x * MaskTextures[index].Sample(Sampler, p.yz) * weight;
+		bump  += blend.x * (NormalTextures[index].Sample(Sampler, p.yz).xyz * 2 - 1) * weight;
 	}
 	if (blend.y > 0) {
-		color += blend.y * MainTextures[index].Sample(Sampler, p.xz);
-		mask  += blend.y * MaskTextures[index].Sample(Sampler, p.xz);
-		bump  += blend.y * (NormalTextures[index].Sample(Sampler, p.xz).xyz * 2 - 1);
+		color += blend.y * MainTextures[topIndex].Sample(Sampler, p.xz) * weight;
+		mask  += blend.y * MaskTextures[topIndex].Sample(Sampler, p.xz) * weight;
+		bump  += blend.y * (NormalTextures[topIndex].Sample(Sampler, p.xz).xyz * 2 - 1) * weight;
 	}
 	if (blend.z > 0) {
-		color += blend.z * MainTextures[index].Sample(Sampler, p.xy);
-		mask  += blend.z * MaskTextures[index].Sample(Sampler, p.xy);
-		bump  += blend.z * (NormalTextures[index].Sample(Sampler, p.xy).xyz * 2 - 1);
+		color += blend.z * MainTextures[index].Sample(Sampler, p.xy) * weight;
+		mask  += blend.z * MaskTextures[index].Sample(Sampler, p.xy) * weight;
+		bump  += blend.z * (NormalTextures[index].Sample(Sampler, p.xy).xyz * 2 - 1) * weight;
 	}
 }
 
@@ -88,10 +74,12 @@ v2f vsmain(
 	uint v : SV_VertexID,
 	uint instance : SV_InstanceID ) {
 	
+	float tmp;
+
 	float3 vertex = float3(v % 17, 0, v / 17) / 16.0;
 	vertex.xz -= .5;
 	vertex = vertex * Nodes[instance].w + Nodes[instance].xyz;
-	vertex.y = SampleTerrain(vertex.xz);
+	vertex.y = TerrainHeight * SampleTerrain(vertex.xz, tmp, tmp);
 
 	float4 worldPos = mul(ObjectToWorld, float4(vertex, 1.0));
 	worldPos.xyz -= Camera.Position;
@@ -130,25 +118,28 @@ void fsmain(v2f i,
 	}
 	depth /= Camera.Viewport.w;
 
+	float tmp;
+	float mountain, lake;
+
 	const float e = .1;
-	float y = SampleTerrain(i.terrainPos);
-	float3 tangent   = normalize(float3(e, SampleTerrain(i.terrainPos + float2(e, 0)) - y, 0));
-	float3 bitangent = normalize(float3(0, SampleTerrain(i.terrainPos - float2(0, e)) - y, -e));
+	float y = TerrainHeight * SampleTerrain(i.terrainPos, mountain, lake);
+	float3 tangent   = normalize(float3(e, TerrainHeight * SampleTerrain(i.terrainPos + float2(e, 0), tmp, tmp) - y, 0));
+	float3 bitangent = normalize(float3(0, TerrainHeight * SampleTerrain(i.terrainPos - float2(0, e), tmp, tmp) - y, -e));
 	float3 normal    = normalize(cross(tangent, bitangent));
 
 	float4 col = 0;
 	float4 mask = 0;
 	float3 bump = 0;
 
-
 	// tri-planar
 	float3 blend = abs(normal);
-	blend *= blend;
+	blend *= blend * blend;
 	blend /= dot(blend, 1);
 
-	float3 wp = frac(i.worldPos + Camera.Position);
+	float3 wp = .5 * frac(i.worldPos + Camera.Position);
 
-	triplanar(0, wp, blend, col, mask, bump);
+	triplanar(2, 0, wp, blend, col, mask, bump, 1 - lake);
+	triplanar(2, 1, wp, blend, col, mask, bump, lake);
 
 	bump = normalize(bump);
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);

@@ -1,5 +1,5 @@
 float2 hash(float2 x) {
-    const float2 k = float2( 0.3183099, 0.3678794 );
+    const float2 k = float2(0.3183099f, 0.3678794f);
     x = x*k + k.yx;
     return -1 + 2*frac(16 * k*frac( x.x*x.y*(x.x+x.y)));
 }
@@ -52,23 +52,36 @@ float billow2(float2 p) {
 		amplitude *= .5;
         p *= 2;
     }
-
+	value /= 1.5;
 	return value * .5 + .5;
 }
+
 float ridged8(float2 p) {
     float value = 0;
     float amplitude = 1;
     for(uint i = 0; i < 8; i++) {
         float n = noise(p);
-		float signal = exp(-10*n*n);// 1 - abs(n);
+		float signal = exp(-10*n*n);
 		value += amplitude * signal;
 		amplitude *= .5;
         p *= 2;
     }
-
-	return value * .5 + .5;
+	value /= 1.9922;
+	return value;
 }
-
+float ridged3(float2 p) {
+	float value = 0;
+	float amplitude = 1;
+	for (uint i = 0; i < 3; i++) {
+		float n = noise(p);
+		float signal = exp(-10*n*n);
+		value += amplitude * signal;
+		amplitude *= .5;
+		p *= 2;
+	}
+	value /= 1.75;
+	return value;
+}
 
 float fbm3(float2 p) {
     float value = 0;
@@ -81,10 +94,9 @@ float fbm3(float2 p) {
 		amplitude *= .5;
         p *= 2;
     }
-
+	value /= 1.75;
 	return value * .5 + .5;
 }
-
 float fbm6(float2 p) {
     float value = 0;
 	float2 tot = 0;
@@ -96,6 +108,20 @@ float fbm6(float2 p) {
 		amplitude *= .5;
         p *= 2;
     }
-
+	value /= 1.9844;
 	return value * .5 + .5;
+}
+
+float SampleTerrain(float2 p, out float mountain, out float lake) {
+	lake = tanh(120 * (ridged3(p * .00025) - .98)) * .5 + .5;
+	mountain = tanh(70 * (billow2(p * float2(.00075, .0005)) - .2)) * .5 + .5;
+
+	lake = max(lake - mountain, 0);
+
+	float n = 0;
+	n += .10 * fbm3(p * .02);
+	n += .50 * fbm3(p * .004) * (1 - lake);
+	n += .40 * ridged8(p * .0015) * mountain;
+
+	return n;
 }

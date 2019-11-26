@@ -86,7 +86,7 @@ const uint8_t perm[512]{
 
 inline float gradf(int hash, float x) {
     int h = hash & 15;
-    float grad = 1.0 + (h & 7);   // Gradient value 1.0, 2.0, ..., 8.0
+    float grad = 1.f + (h & 7);   // Gradient value 1.0, 2.0, ..., 8.0
     if ((h & 8) != 0) grad = -grad;         // Set a random sign for the gradient
     return (grad * x);           // Multiply the gradient with the distance
 }
@@ -326,7 +326,7 @@ inline float billowf(float3 p, float lacunarity, uint32_t octaves) {
     float value = 0;
     float l = 1;
     for (uint32_t i = 0; i < octaves; ++i) {
-        value += (2 * abs(simplex(p)) - 1) * l;
+        value += (2 * abs(simplexf(p)) - 1) * l;
         p *= lacunarity;
         l /= lacunarity;
     }
@@ -338,7 +338,7 @@ inline float ridgedf(float3 p, float lacunarity, uint32_t octaves) {
     float value = 0;
     float l = 1;
     for (uint32_t i = 0; i < octaves; ++i) {
-        float signal = abs(simplex(p));
+        float signal = abs(simplexf(p));
         value += signal * signal * l;
         p *= lacunarity;
         l /= lacunarity;
@@ -349,7 +349,7 @@ inline float multifractalf(float3 p, float lacunarity, uint32_t octaves) {
     float value = 1;
     float l = 1;
     for (int i = 0; i < octaves; i++) {
-        value *= simplex(p) * l + 1;
+        value *= simplexf(p) * l + 1;
         p *= lacunarity;
         l /= lacunarity;
     }
