@@ -197,7 +197,7 @@ inline float simplexf(const float3& p) {
 
     // Calculate the contribution from the four corners
     float4 n = 0;
-    float4 t = 0.6 - dot(p0, p0);
+    float4 t = .6f - dot(p0, p0);
     if (t.x >= 0){
         t.x *= t.x;
         n.x = t.x * t.x * gradf(perm[ijk.x + perm[ijk.y + perm[ijk.z]]], p0);

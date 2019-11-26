@@ -64,10 +64,8 @@ private:
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 
 	struct DeviceData {
-		::DescriptorSet** mDescriptorSets;
-		bool* mDirty;
 		GraphicsShader* mShaderVariant;
-		inline DeviceData() : mDescriptorSets(nullptr), mDirty(nullptr), mShaderVariant(nullptr) {};
+		inline DeviceData() : mShaderVariant(nullptr) {};
 	};
 	std::unordered_map<Device*, DeviceData> mDeviceData;
 };

@@ -59,8 +59,8 @@ UIElement* UICanvas::Raycast(const Ray& worldRay) {
 	}
 	return hit;
 }
-void UICanvas::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
-	if (pass != Scene::PassType::Main) return;
+void UICanvas::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	if (pass != Main) return;
 
 	if (mSortedElementsDirty) {
 		mSortedElements.clear();

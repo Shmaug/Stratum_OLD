@@ -77,6 +77,11 @@ enum ConsoleColor {
 	BoldCyan,
 	BoldMagenta
 };
+enum PassType {
+	Depth,
+	Main
+};
+
 template<typename... Args>
 inline void printf_color(ConsoleColor color, Args&&... a) {
 	#ifdef WINDOWS

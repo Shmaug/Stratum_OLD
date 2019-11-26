@@ -8,6 +8,7 @@ using namespace std;
 
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
+
 #define SHADOW_ATLAS_RESOLUTION 2048
 #define SHADOW_RESOLUTION 512
 
@@ -125,11 +126,11 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 	sc->Far(far);
 	sc->LocalPosition(pos);
 	sc->LocalRotation(rot);
-	
+
 	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
 	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
-	sc->ViewportWidth(1024);
-	sc->ViewportHeight(1024);
+	sc->ViewportWidth(SHADOW_RESOLUTION);
+	sc->ViewportHeight(SHADOW_RESOLUTION);
 
 	sd->WorldToShadow = sc->ViewProjection();
 	sd->ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
@@ -236,7 +237,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		bool g = mDrawGizmos;
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++)
-			Render(data.mShadowCameras[i], commandBuffer, PassType::Depth, false);
+			Render(data.mShadowCameras[i], commandBuffer, Depth, false);
 		mDrawGizmos = g;
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
@@ -274,7 +275,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PreRender(commandBuffer, camera);
+			p->PreRender(commandBuffer, camera, pass);
 	for (Renderer* r : mRenderList)
 		r->PreRender(commandBuffer, camera, pass);
 	PROFILER_END;
@@ -352,7 +353,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	}
 	PROFILER_END;
 
-	if (mDrawGizmos) {
+	if (mDrawGizmos && pass == Main) {
 		PROFILER_BEGIN("Draw Gizmos");
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		for (const auto& r : mObjects)
@@ -380,7 +381,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PostRender(commandBuffer, camera);
+			p->PostRender(commandBuffer, camera, pass);
 	PROFILER_END;
 
 	camera->ResolveWindow(commandBuffer);

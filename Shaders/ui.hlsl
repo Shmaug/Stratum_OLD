@@ -8,7 +8,7 @@
 
 #pragma static_sampler Sampler
 
-#include <shadercompat.h>
+#include "shadercompat.h"
 
 // per-object
 [[vk::binding(BINDING_START + 0, PER_OBJECT)]] Texture2D<float4> MainTexture : register(t0);
@@ -24,6 +24,8 @@
 	float2 Extent;
 	float2 Bounds;
 }
+
+#include "util.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -49,7 +51,12 @@ v2f vsmain(uint index : SV_VertexID) {
 
 	v2f o;
 	o.position = mul(Camera.ViewProjection, worldPos);
-	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
+
+	float3 view;
+	float depth;
+	ComputeDepth(worldPos.xyz, ComputeScreenPos(o.position), view, depth);
+
+	o.depth = depth;
 	o.texcoord.xy = positions[index];
 	o.texcoord.zw = abs(p);
 	o.normal = mul(float4(0, 0, 1, 1), WorldToObject).xyz;

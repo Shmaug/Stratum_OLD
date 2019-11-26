@@ -9,6 +9,6 @@ public:
 	inline virtual uint32_t RenderQueue() { return 1000; }
 	virtual bool Visible() = 0;
 	virtual bool CastShadows() { return false; };
-	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {};
-	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) = 0;
+	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {};
+	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) = 0;
 };

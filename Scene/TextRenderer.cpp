@@ -41,7 +41,9 @@ void TextRenderer::Text(const string& text) {
 	mText = text;
 }
 
-void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	if (pass != Main) return;
+
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
 	Buffer* glyphBuffer;
@@ -58,18 +60,18 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::Pas
 	descriptorSet->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
 	descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
 
-	float4x4 mt = ObjectToWorld() * float4x4::Translate(-camera->WorldPosition()) * camera->ViewProjection();
+	float4x4 mt = ObjectToWorld();
 	float3 normal = WorldRotation().forward();
 	float2 offset(0);
 
-	VkPushConstantRange wvp = shader->mPushConstants.at("WorldViewProjection");
+	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 	VkPushConstantRange nrm = shader->mPushConstants.at("WorldNormal");
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 
 	VkDescriptorSet objds = *descriptorSet;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-	vkCmdPushConstants(*commandBuffer, layout, wvp.stageFlags, wvp.offset, wvp.size, &mt);
+	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
 	vkCmdPushConstants(*commandBuffer, layout, nrm.stageFlags, nrm.offset, nrm.size, &normal);
 	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
 	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
