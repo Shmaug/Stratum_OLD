@@ -7,8 +7,6 @@
 
 #include "TerrainRenderer.hpp"
 
-#include <Plugins/Environment/Environment.hpp>
-
 using namespace std;
 
 class TerrainSystem : public EnginePlugin {
@@ -39,11 +37,8 @@ TerrainSystem::~TerrainSystem() {
 bool TerrainSystem::Init(Scene* scene) {
 	mScene = scene;
 
-	Environment* env = mScene->PluginManager()->GetPlugin<Environment>();
 
 	shared_ptr<Material> mat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
-	mat->SetParameter("ReflectionTexture", env->ReflectionMap());
-	mat->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 
 	mat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
 	mat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));

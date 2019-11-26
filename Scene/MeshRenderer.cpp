@@ -23,16 +23,16 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
 }
 
-void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, Scene::PassType pass) {
+void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
 	if (!mMaterial) return;
 	::Mesh* m = Mesh();
 	if (!m) return;
 
 	switch (pass) {
-	case Scene::PassType::Main:
+	case Main:
 		mMaterial->DisableKeyword("DEPTH_PASS");
 		break;
-	case Scene::PassType::Depth:
+	case Depth:
 		mMaterial->EnableKeyword("DEPTH_PASS");
 		break;
 	}
@@ -62,6 +62,6 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	commandBuffer->mTriangleCount += instanceCount * (m->IndexCount() / 3);
 }
 
-void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, pass);
 }

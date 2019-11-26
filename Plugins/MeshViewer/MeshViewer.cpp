@@ -152,7 +152,6 @@ Robot* MeshViewer::AddRobot() {
 		metal->SetParameter("Metallic", 1.f);
 		metal->SetParameter("Roughness", 0);
 		metal->SetParameter("ReflectionTexture", env->ReflectionMap());
-		metal->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 	}
 
 	if (!facem) {
@@ -161,7 +160,6 @@ Robot* MeshViewer::AddRobot() {
 		facem->SetParameter("Metallic", 1.f);
 		facem->SetParameter("Roughness", .01f);
 		facem->SetParameter("ReflectionTexture", env->ReflectionMap());
-		facem->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 	}
 
 	if (!eye){
@@ -172,7 +170,6 @@ Robot* MeshViewer::AddRobot() {
 		eye->SetParameter("Emission", float3(.5f, .75f, 1.f));
 		eye->SetParameter("EmissionTexture", mScene->AssetManager()->LoadTexture("Assets/white.png"));
 		eye->SetParameter("ReflectionTexture", env->ReflectionMap());
-		eye->SetParameter("ReflectionStrength", env->ReflectionMapStrength());
 		eye->EnableKeyword("EMISSION");
 	}
 

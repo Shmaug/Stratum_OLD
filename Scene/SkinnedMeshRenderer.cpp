@@ -70,7 +70,7 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mDeviceData.count(commandBuffer->Device())) {
 		DeviceData& d = mDeviceData[commandBuffer->Device()];
 		uint32_t c = commandBuffer->Device()->MaxFramesInFlight();
@@ -116,16 +116,16 @@ void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera
     }
 }
 
-void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mMaterial) return;
 	::Mesh* m = Mesh();
 	if (!m) return;
 
 	switch (pass) {
-	case Scene::PassType::Main:
+	case Main:
 		mMaterial->DisableKeyword("DEPTH_PASS");
 		break;
-	case Scene::PassType::Depth:
+	case Depth:
 		mMaterial->EnableKeyword("DEPTH_PASS");
 		break;
 	}

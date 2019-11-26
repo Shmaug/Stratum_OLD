@@ -19,7 +19,7 @@ public:
 
 	inline virtual bool Visible() override { return mVisible && mSpline.size() > 3 && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mShader ? mShader->RenderQueue() : 5000; }
-	inline virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {}
+	inline virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
 	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }

@@ -90,7 +90,7 @@ private:
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras()) {
 			if (!camera->EnabledHierarchy()) continue;
-			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Scene::PassType::Main);
+			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Main);
 		}
 		PROFILER_END;
 

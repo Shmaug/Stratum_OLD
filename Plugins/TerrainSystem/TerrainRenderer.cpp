@@ -3,6 +3,8 @@
 
 #include "TriangleFan.hpp"
 
+#include <Plugins/Environment/Environment.hpp>
+
 using namespace std;
 
 TerrainRenderer::QuadNode::QuadNode(TerrainRenderer* terrain, QuadNode* parent, uint32_t siblingIndex, uint32_t lod, const float2& pos, float size)
@@ -171,14 +173,12 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 
 
 TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
- : Object(name), Renderer(), mRootNode(nullptr), mSize(size), mHeight(height), mMaxVertexResolution(2.f) {
+ : Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f) {
 	mVisible = true;
-	mRootNode = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
 }
 TerrainRenderer::~TerrainRenderer() {
-    safe_delete(mRootNode);
 	for (auto d : mIndexBuffers)
 		safe_delete(d.second);
 }
@@ -189,14 +189,15 @@ bool TerrainRenderer::UpdateTransform(){
     return true;
 }
 
-void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) {
+void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mMaterial) return;
 
 	switch (pass) {
-	case Scene::PassType::Main:
+	case Main:
 		mMaterial->DisableKeyword("DEPTH_PASS");
+		mMaterial->SetParameter("EnvironmentTexture", Scene()->PluginManager()->GetPlugin<Environment>()->EnvironmentTexture(commandBuffer->Device()));
 		break;
-	case Scene::PassType::Depth:
+	case Depth:
 		mMaterial->EnableKeyword("DEPTH_PASS");
 		break;
 	}
@@ -209,9 +210,10 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 	// Create node buffer
 	float3 lc = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
 	float2 cp = float2(lc.x, lc.z);
+	QuadNode* root = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 	vector<QuadNode*> leafNodes;
 	queue<QuadNode*> nodes;
-	nodes.push(mRootNode);
+	nodes.push(root);
 	while(nodes.size()){
 		QuadNode* n = nodes.front();
 		nodes.pop();
@@ -238,6 +240,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 		*bn = float4(n->mPosition.x, 0, n->mPosition.y, n->mSize);
 		bn++;
 	}
+	delete root;
 
 	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);

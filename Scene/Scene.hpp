@@ -24,11 +24,6 @@ to free the memory.
 */
 class Scene {
 public:
-	enum PassType {
-		Depth,
-		Main
-	};
-
 	ENGINE_EXPORT ~Scene();
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);

@@ -8,14 +8,7 @@ Material::Material(const string& name, ::Shader* shader)
 	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader)
 	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
-Material::~Material(){
-	for (auto& d : mDeviceData) {
-		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++)
-			safe_delete(d.second.mDescriptorSets[i]);
-		safe_delete(d.second.mDescriptorSets);
-		safe_delete(d.second.mDirty);
-	}
-}
+Material::~Material() {}
 
 void Material::DisableKeyword(const string& kw) {
 	mShaderKeywords.erase(kw);
@@ -30,31 +23,21 @@ void Material::EnableKeyword(const string& kw) {
 
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
 	mParameters[name] = param;
-	for (auto& d : mDeviceData)
-		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 }
 void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
 	if (!mParameters.count(name))
 		mParameters[name] = unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>();
 	get<unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>>(mParameters[name])[index] = param;
-	for (auto& d : mDeviceData)
-		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 }
 void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
 	if (!mParameters.count(name))
 		mParameters[name] = unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>();
-	get<unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>>(mParameters[name])[index] = param;	for (auto& d : mDeviceData)
-		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
+	get<unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>>(mParameters[name])[index] = param;
 }
 
 GraphicsShader* Material::GetShader(Device* device) {
 	if (!mDeviceData.count(device)) {
 		DeviceData& d = mDeviceData[device];
-		uint32_t c = device->MaxFramesInFlight();
-		d.mDescriptorSets = new DescriptorSet*[c];
-		d.mDirty = new bool[c];
-		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * c);
-		memset(d.mDirty, true, sizeof(bool) * c);
 		d.mShaderVariant = Shader()->GetGraphics(device, mShaderKeywords);
 		return d.mShaderVariant;
 	} else {
@@ -66,59 +49,57 @@ GraphicsShader* Material::GetShader(Device* device) {
 }
 
 void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, GraphicsShader* variant) {
-	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL&&
+	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL &&
 		variant->mDescriptorBindings.size()) {
 		uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 		auto& data = mDeviceData[commandBuffer->Device()];
-		if (!data.mDescriptorSets[frameContextIndex])
-			data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerMaterial DescriptorSet", commandBuffer->Device(), variant->mDescriptorSetLayouts[PER_MATERIAL]);
+
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet(mName + " PerMaterial DescriptorSet", variant->mDescriptorSetLayouts[PER_MATERIAL]);
 
 		// set descriptor parameters
-		if (data.mDirty[frameContextIndex]) {
-			vector<Texture*> tmpArray;
+		vector<Texture*> tmpArray;
 
-			for (auto& m : mParameters) {
-				if (m.second.index() > 4) continue;
-				if (variant->mDescriptorBindings.count(m.first) == 0) continue;
-				auto& bindings = variant->mDescriptorBindings.at(m.first);
-				if (bindings.first != PER_MATERIAL) continue;
+		for (auto& m : mParameters) {
+			if (m.second.index() > 4) continue;
+			if (variant->mDescriptorBindings.count(m.first) == 0) continue;
+			auto& bindings = variant->mDescriptorBindings.at(m.first);
+			if (bindings.first != PER_MATERIAL) continue;
 
-				switch (m.second.index()) {
-				case 0:
-					data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), bindings.second.binding);
-					break;
-				case 1:
-					data.mDescriptorSets[frameContextIndex]->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), bindings.second.binding);
-					break;
-				case 2:
-					data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(get<Texture*>(m.second), bindings.second.binding);
-					break;
-				case 3:
-					data.mDescriptorSets[frameContextIndex]->CreateSamplerDescriptor(get<Sampler*>(m.second), bindings.second.binding);
-					break;
-				case 4: {
-					auto& v = get<unordered_map<uint32_t, std::variant<shared_ptr<Texture>, Texture*>>>(m.second);
-					tmpArray.assign(bindings.second.descriptorCount, nullptr);
-					Texture* t = nullptr;
-					for (auto& p : v) {
-						if (p.first >= bindings.second.descriptorCount) continue;
-						tmpArray[p.first] = p.second.index() == 0 ? get<shared_ptr<Texture>>(p.second).get() : get<Texture*>(p.second);
-						if (!t) t = tmpArray[p.first];
-					}
-					if (t) {
-						for (uint32_t i = 0; i < tmpArray.size(); i++)
-							if (!tmpArray[i]) tmpArray[i] = t;
-						data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(tmpArray.data(), bindings.second.descriptorCount, bindings.second.descriptorCount, bindings.second.binding);
-					}
-					break;
+			auto binding = bindings.second;
+
+			switch (m.second.index()) {
+			case 0:
+				ds->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), binding.binding);
+				break;
+			case 1:
+				ds->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), binding.binding);
+				break;
+			case 2:
+				ds->CreateSampledTextureDescriptor(get<Texture*>(m.second), binding.binding);
+				break;
+			case 3:
+				ds->CreateSamplerDescriptor(get<Sampler*>(m.second), binding.binding);
+				break;
+			case 4: {
+				auto& v = get<unordered_map<uint32_t, std::variant<shared_ptr<Texture>, Texture*>>>(m.second);
+				tmpArray.assign(binding.descriptorCount, nullptr);
+				Texture* t = nullptr;
+				for (auto& p : v) {
+					if (p.first >= binding.descriptorCount) continue;
+					tmpArray[p.first] = p.second.index() == 0 ? get<shared_ptr<Texture>>(p.second).get() : get<Texture*>(p.second);
+					if (!t) t = tmpArray[p.first];
 				}
+				if (t) {
+					for (uint32_t i = 0; i < tmpArray.size(); i++)
+						if (!tmpArray[i]) tmpArray[i] = t;
+					ds->CreateSampledTextureDescriptor(tmpArray.data(), binding.descriptorCount, binding.descriptorCount, binding.binding);
 				}
+				break;
 			}
-
-			data.mDirty[frameContextIndex] = false;
+			}
 		}
 
-		VkDescriptorSet matds = *data.mDescriptorSets[frameContextIndex];
+		VkDescriptorSet matds = *ds;
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 	}
 

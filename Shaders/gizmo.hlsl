@@ -9,7 +9,7 @@
 #pragma static_sampler Sampler
 #pragma array MainTexture 128
 
-#include <shadercompat.h>
+#include "shadercompat.h"
 
 struct Gizmo {
 	float4 Color;
@@ -26,6 +26,8 @@ struct Gizmo {
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<Gizmo> Gizmos : register(t0);
 [[vk::binding(BINDING_START + 0, PER_OBJECT)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[128] : register(t1);
+
+#include "util.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -44,14 +46,19 @@ v2f vsmain(
 	[[vk::location(0)]] float3 vertex : Position,  
 	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
 	uint i : SV_InstanceID ) {
-	v2f o;
 	Gizmo g = Gizmos[i];
 
 	float3 worldPos = g.Position + rotate(g.Rotation, vertex * g.Scale);
 	worldPos.xyz -= Camera.Position;
-	
+
+	v2f o;
 	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
-	o.depth = o.position.w / Camera.Viewport.w;
+
+	float3 view;
+	float depth;
+	ComputeDepth(worldPos, ComputeScreenPos(o.position), view, depth);
+
+	o.depth = depth;
 	o.normal = rotate(g.Rotation, float3(0,0,1));
 	o.color = g.Color;
 	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;

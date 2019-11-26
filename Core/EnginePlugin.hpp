@@ -1,12 +1,10 @@
 #pragma once
 
-#include <Core/Device.hpp>
-#include <Core/Instance.hpp>
+#include <Core/CommandBuffer.hpp>
 #include <Util/Util.hpp>
 
-class Camera;
-class Instance;
 class Scene;
+class Camera;
 
 class EnginePlugin {
 public:
@@ -20,9 +18,9 @@ public:
 	inline virtual void Update	  () {}
 	inline virtual void PostUpdate() {}
 	
-	inline virtual void PreRender (CommandBuffer* commandBuffer, Camera* camera) {}
+	inline virtual void PreRender (CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	inline virtual void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
 	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
-	inline virtual void PostRender(CommandBuffer* commandBuffer, Camera* camera) {}
 	
 	// Higher priority plugins get called first
 	inline virtual int Priority() { return 50; }

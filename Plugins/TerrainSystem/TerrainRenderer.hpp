@@ -16,13 +16,15 @@ public:
 	inline float Height() const { return mHeight; }
 	inline float Size() const { return mSize; }
 
+	inline bool CastShadows() override { return true; }
+
 	inline ::Material* Material() const { return mMaterial.get(); }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
-	inline virtual bool Visible() override { return mVisible && EnabledHierarchy(); }
-	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : 1000; }
-	PLUGIN_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::PassType pass) override;
-	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
+	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
+	inline uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : 1000; }
+	PLUGIN_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
@@ -70,7 +72,6 @@ private:
 	float mHeight;
 	float mMaxVertexResolution;
 
-	QuadNode* mRootNode;
     std::shared_ptr<::Material> mMaterial;
 	AABB mAABB;
 

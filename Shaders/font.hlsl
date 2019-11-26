@@ -26,12 +26,14 @@ struct Glyph {
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4x4 WorldViewProjection;
+	float4x4 ObjectToWorld;
 	float3 WorldNormal;
 	float4 Color;
 	float2 Offset;
 	float2 Bounds;
 }
+
+#include "util.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -59,13 +61,19 @@ v2f vsmain(uint id : SV_VertexId) {
 	};
 
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
+	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1));
+	worldPos.xyz -= Camera.Position;
 
 	#ifdef CANVAS_BOUNDS
 	o.texcoord.zw = abs(p);
 	#endif
+	o.position = mul(Camera.ViewProjection, worldPos);
 
-	o.position = mul(WorldViewProjection, float4(p, 0, 1));
-	o.depth = o.position.w / Camera.Viewport.w;
+	float3 view;
+	float depth;
+	ComputeDepth(worldPos.xyz, ComputeScreenPos(o.position), view, depth);
+
+	o.depth = depth;
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
 
 	return o;

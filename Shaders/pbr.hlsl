@@ -33,12 +33,12 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture : register(t4);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture : register(t5);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> ReflectionTexture : register(t6);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture : register(t7);
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture : register(t8);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture : register(t9);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture	: register(t4);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> MainTexture			: register(t5);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> NormalTexture		: register(t6);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture		: register(t7);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture		: register(t8);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture		: register(t9);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
 
@@ -46,7 +46,6 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
-	float ReflectionStrength;
 	uint LightCount;
 	float2 ShadowTexelSize;
 #ifdef NORMAL_MAP
@@ -57,6 +56,7 @@
 #endif
 };
 
+#include "util.hlsli"
 #include "brdf.hlsli"
 
 struct v2f {
@@ -95,7 +95,7 @@ v2f vsmain(
 	#ifdef DEPTH_PASS
 	o.depth = (Camera.ProjParams.w ? o.position.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z : o.position.w) / Camera.Viewport.w;
 	#else
-	o.screenPos = o.position;
+	o.screenPos = ComputeScreenPos(o.position);
 	o.worldPos = worldPos.xyz;
 
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
@@ -120,18 +120,7 @@ void fsmain(v2f i,
 
 	float3 view;
 	float depth;
-	if (Camera.ProjParams.w) {
-		view = float3(i.screenPos.xy / i.screenPos.w, Camera.Viewport.z);
-		view.x *= Camera.ProjParams.x; // aspect
-		view.xy *= Camera.ProjParams.y; // ortho size
-		view = mul(float4(view, 1), Camera.View).xyz;
-		view = -view;
-		depth = i.screenPos.z * (Camera.Viewport.w - Camera.Viewport.z) + Camera.Viewport.z;
-	} else {
-		view = normalize(-i.worldPos);
-		depth = i.screenPos.w;
-	}
-	depth /= Camera.Viewport.w;
+	ComputeDepth(i.worldPos, i.screenPos, view, depth);
 
 	#ifdef COLOR_MAP
 	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
