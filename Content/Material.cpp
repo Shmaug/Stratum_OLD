@@ -33,6 +33,16 @@ void Material::SetParameter(const string& name, const MaterialParameter& param) 
 	for (auto& d : mDeviceData)
 		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
 }
+void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
+	mParameters[name] = make_pair(param, index);
+	for (auto& d : mDeviceData)
+		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
+}
+void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
+	mParameters[name] = make_pair(param, index);
+	for (auto& d : mDeviceData)
+		memset(d.second.mDirty, true, sizeof(bool) * d.first->MaxFramesInFlight());
+}
 
 GraphicsShader* Material::GetShader(Device* device) {
 	if (!mDeviceData.count(device)) {
@@ -62,8 +72,10 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Graph
 
 		// set descriptor parameters
 		if (data.mDirty[frameContextIndex]) {
+			unordered_map<uint32_t, vector<Texture*>> arrays;
+
 			for (auto& m : mParameters) {
-				if (m.second.index() > 3) continue;
+				if (m.second.index() > 5) continue;
 				if (variant->mDescriptorBindings.count(m.first) == 0) continue;
 				auto& bindings = variant->mDescriptorBindings.at(m.first);
 				if (bindings.first != PER_MATERIAL) continue;
@@ -81,8 +93,34 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Graph
 				case 3:
 					data.mDescriptorSets[frameContextIndex]->CreateSamplerDescriptor(get<Sampler*>(m.second), bindings.second.binding);
 					break;
+				case 4: {
+					auto p = get<pair<Texture*, uint32_t>>(m.second);
+					if (!arrays.count(bindings.second.binding)){
+						vector<Texture*>& t = arrays[bindings.second.binding];
+						t.resize(bindings.second.descriptorCount);
+						for (uint32_t i = 0; i < t.size(); i++)
+							t[i] = p.first;
+					} else
+						arrays[bindings.second.binding][p.second] = p.first;
+					break;
+				}
+				case 5: {
+					auto p = get<pair<shared_ptr<Texture>, uint32_t>>(m.second);
+					if (!arrays.count(bindings.second.binding)){
+						vector<Texture*>& t = arrays[bindings.second.binding];
+						t.resize(bindings.second.descriptorCount);
+						for (uint32_t i = 0; i < t.size(); i++)
+							t[i] = p.first.get();
+					} else
+						arrays[bindings.second.binding][p.second] = p.first.get();
+					break;
+				}
 				}
 			}
+
+			for (auto a : arrays)
+				data.mDescriptorSets[frameContextIndex]->CreateSampledTextureDescriptor(a.second.data(), (uint32_t)a.second.size(), a.second.size(), a.first);
+
 			data.mDirty[frameContextIndex] = false;
 		}
 
@@ -98,26 +136,26 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Graph
 
 	// set push constant parameters
 	for (auto& m : mParameters) {
-		if (m.second.index() <= 3) continue;
+		if (m.second.index() <= 5) continue;
 		if (variant->mPushConstants.count(m.first) == 0) continue;
 		auto& range = variant->mPushConstants.at(m.first);
 
 		float4 value(0);
 
 		switch (m.second.index()) {
-		case 4:
+		case 6:
 			if (range.size != sizeof(float)) continue;
 			value = float4(get<float>(m.second), 0, 0, 0);
 			break;
-		case 5:
+		case 7:
 			if (range.size != sizeof(float2)) continue;
 			value = float4(get<float2>(m.second), 0, 0);
 			break;
-		case 6:
+		case 8:
 			if (range.size != sizeof(float3)) continue;
 			value = float4(get<float3>(m.second), 0);
 			break;
-		case 7:
+		case 9:
 			if (range.size != sizeof(float4)) continue;
 			value = get<float4>(m.second);
 			break;

@@ -17,13 +17,16 @@ TerrainRenderer::QuadNode::~QuadNode() {
 void TerrainRenderer::QuadNode::Split() {
 	if (mChildren) return;
 
+	float s4 = mSize / 4;
+	float s2 = mSize / 2;
+
 	//  | 0 | 1 |
 	//  | 2 | 3 |
 	float2 o[4]{
-		float2(-mSize,  mSize) / 4,
-		float2( mSize,  mSize) / 4,
-		float2(-mSize, -mSize) / 4,
-		float2( mSize, -mSize) / 4,
+		float2(-s4, -s4),
+		float2( s4, -s4),
+		float2(-s4,  s4),
+		float2( s4,  s4)
 	};
 
 	mChildren = new QuadNode[4];
@@ -34,7 +37,7 @@ void TerrainRenderer::QuadNode::Split() {
 		mChildren[i].mSiblingIndex = i;
 		mChildren[i].mLod = mLod + 1;
 		mChildren[i].mPosition = mPosition + o[i];
-		mChildren[i].mSize = mSize / 2;
+		mChildren[i].mSize = s2;
 		mChildren[i].mVertexResolution = 2 * mVertexResolution;
 		mChildren[i].mTriangleMask = 0;
 	}
@@ -64,12 +67,11 @@ void TerrainRenderer::QuadNode::ComputeTriangleFanMask(bool recurse) {
 	QuadNode* d = BackNeighbor();
 	QuadNode* u = ForwardNeighbor();
 
-	uint32_t mask = 0;
-	if (l && l->mLod < mLod) mask |= 1;
-	if (u && u->mLod < mLod) mask |= 2;
-	if (r && r->mLod < mLod) mask |= 4;
-	if (d && d->mLod < mLod) mask |= 8;
-	mTriangleMask = mask;
+	mTriangleMask = 0;
+	if (l && l->mLod < mLod) mTriangleMask |= 1;
+	if (u && u->mLod < mLod) mTriangleMask |= 2;
+	if (r && r->mLod < mLod) mTriangleMask |= 4;
+	if (d && d->mLod < mLod) mTriangleMask |= 8;
 }
 void TerrainRenderer::QuadNode::UpdateNeighbors() {
 	QuadNode* r = RightNeighbor();
@@ -83,8 +85,19 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 }
 
 bool TerrainRenderer::QuadNode::ShouldSplit(const float2& camPos) {
-	float2 v = mSize - abs(mPosition - camPos);	
-	return mVertexResolution < mTerrain->mMaxVertexResolution && v.x > 0 && v.y > 0;
+	float2 v = mSize - abs(mPosition - camPos);
+	if (mVertexResolution < mTerrain->mMaxVertexResolution && v.x > 0 && v.y > 0) return true;
+
+	QuadNode* l = LeftNeighbor();
+	if (l && l->mChildren && (l->mChildren[1].mChildren || l->mChildren[3].mChildren)) return true;
+	QuadNode* r = RightNeighbor();
+	if (r && r->mChildren && (r->mChildren[0].mChildren || r->mChildren[2].mChildren)) return true;
+	QuadNode* u = ForwardNeighbor();
+	if (u && u->mChildren && (u->mChildren[2].mChildren || u->mChildren[3].mChildren)) return true;
+	QuadNode* d = BackNeighbor();
+	if (d && d->mChildren && (d->mChildren[0].mChildren || d->mChildren[1].mChildren)) return true;
+	
+	return false;
 }
 
 TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::LeftNeighbor() {
@@ -121,16 +134,16 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::RightNeighbor() {
 	}
 	return nullptr;
 }
-TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
+TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::BackNeighbor() {
 	if (!mParent) return nullptr;
 	QuadNode* n = nullptr;
 	switch (mSiblingIndex) {
 	case 0:
-		n = mParent->ForwardNeighbor();
+		n = mParent->BackNeighbor();
 		if (!n) return nullptr;
 		return n->mChildren ? &n->mChildren[2] : n;
 	case 1:
-		n = mParent->ForwardNeighbor();
+		n = mParent->BackNeighbor();
 		if (!n) return nullptr;
 		return n->mChildren ? &n->mChildren[3] : n;
 	case 2: return &mParent->mChildren[0];
@@ -138,16 +151,16 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 	}
 	return nullptr;
 }
-TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::BackNeighbor() {
+TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 	if (!mParent) return nullptr;
 	QuadNode* n = nullptr;
 	switch (mSiblingIndex) {
 	case 2:
-		n = mParent->BackNeighbor();
+		n = mParent->ForwardNeighbor();
 		if (!n) return nullptr;
 		return n->mChildren ? &n->mChildren[0] : n;
 	case 3:
-		n = mParent->BackNeighbor();
+		n = mParent->ForwardNeighbor();
 		if (!n) return nullptr;
 		return n->mChildren ? &n->mChildren[1] : n;
 	case 0: return &mParent->mChildren[2];
@@ -216,7 +229,6 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Scene::
 		else
 			leafNodes.push_back(n);
 	}
-		
 	sort(leafNodes.begin(), leafNodes.end(), [](QuadNode* a, QuadNode* b) {
 		return a->mTriangleMask < b->mTriangleMask;
 	});

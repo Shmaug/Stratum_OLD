@@ -15,6 +15,8 @@ typedef std::variant<
 	std::shared_ptr<Sampler>,
 	Texture*,
 	Sampler*,
+	std::pair<Texture*, uint32_t>,
+	std::pair<std::shared_ptr<Texture>, uint32_t>,
 	float,
 	float2,
 	float3,
@@ -40,6 +42,8 @@ public:
 	inline void BlendMode(::BlendMode c) { mBlendMode = c; }
 	inline ::BlendMode BlendMode() const { return mBlendMode; }
 
+	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, Texture* param);
+	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, std::shared_ptr<Texture> param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
 	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
 	ENGINE_EXPORT void EnableKeyword(const std::string& kw);
