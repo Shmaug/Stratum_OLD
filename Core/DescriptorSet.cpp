@@ -34,6 +34,10 @@ void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize o
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
 }
+void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t binding) {
+	CreateStorageBufferDescriptor(buffer, 0, buffer->Size(), binding);
+}
+
 void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
 	VkDescriptorBufferInfo info = {};
 	info.buffer = *buffer;
@@ -50,6 +54,10 @@ void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize o
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
 }
+void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, uint32_t binding) {
+	CreateUniformBufferDescriptor(buffer, 0, buffer->Size(), binding);
+}
+
 void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {
 	VkDescriptorImageInfo info = {};
 	info.imageLayout = layout;
@@ -103,6 +111,7 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t in
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
 }
+
 void DescriptorSet::CreateSampledTextureDescriptor(Texture** textures, uint32_t count, uint32_t arraySize, uint32_t binding, VkImageLayout layout) {
 	vector<VkDescriptorImageInfo> infos(arraySize);
 	for (uint32_t i = 0; i < arraySize; i++){
@@ -156,6 +165,7 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t in
 	write.descriptorCount = 1;
 	vkUpdateDescriptorSets(*mDevice, 1, &write, 0, nullptr);
 }
+
 void DescriptorSet::CreateSamplerDescriptor(Sampler* sampler, uint32_t binding) {
 	VkDescriptorImageInfo info = {};
 	info.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;

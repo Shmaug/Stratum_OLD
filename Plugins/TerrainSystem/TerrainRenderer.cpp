@@ -1,9 +1,8 @@
 #include "TerrainRenderer.hpp"
 #include <Core/CommandBuffer.hpp>
+#include <Scene/Environment.hpp>
 
 #include "TriangleFan.hpp"
-
-#include <Plugins/Environment/Environment.hpp>
 
 #include <Shaders/noise.hlsli>
 
@@ -92,8 +91,8 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 bool TerrainRenderer::QuadNode::ShouldSplit(const float3& camPos, float tanFov) {
 	float3 v = abs(mPosition - camPos);
 
-	float error = mSize / length(v) * tanFov;
-	if (mVertexResolution < 2 && error >= 62.2f) return true;
+	float verticesPerPixel = mVertexResolution * length(v) * tanFov;
+	if (mVertexResolution < 2 && verticesPerPixel < .02f) return true;
 
 	QuadNode* l = LeftNeighbor();
 	if (l && l->mChildren && (l->mChildren[1].mChildren || l->mChildren[3].mChildren)) return true;
@@ -206,7 +205,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	switch (pass) {
 	case Main:
 		mMaterial->DisableKeyword("DEPTH_PASS");
-		mMaterial->SetParameter("EnvironmentTexture", Scene()->PluginManager()->GetPlugin<Environment>()->EnvironmentTexture(commandBuffer->Device()));
+		Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 		break;
 	case Depth:
 		mMaterial->EnableKeyword("DEPTH_PASS");
@@ -220,7 +219,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	// Create node buffer
 	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
-	float tanFov = (.5f * camera->FramebufferHeight()) / tan(.5f * camera->FieldOfView());
+	float tanFov = tan(.5f * camera->FieldOfView()) / (.5f * camera->FramebufferHeight());
 	QuadNode* root = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 	queue<QuadNode*> nodes;
 	nodes.push(root);
@@ -277,44 +276,26 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);
-	objds->CreateStorageBufferDescriptor(nodeBuffer, 0, nodeBuffer->Size(), OBJECT_BUFFER_BINDING);
-	if (shader->mDescriptorBindings.count("Lights")) {
-		Buffer* b = Scene()->LightBuffer(commandBuffer->Device());
-		objds->CreateStorageBufferDescriptor(b, 0, b->Size(), LIGHT_BUFFER_BINDING);
-	}
-	if (shader->mDescriptorBindings.count("Shadows")) {
-		Buffer* b = Scene()->ShadowBuffer(commandBuffer->Device());
-		objds->CreateStorageBufferDescriptor(b, 0, b->Size(), SHADOW_BUFFER_BINDING);
-	}
+	objds->CreateStorageBufferDescriptor(nodeBuffer, OBJECT_BUFFER_BINDING);
+	if (shader->mDescriptorBindings.count("Lights"))
+		objds->CreateStorageBufferDescriptor(Scene()->LightBuffer(commandBuffer->Device()), LIGHT_BUFFER_BINDING);
+	if (shader->mDescriptorBindings.count("Shadows"))
+		objds->CreateStorageBufferDescriptor(Scene()->ShadowBuffer(commandBuffer->Device()), SHADOW_BUFFER_BINDING);
 	if (shader->mDescriptorBindings.count("ShadowAtlas"))
 		objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
+	
 	VkDescriptorSet ds = *objds;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
 
-	if (shader->mPushConstants.count("LightCount")) {
-		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
-		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
-	}
-	if (shader->mPushConstants.count("ShadowTexelSize")) {
-		VkPushConstantRange strange = shader->mPushConstants.at("ShadowTexelSize");
-		float2 s = Scene()->ShadowTexelSize();
-		vkCmdPushConstants(*commandBuffer, layout, strange.stageFlags, strange.offset, strange.size, &s);
-	}
-	if (shader->mPushConstants.count("ObjectToWorld")) {
-		VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
-		float4x4 mt = ObjectToWorld();
-		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
-	}
-	if (shader->mPushConstants.count("WorldToObject")) {
-		VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
-		float4x4 mt = WorldToObject();
-		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
-	}
-	if (shader->mPushConstants.count("TerrainHeight")) {
-		VkPushConstantRange th = shader->mPushConstants.at("TerrainHeight");
-		vkCmdPushConstants(*commandBuffer, layout, th.stageFlags, th.offset, th.size, &mHeight);
-	}
+	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
+	float2 s = Scene()->ShadowTexelSize();
+	float4x4 o2w = ObjectToWorld();
+	float4x4 w2o = WorldToObject();
+	commandBuffer->PushConstant(shader, "LightCount", &lc);
+	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
+	commandBuffer->PushConstant(shader, "ObjectToWorld", &o2w);
+	commandBuffer->PushConstant(shader, "WorldToObject", &w2o);
+	commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
 	#pragma endregion
 
 	if (mIndexBuffers.count(commandBuffer->Device()) == 0) {

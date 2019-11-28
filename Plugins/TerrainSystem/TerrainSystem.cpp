@@ -148,7 +148,7 @@ void TerrainSystem::Update() {
 	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
 		mInput->LockMouse(!mInput->LockMouse());
 
-	mMainCamera->FieldOfView(clamp(mMainCamera->FieldOfView() + mInput->ScrollDelta().y * .01f, radians(1.f), radians(110.f)));
+	mMainCamera->FieldOfView(clamp(mMainCamera->FieldOfView() - mInput->ScrollDelta().y * .01f, radians(10.f), radians(110.f)));
 
 	#pragma region rotate camera
 	if (mInput->LockMouse()) {

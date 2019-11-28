@@ -44,11 +44,13 @@ public:
 private:
 	friend class AssetManager;
 	ENGINE_EXPORT Texture(const std::string& name, Instance* instance, const std::string& filename, bool srgb = true);
+	ENGINE_EXPORT Texture(const std::string& name, Instance* instance, const std::string& px, const std::string& nx, const std::string& py, const std::string& ny, const std::string& pz, const std::string& nz, bool srgb = true);
 
 	uint32_t mWidth;
 	uint32_t mHeight;
 	uint32_t mDepth;
 	uint32_t mMipLevels;
+	uint32_t mArrayLayers;
 
 	VkFormat mFormat;
 	VkSampleCountFlagBits mSampleCount;

@@ -2,13 +2,14 @@
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
+#include <Scene/Environment.hpp>
 
 #include <Shaders/shadercompat.h>
 
 using namespace std;
 
 MeshRenderer::MeshRenderer(const string& name)
-	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01), mCastShadows(true) {}
+	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01), mPassMask(Main) {}
 MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
@@ -31,6 +32,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	switch (pass) {
 	case Main:
 		mMaterial->DisableKeyword("DEPTH_PASS");
+		Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 		break;
 	case Depth:
 		mMaterial->EnableKeyword("DEPTH_PASS");
@@ -41,16 +43,10 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	if (!layout) return;
 	auto shader = mMaterial->GetShader(commandBuffer->Device());
 
-	if (shader->mPushConstants.count("LightCount")) {
-		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
-		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
-	}
-	if (shader->mPushConstants.count("ShadowTexelSize")) {
-		VkPushConstantRange strange = shader->mPushConstants.at("ShadowTexelSize");
-		float2 s = Scene()->ShadowTexelSize();
-		vkCmdPushConstants(*commandBuffer, layout, strange.stageFlags, strange.offset, strange.size, &s);
-	}
+	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
+	float2 s = Scene()->ShadowTexelSize();
+	commandBuffer->PushConstant(shader, "LightCount", &lc);
+	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 

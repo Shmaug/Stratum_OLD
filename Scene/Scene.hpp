@@ -8,6 +8,7 @@
 #include <Input/InputManager.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Gizmos.hpp>
+#include <Scene/Environment.hpp>
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
 #include <Scene/Collider.hpp>
@@ -49,6 +50,7 @@ public:
 	inline ::Gizmos* Gizmos() const { return mGizmos; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
+	inline ::Environment* Environment() const { return mEnvironment; }
 
 private:
 	friend class VkCAVE;
@@ -72,6 +74,7 @@ private:
 	::Gizmos* mGizmos;
 	::InputManager* mInputManager;
 	::PluginManager* mPluginManager;
+	::Environment* mEnvironment;
 	std::vector<std::shared_ptr<Object>> mObjects;
 	std::vector<Light*> mLights;
 	std::vector<Camera*> mCameras;

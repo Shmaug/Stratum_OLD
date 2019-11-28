@@ -14,8 +14,8 @@ public:
 	ENGINE_EXPORT MeshRenderer(const std::string& name);
 	ENGINE_EXPORT ~MeshRenderer();
 
-	inline virtual void CastShadows(bool c) { mCastShadows = c; }
-	inline virtual bool CastShadows() override { return mCastShadows; }
+	inline virtual void PassMask(PassType p) { mPassMask = p; }
+	inline virtual PassType PassMask() override { return mPassMask; }
 
 	inline virtual void Mesh(::Mesh* m) { mMesh = m; Dirty(); }
 	inline virtual void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }
@@ -39,7 +39,7 @@ private:
 	uint32_t mCollisionMask;
 
 protected:
-	bool mCastShadows;
+	PassType mPassMask;
 	std::shared_ptr<::Material> mMaterial;
 
 	OBB mOBB;

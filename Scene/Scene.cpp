@@ -17,6 +17,7 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mGizmos = new ::Gizmos(this);
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mCascadeSplits = float4(.005f, .1f, .25f, 1.f);
+	mEnvironment = new ::Environment(this);
 }
 Scene::~Scene(){
 	for (auto& kp : mDeviceData) {
@@ -30,6 +31,7 @@ Scene::~Scene(){
 		for (Camera* c : kp.second.mShadowCameras) safe_delete(c);
 	}
 	safe_delete(mGizmos);
+	safe_delete(mEnvironment);
 
 	while (mObjects.size())
 		RemoveObject(mObjects[0].get());
@@ -256,7 +258,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	PROFILER_BEGIN("Gather/Sort Renderers");
 	mRenderList.clear();
 	for (Renderer* r : mRenderers)
-		if (r->Visible() && camera->IntersectFrustum(r->Bounds()) && (pass != Depth || r->CastShadows()))
+		if (r->Visible() && camera->IntersectFrustum(r->Bounds()) && (r->PassMask() & pass))
 			mRenderList.push_back(r);
 	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
 		if (a->RenderQueue() == b->RenderQueue())
@@ -271,6 +273,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	PROFILER_END;
 
 	camera->PreRender();
+	if (pass & Main) mEnvironment->PreRender(commandBuffer, camera);
 	
 	PROFILER_BEGIN("Pre Render");
 	for (const auto& p : mPluginManager->Plugins())
