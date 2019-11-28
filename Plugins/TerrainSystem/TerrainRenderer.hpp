@@ -18,7 +18,7 @@ public:
 
 	PLUGIN_EXPORT float Height(const float3& lp);
 
-	inline bool CastShadows() override { return true; }
+	inline PassType PassMask() override { return (PassType)(Main | Depth); }
 
 	inline ::Material* Material() const { return mMaterial.get(); }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }

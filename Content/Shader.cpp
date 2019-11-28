@@ -73,7 +73,8 @@ bool PipelineInstance::operator==(const PipelineInstance& rhs) const {
 		((!rhs.mVertexInput && !mVertexInput) || (rhs.mVertexInput && mVertexInput && *rhs.mVertexInput == *mVertexInput)) &&
 		mTopology == rhs.mTopology &&
 		mCullMode == rhs.mCullMode &&
-		mBlendMode == rhs.mBlendMode;
+		mBlendMode == rhs.mBlendMode &&
+		mPolygonMode == rhs.mPolygonMode;
 }
 
 Shader::Shader(const string& name, ::Instance* devices, const string& filename)
@@ -361,10 +362,11 @@ Shader::~Shader() {
 	}
 }
 
-VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode) {
+VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
 	BlendMode blend = blendMode == BLEND_MODE_MAX_ENUM ? mShader->mBlendMode : blendMode;
 	VkCullModeFlags cull = cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM ? mShader->mRasterizationState.cullMode : cullMode;
-	PipelineInstance instance(*renderPass, vertexInput, topology, cull, blendMode);
+	VkPolygonMode poly = polyMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM ? mShader->mRasterizationState.polygonMode : polyMode;
+	PipelineInstance instance(*renderPass, vertexInput, topology, cull, blendMode, poly);
 
 	if (mPipelines.count(instance))
 		return mPipelines.at(instance);
@@ -416,6 +418,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 
 		VkPipelineRasterizationStateCreateInfo rasterState = mShader->mRasterizationState;
 		if (cullMode != VK_CULL_MODE_FLAG_BITS_MAX_ENUM) rasterState.cullMode = cullMode;
+		if (polyMode != VK_POLYGON_MODE_MAX_ENUM) rasterState.polygonMode = polyMode;
 
 		VkPipelineColorBlendStateCreateInfo blendState = {};
 		blendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;

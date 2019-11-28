@@ -22,12 +22,13 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture	: register(t4);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> MainTextures[8]		: register(t5);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> NormalTextures[8]	: register(t13);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> MaskTextures[8]		: register(t21); // rgb -> rough, height, ao
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] SamplerState Sampler : register(s0);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture3D<float4> InscatteringLUT		: register(t4);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture3D<float4> ExtinctionLUT		: register(t5);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MainTextures[8]		: register(t6);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> NormalTextures[8]	: register(t7);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> MaskTextures[8]		: register(t8); // rgb -> rough, height, ao
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 ObjectToWorld;

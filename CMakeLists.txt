@@ -39,6 +39,7 @@ add_library(Engine SHARED
 	"Scene/Gizmos.cpp"
 	"Scene/Light.cpp"
 	"Scene/MeshRenderer.cpp"
+	"Scene/Environment.cpp"
 	"Scene/Scene.cpp"
 	"Scene/Object.cpp"
 	"Scene/SkinnedMeshRenderer.cpp"

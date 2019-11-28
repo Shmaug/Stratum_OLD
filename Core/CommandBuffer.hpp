@@ -1,4 +1,5 @@
 #pragma once
+
 #include <Util/Util.hpp>
 
 #ifdef ENABLE_DEBUG_LAYERS
@@ -15,6 +16,7 @@ class Material;
 class GraphicsShader;
 class RenderPass;
 class Camera;
+class ShaderVariant;
 
 class Fence {
 public:
@@ -53,8 +55,18 @@ public:
 
 	inline RenderPass* CurrentRenderPass() const { return mCurrentRenderPass; }
 
-	ENGINE_EXPORT VkPipelineLayout BindShader(GraphicsShader* shader, const VertexInput* input, Camera* camera = nullptr, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, const VertexInput* input, Camera* camera = nullptr, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	ENGINE_EXPORT bool PushConstant(ShaderVariant* shader, const std::string& name, const void* value);
+
+	ENGINE_EXPORT VkPipelineLayout BindShader(GraphicsShader* shader, const VertexInput* input, Camera* camera = nullptr,
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,
+		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
+		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
+	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, const VertexInput* input, Camera* camera = nullptr,
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,
+		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
+		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
 	ENGINE_EXPORT void BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount);
 	ENGINE_EXPORT void EndRenderPass();
 

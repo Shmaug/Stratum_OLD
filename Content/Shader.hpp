@@ -1,8 +1,5 @@
 #pragma once
 
-#include <set>
-#include <unordered_map>
-
 #include <Content/Asset.hpp>
 #include <Core/Instance.hpp>
 #include <Core/Sampler.hpp>
@@ -16,9 +13,10 @@ struct PipelineInstance {
 	VkPrimitiveTopology mTopology;
 	VkCullModeFlags mCullMode;
 	BlendMode mBlendMode;
+	VkPolygonMode mPolygonMode;
 
-	inline PipelineInstance(VkRenderPass renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode)
-		: mRenderPass(renderPass), mVertexInput(vertexInput), mTopology(topology), mCullMode(cullMode), mBlendMode(blendMode) {};
+	inline PipelineInstance(VkRenderPass renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode)
+		: mRenderPass(renderPass), mVertexInput(vertexInput), mTopology(topology), mCullMode(cullMode), mBlendMode(blendMode), mPolygonMode(polyMode) {};
 
 	ENGINE_EXPORT bool operator==(const PipelineInstance& rhs) const;
 };
@@ -33,6 +31,7 @@ namespace std {
 			hash_combine(h, p.mTopology);
 			hash_combine(h, p.mCullMode);
 			hash_combine(h, p.mBlendMode);
+			hash_combine(h, p.mPolygonMode);
 			return h;
 		}
 	};
@@ -65,7 +64,11 @@ public:
 	Shader* mShader;
 
 	inline GraphicsShader() : ShaderVariant() { mShader = nullptr; }
-	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM, BlendMode blendMode = BLEND_MODE_MAX_ENUM);
+	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput,
+		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,
+		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
+		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
 };
 
 class Shader : public Asset {

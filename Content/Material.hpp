@@ -1,8 +1,5 @@
 #pragma once
 
-#include <variant>
-#include <unordered_map>
-
 #include <Content/Shader.hpp>
 #include <Content/Texture.hpp>
 #include <Core/CommandBuffer.hpp>

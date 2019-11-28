@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Util/Util.hpp>
 #include <Core/Device.hpp>
+#include <Util/Util.hpp>
 
 class Buffer {
 public:
