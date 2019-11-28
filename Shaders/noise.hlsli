@@ -1,127 +1,167 @@
-float2 hash(float2 x) {
-    const float2 k = float2(0.3183099f, 0.3678794f);
-    x = x*k + k.yx;
-    return -1 + 2*frac(16 * k*frac( x.x*x.y*(x.x+x.y)));
-}
-float noise(float2 p) {
-    float2 i = floor(p);
-    float2 f = frac(p);
-    // quintic interpolation
-    float2 u = f*f*f*(f*(f*6-15)+10);
-    
-    float2 ga = hash(i + float2(0,0));
-    float2 gb = hash(i + float2(1,0));
-    float2 gc = hash(i + float2(0,1));
-    float2 gd = hash(i + float2(1,1));
-    
-    float va = dot(ga, f - float2(0,0));
-    float vb = dot(gb, f - float2(1,0));
-    float vc = dot(gc, f - float2(0,1));
-    float vd = dot(gd, f - float2(1,1));
+#ifdef __cplusplus
+#pragma once
+#ifdef uint
+#undef uint
+#endif
+#define uint uint32_t
+#define pow powf
+#endif
 
-    return va + u.x*(vb-va) + u.y*(vc-va) + u.x*u.y*(va-vb-vc+vd);
+float hash12(float2 p) {
+	float3 p3 = frac(float3(p.x, p.y, p.x) * .1013f);
+	p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 19.19f);
+	return frac((p3.x + p3.y) * p3.z);
 }
-float3 noised(float2 p) {
-    float2 i = floor(p);
-    float2 f = frac(p);
-    // quintic interpolation
-    float2 u = f*f*f*(f*(f*6-15)+10);
-    float2 du = 30.0*f*f*(f*(f-2)+1);
-    
-    float2 ga = hash(i + float2(0,0));
-    float2 gb = hash(i + float2(1,0));
-    float2 gc = hash(i + float2(0,1));
-    float2 gd = hash(i + float2(1,1));
-    
-    float va = dot(ga, f - float2(0,0));
-    float vb = dot(gb, f - float2(1,0));
-    float vc = dot(gc, f - float2(0,1));
-    float vd = dot(gd, f - float2(1,1));
+float noise(float2 xz) {
+	float2 f = frac(xz);
+	xz = floor(xz);
+	float2 u = f * f * (3 - 2 * f);
+	return
+		lerp(lerp(hash12(xz), hash12(xz + float2(1,0)), u.x),
+		     lerp(hash12(xz + float2(0,1)), hash12(xz + float2(1,1)), u.x),
+			 u.y);
+}
+float3 noised(float2 x) {
+	float2 p = floor(x);
+	float2 f = frac(x);
 
-    return float3(va + u.x*(vb-va) + u.y*(vc-va) + u.x*u.y*(va-vb-vc+vd),   // value
-                  ga + u.x*(gb-ga) + u.y*(gc-ga) + u.x*u.y*(ga-gb-gc+gd) +  // derivatives
-                  du * (u.yx*(va-vb-vc+vd) + float2(vb,vc) - va));
+	float2 u = f * f * (1.5 - f) * 2;;
+
+	float a = hash12(p);
+	float b = hash12(p + float2(1,0));
+	float c = hash12(p + float2(0,1));
+	float d = hash12(p + float2(1,1));
+	return float3(a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y,
+		6 * f * (f - 1) * (float2(b - a, c - a) + (a - b - c + d) * float2(u.y, u.x)));
 }
 
-float billow2(float2 p) {
-    float value = 0;
-    float amplitude = 1;
-    for(uint i = 0; i < 2; i++) {
-		float signal = abs(noise(p))*2-1;
-		value += amplitude * signal;
-		amplitude *= .5;
-        p *= 2;
-    }
-	value /= 1.5;
-	return value * .5 + .5;
+float2 hash(float2 x, uint seed) {
+	const float2 k = float2(0.3183099f, 0.3678794f);
+#ifdef __cplusplus
+	x = x * k + float2(k.y, k.x);
+#else
+	x = x * k + k.yx;
+#endif
+	return -1 + 2 * frac(16 * k * frac(x.x * x.y * (x.x + x.y)));
+}
+float noise(float2 p, uint seed) {
+	float2 i = floor(p);
+	float2 f = frac(p);
+
+	float2 u = f * f * (3 - 2 * f);
+
+	float i0 = dot(hash(i, seed), f);
+	float i1 = dot(hash(i + float2(1, 0), seed), f - float2(1, 0));
+	float i2 = dot(hash(i + float2(0, 1), seed), f - float2(0, 1));
+	float i3 = dot(hash(i + float2(1, 1), seed), f - float2(1, 1));
+
+	return lerp(lerp(i0, i1, u.x), lerp(i2, i3, u.x), u.y);
 }
 
-float ridged8(float2 p) {
-    float value = 0;
-    float amplitude = 1;
-    for(uint i = 0; i < 8; i++) {
-        float n = noise(p);
-		float signal = exp(-10*n*n);
-		value += amplitude * signal;
-		amplitude *= .5;
-        p *= 2;
-    }
-	value /= 1.9922;
-	return value;
-}
-float ridged3(float2 p) {
+float fbm3(float2 p, float lac, uint seed) {
 	float value = 0;
-	float amplitude = 1;
+	float amp = .5f;
+	float d = 0;
 	for (uint i = 0; i < 3; i++) {
-		float n = noise(p);
-		float signal = exp(-10*n*n);
-		value += amplitude * signal;
-		amplitude *= .5;
-		p *= 2;
+		d += amp;
+		value += noise(p, seed + i * 300) * amp;
+		p *= lac;
+		amp *= .5f;
 	}
-	value /= 1.75;
-	return value;
+
+	return clamp(value / d, -1.f, 1.f);
 }
 
-float fbm3(float2 p) {
-    float value = 0;
-	float2 tot = 0;
-    float amplitude = 1;
-    for(uint i = 0; i < 3; i++) {
-		float3 signal = noised(p);
-		tot += signal.yz;
-		value += amplitude * signal.x / (1 + dot(tot, tot));;
-		amplitude *= .5;
-        p *= 2;
-    }
-	value /= 1.75;
-	return value * .5 + .5;
-}
-float fbm6(float2 p) {
-    float value = 0;
-	float2 tot = 0;
-    float amplitude = 1;
-    for(uint i = 0; i < 6; i++) {
-		float3 signal = noised(p);
-		tot += signal.yz;
-		value += amplitude * signal.x / (1 + dot(tot, tot));
-		amplitude *= .5;
-        p *= 2;
-    }
-	value /= 1.9844;
-	return value * .5 + .5;
+float ridged3(float2 p, float lac, uint seed) {
+	float signal = 0;
+	float value = 0;
+	float amp = .5f;
+	float dmax = 0;
+	float dmin = 0;
+	for (uint i = 0; i < 3; ++i) {
+		dmin += amp;
+		dmax += 4 * amp;
+		signal = 2 - abs(noise(p, seed + i * 300));
+		value += signal * signal * amp;
+		p *= lac;
+		amp *= .5f;
+	}
+	value = (value - .5f * (dmax + dmin)) / (dmax - dmin);
+	return clamp(value, -1.f, 1.f);
 }
 
+float multi8(float2 p, float lac, uint seed) {
+	float value = 1;
+	float amp = .5f;
+
+	float dmax = 1.0;
+	float dmin = 1.0;
+
+	for (uint i = 0; i < 8; i++) {
+		dmax *= 1 + amp;
+		dmin *= 1 - amp;
+		value *= 1 + noise(p, seed + i * 300) * amp;
+		p *= lac;
+		amp *= .5f;
+	}
+
+	value = (value - .5f * (dmax + dmin)) / (dmax - dmin);
+	return clamp(value, -1.f, 1.f);
+}
+
+float billow2(float2 p, float lac, uint seed) {
+	float value = 0;
+	float amp = .5f;
+	float dmax = 1;
+	float dmin = 1;
+	for (uint i = 0; i < 2; ++i) {
+		dmax += amp;
+		dmin += -amp;
+		value += (2 * abs(noise(p, seed + i * 300)) - 1) * amp;
+		p *= lac;
+		amp *= .5f;
+	}
+	value = (value - .5f * (dmax + dmin)) / (dmax - dmin);
+	return clamp(value, -1.f, 1.f);
+}
+
+#ifdef __cplusplus
+float SampleTerrain(float2 p, float& mountain, float& lake) {
+#else
 float SampleTerrain(float2 p, out float mountain, out float lake) {
-	lake = tanh(120 * (ridged3(p * .00025) - .98)) * .5 + .5;
-	mountain = tanh(70 * (billow2(p * float2(.00075, .0005)) - .2)) * .5 + .5;
-
+#endif
+	lake = tanh(120 * (ridged3(p * .00025f, .5, 12345) - .98f)) * .5f + .5f;
+	mountain = tanh(70 * (billow2(p * float2(.00075f, .0005f), .5, 12345) - .2f)) * .5f + .5f;
 	lake = max(lake - mountain, 0);
 
-	float n = 0;
-	n += .10 * fbm3(p * .02);
-	n += .50 * fbm3(p * .004) * (1 - lake);
-	n += .40 * ridged8(p * .0015) * mountain;
+	p *= .001f;
 
-	return n;
+	float a = 3.8f;
+	float o = -.1f;
+	float2 d = 0;
+
+	for (int i = 0; i < 8; i++) {
+		float3 nd = noised(p);
+
+		d.x += nd.y;
+		d.y += nd.z;
+
+		float v = nd.x / (1 + dot(d, d));
+		v = pow(1 - abs(v - .5f) * 2, 1.5f);
+		o += v * a;
+
+		v = noise(p * .1f);
+		o -= v * a * .3f;
+
+		a *= -.43f;
+
+		p = float2(dot(p, float2(1.5623f, 1.7531f)), dot(p, float2(-1.8131f, 1.8623f)));
+
+	}
+	return (1 - o) * .05f;
 }
+
+#ifdef __cplusplus
+#undef uint
+#undef pow
+#endif

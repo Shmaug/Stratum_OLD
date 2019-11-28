@@ -16,6 +16,8 @@ public:
 	inline float Height() const { return mHeight; }
 	inline float Size() const { return mSize; }
 
+	PLUGIN_EXPORT float Height(const float3& lp);
+
 	inline bool CastShadows() override { return true; }
 
 	inline ::Material* Material() const { return mMaterial.get(); }
@@ -39,7 +41,7 @@ private:
 
 		uint32_t mSiblingIndex;
 		uint32_t mLod;
-		float2 mPosition; // 0-1
+		float3 mPosition;
 
 		float mSize;
 		float mVertexResolution;
@@ -50,7 +52,7 @@ private:
 		PLUGIN_EXPORT QuadNode(TerrainRenderer* terrain, QuadNode* parent, uint32_t siblingIndex, uint32_t lod, const float2& pos, float size);
 		PLUGIN_EXPORT ~QuadNode();
 
-		PLUGIN_EXPORT bool ShouldSplit(const float2& camPos);
+		PLUGIN_EXPORT bool ShouldSplit(const float3& camPos, float tanFov);
 
 		PLUGIN_EXPORT void Split();
 		PLUGIN_EXPORT void Join();

@@ -26,14 +26,16 @@ void Window::KeyCallback(GLFWwindow* window, int key, int scancode, int action, 
 	if (action == GLFW_REPEAT) return;
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 
+	win->mInput->mLastWindow = win;
 	win->mInput->mCurrent.mKeys[key] = action;
 	if (win && win->mInput->mCurrent.mKeys[GLFW_KEY_LEFT_ALT] == GLFW_PRESS && win->mInput->mCurrent.mKeys[GLFW_KEY_ENTER] == GLFW_PRESS && (key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT_ALT))
 		win->Fullscreen(!win->Fullscreen());
 }
 void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mCurrent.mCursorPos.x = (float)x + win->ClientRect().offset.x;
-	win->mInput->mCurrent.mCursorPos.y = (float)y + win->ClientRect().offset.y;
+	win->mInput->mLastWindow = win;
+	win->mInput->mCurrent.mCursorPos = float2(x, y) + float2(win->mClientRect.offset.x, win->mClientRect.offset.y);
+	win->mInput->mCurrent.mCursorDelta = win->mInput->mCurrent.mCursorPos - win->mInput->mLast.mCursorPos;
 
 	if (win->mTargetCamera) {
 		float2 uv = float2((float)x, (float)y) / float2((float)win->ClientRect().extent.width, (float)win->ClientRect().extent.height);
@@ -43,11 +45,12 @@ void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 	win->mInput->mMousePointer.mAxis[(uint32_t)button] = action == GLFW_PRESS;
+	win->mInput->mLastWindow = win;
 }
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mCurrent.mScrollDelta.x += (float)x;
-	win->mInput->mCurrent.mScrollDelta.y += (float)y;
+	win->mInput->mLastWindow = win;
+	win->mInput->mCurrent.mScrollDelta += float2(x, y);
 }
 
 Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position)

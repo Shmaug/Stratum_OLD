@@ -419,6 +419,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 						string val = it->substr(eq + 1);
 						if (id == "magFilter")		    samplerInfo.magFilter = atofilter(val);
 						else if (id == "minFilter")		samplerInfo.minFilter = atofilter(val);
+						else if (id == "filter")		samplerInfo.minFilter = samplerInfo.magFilter = atofilter(val);
 						else if (id == "addressModeU")	samplerInfo.addressModeU = atoaddressmode(val);
 						else if (id == "addressModeV")	samplerInfo.addressModeV = atoaddressmode(val);
 						else if (id == "addressModeW")	samplerInfo.addressModeW = atoaddressmode(val);
