@@ -127,9 +127,10 @@ void fsmain(v2f i,
 	blend /= dot(blend, 1);
 
 	float3 wp = .5 * frac(i.worldPos + Camera.Position);
-
-	triplanar(2, 0, wp, blend, col, mask, bump, 1 - lake);
-	triplanar(2, 1, wp, blend, col, mask, bump, lake);
+	
+	triplanar(2, 0, wp, blend, col, mask, bump, (1 - mountain) * (1 - lake)); // grass
+	triplanar(2, 1, wp, blend, col, mask, bump, lake); // dirt
+	triplanar(2, 3, wp, blend, col, mask, bump, mountain * (1 - lake)); // snow
 
 	bump = normalize(bump);
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);

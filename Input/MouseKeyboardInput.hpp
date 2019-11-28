@@ -10,6 +10,9 @@ class MouseKeyboardInput : public InputDevice {
 public:
 	ENGINE_EXPORT MouseKeyboardInput();
 
+	ENGINE_EXPORT void LockMouse(bool l);
+	inline bool LockMouse() const { return mLockMouse; }
+
 	inline bool MouseButtonDownFirst(int key) { return mMousePointer.mAxis[key] == GLFW_PRESS && mMousePointer.mLastAxis[key] == GLFW_RELEASE; }
 	inline bool MouseButtonUpFirst(int key) { return mMousePointer.mLastAxis[key] == GLFW_PRESS && mMousePointer.mAxis[key] == GLFW_RELEASE; }
 	inline bool MouseButtonDown(int key) { return mMousePointer.mAxis[key] == GLFW_PRESS; }
@@ -22,7 +25,7 @@ public:
 
 	inline float2 ScrollDelta() const { return mCurrent.mScrollDelta; }
 	inline float2 CursorPos() const { return mCurrent.mCursorPos; }
-	inline float2 CursorDelta() const { return mCurrent.mCursorPos - mLast.mCursorPos; }
+	inline float2 CursorDelta() const { return mCurrent.mCursorDelta; }
 
 	inline uint32_t PointerCount() override { return 1; }
 	inline const InputPointer* GetPointer(uint32_t index) override { return &mMousePointer; }
@@ -32,10 +35,13 @@ private:
 	friend class Window;
 	struct State {
 		float2 mCursorPos;
+		float2 mCursorDelta;
 		float2 mScrollDelta;
 		std::unordered_map<int, int> mKeys;
 	};
+	Window* mLastWindow;
 	InputPointer mMousePointer;
 	State mCurrent;
 	State mLast;
+	bool mLockMouse;
 };

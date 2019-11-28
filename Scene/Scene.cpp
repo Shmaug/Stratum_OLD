@@ -208,8 +208,8 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 					lights[li].ShadowIndex = (int32_t)si;
 
 					for (uint32_t ci = 0; ci < 4; ci++) {
-						float mx = mainCamera->Far() * mCascadeSplits[ci];
-						float mn = (ci == 0) ? mainCamera->Near() : (mainCamera->Far() * mCascadeSplits[ci - 1]);
+						float mx = l->ShadowDistance() * mCascadeSplits[ci];
+						float mn = (ci == 0) ? mainCamera->Near() : (l->ShadowDistance() * mCascadeSplits[ci - 1]);
 
 						AddShadowCamera(&data, si, &shadows[si], true, ct * mx, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -100, 500);
 						si++;

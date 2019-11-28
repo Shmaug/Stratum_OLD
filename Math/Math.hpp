@@ -1010,6 +1010,7 @@ struct float3 {
 	inline float3(const uint3& s) { rpt3(i) v[i] = (float)s.v[i]; };
 	inline float3(const int3& s) { rpt3(i) v[i] = (float)s.v[i]; };
 	inline float3(const float2& v, float z) : x(v.x), y(v.y), z(z) {};
+	inline float3(float x, const float2& v) : x(x), y(v.x), z(v.y) {};
 	float3(const double3& s);
 	inline float3(float x, float y, float z) : x(x), y(y), z(z) {};
 	inline float3(float s) { rpt3(i) v[i] = s;};
@@ -1126,6 +1127,8 @@ struct float4 {
 	inline float4(const float2& v0, const float2& v1) : x(v0.x), y(v0.y), z(v1.x), w(v1.y) {};
 	float4(const double4& s);
 	inline float4(const float3& v, float w) : x(v.x), y(v.y), z(v.z), w(w) {};
+	inline float4(float x, const float3& v) : x(x), y(v.x), z(v.y), w(v.z) {};
+	inline float4(float x, float y, const float2& v) : x(x), y(y), z(v.x), w(v.y) {};
 	inline float4(const float2& v, float z, float w) : x(v.x), y(v.y), z(z), w(w) {};
 	inline float4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {};
 	inline float4(float s) { rpt4(i) v[i] = s;};
@@ -1349,6 +1352,7 @@ struct double3 {
 	inline double3(const int3& s) { rpt3(i) v[i] = (double)s.v[i]; };
 	inline double3(const float3& s) { rpt3(i) v[i] = (double)s.v[i]; };
 	inline double3(const double2& v, double z) : x(v.x), y(v.y), z(z) {};
+	inline double3(double x, const double2& v) : x(x), y(v.x), z(v.y) {};
 	inline double3(double x, double y, double z) : x(x), y(y), z(z) {};
 	inline double3(double s) { rpt3(i) v[i] = s;};
 	inline double3() : double3(0) {};
@@ -1464,6 +1468,8 @@ struct double4 {
 	inline double4(const float4& s) { rpt4(i) v[i] = (double)s.v[i]; };
 	inline double4(const double2& v0, const double2& v1) : x(v0.x), y(v0.y), z(v1.x), w(v1.y) {};
 	inline double4(const double3& v, double w) : x(v.x), y(v.y), z(v.z), w(w) {};
+	inline double4(double x, const double3& v) : x(x), y(v.x), z(v.y), w(v.z) {};
+	inline double4(double x, double y, const double2& v) : x(x), y(y), z(v.x), w(v.y) {};
 	inline double4(const double2& v, double z, double w) : x(v.x), y(v.y), z(z), w(w) {};
 	inline double4(double x, double y, double z, double w) : x(x), y(y), z(z), w(w) {};
 	inline double4(double s) { rpt4(i) v[i] = s;};
@@ -1755,18 +1761,18 @@ inline uint32_t dot(const uint4& a, const uint4& b) {
 	return r;
 }
 
-inline int dot(const int2& a, const int2& b) {
-	int r = 0;
+inline int32_t dot(const int2& a, const int2& b) {
+	int32_t r = 0;
 	rpt2(i) r += a[i] * b[i];
 	return r;
 }
-inline int dot(const int3& a, const int3& b) {
-	int r = 0;
+inline int32_t dot(const int3& a, const int3& b) {
+	int32_t r = 0;
 	rpt3(i) r += a[i] * b[i];
 	return r;
 }
-inline int dot(const int4& a, const int4& b) {
-	int r = 0;
+inline int32_t dot(const int4& a, const int4& b) {
+	int32_t r = 0;
 	rpt4(i) r += a[i] * b[i];
 	return r;
 }
@@ -2412,6 +2418,9 @@ inline uint4 clamp(const uint4& a, const uint4& l, const uint4& h) {
 inline float clamp(float x, float l, float h) {
 	return fminf(fmaxf(x, l), h);
 }
+inline float frac(float a) {
+	return a - floorf(a);
+}
 
 inline float2 min(const float2& a, const float2& b) {
 	float2 r;
@@ -2442,6 +2451,9 @@ inline float2 ceil(const float2& a){
 	float2 r;
 	rpt2(i) r.v[i] = ceilf(a.v[i]);
 	return r;
+}
+inline float2 frac(const float2& a) {
+	return a - floor(a);
 }
 
 inline float3 min(const float3& a, const float3& b) {
@@ -2474,6 +2486,9 @@ inline float3 ceil(const float3& a){
 	rpt3(i) r.v[i] = ceilf(a.v[i]);
 	return r;
 }
+inline float3 frac(const float3& a) {
+	return a - floor(a);
+}
 
 inline float4 min(const float4& a, const float4& b) {
 	float4 r;
@@ -2505,12 +2520,16 @@ inline float4 ceil(const float4& a){
 	rpt4(i) r.v[i] = ceilf(a.v[i]);
 	return r;
 }
-
+inline float4 frac(const float4& a) {
+	return a - floor(a);
+}
 
 inline double clamp(double x, double l, double h) {
 	return fmin(fmax(x, l), h);
 }
-
+inline double frac(double a) {
+	return a - floor(a);
+}
 inline double2 min(const double2& a, const double2& b) {
 	double2 r;
 	rpt2(i) r.v[i] = fmin(a.v[i], b.v[i]);
@@ -2540,6 +2559,9 @@ inline double2 ceil(const double2& a){
 	double2 r;
 	rpt2(i) r.v[i] = ceil(a.v[i]);
 	return r;
+}
+inline double2 frac(const double2& a) {
+	return a - floor(a);
 }
 
 inline double3 min(const double3& a, const double3& b) {
@@ -2572,6 +2594,9 @@ inline double3 ceil(const double3& a){
 	rpt3(i) r.v[i] = ceil(a.v[i]);
 	return r;
 }
+inline double3 frac(const double3& a) {
+	return a - floor(a);
+}
 
 inline double4 min(const double4& a, const double4& b) {
 	double4 r;
@@ -2602,6 +2627,9 @@ inline double4 ceil(const double4& a){
 	double4 r;
 	rpt4(i) r.v[i] = ceil(a.v[i]);
 	return r;
+}
+inline double4 frac(const double4& a) {
+	return a - floor(a);
 }
 #pragma endregion
 

@@ -41,6 +41,8 @@ public:
 	inline bool ShouldClose() const { return mWindow ? glfwWindowShouldClose(mWindow) : false; }
 	inline ::Device* Device() const { return mDevice; }
 
+	inline operator GLFWwindow*() { return mWindow; }
+
 private:
 	friend class Camera;
 	friend class VkCAVE;

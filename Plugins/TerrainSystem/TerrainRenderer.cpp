@@ -5,10 +5,12 @@
 
 #include <Plugins/Environment/Environment.hpp>
 
+#include <Shaders/noise.hlsli>
+
 using namespace std;
 
 TerrainRenderer::QuadNode::QuadNode(TerrainRenderer* terrain, QuadNode* parent, uint32_t siblingIndex, uint32_t lod, const float2& pos, float size)
- : mTerrain(terrain), mParent(parent), mSiblingIndex(siblingIndex), mSize(size), mLod(lod), mChildren(nullptr), mPosition(pos) {
+ : mTerrain(terrain), mParent(parent), mSiblingIndex(siblingIndex), mSize(size), mLod(lod), mChildren(nullptr), mPosition(float3(pos.x, terrain->Height(float3(pos.x, 0, pos.y)), pos.y)) {
 	mVertexResolution = Resolution / size;
 	mTriangleMask = 0;
 }
@@ -24,11 +26,11 @@ void TerrainRenderer::QuadNode::Split() {
 
 	//  | 0 | 1 |
 	//  | 2 | 3 |
-	float2 o[4]{
-		float2(-s4, -s4),
-		float2( s4, -s4),
-		float2(-s4,  s4),
-		float2( s4,  s4)
+	float3 o[4]{
+		float3(-s4, 0, -s4),
+		float3( s4, 0, -s4),
+		float3(-s4, 0,  s4),
+		float3( s4, 0,  s4)
 	};
 
 	mChildren = new QuadNode[4];
@@ -39,6 +41,7 @@ void TerrainRenderer::QuadNode::Split() {
 		mChildren[i].mSiblingIndex = i;
 		mChildren[i].mLod = mLod + 1;
 		mChildren[i].mPosition = mPosition + o[i];
+		mChildren[i].mPosition.y = mTerrain->Height(mChildren[i].mPosition);
 		mChildren[i].mSize = s2;
 		mChildren[i].mVertexResolution = 2 * mVertexResolution;
 		mChildren[i].mTriangleMask = 0;
@@ -86,9 +89,11 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 	if (u) u->ComputeTriangleFanMask();
 }
 
-bool TerrainRenderer::QuadNode::ShouldSplit(const float2& camPos) {
-	float2 v = mSize - abs(mPosition - camPos);
-	if (mVertexResolution < mTerrain->mMaxVertexResolution && v.x > 0 && v.y > 0) return true;
+bool TerrainRenderer::QuadNode::ShouldSplit(const float3& camPos, float tanFov) {
+	float3 v = abs(mPosition - camPos);
+
+	float error = mSize / length(v) * tanFov;
+	if (mVertexResolution < 2 && error >= 62.2f) return true;
 
 	QuadNode* l = LeftNeighbor();
 	if (l && l->mChildren && (l->mChildren[1].mChildren || l->mChildren[3].mChildren)) return true;
@@ -183,6 +188,12 @@ TerrainRenderer::~TerrainRenderer() {
 		safe_delete(d.second);
 }
 
+
+float TerrainRenderer::Height(const float3& lp) {
+	float m, l;
+	return SampleTerrain(float2(lp.x, lp.z), m, l) * mHeight;
+}
+
 bool TerrainRenderer::UpdateTransform(){
     if (!Object::UpdateTransform()) return false;
 	mAABB = AABB(float3(0, 0, 0), float3(mSize, mHeight, mSize) / 2) * ObjectToWorld();
@@ -208,39 +219,61 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
     GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
 	// Create node buffer
-	float3 lc = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
-	float2 cp = float2(lc.x, lc.z);
+	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
+	float tanFov = (.5f * camera->FramebufferHeight()) / tan(.5f * camera->FieldOfView());
 	QuadNode* root = new QuadNode(this, nullptr, 0, 0, 0, mSize);
-	vector<QuadNode*> leafNodes;
 	queue<QuadNode*> nodes;
 	nodes.push(root);
 	while(nodes.size()){
 		QuadNode* n = nodes.front();
 		nodes.pop();
 
-		bool split = n->ShouldSplit(cp);
+		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
 
-		if (!n->mChildren && split)
+		if (n->ShouldSplit(cp, tanFov)) {
 			n->Split();
-		else if (n->mParent && !split)
-			n->Join();
+			for (uint32_t i = 0; i < 4; i++)
+				nodes.push(&n->mChildren[i]);
 
+			QuadNode* nn[4]{
+				n->LeftNeighbor(),
+				n->RightNeighbor(),
+				n->ForwardNeighbor(),
+				n->BackNeighbor(),
+			};
+			for (uint32_t i = 0; i < 4; i++)
+				if (nn[i] && nn[i]->mLod < n->mLod) {
+					nn[i]->Split();
+					for (uint32_t j = 0; j < 4; j++)
+						nodes.push(&nn[i]->mChildren[j]);
+				}
+		}
+	}
+
+	nodes.push(root);
+	vector<QuadNode*> leafNodes;
+	while (nodes.size()) {
+		QuadNode* n = nodes.front();
+		nodes.pop();
 		if (n->mChildren)
 			for (uint32_t i = 0; i < 4; i++)
 				nodes.push(&n->mChildren[i]);
 		else
 			leafNodes.push_back(n);
 	}
+
+	if (!leafNodes.size()) return;
+
 	sort(leafNodes.begin(), leafNodes.end(), [](QuadNode* a, QuadNode* b) {
 		return a->mTriangleMask < b->mTriangleMask;
 	});
+	
 	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
 	for (QuadNode* n : leafNodes) {
-		*bn = float4(n->mPosition.x, 0, n->mPosition.y, n->mSize);
+		*bn = float4(n->mPosition.x, 0, n->mPosition.z, n->mSize);
 		bn++;
 	}
-	delete root;
 
 	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);
@@ -312,6 +345,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
 		commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
 	}
+
+	delete root;
 }
 
 void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
