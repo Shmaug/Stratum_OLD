@@ -46,6 +46,7 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
+	float3 AmbientLight;
 	uint LightCount;
 	float2 ShadowTexelSize;
 #ifdef NORMAL_MAP

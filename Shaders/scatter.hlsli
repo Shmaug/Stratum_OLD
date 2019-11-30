@@ -1,6 +1,6 @@
 void ApplyScattering(inout float3 color, float2 uv, float linearDepth) {
-	float3 inscattering = InscatteringLUT.SampleLevel(Sampler, float3(uv, linearDepth), 0).rgb;
-	float3 extinction = ExtinctionLUT.SampleLevel(Sampler, float3(uv, linearDepth), 0).rgb;
+	float3 inscattering = InscatteringLUT.SampleLevel(AtmosphereSampler, float3(uv, linearDepth), 0).rgb;
+	float3 extinction = ExtinctionLUT.SampleLevel(AtmosphereSampler, float3(uv, linearDepth), 0).rgb;
 
 	//float shadow = tex2D(_LightShaft1, uv).x;
 	//shadow = (pow(shadow, 4) + shadow) / 2;

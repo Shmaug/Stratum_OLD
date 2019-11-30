@@ -20,6 +20,9 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mEnvironment = new ::Environment(this);
 }
 Scene::~Scene(){
+	safe_delete(mGizmos);
+	safe_delete(mEnvironment);
+
 	for (auto& kp : mDeviceData) {
 		for (uint32_t i = 0; i < kp.first->MaxFramesInFlight(); i++) {
 			safe_delete(kp.second.mLightBuffers[i]);
@@ -30,8 +33,6 @@ Scene::~Scene(){
 		safe_delete(kp.second.mShadowAtlasFramebuffer);
 		for (Camera* c : kp.second.mShadowCameras) safe_delete(c);
 	}
-	safe_delete(mGizmos);
-	safe_delete(mEnvironment);
 
 	while (mObjects.size())
 		RemoveObject(mObjects[0].get());
@@ -250,6 +251,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	PROFILER_END;
 
 	mGizmos->PreFrame(device);
+	mEnvironment->Update();
 }
 
 void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, bool startRenderPass) {

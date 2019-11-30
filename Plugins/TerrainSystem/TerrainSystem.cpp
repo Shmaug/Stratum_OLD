@@ -86,16 +86,6 @@ bool TerrainSystem::Init(Scene* scene) {
 	mTerrain = terrain.get();
 	mObjects.push_back(mTerrain);
 
-
-	shared_ptr<Light> sun = make_shared<Light>("Sun");
-	mScene->AddObject(sun);
-	sun->CastShadows(true);
-	sun->ShadowDistance(1024);
-	sun->Color(float3(1, .99f, .95f));
-	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
-	sun->Type(Sun);
-	mObjects.push_back(sun.get());
-
 	shared_ptr<Object> player = make_shared<Object>("Player");
 	mScene->AddObject(player);
 	mPlayer = player.get();
@@ -128,6 +118,13 @@ bool TerrainSystem::Init(Scene* scene) {
 }
 
 void TerrainSystem::Update() {
+	float tod = mScene->Environment()->TimeOfDay();
+	if (mInput->KeyDown(GLFW_KEY_H)) {
+		tod += mScene->Instance()->DeltaTime() * .06f;
+		if (tod > 1) tod -= 1;
+	}
+	mScene->Environment()->TimeOfDay(tod);
+
 	if (mInput->KeyDownFirst(GLFW_KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 

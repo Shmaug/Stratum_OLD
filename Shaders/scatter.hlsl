@@ -14,8 +14,8 @@
 [[vk::binding(3, 0)]] RWTexture3D<float4> _ExtinctionLUT : register(u3);
 
 [[vk::binding(4, 0)]] RWTexture2D<float2> _RWParticleDensityLUT : register(u4);
-[[vk::binding(5, 0)]] RWTexture2D<float4> _RWAmbientLightLUT : register(u5);
-[[vk::binding(6, 0)]] RWTexture2D<float4> _RWDirectLightLUT : register(u6);
+[[vk::binding(5, 0)]] RWStructuredBuffer<float4> _RWAmbientLightLUT : register(u5);
+[[vk::binding(6, 0)]] RWStructuredBuffer<float4> _RWDirectLightLUT : register(u6);
 
 [[vk::binding(7, 0)]] RWTexture2D<float4> _RandomVectors : register(u7);
 [[vk::binding(8, 0)]] Texture2D<float2> _ParticleDensityLUT : register(t0);
@@ -52,6 +52,18 @@
 #define PI 3.14159265359
 
 float2 RaySphereIntersection(float3 ro, float3 rd, float3 p, float r) {
+	ro -= p;
+	float a = dot(rd, rd);
+	float b = 2.0 * dot(ro, rd);
+	float c = dot(ro, ro) - (r * r);
+	float d = b * b - 4 * a * c;
+	if (d < 0) {
+		return -1;
+	} else {
+		d = sqrt(d);
+		return float2(-b - d, -b + d) / (2 * a);
+	}
+	/*
 	float3 f = ro - p;
 	float r2 = r * r;
 
@@ -69,12 +81,13 @@ float2 RaySphereIntersection(float3 ro, float3 rd, float3 p, float r) {
 	float rcpa = 1.0 / a;
 	det = sqrt(det * rcpa);
 	return (-b - det, -b + det) * rcpa;
+	*/
 }
 
 void GetAtmosphereDensity(float3 position, float3 planetCenter, float3 lightDir, out float2 localDensity, out float2 densityToAtmTop) {
 	float height = length(position - planetCenter) - _PlanetRadius;
 	localDensity = exp(-height.xx / _DensityScaleHeight.xy);
-	float cosAngle = dot(normalize(position - planetCenter), -lightDir.xyz);
+	float cosAngle = dot(normalize(position - planetCenter), lightDir.xyz);
 	densityToAtmTop = _ParticleDensityLUT.SampleLevel(PointClampSampler, float2(cosAngle * 0.5 + 0.5, height / _AtmosphereHeight), 0).xy;
 }
 
@@ -102,7 +115,7 @@ void ApplyPhaseFunction(inout float3 scatterR, inout float3 scatterM, float cosA
 	scatterM *= phase;
 }
 
-void IntegrateInscattering(float3 rayStart, float3 rayDir, float rayLength, float3 planetCenter, float3 lightDir, out float scatterR, out float scatterM) {
+void IntegrateInscattering(float3 rayStart, float3 rayDir, float rayLength, float3 planetCenter, float3 lightDir, out float3 scatterR, out float3 scatterM) {
 	float sampleCount = 64;
 	float3 step = rayDir * (rayLength / sampleCount);
 	float stepSize = length(step);
@@ -248,7 +261,7 @@ void PrecomputeLightScattering(float3 rayStart, float3 rayDir, float rayLength, 
 		float3 currentScatterR = scatterR;
 		float3 currentScatterM = scatterM;
 
-		ApplyPhaseFunction(currentScatterR, currentScatterM, dot(rayDir, -lightDir.xyz));
+		ApplyPhaseFunction(currentScatterR, currentScatterM, dot(rayDir, lightDir.xyz));
 		float3 lightInscatter = (currentScatterR * _ScatteringR + currentScatterM * _ScatteringM) * _IncomingLight.xyz;
 		float3 lightExtinction = exp(-(densityCP.x * _ExtinctionR + densityCP.y * _ExtinctionM));
 
@@ -324,7 +337,7 @@ float4 PrecomputeDirectLight(float3 rayDir) {
 	float2 localDensity;
 	float2 densityToAtmosphereTop;
 
-	GetAtmosphereDensity(rayStart, planetCenter, -rayDir, localDensity, densityToAtmosphereTop);
+	GetAtmosphereDensity(rayStart, planetCenter, rayDir, localDensity, densityToAtmosphereTop);
 	float4 color;
 	color.xyz = ComputeOpticalDepth(densityToAtmosphereTop);
 	color.w = 1;
@@ -335,16 +348,12 @@ float4 PrecomputeDirectLight(float3 rayDir) {
 void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 	float w, h, d;
 	_SkyboxLUT.GetDimensions(w, h, d);
-
-	// linear parameters
 	float3 coords = float3(id.x / (w - 1), id.y / (h - 1), id.z / (d - 1));
-
+	
 	float height = coords.x * coords.x * _AtmosphereHeight;
-	//float height = coords.x * _AtmosphereHeight;
 	float ch = -(sqrt(height * (2 * _PlanetRadius + height)) / (_PlanetRadius + height));
 
 	float viewZenithAngle = coords.y;
-	//float viewZenithAngle = coords.y * 2.0 - 1.0;
 
 	if (viewZenithAngle > 0.5)
 		viewZenithAngle = ch + pow((viewZenithAngle - 0.5) * 2, 5) * (1 - ch);
@@ -352,13 +361,12 @@ void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 		viewZenithAngle = ch - pow(viewZenithAngle * 2, 5) * (1 + ch);
 
 	float sunZenithAngle = (tan((2 * coords.z - 1 + 0.26) * 0.75)) / (tan(1.26 * 0.75));// coords.z * 2.0 - 1.0;
-	//float sunZenithAngle = coords.z * 2.0 - 1.0;
 
 	float3 planetCenter = float3(0, -_PlanetRadius, 0);
 	float3 rayStart = float3(0, height, 0);
 
-	float3 rayDir = float3(sqrt(saturate(1 - viewZenithAngle * viewZenithAngle)), viewZenithAngle, 0);
-	float3 lightDir = -float3(sqrt(saturate(1 - sunZenithAngle * sunZenithAngle)), sunZenithAngle, 0);
+	float3 rayDir   = float3(sqrt(saturate(1 - viewZenithAngle * viewZenithAngle)), viewZenithAngle, 0);
+	float3 lightDir = float3(sqrt(saturate(1 - sunZenithAngle * sunZenithAngle)), sunZenithAngle, 0);
 
 	float rayLength = 1e20;
 	float2 intersection = RaySphereIntersection(rayStart, rayDir, planetCenter, _PlanetRadius + _AtmosphereHeight);
@@ -368,21 +376,19 @@ void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 	if (intersection.x > 0)
 		rayLength = min(rayLength, intersection.x);
 
-	float4 rayleigh;
-	float4 mie;
+	float3 rayleigh;
+	float3 mie;
 	IntegrateInscattering(rayStart, rayDir, rayLength, planetCenter, lightDir, rayleigh, mie);
 
-	//color.inscattering.z = coords.z;
-	_SkyboxLUT[id.xyz] = float4(rayleigh.xyz, mie.x);
+	_SkyboxLUT[id.xyz] = float4(rayleigh, mie.x);
 	_SkyboxLUT2[id.xyz] = mie.yz;
 }
 
 [numthreads(1, 1, 1)]
 void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
-	float w, h, d;
+	uint w, h, d;
 	_InscatteringLUT.GetDimensions(w, h, d);
-
-	float2 coords = float2(id.x / (w - 1), id.y / (h - 1));
+	float2 coords = float2(id.x / float(w - 1), id.y / float(h - 1));
 
 	float3 v1 = lerp(_BottomLeftCorner.xyz, _BottomRightCorner.xyz, coords.x);
 	float3 v2 = lerp(_TopLeftCorner.xyz, _TopRightCorner.xyz, coords.x);
@@ -402,7 +408,6 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 void ParticleDensityLUT(uint3 id : SV_DispatchThreadID) {
 	float w, h;
 	_RWParticleDensityLUT.GetDimensions(w, h);
-
 	float2 uv = float2(id.x / (w - 1), id.y / (h - 1));
 
 	float cosAngle = uv.x * 2 - 1;
@@ -417,28 +422,18 @@ void ParticleDensityLUT(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(1, 1, 1)]
 void AmbientLightLUT(uint3 id : SV_DispatchThreadID) {
-	float w, h;
-	_RWAmbientLightLUT.GetDimensions(w, h);
-
-	float2 uv = float2(id.x / (w - 1), id.y / (h - 1));
-
-	float cosAngle = uv.x * 1.1 - 0.1;// *2.0 - 1.0;
+	float cosAngle = id.x / 128.0 * 1.1 - 0.1;// *2.0 - 1.0;
 	float sinAngle = sqrt(saturate(1 - cosAngle * cosAngle));
-	float3 lightDir = -normalize(float3(sinAngle, cosAngle, 0));
+	float3 lightDir = normalize(float3(sinAngle, cosAngle, 0));
 
-	_RWAmbientLightLUT[id.xy] = PrecomputeAmbientLight(lightDir);
+	_RWAmbientLightLUT[id.x] = PrecomputeAmbientLight(lightDir);
 }
 
 [numthreads(1, 1, 1)]
 void DirectLightLUT(uint3 id : SV_DispatchThreadID) {
-	float w, h;
-	_RWDirectLightLUT.GetDimensions(w, h);
-
-	float2 uv = float2(id.x / (w - 1), id.y / (h - 1));
-
-	float cosAngle = uv.x * 1.1 - 0.1;// *2.0 - 1.0;
+	float cosAngle = id.x / 128.0 * 1.1 - 0.1;// *2.0 - 1.0;
 	float sinAngle = sqrt(saturate(1 - cosAngle * cosAngle));
 	float3 rayDir = normalize(float3(sinAngle, cosAngle, 0));
 
-	_RWDirectLightLUT[id.xy] = PrecomputeDirectLight(rayDir);
+	_RWDirectLightLUT[id.x] = PrecomputeDirectLight(rayDir);
 }

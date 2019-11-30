@@ -183,6 +183,8 @@ TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
 	mIndexCounts.resize(16);
 }
 TerrainRenderer::~TerrainRenderer() {
+	for (auto q : mRootNodes)
+		safe_delete(q.second);
 	for (auto d : mIndexBuffers)
 		safe_delete(d.second);
 }
@@ -220,33 +222,23 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	// Create node buffer
 	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
 	float tanFov = tan(.5f * camera->FieldOfView()) / (.5f * camera->FramebufferHeight());
-	QuadNode* root = new QuadNode(this, nullptr, 0, 0, 0, mSize);
+	if (mRootNodes.count(camera) == 0)
+		mRootNodes.emplace(camera, new QuadNode(this, nullptr, 0, 0, 0, mSize));
+	QuadNode* root = mRootNodes.at(camera);
 	queue<QuadNode*> nodes;
 	nodes.push(root);
 	while(nodes.size()){
 		QuadNode* n = nodes.front();
 		nodes.pop();
 
-		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+		if (!camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f))) continue;
 
 		if (n->ShouldSplit(cp, tanFov)) {
 			n->Split();
 			for (uint32_t i = 0; i < 4; i++)
 				nodes.push(&n->mChildren[i]);
-
-			QuadNode* nn[4]{
-				n->LeftNeighbor(),
-				n->RightNeighbor(),
-				n->ForwardNeighbor(),
-				n->BackNeighbor(),
-			};
-			for (uint32_t i = 0; i < 4; i++)
-				if (nn[i] && nn[i]->mLod < n->mLod) {
-					nn[i]->Split();
-					for (uint32_t j = 0; j < 4; j++)
-						nodes.push(&nn[i]->mChildren[j]);
-				}
-		}
+		} else
+			n->Join();
 	}
 
 	nodes.push(root);
@@ -326,8 +318,6 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
 		commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
 	}
-
-	delete root;
 }
 
 void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

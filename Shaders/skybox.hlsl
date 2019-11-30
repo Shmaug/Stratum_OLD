@@ -6,7 +6,7 @@
 #pragma zwrite false
 #pragma ztest false
 
-#pragma static_sampler Sampler
+#pragma static_sampler Sampler maxAnisotropy=0 addressMode=clamp_edge
 
 #include <shadercompat.h>
 
@@ -63,7 +63,7 @@ float3 RenderSun(in float3 scatterM, float cosAngle) {
 	float g2 = g * g;
 
 	float sun = (1 - g) * (1 - g) / (4 * PI * pow(1.0 + g2 - 2.0 * g * cosAngle, 1.5));
-	return sun * 0.003 * scatterM;// 5;
+	return sun * 0.0015 * scatterM;// 5;
 }
 
 void ApplyPhaseFunctionElek(inout float3 scatterR, inout float3 scatterM, float cosAngle) {
@@ -99,6 +99,13 @@ void fsmain(
 	float3 rayStart = Camera.Position;
 	float3 ray = normalize(viewRay);
 
+	float3 realRay = ray;
+	float fadeOut = 1;
+	if (ray.y < 0 && ray.y > -.075) {
+		fadeOut = 1 + ray.y / .075;
+		ray.y = -ray.y;
+	}
+
 	float3 planetCenter = float3(0, -_PlanetRadius, 0);
 
 	float4 scatterR = 0;
@@ -112,7 +119,7 @@ void fsmain(
 
 	float3 coords = float3(height / _AtmosphereHeight, viewZenith * 0.5 + 0.5, sunZenith * 0.5 + 0.5);
 
-	coords.x = pow(height / _AtmosphereHeight, 0.5);
+	coords.x = sqrt(height / _AtmosphereHeight);
 	float ch = -(sqrt(height * (2 * _PlanetRadius + height)) / (_PlanetRadius + height));
 	if (viewZenith > ch)
 		coords.y = 0.5 * pow((viewZenith - ch) / (1 - ch), 0.2) + 0.5;
@@ -120,20 +127,21 @@ void fsmain(
 		coords.y = 0.5 * pow((ch - viewZenith) / (ch + 1), 0.2);
 	coords.z = 0.5 * ((atan(max(sunZenith, -0.1975) * tan(1.26 * 1.1)) / 1.1) + (1 - 0.26));
 
-	coords = saturate(coords);
-	scatterR = _SkyboxLUT.Sample(Sampler, coords);
-	scatterM.x = scatterR.w;
-	scatterM.yz = _SkyboxLUT2.Sample(Sampler, coords).xy;
 
-	float3 m = scatterM;
-	// scatterR = 0;
-	// phase function
+	coords = saturate(coords);
+	scatterR = _SkyboxLUT.SampleLevel(Sampler, coords, 0);
+	scatterM.x = scatterR.w;
+	scatterM.yz = _SkyboxLUT2.SampleLevel(Sampler, coords, 0).xy;
+
+	float3 m = scatterM.xyz;
+
 	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, _SunDir));
 	float3 lightInscatter = (scatterR * _ScatteringR + scatterM * _ScatteringM) * _IncomingLight;
 
-	lightInscatter += RenderSun(m, dot(ray, _SunDir.xyz)) * _SunIntensity;
+	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
+	ray = realRay;
 
-	color = float4(lightInscatter, 1);
+	color = float4(lightInscatter * fadeOut, 1);
 	RenderMoon(color.rgb, ray);
 	float3 star = _StarCube.SampleLevel(Sampler, rotate(_StarRotation, ray), .25);
 	color.rgb += star * (1 - saturate(_StarFade * dot(color, color)));

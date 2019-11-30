@@ -11,6 +11,7 @@
 
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=greater
+#pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
 #include <shadercompat.h>
 
@@ -29,6 +30,7 @@
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> MaskTextures[8]		: register(t8); // rgb -> rough, height, ao
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
+[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 ObjectToWorld;
@@ -36,6 +38,7 @@
 	uint LightCount;
 	float2 ShadowTexelSize;
 	float TerrainHeight;
+	float3 AmbientLight;
 };
 
 #include "util.hlsli"
