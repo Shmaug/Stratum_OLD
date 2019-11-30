@@ -34,7 +34,7 @@ void Window::KeyCallback(GLFWwindow* window, int key, int scancode, int action, 
 void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 	win->mInput->mLastWindow = win;
-	win->mInput->mCurrent.mCursorPos = float2(x, y) + float2(win->mClientRect.offset.x, win->mClientRect.offset.y);
+	win->mInput->mCurrent.mCursorPos = float2((float)x, (float)y) + float2((float)win->mClientRect.offset.x, (float)win->mClientRect.offset.y);
 	win->mInput->mCurrent.mCursorDelta = win->mInput->mCurrent.mCursorPos - win->mInput->mLast.mCursorPos;
 
 	if (win->mTargetCamera) {
@@ -50,7 +50,7 @@ void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int
 void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 	win->mInput->mLastWindow = win;
-	win->mInput->mCurrent.mScrollDelta += float2(x, y);
+	win->mInput->mCurrent.mScrollDelta += float2((float)x, (float)y);
 }
 
 Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position)
@@ -359,14 +359,14 @@ void Window::CreateSwapchain(::Device* device) {
 
 	// find the best present mode
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	if (!mWindow || !mFullscreen) {
+	//if (!mWindow || !mFullscreen) {
 		for (const auto& availablePresentMode : presentModes)
 			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
 				presentMode = availablePresentMode;
 				break;
 			} else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
 				presentMode = availablePresentMode;
-	}
+	//}
 
 	// find the preferrable number of back buffers
 	mImageCount = capabilities.minImageCount + 1;

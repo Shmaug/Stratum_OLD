@@ -632,7 +632,7 @@ void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLa
 		break;
 	case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		break;
 	case VK_IMAGE_LAYOUT_GENERAL:
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;

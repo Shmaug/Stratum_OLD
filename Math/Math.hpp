@@ -1745,67 +1745,131 @@ inline double4 degrees(const double4& r) {
 }
 #pragma endregion
 
+inline float2 pow(const float2& a, const float2& b) {
+	float2 r;
+	rpt2(i) r.v[i] = powf(a.v[i], b[i]);
+	return r;
+}
+inline float3 pow(const float3& a, const float3& b) {
+	float3 r;
+	rpt3(i) r.v[i] = powf(a.v[i], b[i]);
+	return r;
+}
+inline float4 pow(const float4& a, const float4& b) {
+	float4 r;
+	rpt4(i) r.v[i] = powf(a.v[i], b[i]);
+	return r;
+}
+
+inline float2 pow(const float2& a, float b) {
+	float2 r;
+	rpt2(i) r.v[i] = powf(a.v[i], b);
+	return r;
+}
+inline float3 pow(const float3& a, float b) {
+	float3 r;
+	rpt3(i) r.v[i] = powf(a.v[i], b);
+	return r;
+}
+inline float4 pow(const float4& a, float b) {
+	float4 r;
+	rpt4(i) r.v[i] = powf(a.v[i], b);
+	return r;
+}
+
+inline double2 pow(const double2& a, const double2& b) {
+	double2 r;
+	rpt2(i) r.v[i] = pow(a.v[i], b[i]);
+	return r;
+}
+inline double3 pow(const double3& a, const double3& b) {
+	double3 r;
+	rpt3(i) r.v[i] = pow(a.v[i], b[i]);
+	return r;
+}
+inline double4 pow(const double4& a, const double4& b) {
+	double4 r;
+	rpt4(i) r.v[i] = pow(a.v[i], b[i]);
+	return r;
+}
+
+inline double2 pow(const double2& a, float b) {
+	double2 r;
+	rpt2(i) r.v[i] = pow(a.v[i], b);
+	return r;
+}
+inline double3 pow(const double3& a, float b) {
+	double3 r;
+	rpt3(i) r.v[i] = pow(a.v[i], b);
+	return r;
+}
+inline double4 pow(const double4& a, float b) {
+	double4 r;
+	rpt4(i) r.v[i] = pow(a.v[i], b);
+	return r;
+}
+
 inline uint32_t dot(const uint2& a, const uint2& b) {
 	uint32_t r = 0;
-	rpt2(i) r += a[i] * b[i];
+	rpt2(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline uint32_t dot(const uint3& a, const uint3& b) {
 	uint32_t r = 0;
-	rpt3(i) r += a[i] * b[i];
+	rpt3(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline uint32_t dot(const uint4& a, const uint4& b) {
 	uint32_t r = 0;
-	rpt4(i) r += a[i] * b[i];
+	rpt4(i) r += a.v[i] * b.v[i];
 	return r;
 }
 
 inline int32_t dot(const int2& a, const int2& b) {
 	int32_t r = 0;
-	rpt2(i) r += a[i] * b[i];
+	rpt2(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline int32_t dot(const int3& a, const int3& b) {
 	int32_t r = 0;
-	rpt3(i) r += a[i] * b[i];
+	rpt3(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline int32_t dot(const int4& a, const int4& b) {
 	int32_t r = 0;
-	rpt4(i) r += a[i] * b[i];
+	rpt4(i) r += a.v[i] * b.v[i];
 	return r;
 }
 
 inline float dot(const float2& a, const float2& b) {
 	float r = 0;
-	rpt2(i) r += a[i] * b[i];
+	rpt2(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline float dot(const float3& a, const float3& b) {
 	float r = 0;
-	rpt3(i) r += a[i] * b[i];
+	rpt3(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline float dot(const float4& a, const float4& b) {
 	float r = 0;
-	rpt4(i) r += a[i] * b[i];
+	rpt4(i) r += a.v[i] * b.v[i];
 	return r;
 }
 
 inline double dot(const double2& a, const double2& b) {
 	double r = 0;
-	rpt2(i) r += a[i] * b[i];
+	rpt2(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline double dot(const double3& a, const double3& b) {
 	double r = 0;
-	rpt3(i) r += a[i] * b[i];
+	rpt3(i) r += a.v[i] * b.v[i];
 	return r;
 }
 inline double dot(const double4& a, const double4& b) {
 	double r = 0;
-	rpt4(i) r += a[i] * b[i];
+	rpt4(i) r += a.v[i] * b.v[i];
 	return r;
 }
 

@@ -66,6 +66,8 @@ private:
 		PLUGIN_EXPORT QuadNode* BackNeighbor();
 	};
 
+	std::unordered_map<Camera*, QuadNode*> mRootNodes;
+
 	std::unordered_map<Device*, Buffer*> mIndexBuffers;
 	std::vector<uint32_t> mIndexOffsets;
 	std::vector<uint32_t> mIndexCounts;
