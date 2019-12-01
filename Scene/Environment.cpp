@@ -9,19 +9,19 @@ using namespace std;
 Environment::Environment(Scene* scene) : 
 	mTimeOfDay(.25f),
 	mScene(scene), mSkybox(nullptr),
-	mIncomingLight(float4(4)),
-	mRayleighScatterCoef(3),
-	mRayleighExtinctionCoef(1),
-	mMieScatterCoef(1.5f),
+	mIncomingLight(float4(2.5f)),
+	mRayleighScatterCoef(2),
+	mRayleighExtinctionCoef(.5f),
+	mMieScatterCoef(1),
 	mMieExtinctionCoef(1),
-	mMieG(0.98f),
-	mDistanceScale(30),
-	mSunIntensity(.2f),
+	mMieG(0.76f),
+	mDistanceScale(200),
+	mSunIntensity(.1f),
 	mAtmosphereHeight(80000.0f),
 	mPlanetRadius(6371000.0f),
-	mDensityScale(float4(7994, 1200, 0, 0)),
+	mDensityScale(float4(20000, 8000, 0, 0)),
 	mRayleighSct(float4(5.8f, 13.5f, 33.1f, 0) * .000001f),
-	mMieSct(float4(2, 2, 2, 0) * .00001f),
+	mMieSct(float4(2, 2, 2, 0) * .000001f),
 	mAmbientLight(0),
 	mMoonSize(.04f) {
 
@@ -61,8 +61,8 @@ Environment::Environment(Scene* scene) :
 		DevLUT dlut = {};
 
 		dlut.mParticleDensityLUT = new Texture("Particle Density LUT", device, 1024, 1024, 1, VK_FORMAT_R32G32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
-		dlut.mSkyboxLUT = new Texture("Skybox LUT", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		dlut.mSkyboxLUT2 = new Texture("Skybox LUT 2", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R16G16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		dlut.mSkyboxLUT = new Texture("Skybox LUT", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		dlut.mSkyboxLUT2 = new Texture("Skybox LUT 2", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R32G32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
 		// compute particle density LUT
 		dlut.mParticleDensityLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
@@ -168,7 +168,7 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(direct, "_SunIntensity", &mSunIntensity);
 		vkCmdDispatch(*commandBuffer, 128, 1, 1);
 
-		device->Execute(commandBuffer)->Wait();
+		device->Execute(commandBuffer, false)->Wait();
 
 		delete ds;
 		delete ds2;
@@ -196,7 +196,7 @@ Environment::Environment(Scene* scene) :
 	moon->CastShadows(true);
 	moon->ShadowDistance(1024);
 	moon->Color(float3(1));
-	moon->Intensity(.2f);
+	moon->Intensity(.05f);
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	moon->Type(Sun);
 	mMoon = moon.get();
@@ -275,7 +275,7 @@ void Environment::Update() {
 	index1 = clamp(index1, 0, 128 - 1);
 
 	mSun->Color((1.055f * pow((mDirectionalLUT[index0] * weight0 + mDirectionalLUT[index1] * weight1).rgb, 1.f / 2.4f) - .055f));
-	mAmbientLight = .02f * length(1.055f * pow(mAmbientLUT[index0] * weight0 + mAmbientLUT[index1] * weight1, 1.f / 2.4f) - .055f);
+	mAmbientLight = .1f * length(1.055f * pow(mAmbientLUT[index0] * weight0 + mAmbientLUT[index1] * weight1, 1.f / 2.4f) - .055f);
 }
 
 void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
@@ -288,11 +288,11 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	DevLUT* dlut = &mDeviceLUTs.at(camera->Device());
 
 	if (!l->mInscatterLUT) {
-		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 8, 8, 64, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mOutscatterLUT) {
-		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 8, 8, 64, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 
@@ -340,7 +340,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
 	commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
-	vkCmdDispatch(*commandBuffer, 8, 8, 1);
+	vkCmdDispatch(*commandBuffer, 16, 16, 1);
 	#pragma endregion
 
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
@@ -350,8 +350,8 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	mSkyboxMaterial->SetParameter("_SkyboxLUT2", dlut->mSkyboxLUT2);
 	mSkyboxMaterial->SetParameter("_MoonTex", mMoonTexture);
 	mSkyboxMaterial->SetParameter("_StarCube", mStarTexture);
-	mSkyboxMaterial->SetParameter("_MoonDir", mMoon->WorldRotation().forward());
-	mSkyboxMaterial->SetParameter("_MoonRight", mMoon->WorldRotation() * float3(1,0,0));
+	mSkyboxMaterial->SetParameter("_MoonDir", -mMoon->WorldRotation().forward());
+	mSkyboxMaterial->SetParameter("_MoonRight", mMoon->WorldRotation() * float3(-1,0,0));
 	mSkyboxMaterial->SetParameter("_MoonSize", mMoonSize);
 	mSkyboxMaterial->SetParameter("_IncomingLight", mIncomingLight.xyz);
 	mSkyboxMaterial->SetParameter("_SunDir", lightdir);

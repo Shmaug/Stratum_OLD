@@ -138,8 +138,8 @@ void fsmain(
 	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, _SunDir));
 	float3 lightInscatter = (scatterR * _ScatteringR + scatterM * _ScatteringM) * _IncomingLight;
 
-	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
 	ray = realRay;
+	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
 
 	color = float4(lightInscatter * fadeOut, 1);
 	RenderMoon(color.rgb, ray);

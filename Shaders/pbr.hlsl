@@ -14,7 +14,7 @@
 
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=greater
-
+#pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
 #if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(SPECGLOSS_MAP) || defined(OCCLUSION_MAP)
 #define NEED_TEXCOORD
@@ -39,8 +39,11 @@
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture		: register(t7);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture2D<float4> SpecGlossTexture		: register(t8);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> OcclusionTexture		: register(t9);
-[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
-[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture3D<float4> InscatteringLUT		: register(t4);
+[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] Texture3D<float4> ExtinctionLUT		: register(t5);
+[[vk::binding(BINDING_START + 8, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 9, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
+[[vk::binding(BINDING_START + 10, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -59,6 +62,7 @@
 
 #include "util.hlsli"
 #include "brdf.hlsli"
+#include "scatter.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -164,7 +168,8 @@ void fsmain(v2f i,
 	material.emission = 0;
 	#endif
 	
-	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
+	float3 eval = EvaluateLighting(material, i.worldPos, normal, view, depth);
+	ApplyScattering(eval, i.screenPos.xy / i.screenPos.w, depth);
 	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
 }

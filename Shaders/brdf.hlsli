@@ -118,7 +118,7 @@ float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out
 		int ci = CascadeSplit(li, depth);
 		ShadowData s = Shadows[l.ShadowIndex + ci];
 
-		float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + normal * .005, 1));
+		float4 shadowPos = mul(s.WorldToShadow, float4((worldPos + (Camera.Position - l.WorldPosition)) + normal * .005, 1));
 
 		float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
 		z *= s.Proj.y;
@@ -140,14 +140,14 @@ float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out
 			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, 0), z);
 			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, ShadowTexelSize.y), z);
 			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, -ShadowTexelSize.y), z);
-			shadow *= 1.0 / 9.0;
+			shadow /= 9;
 
 			attenuation = 1 - shadow;
 		}
 	}
 
 	if (l.Type > LIGHT_SUN) {
-		L = l.WorldPosition - worldPos;
+		L = (l.WorldPosition - Camera.Position) - worldPos;
 		float d2 = dot(L, L);
 		L /= sqrt(d2);
 		attenuation *= 1 / max(d2, .0001);
@@ -195,10 +195,10 @@ float3 EvaluateLighting(MaterialInfo material, float3 worldPos, float3 normal, f
 			eval += attenuation * lc * BRDF(material, nv, L, normal, view);
 	}
 
-	float3 reflection = normalize(reflect(-view, normal));
 
 	//uint texWidth, texHeight, numMips;
 	//EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	//zfloat3 reflection = normalize(reflect(-view, normal));
 	//float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
 	float3 env_spec = AmbientLight;//EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb;
 	float3 env_diff = AmbientLight;//EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;

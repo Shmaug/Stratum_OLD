@@ -49,8 +49,8 @@ private:
 	friend class Instance;
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position);
 	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex);
-	ENGINE_EXPORT VkImage AcquireNextImage(std::vector<std::shared_ptr<Semaphore>>& signalSemaphores);
-	ENGINE_EXPORT void Present(const std::vector<VkSemaphore>& waitSemaphores);
+	ENGINE_EXPORT VkImage AcquireNextImage();
+	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
 	ENGINE_EXPORT static void WindowPosCallback(GLFWwindow* window, int x, int y);
 	ENGINE_EXPORT static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);

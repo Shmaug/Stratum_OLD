@@ -16,13 +16,14 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update() override;
-	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
-	PLUGIN_EXPORT void PostRender(CommandBuffer* commandBuffer, Camera* camera);
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
+	PLUGIN_EXPORT void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 
 private:
 	Scene* mScene;
 	TerrainRenderer* mTerrain;
 	vector<Object*> mObjects;
+	Object* mSelected;
 
 	float3 mCameraEuler;
 
@@ -44,7 +45,7 @@ private:
 
 ENGINE_PLUGIN(TerrainSystem)
 
-TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr) {
+TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr) {
 	mEnabled = true;
 	mHeadBob = 0;
 	mCameraEuler = 0;
@@ -112,6 +113,19 @@ bool TerrainSystem::Init(Scene* scene) {
 	camera->AddChild(mFpsText);
 	mObjects.push_back(mFpsText);
 
+	shared_ptr<Light> light = make_shared<Light>("Light");
+	mScene->AddObject(light);
+	mObjects.push_back(light.get());
+	light->LocalPosition(0, mTerrain->Height(0) + 5, 0);
+	light->LocalRotation(quaternion(float3(PI * .4f)));
+	light->Type(Spot);
+	light->InnerSpotAngle(radians(20.f));
+	light->OuterSpotAngle(radians(25.f));
+	light->CastShadows(true);
+	light->Range(100);
+	light->Color(float3(1, .9f, .9f));
+	light->Intensity(100);
+
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	return true;
@@ -119,8 +133,9 @@ bool TerrainSystem::Init(Scene* scene) {
 
 void TerrainSystem::Update() {
 	float tod = mScene->Environment()->TimeOfDay();
-	if (mInput->KeyDown(GLFW_KEY_H)) {
-		tod += mScene->Instance()->DeltaTime() * .06f;
+	tod += mScene->Instance()->DeltaTime() * .0011111f; // 15min days
+	if (mInput->KeyDown(GLFW_KEY_F3)) {
+		tod += mScene->Instance()->DeltaTime() * .1f; // zoooom
 		if (tod > 1) tod -= 1;
 	}
 	mScene->Environment()->TimeOfDay(tod);
@@ -140,7 +155,6 @@ void TerrainSystem::Update() {
 
 	if (mInput->KeyDownFirst(GLFW_KEY_O))
 		mMainCamera->Orthographic(!mMainCamera->Orthographic());
-
 
 	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
 		mInput->LockMouse(!mInput->LockMouse());
@@ -198,10 +212,10 @@ void TerrainSystem::Update() {
 	else
 		mHeadBob = 0;
 
-	float sb = sin(-2 * mHeadBob);
-	sb *= sb;
-	float dy = 1.6f + .2f * -sb - mMainCamera->LocalPosition().y;
-	mMainCamera->LocalPosition(0, mMainCamera->LocalPosition().y + min(mScene->Instance()->DeltaTime(), dy), 0);
+	//float sb = sin(-2 * mHeadBob);
+	//sb *= sb;
+	//float dy = 1.6f + .2f * -sb - mMainCamera->LocalPosition().y;
+	//mMainCamera->LocalPosition(0, mMainCamera->LocalPosition().y + min(mScene->Instance()->DeltaTime(), dy), 0);
 
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
@@ -215,10 +229,71 @@ void TerrainSystem::Update() {
 	}
 }
 
-void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	
+void TerrainSystem::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	mTriangleCount = commandBuffer->mTriangleCount;
 }
 
-void TerrainSystem::PostRender(CommandBuffer* commandBuffer, Camera* camera) {
-	mTriangleCount = commandBuffer->mTriangleCount;
+void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
+	const Ray& ray = mInput->GetPointer(0)->mWorldRay;
+	float hitT;
+	Collider* hit = mScene->Raycast(ray, hitT);
+
+	Gizmos* gizmos = mScene->Gizmos();
+
+	bool change = mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
+
+	// manipulate selection
+	Light* selectedLight = nullptr;
+	if (mSelected) {
+		selectedLight = dynamic_cast<Light*>(mSelected);
+		if (selectedLight) {
+			switch (selectedLight->Type()) {
+			case LightType::Spot:
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(
+					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+				break;
+
+			case LightType::Point:
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
+				break;
+			}
+		}
+
+		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+			quaternion r = mSelected->WorldRotation();
+			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r)) {
+				mSelected->LocalRotation(r);
+				change = false;
+			}
+		} else {
+			float3 p = mSelected->WorldPosition();
+			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p)) {
+				mSelected->LocalPosition(p);
+				change = false;
+			}
+		}
+	}
+
+	// change selection
+	if (change) mSelected = nullptr;
+	for (Light* light : mScene->ActiveLights()) {
+		float lt = ray.Intersect(Sphere(light->WorldPosition(), .09f)).x;
+		bool hover = lt > 0 && (hitT < 0 || lt < hitT);
+
+		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
+		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
+			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
+
+		if (hover) {
+			hitT = lt;
+			if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
+				light->mEnabled = !light->mEnabled;
+			if (change) mSelected = light;
+		}
+	}
 }

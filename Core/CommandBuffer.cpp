@@ -73,7 +73,7 @@ void CommandBuffer::Reset(const string& name) {
 	mDevice->SetObjectName(mCommandBuffer, name, VK_OBJECT_TYPE_COMMAND_BUFFER);
 	
 	mSignalFence->Reset();
-	mDevice->SetObjectName(mSignalFence->operator VkFence(), name + " Fence", VK_OBJECT_TYPE_FENCE);
+	mDevice->SetObjectName(*mSignalFence, name + " Fence", VK_OBJECT_TYPE_FENCE);
 
 	mCurrentRenderPass = nullptr;
 	mCurrentCamera = nullptr;

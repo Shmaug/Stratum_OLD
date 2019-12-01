@@ -128,9 +128,10 @@ void fsmain(v2f i,
 	// tri-planar
 	float3 blend = abs(normal);
 	blend *= blend * blend;
+	blend *= blend * blend;
 	blend /= dot(blend, 1);
 
-	float3 wp = .5 * frac(i.worldPos + Camera.Position);
+	float3 wp = .2 * (i.worldPos + Camera.Position);
 	
 	triplanar(2, 0, wp, blend, col, mask, bump, (1 - mountain) * (1 - lake)); // grass
 	triplanar(2, 1, wp, blend, col, mask, bump, lake); // dirt
@@ -145,7 +146,7 @@ void fsmain(v2f i,
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	material.occlusion = mask.b;
 	material.emission = 0;
-	float3 eval = EvaluateLighting(material, i.worldPos + Camera.Position, normal, view, depth);
+	float3 eval = EvaluateLighting(material, i.worldPos, normal, view, depth);
 	ApplyScattering(eval, i.screenPos.xy / i.screenPos.w, depth);
 	color = float4(eval, 1);
 	depthNormal = float4(normal * .5 + .5, depth);
