@@ -51,7 +51,7 @@ Environment::Environment(Scene* scene) :
 		r[4 * i + 2] = rand() % 0xFF;
 		r[4 * i + 3] = 0;
 	}
-	Texture* randTex = new Texture("Random Vectors", mScene->Instance(), r, 256 * 4, 16, 16, 1, VK_FORMAT_R8G8B8A8_SNORM, 1,
+	Texture* randTex = new Texture("Random Vectors", mScene->Instance(), r, 256 * 4, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, 1,
 		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
 
 	for (uint32_t i = 0; i < mScene->Instance()->DeviceCount(); i++) {
@@ -121,8 +121,8 @@ Environment::Environment(Scene* scene) :
 		Device* device = mScene->Instance()->GetDevice(0);
 		auto commandBuffer = device->GetCommandBuffer();
 
-		Buffer ambientBuffer("Ambient", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		Buffer dirBuffer("Direct", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Buffer ambientBuffer("Ambient", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Buffer dirBuffer("Direct", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		ComputeShader* ambient = mShader->GetCompute(commandBuffer->Device(), "AmbientLightLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipeline);
@@ -170,13 +170,13 @@ Environment::Environment(Scene* scene) :
 
 		device->Execute(commandBuffer, false)->Wait();
 
-		delete ds;
-		delete ds2;
-
 		ambientBuffer.Map();
 		dirBuffer.Map();
 		std::memcpy(mAmbientLUT, ambientBuffer.MappedData(), 128 * sizeof(float4));
 		std::memcpy(mDirectionalLUT, dirBuffer.MappedData(), 128 * sizeof(float4));
+
+		delete ds;
+		delete ds2;
 	}
 
 	delete randTex;
@@ -193,10 +193,8 @@ Environment::Environment(Scene* scene) :
 	shared_ptr<Light> moon = make_shared<Light>("Moon");
 	mScene->AddObject(moon);
 	moon->mEnabled = false;
-	moon->CastShadows(true);
-	moon->ShadowDistance(1024);
 	moon->Color(float3(1));
-	moon->Intensity(.05f);
+	moon->Intensity(.1f);
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	moon->Type(Sun);
 	mMoon = moon.get();
@@ -229,18 +227,16 @@ void Environment::SetEnvironment(Camera* camera, Material* mat) {
 
 void Environment::Update() {
 	const float sunsetDuration = .04f;
-	const float moonIntensity = .2f;
+	const float moonIntensity = .1f;
 
 	if (mTimeOfDay > .5f - sunsetDuration && mTimeOfDay < .5f + sunsetDuration) {
 		// sunset
 		mSun->mEnabled = true;
-		mMoon->mEnabled = true;
 		float f = (mTimeOfDay - (.5f - sunsetDuration)) / (2 * sunsetDuration);
 		mMoon->Intensity(moonIntensity * f);
 	} else if (mTimeOfDay < sunsetDuration || mTimeOfDay > 1 - sunsetDuration) {
 		// sunrise
 		mSun->mEnabled = true;
-		mMoon->mEnabled = true;
 		float f = 0;
 		if (mTimeOfDay < sunsetDuration)
 			f = .5f + .5f * mTimeOfDay / sunsetDuration;
@@ -250,12 +246,10 @@ void Environment::Update() {
 	} else if (mTimeOfDay > .5f + sunsetDuration) {
 		// night time
 		mSun->mEnabled = false;
-		mMoon->mEnabled = true;
 		mMoon->Intensity(moonIntensity);
 	} else if (mTimeOfDay > sunsetDuration) {
 		// day time
 		mSun->mEnabled = true;
-		mMoon->mEnabled = false;
 	}
 
 	float fwd = -10 * mMoon->WorldRotation().forward().y + .1f;
@@ -309,6 +303,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	float4 extinctM = mMieSct * mMieExtinctionCoef;
 	float3 cp = camera->WorldPosition();
 	float3 lightdir = -normalize(mSun->WorldRotation().forward());
+	float4 incoming = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
 
 	#pragma region Precompute scattering
 	ComputeShader* scatter = mShader->GetCompute(commandBuffer->Device(), "InscatteringLUT", {});
@@ -336,7 +331,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_ScatteringM", &scatterM);
 	commandBuffer->PushConstant(scatter, "_ExtinctionR", &extinctR);
 	commandBuffer->PushConstant(scatter, "_ExtinctionM", &extinctM);
-	commandBuffer->PushConstant(scatter, "_IncomingLight", &mIncomingLight);
+	commandBuffer->PushConstant(scatter, "_IncomingLight", &incoming);
 	commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
 	commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
