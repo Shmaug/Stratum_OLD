@@ -283,10 +283,8 @@ float4 PrecomputeAmbientLight(float3 lightDir) {
 
 	float4 color = 0;
 
-	const int sampleCount = 255;
-
-	for (int ii = 0; ii < sampleCount; ++ii) {
-		float3 rayDir = normalize(_RandomVectors[uint2(ii % 16, ii / 16)]);
+	for (int ii = 0; ii < 255; ++ii) {
+		float3 rayDir = normalize(_RandomVectors[uint2(ii % 16, ii / 16)].xyz * 2 - 1);
 		rayDir.y = abs(rayDir.y);
 
 		float2 intersection = RaySphereIntersection(rayStart, rayDir, planetCenter, _PlanetRadius + _AtmosphereHeight);
@@ -296,15 +294,13 @@ float4 PrecomputeAmbientLight(float3 lightDir) {
 		if (intersection.x > 0)
 			rayLength = min(rayLength, intersection.x);
 
-		float sampleCount = 32;
 		float4 extinction;
-
-		float4 scattering = (IntegrateInscattering(rayStart, rayDir, rayLength, planetCenter, 1, lightDir, sampleCount, extinction, _SunIntensity));
-
-		color += scattering * dot(rayDir, float3(0, 1, 0));
+		float4 scattering = IntegrateInscattering(rayStart, rayDir, rayLength, planetCenter, 1, lightDir, 32, extinction, _SunIntensity);
+		
+		color.rgb += scattering* dot(rayDir, float3(0, 1, 0));
 	}
 
-	return color * 2 * PI / sampleCount;
+	return color * 2 * PI / 255;
 }
 float4 PrecomputeDirectLight(float3 rayDir) {
 	float startHeight = 500;
@@ -401,7 +397,7 @@ void ParticleDensityLUT(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(1, 1, 1)]
 void AmbientLightLUT(uint3 id : SV_DispatchThreadID) {
-	float cosAngle = id.x / 128.0 * 1.1 - 0.1;// *2.0 - 1.0;
+	float cosAngle = id.x / 128.0 * 1.1 - 0.1;
 	float sinAngle = sqrt(saturate(1 - cosAngle * cosAngle));
 	float3 lightDir = normalize(float3(sinAngle, cosAngle, 0));
 
@@ -410,7 +406,7 @@ void AmbientLightLUT(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(1, 1, 1)]
 void DirectLightLUT(uint3 id : SV_DispatchThreadID) {
-	float cosAngle = id.x / 128.0 * 1.1 - 0.1;// *2.0 - 1.0;
+	float cosAngle = id.x / 128.0 * 1.1 - 0.1;
 	float sinAngle = sqrt(saturate(1 - cosAngle * cosAngle));
 	float3 rayDir = normalize(float3(sinAngle, cosAngle, 0));
 
