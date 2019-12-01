@@ -214,9 +214,8 @@ bool Instance::PollEvents() {
 
 void Instance::AdvanceFrame() {
 	uint32_t wi = 0;
-	vector<VkSemaphore> waitSemaphores;
 	for (Window* w : mWindows) {
-		waitSemaphores.clear();
+		vector<VkSemaphore> waitSemaphores;
 		for (const shared_ptr<Semaphore>& s : w->Device()->CurrentFrameContext()->mSemaphores[wi])
 			waitSemaphores.push_back(*s);
 		// will wait on the semaphores signalled by the frame mMaxFramesInFlight ago
@@ -225,6 +224,7 @@ void Instance::AdvanceFrame() {
 	}
 
 	mFrameCount++;
+
 	PROFILER_BEGIN("Wait for GPU");
 	for (uint32_t i = 0; i < mDevices.size(); i++) {
 		mDevices[i]->mFrameContextIndex = mFrameCount % mMaxFramesInFlight;

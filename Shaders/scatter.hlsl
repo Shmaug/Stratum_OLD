@@ -52,36 +52,15 @@
 #define PI 3.14159265359
 
 float2 RaySphereIntersection(float3 ro, float3 rd, float3 p, float r) {
-	ro -= p;
-	float a = dot(rd, rd);
-	float b = 2.0 * dot(ro, rd);
-	float c = dot(ro, ro) - (r * r);
-	float d = b * b - 4 * a * c;
-	if (d < 0) {
-		return -1;
-	} else {
-		d = sqrt(d);
-		return float2(-b - d, -b + d) / (2 * a);
-	}
-	/*
 	float3 f = ro - p;
-	float r2 = r * r;
-
 	float a = dot(rd, rd);
 	float b = dot(f, rd);
-
-	float a2 = a * a;
-
-	float3 l = f * a - rd * b;
-	float a2r2 = a2 * r2;
-	float ll = dot(l, l);
-	if (a2r2 < ll) return -1.0;
-
-	float det = a2r2 - ll;
-	float rcpa = 1.0 / a;
-	det = sqrt(det * rcpa);
-	return (-b - det, -b + det) * rcpa;
-	*/
+	float3 l = a * f - rd * b;
+	float det = a * a * r * r - dot(l, l);
+	if (det < 0.0) return -1;
+	float ra = 1.0 / a;
+	det = sqrt(det * ra);
+	return (-b + float2(-det, det)) * ra;
 }
 
 void GetAtmosphereDensity(float3 position, float3 planetCenter, float3 lightDir, out float2 localDensity, out float2 densityToAtmTop) {
@@ -261,7 +240,7 @@ void PrecomputeLightScattering(float3 rayStart, float3 rayDir, float rayLength, 
 		float3 currentScatterR = scatterR;
 		float3 currentScatterM = scatterM;
 
-		ApplyPhaseFunction(currentScatterR, currentScatterM, dot(rayDir, lightDir.xyz));
+		ApplyPhaseFunction(currentScatterR, currentScatterM, saturate(dot(rayDir, lightDir)));
 		float3 lightInscatter = (currentScatterR * _ScatteringR + currentScatterM * _ScatteringM) * _IncomingLight.xyz;
 		float3 lightExtinction = exp(-(densityCP.x * _ExtinctionR + densityCP.y * _ExtinctionM));
 
@@ -304,10 +283,10 @@ float4 PrecomputeAmbientLight(float3 lightDir) {
 
 	float4 color = 0;
 
-	int sampleCount = 255;
+	const int sampleCount = 255;
 
 	for (int ii = 0; ii < sampleCount; ++ii) {
-		float3 rayDir = _RandomVectors[uint2(ii % 16, ii / 16)];
+		float3 rayDir = normalize(_RandomVectors[uint2(ii % 16, ii / 16)]);
 		rayDir.y = abs(rayDir.y);
 
 		float2 intersection = RaySphereIntersection(rayStart, rayDir, planetCenter, _PlanetRadius + _AtmosphereHeight);

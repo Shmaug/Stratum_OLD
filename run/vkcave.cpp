@@ -166,21 +166,8 @@ public:
 			PROFILER_END;
 
 			PROFILER_BEGIN("Acquire Swapchain Images");
-			bool failed = false;
-			std::vector<uint32_t> wi(mInstance->DeviceCount());
-			// advance window swapchains
-			for (uint32_t i = 0; i < mInstance->WindowCount(); i++) {
-				Window* w = mInstance->GetWindow(i);
-				if (w->AcquireNextImage(w->mDevice->CurrentFrameContext()->mSemaphores[wi[w->mDevice->PhysicalDeviceIndex()]]) == VK_NULL_HANDLE)
-					failed = true;
-				wi[w->mDevice->PhysicalDeviceIndex()]++;
-			}
-			if (failed) {
-				// flush all command buffers to make re-initialization cleaner
-				for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
-					mInstance->GetDevice(i)->FlushFrames();
-				continue;
-			}
+			for (uint32_t i = 0; i < mInstance->WindowCount(); i++)
+				mInstance->GetWindow(i)->AcquireNextImage();
 			PROFILER_END;
 
 			mScene->Update();

@@ -1,4 +1,6 @@
 #include <Scene/Camera.hpp>
+#include <Scene/Scene.hpp>
+#include <Scene/Gizmos.hpp>
 #include <Shaders/shadercompat.h>
 
 #include <Util/Profiler.hpp>
@@ -302,4 +304,33 @@ bool Camera::IntersectFrustum(const AABB& aabb) {
 		if (d <= -r) return false;
 	}
 	return true;
+}
+
+void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
+	if (camera == this) return;
+
+	float3 r0 = ScreenToWorldRay(float2(0, 0)).mDirection;
+	float3 r1 = ScreenToWorldRay(float2(0, 1)).mDirection;
+	float3 r2 = ScreenToWorldRay(float2(1, 0)).mDirection;
+	float3 r3 = ScreenToWorldRay(float2(1, 1)).mDirection;
+
+	float3 f0 = WorldPosition() + r0 * mNear;
+	float3 f1 = WorldPosition() + r1 * mNear;
+	float3 f2 = WorldPosition() + r2 * mNear;
+	float3 f3 = WorldPosition() + r3 * mNear;
+
+	float3 f4 = WorldPosition() + r0 * mFar;
+	float3 f5 = WorldPosition() + r1 * mFar;
+	float3 f6 = WorldPosition() + r2 * mFar;
+	float3 f7 = WorldPosition() + r3 * mFar;
+
+	Scene()->Gizmos()->DrawLine(f0, f1, 1);
+	Scene()->Gizmos()->DrawLine(f0, f2, 1);
+	Scene()->Gizmos()->DrawLine(f3, f1, 1);
+	Scene()->Gizmos()->DrawLine(f3, f2, 1);
+
+	Scene()->Gizmos()->DrawLine(f4, f5, 1);
+	Scene()->Gizmos()->DrawLine(f4, f6, 1);
+	Scene()->Gizmos()->DrawLine(f7, f5, 1);
+	Scene()->Gizmos()->DrawLine(f7, f6, 1);
 }

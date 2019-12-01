@@ -79,7 +79,10 @@ public:
 	inline virtual float4x4 InverseProjection() { UpdateMatrices(); return mInvProjection; }
 	inline virtual float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
 
-	ENGINE_EXPORT bool IntersectFrustum(const AABB& aabb);
+	ENGINE_EXPORT virtual bool IntersectFrustum(const AABB& aabb);
+
+
+	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 
 private:
 	uint32_t mRenderPriority;

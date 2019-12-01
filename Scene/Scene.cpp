@@ -214,7 +214,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 						float mx = l->ShadowDistance() * mCascadeSplits[ci];
 						float mn = (ci == 0) ? mainCamera->Near() : (l->ShadowDistance() * mCascadeSplits[ci - 1]);
 
-						AddShadowCamera(&data, si, &shadows[si], true, ct * mx, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -100, 500);
+						AddShadowCamera(&data, si, &shadows[si], true, ct * mx * .5f, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -100, 500);
 						si++;
 					}
 					break;
@@ -360,17 +360,14 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 
 	if (mDrawGizmos && pass == Main) {
 		PROFILER_BEGIN("Draw Gizmos");
-		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		for (const auto& r : mObjects)
-			if (r->EnabledHierarchy()) {
-				BEGIN_CMD_REGION(commandBuffer, "Gizmos " + r->mName);
+			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);
-				END_CMD_REGION(commandBuffer);
-			}
 
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
 				p->DrawGizmos(commandBuffer, camera);
+		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		mGizmos->Draw(commandBuffer, camera);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;

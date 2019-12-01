@@ -256,12 +256,15 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 	vector<VkPipelineStageFlags> waitStages;
 	if (frameContext) {		
 		CurrentFrameContext()->mFences.push_back(commandBuffer->mSignalFence);
-		semaphores.resize(commandBuffer->mSignalSemaphores.size());
-		for (uint32_t i = 0; i < commandBuffer->mSignalSemaphores.size(); i++) {
+
+		commandBuffer->mSignalSemaphores.resize(CurrentFrameContext()->mSemaphores.size());
+		for (uint32_t i = 0; i < CurrentFrameContext()->mSemaphores.size(); i++) {
 			if (!commandBuffer->mSignalSemaphores[i]) commandBuffer->mSignalSemaphores[i] = make_shared<Semaphore>(this);
+			SetObjectName(*commandBuffer->mSignalSemaphores[i], "CommandBuffer Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
 			semaphores.push_back(*commandBuffer->mSignalSemaphores[i]);
-			CurrentFrameContext()->mSemaphores[i].push_back(commandBuffer->mSignalSemaphores[i]);
 			waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+			CurrentFrameContext()->mSemaphores[i].push_back(commandBuffer->mSignalSemaphores[i]);
 		}
 	}
 

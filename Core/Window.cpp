@@ -216,24 +216,23 @@ Window::~Window() {
 	if (mWindow) glfwDestroyWindow(mWindow);
 }
 
-VkImage Window::AcquireNextImage(vector<shared_ptr<Semaphore>>& signalSemaphores) {
+VkImage Window::AcquireNextImage() {
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
 	mImageAvailableSemaphoreIndex = (mImageAvailableSemaphoreIndex + 1) % (uint32_t)mImageAvailableSemaphores.size();
-	VkResult err = vkAcquireNextImageKHR(*mDevice, mSwapchain, numeric_limits<uint64_t>::max(), mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]->operator VkSemaphore(), VK_NULL_HANDLE, &mCurrentBackBufferIndex);
+	VkResult err = vkAcquireNextImageKHR(*mDevice, mSwapchain, numeric_limits<uint64_t>::max(), *mImageAvailableSemaphores[mImageAvailableSemaphoreIndex], VK_NULL_HANDLE, &mCurrentBackBufferIndex);
 	if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
 		CreateSwapchain(mDevice);
 
 	if (mFrameData == nullptr) return VK_NULL_HANDLE;
-
-	signalSemaphores.push_back(mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]);
-
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain was destroyed during CreateSwapchain (happens when window is minimized)
 	return mFrameData[mCurrentBackBufferIndex].mSwapchainImage;
 }
 
-void Window::Present(const vector<VkSemaphore>& waitSemaphores) {
+void Window::Present(vector<VkSemaphore> waitSemaphores) {
 	if (mSwapchain == VK_NULL_HANDLE) return;
+
+	waitSemaphores.push_back(*mImageAvailableSemaphores[mImageAvailableSemaphoreIndex]);
 
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
