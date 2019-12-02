@@ -181,14 +181,52 @@ TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
 	mVisible = true;
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
+	mRootNode = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 }
 TerrainRenderer::~TerrainRenderer() {
-	for (auto q : mRootNodes)
-		safe_delete(q.second);
+	safe_delete(mRootNode);
 	for (auto d : mIndexBuffers)
 		safe_delete(d.second);
 }
 
+void TerrainRenderer::UpdateLOD(Camera* camera) {
+	// Create node buffer
+	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
+	float tanFov = tan(.5f * camera->FieldOfView()) / (.5f * camera->FramebufferHeight());
+	queue<QuadNode*> nodes;
+	nodes.push(mRootNode);
+	while (nodes.size()) {
+		QuadNode* n = nodes.front();
+		nodes.pop();
+
+		if (!camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f))) continue;
+
+		if (n->ShouldSplit(cp, tanFov)) {
+			n->Split();
+			for (uint32_t i = 0; i < 4; i++)
+				nodes.push(&n->mChildren[i]);
+		} else
+			n->Join();
+	}
+
+	mLeafNodes.clear();
+	nodes.push(mRootNode);
+	while (nodes.size()) {
+		QuadNode* n = nodes.front();
+		nodes.pop();
+		if (n->mChildren)
+			for (uint32_t i = 0; i < 4; i++)
+				nodes.push(&n->mChildren[i]);
+		else
+			mLeafNodes.push_back(n);
+	}
+
+	if (!mLeafNodes.size()) return;
+
+	sort(mLeafNodes.begin(), mLeafNodes.end(), [](QuadNode* a, QuadNode* b) {
+		return a->mTriangleMask < b->mTriangleMask;
+	});
+}
 
 float TerrainRenderer::Height(const float3& lp) {
 	float m, l;
@@ -219,55 +257,17 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
     GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
-	// Create node buffer
-	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
-	float tanFov = tan(.5f * camera->FieldOfView()) / (.5f * camera->FramebufferHeight());
-	if (mRootNodes.count(camera) == 0)
-		mRootNodes.emplace(camera, new QuadNode(this, nullptr, 0, 0, 0, mSize));
-	QuadNode* root = mRootNodes.at(camera);
-	queue<QuadNode*> nodes;
-	nodes.push(root);
-	while(nodes.size()){
-		QuadNode* n = nodes.front();
-		nodes.pop();
+	if (!mLeafNodes.size()) return;
 
-		if (!camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f))) continue;
-
-		if (n->ShouldSplit(cp, tanFov)) {
-			n->Split();
-			for (uint32_t i = 0; i < 4; i++)
-				nodes.push(&n->mChildren[i]);
-		} else
-			n->Join();
-	}
-
-	nodes.push(root);
-	vector<QuadNode*> leafNodes;
-	while (nodes.size()) {
-		QuadNode* n = nodes.front();
-		nodes.pop();
-		if (n->mChildren)
-			for (uint32_t i = 0; i < 4; i++)
-				nodes.push(&n->mChildren[i]);
-		else
-			leafNodes.push_back(n);
-	}
-
-	if (!leafNodes.size()) return;
-
-	sort(leafNodes.begin(), leafNodes.end(), [](QuadNode* a, QuadNode* b) {
-		return a->mTriangleMask < b->mTriangleMask;
-	});
-	
-	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", mLeafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
-	for (QuadNode* n : leafNodes) {
+	for (QuadNode* n : mLeafNodes) {
 		*bn = float4(n->mPosition.x, 0, n->mPosition.z, n->mSize);
 		bn++;
 	}
 
 	#pragma region Populate descriptor set/push constants
-	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName, shader->mDescriptorSetLayouts[PER_OBJECT]);
+	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
 	objds->CreateStorageBufferDescriptor(nodeBuffer, OBJECT_BUFFER_BINDING);
 	if (shader->mDescriptorBindings.count("Lights"))
 		objds->CreateStorageBufferDescriptor(Scene()->LightBuffer(commandBuffer->Device()), LIGHT_BUFFER_BINDING);
@@ -304,8 +304,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	uint32_t i = 0;
 	uint32_t si = 0;
-	QuadNode* sn = leafNodes[0];
-	for (QuadNode* n : leafNodes) {
+	QuadNode* sn = mLeafNodes[0];
+	for (QuadNode* n : mLeafNodes) {
 		if (n->mTriangleMask != sn->mTriangleMask) {
 			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
 			commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;

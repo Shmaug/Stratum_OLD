@@ -85,7 +85,7 @@ v2f vsmain(
 	vertex.xz -= .5;
 	vertex = vertex * Nodes[instance].w + Nodes[instance].xyz;
 	vertex.y = TerrainHeight * SampleTerrain(vertex.xz, tmp, tmp);
-
+	
 	float4 worldPos = mul(ObjectToWorld, float4(vertex, 1.0));
 	worldPos.xyz -= Camera.Position;
 

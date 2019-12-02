@@ -20,13 +20,17 @@ Fence::~Fence() {
 	vkDestroyFence(*mDevice, mFence, nullptr);
 }
 void Fence::Wait(){
-	vkWaitForFences(*mDevice, 1, &mFence, true, numeric_limits<uint64_t>::max());
+	ThrowIfFailed(vkWaitForFences(*mDevice, 1, &mFence, true, numeric_limits<uint64_t>::max()), "vkWaitForFences failed");
 }
 bool Fence::Signaled() {
-	return vkGetFenceStatus(*mDevice, mFence) == VK_SUCCESS;
+	VkResult status = vkGetFenceStatus(*mDevice, mFence);
+	if (status == VK_NOT_READY) return false;
+	if (status == VK_SUCCESS) return true;
+	ThrowIfFailed(status, "vkGetFenceStatus failed");
+	return false;
 }
 void Fence::Reset(){
-	vkResetFences(*mDevice, 1, &mFence);
+	ThrowIfFailed(vkResetFences(*mDevice, 1, &mFence), "vkResetFences failed");
 }
 
 Semaphore::Semaphore(Device* device) : mDevice(device) {

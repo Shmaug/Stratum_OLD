@@ -23,6 +23,8 @@ public:
 	inline ::Material* Material() const { return mMaterial.get(); }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
+	PLUGIN_EXPORT void UpdateLOD(Camera* camera);
+
 	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
 	inline uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : 1000; }
 	PLUGIN_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
@@ -66,11 +68,12 @@ private:
 		PLUGIN_EXPORT QuadNode* BackNeighbor();
 	};
 
-	std::unordered_map<Camera*, QuadNode*> mRootNodes;
-
 	std::unordered_map<Device*, Buffer*> mIndexBuffers;
 	std::vector<uint32_t> mIndexOffsets;
 	std::vector<uint32_t> mIndexCounts;
+
+	QuadNode* mRootNode;
+	std::vector<QuadNode*> mLeafNodes;
 
 	float mSize;
 	float mHeight;
