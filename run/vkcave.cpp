@@ -178,6 +178,10 @@ public:
 			mInstance->AdvanceFrame();
 			PROFILER_END;
 
+			// for testing: disable asynchronous frames
+			for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
+				mInstance->GetDevice(i)->FlushFrames();
+
 			#ifdef PROFILER_ENABLE
 			Profiler::FrameEnd();
 			#endif

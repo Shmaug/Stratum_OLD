@@ -137,8 +137,8 @@ Ray Camera::ScreenToWorldRay(const float2& uv) {
 		ray.mDirection = WorldRotation().forward();
 	} else {
 		float4 p1 = mInvViewProjection * float4(clip, .1f, 1);
-		ray.mOrigin = WorldPosition();
 		ray.mDirection = normalize(p1.xyz / p1.w);
+		ray.mOrigin = WorldPosition() + ray.mDirection * mNear;
 	}
 	return ray;
 }
@@ -309,28 +309,28 @@ bool Camera::IntersectFrustum(const AABB& aabb) {
 void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	if (camera == this) return;
 
-	float3 r0 = ScreenToWorldRay(float2(0, 0)).mDirection;
-	float3 r1 = ScreenToWorldRay(float2(0, 1)).mDirection;
-	float3 r2 = ScreenToWorldRay(float2(1, 0)).mDirection;
-	float3 r3 = ScreenToWorldRay(float2(1, 1)).mDirection;
+	float3 f0 = ClipToWorld(float3(-1, -1, 0));
+	float3 f1 = ClipToWorld(float3(-1, 1, 0));
+	float3 f2 = ClipToWorld(float3(1, -1, 0));
+	float3 f3 = ClipToWorld(float3(1, 1, 0));
 
-	float3 f0 = WorldPosition() + r0 * mNear;
-	float3 f1 = WorldPosition() + r1 * mNear;
-	float3 f2 = WorldPosition() + r2 * mNear;
-	float3 f3 = WorldPosition() + r3 * mNear;
-
-	float3 f4 = WorldPosition() + r0 * mFar;
-	float3 f5 = WorldPosition() + r1 * mFar;
-	float3 f6 = WorldPosition() + r2 * mFar;
-	float3 f7 = WorldPosition() + r3 * mFar;
+	float3 f4 = ClipToWorld(float3(-1, -1, 1));
+	float3 f5 = ClipToWorld(float3(-1, 1, 1));
+	float3 f6 = ClipToWorld(float3(1, -1, 1));
+	float3 f7 = ClipToWorld(float3(1, 1, 1));
 
 	Scene()->Gizmos()->DrawLine(f0, f1, 1);
 	Scene()->Gizmos()->DrawLine(f0, f2, 1);
 	Scene()->Gizmos()->DrawLine(f3, f1, 1);
 	Scene()->Gizmos()->DrawLine(f3, f2, 1);
-
+	
 	Scene()->Gizmos()->DrawLine(f4, f5, 1);
 	Scene()->Gizmos()->DrawLine(f4, f6, 1);
 	Scene()->Gizmos()->DrawLine(f7, f5, 1);
 	Scene()->Gizmos()->DrawLine(f7, f6, 1);
+	
+	Scene()->Gizmos()->DrawLine(f0, f4, 1);
+	Scene()->Gizmos()->DrawLine(f1, f5, 1);
+	Scene()->Gizmos()->DrawLine(f2, f6, 1);
+	Scene()->Gizmos()->DrawLine(f3, f7, 1);
 }

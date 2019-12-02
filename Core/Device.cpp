@@ -234,10 +234,10 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 			// reset and reuse the command buffer at the front of the queue
 			commandBuffers.pop();
 			commandBuffer->Reset(name);
-		} else
-			commandBuffer = shared_ptr<CommandBuffer>(new CommandBuffer(this, commandPool, name));
-	} else
-		commandBuffer = shared_ptr<CommandBuffer>(new CommandBuffer(this, commandPool, name));
+		}
+	}
+	
+	if (!commandBuffer) commandBuffer = shared_ptr<CommandBuffer>(new CommandBuffer(this, commandPool, name));
 
 	// begin recording commands
 	VkCommandBufferBeginInfo beginInfo = {};

@@ -57,7 +57,6 @@ private:
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
 
 	float2 mShadowTexelSize;
-	float4 mCascadeSplits;
 
 	struct DeviceData {
 		Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete

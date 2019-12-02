@@ -217,6 +217,8 @@ void TerrainSystem::Update() {
 	//float dy = 1.6f + .2f * -sb - mMainCamera->LocalPosition().y;
 	//mMainCamera->LocalPosition(0, mMainCamera->LocalPosition().y + min(mScene->Instance()->DeltaTime(), dy), 0);
 
+	mTerrain->UpdateLOD(mMainCamera);
+
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
 	if (mFrameTimeAccum > 1.f) {

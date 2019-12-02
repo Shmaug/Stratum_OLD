@@ -16,7 +16,6 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
 	mGizmos = new ::Gizmos(this);
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
-	mCascadeSplits = float4(.005f, .1f, .25f, 1.f);
 	mEnvironment = new ::Environment(this);
 }
 Scene::~Scene(){
@@ -137,7 +136,7 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 
 	sd->WorldToShadow = sc->ViewProjection();
 	sd->ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
-	sd->Proj = float4(sc->Orthographic() ? 1.f : 0.f, 1.f / far, near, far);
+	sd->Proj = float4(ortho ? 1.f : 0.f, 1.f / far, near, far);
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
@@ -207,22 +206,31 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			if (l->CastShadows()) {
 				switch (l->Type()) {
 				case Sun: {
-					lights[li].CascadeSplits = mCascadeSplits;
+					float4 cascadeSplits = 0;
+					float cn = mainCamera->Near();
+					float cf = mainCamera->Far();// min(l->ShadowDistance(), mainCamera->Far());
+					float i_f = 1;
+					for (uint32_t i = 0; i < 4 - 1; i++, i_f += 1.f)
+						cascadeSplits[i] = lerp(cn + (i_f / 4) * (cf - cn), cn * powf(cf / cn, i_f / 4), .9f);
+					cascadeSplits[4 - 1] = cf;
+
+					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
 					lights[li].ShadowIndex = (int32_t)si;
 
-					for (uint32_t ci = 0; ci < 4; ci++) {
-						float mx = l->ShadowDistance() * mCascadeSplits[ci];
-						float mn = (ci == 0) ? mainCamera->Near() : (l->ShadowDistance() * mCascadeSplits[ci - 1]);
+					//float mn = mainCamera->Near();
+					//for (uint32_t ci = 0; ci < 4; ci++) {
+						//float mx = cascadeSplits[ci];
+						//float sz = ct * mx;
 
-						AddShadowCamera(&data, si, &shadows[si], true, ct * mx * .5f, cp + fwd * ((mx + mn) * .5f), l->WorldRotation(), -100, 500);
+						AddShadowCamera(&data, si, &shadows[si], true, 100, cp, l->WorldRotation(), -50, 50);
 						si++;
-					}
+						//mn = mx;
+					//}
 					break;
 				}
 				case Point:
 					break;
 				case Spot:
-					lights[li].CascadeSplits = 1.f;
 					lights[li].ShadowIndex = (int32_t)si;
 					AddShadowCamera(&data, si, &shadows[si], false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
 					si++;
@@ -239,8 +247,12 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		BEGIN_CMD_REGION(commandBuffer, "Render Shadows");
 		bool g = mDrawGizmos;
 		mDrawGizmos = false;
-		for (uint32_t i = 0; i < si; i++)
+		for (uint32_t i = 0; i < si; i++) {
+			data.mShadowCameras[i]->mEnabled = true;
 			Render(data.mShadowCameras[i], commandBuffer, Depth, false);
+		}
+		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
+			data.mShadowCameras[i]->mEnabled = false;
 		mDrawGizmos = g;
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
@@ -360,6 +372,34 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 
 	if (mDrawGizmos && pass == Main) {
 		PROFILER_BEGIN("Draw Gizmos");
+		for (Camera* c : data.mShadowCameras)
+			if (c->mEnabled) {
+				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
+				float3 f1 = c->ClipToWorld(float3(-1,  1, 0));
+				float3 f2 = c->ClipToWorld(float3( 1, -1, 0));
+				float3 f3 = c->ClipToWorld(float3( 1,  1, 0));
+				
+				float3 f4 = c->ClipToWorld(float3(-1, -1, 1));
+				float3 f5 = c->ClipToWorld(float3(-1,  1, 1));
+				float3 f6 = c->ClipToWorld(float3( 1, -1, 1));
+				float3 f7 = c->ClipToWorld(float3( 1,  1, 1));
+
+				mGizmos->DrawLine(f0, f1, 1);
+				mGizmos->DrawLine(f0, f2, 1);
+				mGizmos->DrawLine(f3, f1, 1);
+				mGizmos->DrawLine(f3, f2, 1);
+
+				mGizmos->DrawLine(f4, f5, 1);
+				mGizmos->DrawLine(f4, f6, 1);
+				mGizmos->DrawLine(f7, f5, 1);
+				mGizmos->DrawLine(f7, f6, 1);
+
+				mGizmos->DrawLine(f0, f4, 1);
+				mGizmos->DrawLine(f1, f5, 1);
+				mGizmos->DrawLine(f2, f6, 1);
+				mGizmos->DrawLine(f3, f7, 1);
+			}
+
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);

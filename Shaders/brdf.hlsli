@@ -101,12 +101,12 @@ float3 BRDFIndirect(MaterialInfo material, float3 N, float3 V, float nv, float3 
 
 
 int CascadeSplit(uint l, float depth) {
-	int si = 0;
-	if (depth < Lights[l].CascadeSplits[3]) si = 3;
-	if (depth < Lights[l].CascadeSplits[2]) si = 2;
-	if (depth < Lights[l].CascadeSplits[1]) si = 1;
-	if (depth < Lights[l].CascadeSplits[0]) si = 0;
-	return si;
+	int c = -1;
+	if (depth < Lights[l].CascadeSplits[0]) c = 0;
+	if (depth < Lights[l].CascadeSplits[1]) c = 1;
+	if (depth < Lights[l].CascadeSplits[2]) c = 2;
+	if (depth < Lights[l].CascadeSplits[3]) c = 3;
+	return c;
 }
 
 float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out float3 L) {
@@ -114,42 +114,45 @@ float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out
 	L = l.Direction;
 	float attenuation = 1;
 
+	float3 lightPos = worldPos + (Camera.Position - l.WorldPosition);
+
 	if (l.ShadowIndex >= 0) {
-		int ci = CascadeSplit(li, depth);
-		ShadowData s = Shadows[l.ShadowIndex + ci];
+		int ci = 0;// l.Type == LIGHT_SUN ? CascadeSplit(li, depth) : 0;
+		if (ci >= 0) {
+			ShadowData s = Shadows[l.ShadowIndex + ci];
 
-		float4 shadowPos = mul(s.WorldToShadow, float4((worldPos + (Camera.Position - l.WorldPosition)) + normal * .005, 1));
+			float4 shadowPos = mul(s.WorldToShadow, float4(lightPos + normal * .005, 1));
 
-		float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
-		z *= s.Proj.y;
-		z -= .001;
+			float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
+			z *= s.Proj.y;
+			z -= .001;
 
-		shadowPos /= shadowPos.w;
+			shadowPos /= shadowPos.w;
 
-		if (z > 0 && z < 1 && shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1) {
-			float2 shadowUV = shadowPos.xy * .5 + .5;
-			shadowUV = shadowUV * s.ShadowST.xy + s.ShadowST.zw;
+			if (z > 0 && z < 1 && shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1) {
+				float2 shadowUV = shadowPos.xy * .5 + .5;
+				shadowUV = shadowUV * s.ShadowST.xy + s.ShadowST.zw;
 
-			float shadow = 0;
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV, z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + ShadowTexelSize, z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV - ShadowTexelSize, z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, ShadowTexelSize.y), z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, -ShadowTexelSize.y), z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, 0), z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, 0), z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, ShadowTexelSize.y), z);
-			shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, -ShadowTexelSize.y), z);
-			shadow /= 9;
+				float shadow = 0;
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV, z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + ShadowTexelSize, z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV - ShadowTexelSize, z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, ShadowTexelSize.y), z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, -ShadowTexelSize.y), z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, 0), z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, 0), z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, ShadowTexelSize.y), z);
+				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, -ShadowTexelSize.y), z);
+				shadow /= 9;
 
-			attenuation = 1 - shadow;
+				attenuation = 1 - shadow;
+			}
 		}
 	}
 
 	if (l.Type > LIGHT_SUN) {
-		L = (l.WorldPosition - Camera.Position) - worldPos;
-		float d2 = dot(L, L);
-		L /= sqrt(d2);
+		float d2 = dot(lightPos, lightPos);
+		L = -lightPos / sqrt(d2);
 		attenuation *= 1 / max(d2, .0001);
 		float f = d2 * l.InvSqrRange;
 		f = saturate(1 - f * f);
