@@ -1,7 +1,7 @@
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/Gizmos.hpp>
-#include <Shaders/shadercompat.h>
+#include <Shaders/include/shadercompat.h>
 
 #include <Util/Profiler.hpp>
  
@@ -56,6 +56,7 @@ void Camera::CreateDescriptorSet() {
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
 	mMatricesDirty(true),
+	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
@@ -68,12 +69,18 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount);
 
+	vector<VkFormat> depthFbFormat{ VK_FORMAT_R32_SFLOAT };
+	mDepthFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, depthFbFormat, depthFormat, VK_SAMPLE_COUNT_1_BIT);
+	mDepthFramebuffer->BufferUsage(mDepthFramebuffer->BufferUsage() | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	mDepthFramebuffer->ClearValue(0, { 1.f, 1.f, 1.f, 1.f });
+
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
 	mMatricesDirty(true),
 	mFramebuffer(nullptr),
+	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
@@ -89,12 +96,18 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount);
 
+	vector<VkFormat> depthFbFormat{ VK_FORMAT_R32_SFLOAT };
+	mDepthFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, depthFbFormat, depthFormat, VK_SAMPLE_COUNT_1_BIT);
+	mDepthFramebuffer->BufferUsage(mDepthFramebuffer->BufferUsage() | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	mDepthFramebuffer->ClearValue(0, { 1.f, 1.f, 1.f, 1.f });
+
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr),
 	mMatricesDirty(true),
 	mFramebuffer(framebuffer),
+	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(false),
 	mRenderDepthNormals(false),
 	mOrthographic(false), mOrthographicSize(3),
@@ -115,6 +128,7 @@ Camera::~Camera() {
 	safe_delete_array(mUniformBufferPtrs);
 	safe_delete(mUniformBuffer);
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
+	safe_delete(mDepthFramebuffer);
 }
 
 float4 Camera::WorldToClip(const float3& worldPos) {
@@ -151,6 +165,8 @@ void Camera::PreRender() {
 	if (mTargetWindow && (FramebufferWidth() != mTargetWindow->BackBufferSize().width || FramebufferHeight() != mTargetWindow->BackBufferSize().height)) {
 		mFramebuffer->Width(mTargetWindow->BackBufferSize().width);
 		mFramebuffer->Height(mTargetWindow->BackBufferSize().height);
+		mDepthFramebuffer->Width(mTargetWindow->BackBufferSize().width);
+		mDepthFramebuffer->Height(mTargetWindow->BackBufferSize().height);
 		mMatricesDirty = true;
 
 		mViewport.x = 0;
@@ -159,12 +175,13 @@ void Camera::PreRender() {
 		mViewport.height = (float)mFramebuffer->Height();
 	}
 }
-void Camera::ResolveWindow(CommandBuffer* commandBuffer){
+void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
 	// resolve or copy render target to target window
 	if (mTargetWindow) {
-		PROFILER_BEGIN("Resolve/Copy RenderTarget");
-		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy");
-		ColorBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
+		PROFILER_BEGIN("Copy RenderTarget");
+		BEGIN_CMD_REGION(commandBuffer, "Copy");
+		VkImageLayout srcLayout = mFramebuffer->SampleCount() == VK_SAMPLE_COUNT_1_BIT ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		mFramebuffer->ResolveBuffer(0)->TransitionImageLayout(srcLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
 		VkImageMemoryBarrier barrier = {};
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -186,27 +203,15 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer){
 			1, &barrier
 		);
 
-		if (SampleCount() == VK_SAMPLE_COUNT_1_BIT) {
-			VkImageCopy region = {};
-			region.extent = { FramebufferWidth(), FramebufferHeight(), 1 };
-			region.dstSubresource.layerCount = 1;
-			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.srcSubresource.layerCount = 1;
-			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdCopyImage(*commandBuffer,
-				ColorBuffer()->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		} else {
-			VkImageResolve region = {};
-			region.extent = { FramebufferWidth(), FramebufferHeight(), 1 };
-			region.dstSubresource.layerCount = 1;
-			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.srcSubresource.layerCount = 1;
-			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			vkCmdResolveImage(*commandBuffer,
-				ColorBuffer()->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		}
+		VkImageCopy region = {};
+		region.extent = { FramebufferWidth(), FramebufferHeight(), 1 };
+		region.dstSubresource.layerCount = 1;
+		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.srcSubresource.layerCount = 1;
+		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		vkCmdCopyImage(*commandBuffer,
+			mFramebuffer->ResolveBuffer(0)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 		swap(barrier.oldLayout, barrier.newLayout);
 		swap(barrier.srcAccessMask, barrier.dstAccessMask);
@@ -216,6 +221,8 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer){
 			0, nullptr,
 			0, nullptr,
 			1, &barrier );
+
+		mFramebuffer->ResolveBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayout, commandBuffer);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
@@ -242,7 +249,7 @@ void Camera::Set(CommandBuffer* commandBuffer) {
 bool Camera::UpdateMatrices() {
 	if (!mMatricesDirty) return false;
 
-	mView = float4x4::Look(float3(0), WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
+	mView = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
 
 	if (mOrthographic)
 		mProjection = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);

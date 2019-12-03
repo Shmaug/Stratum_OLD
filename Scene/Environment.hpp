@@ -51,6 +51,7 @@ private:
 	struct CamLUT {
 		Texture* mInscatterLUT;
 		Texture* mOutscatterLUT;
+		Texture* mLightShaftLUT;
 	};
 
 	std::unordered_map<Device*, DevLUT> mDeviceLUTs;

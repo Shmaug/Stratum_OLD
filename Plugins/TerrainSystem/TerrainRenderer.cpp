@@ -4,7 +4,7 @@
 
 #include "TriangleFan.hpp"
 
-#include <Shaders/noise.hlsli>
+#include <Shaders/include/noise.hlsli>
 
 using namespace std;
 
@@ -242,17 +242,14 @@ bool TerrainRenderer::UpdateTransform(){
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mMaterial) return;
 
-	switch (pass) {
-	case Main:
-		mMaterial->DisableKeyword("DEPTH_PASS");
-		Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-		break;
-	case Depth:
-		mMaterial->EnableKeyword("DEPTH_PASS");
-		break;
-	}
+	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
 
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
+	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
+	else mMaterial->DisableKeyword("DEPTH_PASS");
+	if (pass & Shadow)cull = VK_CULL_MODE_FRONT_BIT;
+
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
 	if (!layout) return;
 
     GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());

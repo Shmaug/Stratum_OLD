@@ -80,7 +80,8 @@ enum ConsoleColor {
 enum PassType {
 	None = 0,
 	Depth = 1,
-	Main = 2
+	Main = 2,
+	Shadow = 4,
 };
 
 template<typename... Args>

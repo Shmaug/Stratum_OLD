@@ -8,7 +8,7 @@
 
 #pragma static_sampler Sampler maxAnisotropy=0 addressMode=clamp_edge
 
-#include <shadercompat.h>
+#include "include/shadercompat.h"
 
 #define PI 3.1415926535897932
 #define INV_PI 0.31830988618
@@ -16,15 +16,15 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture3D<float4> _SkyboxLUT : register(t3);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture3D<float2> _SkyboxLUT2 : register(t3);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> _MoonTex : register(t4);
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] TextureCube<float4> _StarCube : register(t5);
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture3D<float4> SkyboxLUT : register(t3);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture3D<float2> SkyboxLUT2 : register(t3);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MoonTexture : register(t4);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT : register(t5);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] TextureCube<float4> StarTexture : register(t6);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float3 _MoonDir;
-	float3 _MoonRight;
+	float4 _MoonRotation;
 	float _MoonSize;
 
 	float3 _IncomingLight;
@@ -44,17 +44,18 @@
 	float _StarFade;
 };
 
+#include "include/util.hlsli"
 
 float3 rotate(float4 q, float3 v) {
 	return 2 * dot(q.xyz, v) * q.xyz + (q.w * q.w - dot(q.xyz, q.xyz)) * v + 2 * q.w * cross(q.xyz, v);
 }
 
 void RenderMoon(inout float3 color, float3 ray) {
-	if (dot(ray, _MoonDir) < 0) return;
-	float3 moonray = _MoonDir - ray;
-	float2 moonuv = float2(dot(moonray, _MoonRight), dot(moonray, cross(_MoonDir, _MoonRight)));
+	float3 moonray = -rotate(_MoonRotation, ray);
+	if (moonray.z < 0) return;
+	float2 moonuv = moonray.xy;
 	if (abs(moonuv.x) < _MoonSize && abs(moonuv.y) < _MoonSize) {
-		float4 moontex = _MoonTex.SampleLevel(Sampler, moonuv / _MoonSize * .5 + .5, 0);
+		float4 moontex = MoonTexture.SampleLevel(Sampler, moonuv / _MoonSize * .5 + .5, 0);
 		color += moontex.rgb * moontex.a * saturate(1 - .5 * length(color));
 	}
 }
@@ -79,9 +80,10 @@ void ApplyPhaseFunctionElek(inout float3 scatterR, inout float3 scatterM, float 
 }
 
 void vsmain(
-	[[vk::location(0)]] float3 vertex : POSITION,
+	float3 vertex : POSITION,
 	out float4 position : SV_Position,
-	out float3 viewRay : TEXCOORD0) {
+	out float4 screenPos : TEXCOORD0,
+	out float3 viewRay : TEXCOORD1) {
 	if (Camera.ProjParams.w) {
 		position = float4(vertex.xy, 0, 1);
 		viewRay = float3(Camera.View[0].z, Camera.View[1].z, Camera.View[2].z);
@@ -89,10 +91,12 @@ void vsmain(
 		position = mul(Camera.Projection, float4(vertex, 1));
 		viewRay = mul(vertex, (float3x3)Camera.View);
 	}
+	screenPos = ComputeScreenPos(position);
 }
 
 void fsmain(
-	float3 viewRay : TEXCOORD0,
+	in float4 screenPos : TEXCOORD0,
+	in float3 viewRay : TEXCOORD1,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
 
@@ -111,8 +115,9 @@ void fsmain(
 	float4 scatterR = 0;
 	float4 scatterM = 0;
 
-	float height = max(0, length(rayStart - planetCenter) - _PlanetRadius);
-	float3 normal = normalize(rayStart - planetCenter);
+	float rp = length(rayStart - planetCenter);
+	float height = max(0, rp - _PlanetRadius);
+	float3 normal = (rayStart - planetCenter) / rp;
 
 	float viewZenith = dot(normal, ray);
 	float sunZenith = dot(normal, _SunDir);
@@ -127,23 +132,31 @@ void fsmain(
 		coords.y = 0.5 * pow((ch - viewZenith) / (ch + 1), 0.2);
 	coords.z = 0.5 * ((atan(max(sunZenith, -0.1975) * tan(1.26 * 1.1)) / 1.1) + (1 - 0.26));
 
-
 	coords = saturate(coords);
-	scatterR = _SkyboxLUT.SampleLevel(Sampler, coords, 0);
+	scatterR = SkyboxLUT.SampleLevel(Sampler, coords, 0);
 	scatterM.x = scatterR.w;
-	scatterM.yz = _SkyboxLUT2.SampleLevel(Sampler, coords, 0).xy;
+	scatterM.yz = SkyboxLUT2.SampleLevel(Sampler, coords, 0).xy;
 
 	float3 m = scatterM.xyz;
 
 	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, _SunDir));
 	float3 lightInscatter = (scatterR * _ScatteringR + scatterM * _ScatteringM) * _IncomingLight;
 
+
 	ray = realRay;
 	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
 
+	float shadow = LightShaftLUT.SampleLevel(Sampler, screenPos.xy / screenPos.w, 0);
+	float shadow4 = shadow*shadow;
+	shadow4 *= shadow4;
+	shadow = (shadow4 + shadow) / 2;
+	lightInscatter *= max(0.1, shadow);
+	
 	color = float4(lightInscatter * fadeOut, 1);
+
 	RenderMoon(color.rgb, ray);
-	float3 star = _StarCube.SampleLevel(Sampler, rotate(_StarRotation, ray), .25);
+
+	float3 star = StarTexture.SampleLevel(Sampler, rotate(_StarRotation, ray), .25);
 	color.rgb += star * (1 - saturate(_StarFade * dot(color, color)));
 
 	depthNormal = float4(0, 0, 0, 1);

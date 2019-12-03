@@ -9,7 +9,7 @@
 #pragma static_sampler Sampler
 #pragma multi_compile CANVAS_BOUNDS
 
-#include <shadercompat.h>
+#include "include/shadercompat.h"
 
 struct Glyph {
 	float2 position;
@@ -33,7 +33,7 @@ struct Glyph {
 	float2 Bounds;
 }
 
-#include "util.hlsli"
+#include "include/util.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
@@ -61,19 +61,14 @@ v2f vsmain(uint id : SV_VertexId) {
 	};
 
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
-	float4 worldPos = mul(ObjectToWorld, float4(p, 0, 1));
-	worldPos.xyz -= Camera.Position;
+	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
+	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(p, 0, 1));
 
 	#ifdef CANVAS_BOUNDS
 	o.texcoord.zw = abs(p);
 	#endif
 	o.position = mul(Camera.ViewProjection, worldPos);
-
-	float3 view;
-	float depth;
-	ComputeDepth(worldPos.xyz, ComputeScreenPos(o.position), view, depth);
-
-	o.depth = depth;
+	o.depth = LinearDepth01(o.position.z);
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
 
 	return o;

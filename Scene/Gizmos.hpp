@@ -15,7 +15,7 @@ public:
 	ENGINE_EXPORT ~Gizmos();
 
 	ENGINE_EXPORT bool PositionHandle(const InputPointer* input, const quaternion& plane, float3& position, float radius = .1f, const float4& color = float4(1));
-	ENGINE_EXPORT bool RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation);
+	ENGINE_EXPORT bool RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation, float radius = .125f);
 	
 	ENGINE_EXPORT void DrawBillboard(const float3& center, const float2& extent, const quaternion& rotation, const float4& color, Texture* texture, const float4& textureST = float4(1,1,0,0));
 	

@@ -3,7 +3,7 @@
 #include <Scene/Object.hpp>
 #include <Util/Util.hpp>
 
-#include <Shaders/shadercompat.h>
+#include <Shaders/include/shadercompat.h>
 
 enum LightType {
 	Sun = LIGHT_SUN,

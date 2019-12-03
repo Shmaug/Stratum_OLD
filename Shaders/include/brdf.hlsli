@@ -99,74 +99,6 @@ float3 BRDFIndirect(MaterialInfo material, float3 N, float3 V, float nv, float3 
 	return material.diffuse * diffuseLight + surfaceReduction * specularLight * FresnelLerp(material.specular, grazingTerm, nv);
 }
 
-
-int CascadeSplit(uint l, float depth) {
-	int c = -1;
-	if (depth < Lights[l].CascadeSplits[0]) c = 0;
-	if (depth < Lights[l].CascadeSplits[1]) c = 1;
-	if (depth < Lights[l].CascadeSplits[2]) c = 2;
-	if (depth < Lights[l].CascadeSplits[3]) c = 3;
-	return c;
-}
-
-float LightAttenuation(uint li, float3 worldPos, float3 normal, float depth, out float3 L) {
-	GPULight l = Lights[li];
-	L = l.Direction;
-	float attenuation = 1;
-
-	float3 lightPos = worldPos + (Camera.Position - l.WorldPosition);
-
-	if (l.ShadowIndex >= 0) {
-		int ci = 0;// l.Type == LIGHT_SUN ? CascadeSplit(li, depth) : 0;
-		if (ci >= 0) {
-			ShadowData s = Shadows[l.ShadowIndex + ci];
-
-			float4 shadowPos = mul(s.WorldToShadow, float4(lightPos + normal * .005, 1));
-
-			float z = s.Proj.x ? shadowPos.z * (s.Proj.w - s.Proj.z) + s.Proj.z : shadowPos.w;
-			z *= s.Proj.y;
-			z -= .001;
-
-			shadowPos /= shadowPos.w;
-
-			if (z > 0 && z < 1 && shadowPos.x > -1 && shadowPos.y > -1 && shadowPos.x < 1 && shadowPos.y < 1) {
-				float2 shadowUV = shadowPos.xy * .5 + .5;
-				shadowUV = shadowUV * s.ShadowST.xy + s.ShadowST.zw;
-
-				float shadow = 0;
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV, z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + ShadowTexelSize, z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV - ShadowTexelSize, z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, ShadowTexelSize.y), z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, -ShadowTexelSize.y), z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(ShadowTexelSize.x, 0), z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(-ShadowTexelSize.x, 0), z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, ShadowTexelSize.y), z);
-				shadow += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, shadowUV + float2(0, -ShadowTexelSize.y), z);
-				shadow /= 9;
-
-				attenuation = 1 - shadow;
-			}
-		}
-	}
-
-	if (l.Type > LIGHT_SUN) {
-		float d2 = dot(lightPos, lightPos);
-		L = -lightPos / sqrt(d2);
-		attenuation *= 1 / max(d2, .0001);
-		float f = d2 * l.InvSqrRange;
-		f = saturate(1 - f * f);
-		attenuation *= f * f;
-		if (l.Type == LIGHT_SPOT) {
-			float a = saturate(dot(L, l.Direction) * l.SpotAngleScale + l.SpotAngleOffset);
-			attenuation *= a * a;
-		}
-	}
-
-	return attenuation;
-}
-
-
 float3 EvaluateLighting(MaterialInfo material, float3 worldPos, float3 normal, float3 view, float depth){
 	#ifdef SHOW_CASCADE_SPLITS
 	static const float4 CascadeSplitColors[4] = {
@@ -184,28 +116,32 @@ float3 EvaluateLighting(MaterialInfo material, float3 worldPos, float3 normal, f
 
 	for (uint l = 0; l < LightCount; l++) {
 		float3 L;
-		float attenuation = LightAttenuation(l, worldPos, normal, depth, L);
-		float3 lc = Lights[l].Color;
+		float attenuation = LightAttenuation(l, Camera.Position, worldPos, normal, depth, L);
 
 		#ifdef SHOW_CASCADE_SPLITS
 		if (Lights[l].Type == LIGHT_SUN) {
-			int ci = CascadeSplit(l, depth);
-			if (ci >= 0) cascadeColor += CascadeSplitColors[ci];
+			float ct = CascadeSplit(Lights[l].CascadeSplits, depth);
+			if (ct >= 0) {
+				uint ci = (uint)ct;
+				float4 cc = CascadeSplitColors[ci];
+				if (ci < 3) cc = lerp(cc, CascadeSplitColors[ci + 1], saturate(((ct - ci) - .92) / .08));
+				cascadeColor += cc;
+			}
 		}
 		#endif
 
-		if (attenuation > 1e-5)
-			eval += attenuation * lc * BRDF(material, nv, L, normal, view);
+		eval += attenuation * Lights[l].Color * BRDF(material, nv, L, normal, view);
 	}
-
 
 	//uint texWidth, texHeight, numMips;
 	//EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
 	//zfloat3 reflection = normalize(reflect(-view, normal));
 	//float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	float3 env_spec = AmbientLight;//EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb;
-	float3 env_diff = AmbientLight;//EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
+	//float3 env_spec = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb;
+	//float3 env_diff = EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
 
+	float3 env_spec = AmbientLight;
+	float3 env_diff = AmbientLight;
 	eval += BRDFIndirect(material, normal, view, nv, env_diff, env_spec) * material.occlusion;
 	eval.rgb += material.emission;
 

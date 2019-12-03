@@ -115,8 +115,7 @@ bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, 
 
 	return true;
 }
-bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation){
-	float radius = .125f;
+bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation, float radius){
 	float t = input->mWorldRay.Intersect(Sphere(center, radius)).x;
 	float lt = input->mLastWorldRay.Intersect(Sphere(center, radius)).x;
 

@@ -7,7 +7,7 @@
 #include <Util/Util.hpp>
 #include <cstring>
 
-#include <Shaders/shadercompat.h>
+#include <Shaders/include/shadercompat.h>
 
 using namespace std;
 
