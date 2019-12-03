@@ -11,10 +11,6 @@
 
 class Camera : public virtual Object {
 public:
-	enum StereoMode {
-		SBSHorizontal, SBSVertical
-	};
-
 	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
 	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
 	ENGINE_EXPORT Camera(const std::string& name, ::Framebuffer* framebuffer);
@@ -60,18 +56,21 @@ public:
 	inline virtual void ViewportWidth(float f) { mViewport.width = f; mMatricesDirty = true; }
 	inline virtual void ViewportHeight(float f) { mViewport.height = f; mMatricesDirty = true; }
 	inline virtual void PerspectiveSize(const float2& p) { mPerspectiveSize = p; mFieldOfView = 0; mMatricesDirty = true; }
-	inline virtual void FramebufferWidth (uint32_t w) { mFramebuffer->Width(w);  mMatricesDirty = true; }
-	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mMatricesDirty = true; }
+	inline virtual void FramebufferWidth (uint32_t w) { mFramebuffer->Width(w);  mDepthFramebuffer->Width(w);  mMatricesDirty = true; }
+	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mDepthFramebuffer->Height(h); mMatricesDirty = true; }
 
 	inline virtual ::Framebuffer* Framebuffer() const { return mFramebuffer; }
+	/// Framebuffer for the depth prepass
+	inline virtual ::Framebuffer* DepthFramebuffer() const { return mDepthFramebuffer; }
 	inline virtual Texture* ColorBuffer() const { return mFramebuffer->ColorBuffer(0); }
 	inline virtual Texture* DepthNormalBuffer() const { return mRenderDepthNormals ? mFramebuffer->ColorBuffer(1) : nullptr; }
-	inline virtual Texture* DepthBuffer() const { return mFramebuffer->DepthBuffer(); }
+	/// Result of the depth prepass
+	inline virtual Texture* DepthBuffer() const { return mDepthFramebuffer->DepthBuffer(); }
 	inline virtual Buffer* UniformBuffer() const { return mUniformBuffer; }
 	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(VkShaderStageFlags stage);
 
-	// Note: The view matrix is calculated placing the camera at the origin. To transform from world->view, one must apply:
-	// view * (worldPos-cameraPos)
+	/// Note: The view matrix is calculated placing the camera at the origin. To transform from world->view, one must apply:
+	/// view * (worldPos-cameraPos)
 	inline virtual float4x4 View() { UpdateMatrices(); return mView; }
 	inline virtual float4x4 Projection() { UpdateMatrices(); return mProjection; }
 	inline virtual float4x4 ViewProjection() { UpdateMatrices(); return mViewProjection; }
@@ -80,7 +79,6 @@ public:
 	inline virtual float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
 
 	ENGINE_EXPORT virtual bool IntersectFrustum(const AABB& aabb);
-
 
 	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 
@@ -112,6 +110,7 @@ private:
 	Window* mTargetWindow;
 	::Device* mDevice;
 	::Framebuffer* mFramebuffer;
+	::Framebuffer* mDepthFramebuffer;
 	bool mDeleteFramebuffer;
 
 	void** mUniformBufferPtrs;

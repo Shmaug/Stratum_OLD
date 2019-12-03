@@ -4,7 +4,7 @@
 #include <Scene/Scene.hpp>
 #include <Scene/Environment.hpp>
 
-#include <Shaders/shadercompat.h>
+#include <Shaders/include/shadercompat.h>
 
 using namespace std;
 
@@ -29,17 +29,14 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	::Mesh* m = Mesh();
 	if (!m) return;
 
-	switch (pass) {
-	case Main:
-		mMaterial->DisableKeyword("DEPTH_PASS");
-		Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-		break;
-	case Depth:
-		mMaterial->EnableKeyword("DEPTH_PASS");
-		break;
-	}
+	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
 
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology());
+	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
+	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
+	else mMaterial->DisableKeyword("DEPTH_PASS");
+	if (pass & Shadow)cull = VK_CULL_MODE_FRONT_BIT;
+
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), cull);
 	if (!layout) return;
 	auto shader = mMaterial->GetShader(commandBuffer->Device());
 

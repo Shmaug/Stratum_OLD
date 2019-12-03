@@ -51,8 +51,9 @@ struct GPULight {
 
 struct ShadowData {
 	float4x4 WorldToShadow; // ViewProjection matrix for the shadow render
-	float4 Proj;
 	float4 ShadowST;
+	float3 CameraPosition;
+	float InvProj22;
 };
 
 #ifdef __cplusplus

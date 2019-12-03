@@ -9,8 +9,8 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 2048
-#define SHADOW_RESOLUTION 512
+#define SHADOW_ATLAS_RESOLUTION 8192
+#define SHADOW_RESOLUTION 2048
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -129,14 +129,15 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 	sc->LocalPosition(pos);
 	sc->LocalRotation(rot);
 
-	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
-	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
-	sc->ViewportWidth(SHADOW_RESOLUTION);
-	sc->ViewportHeight(SHADOW_RESOLUTION);
+	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION) + 1);
+	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION) + 1);
+	sc->ViewportWidth(SHADOW_RESOLUTION - 2);
+	sc->ViewportHeight(SHADOW_RESOLUTION - 2);
 
 	sd->WorldToShadow = sc->ViewProjection();
+	sd->CameraPosition = pos;
 	sd->ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
-	sd->Proj = float4(ortho ? 1.f : 0.f, 1.f / far, near, far);
+	sd->InvProj22 = 1.f / (sc->Projection()[2][2] * (sc->Far() - sc->Near()));
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
@@ -208,24 +209,25 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Sun: {
 					float4 cascadeSplits = 0;
 					float cn = mainCamera->Near();
-					float cf = mainCamera->Far();// min(l->ShadowDistance(), mainCamera->Far());
+					float cf = mainCamera->Far();//min(l->ShadowDistance(), mainCamera->Far());
 					float i_f = 1;
 					for (uint32_t i = 0; i < 4 - 1; i++, i_f += 1.f)
 						cascadeSplits[i] = lerp(cn + (i_f / 4) * (cf - cn), cn * powf(cf / cn, i_f / 4), .9f);
-					cascadeSplits[4 - 1] = cf;
+					cascadeSplits[3] = cf;
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
 					lights[li].ShadowIndex = (int32_t)si;
-
-					//float mn = mainCamera->Near();
-					//for (uint32_t ci = 0; ci < 4; ci++) {
-						//float mx = cascadeSplits[ci];
-						//float sz = ct * mx;
-
-						AddShadowCamera(&data, si, &shadows[si], true, 100, cp, l->WorldRotation(), -50, 50);
+					
+					float mn = mainCamera->Near();
+					for (uint32_t ci = 0; ci < 4; ci++) {
+						float mx = cascadeSplits[ci];
+						float sz = 2 * ct * mx;
+						float d = max(sz*2, 300);
+						AddShadowCamera(&data, si, &shadows[si], true, sz, cp + fwd * (mx + mn)*.5f, l->WorldRotation(), -d, d);
 						si++;
-						//mn = mx;
-					//}
+						mn = mx;
+					}
+
 					break;
 				}
 				case Point:
@@ -249,7 +251,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++) {
 			data.mShadowCameras[i]->mEnabled = true;
-			Render(data.mShadowCameras[i], commandBuffer, Depth, false);
+			Render(data.mShadowCameras[i], commandBuffer, (PassType)(Depth | Shadow), false);
 		}
 		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
 			data.mShadowCameras[i]->mEnabled = false;
@@ -269,6 +271,19 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, bool startRenderPass) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
+	PROFILER_BEGIN("Pre Render");
+	camera->PreRender();
+	if (pass & Main) {
+		BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
+		Render(camera, commandBuffer, Depth);
+		END_CMD_REGION(commandBuffer);
+		mEnvironment->PreRender(commandBuffer, camera);
+	}
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled)
+			p->PreRender(commandBuffer, camera, pass);
+	PROFILER_END;
+	
 	PROFILER_BEGIN("Gather/Sort Renderers");
 	mRenderList.clear();
 	for (Renderer* r : mRenderers)
@@ -285,23 +300,18 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 		return a->RenderQueue() < b->RenderQueue();
 	});
 	PROFILER_END;
-
-	camera->PreRender();
-	if (pass & Main) mEnvironment->PreRender(commandBuffer, camera);
-	
-	PROFILER_BEGIN("Pre Render");
-	for (const auto& p : mPluginManager->Plugins())
-		if (p->mEnabled)
-			p->PreRender(commandBuffer, camera, pass);
 	for (Renderer* r : mRenderList)
 		r->PreRender(commandBuffer, camera, pass);
-	PROFILER_END;
 
 	// combine MeshRenderers that have the same material and mesh
 	PROFILER_BEGIN("Draw");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
-	if (startRenderPass)
-		camera->Framebuffer()->BeginRenderPass(commandBuffer);
+	if (startRenderPass){
+		if (camera->DepthFramebuffer() && (pass & Depth))
+			camera->DepthFramebuffer()->BeginRenderPass(commandBuffer);
+		else
+			camera->Framebuffer()->BeginRenderPass(commandBuffer);
+	}
 	camera->Set(commandBuffer);
 	
 	DescriptorSet* batchDS = nullptr;
@@ -370,36 +380,8 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	}
 	PROFILER_END;
 
-	if (mDrawGizmos && pass == Main) {
+	if (mDrawGizmos && (pass & Main)) {
 		PROFILER_BEGIN("Draw Gizmos");
-		for (Camera* c : data.mShadowCameras)
-			if (c->mEnabled) {
-				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
-				float3 f1 = c->ClipToWorld(float3(-1,  1, 0));
-				float3 f2 = c->ClipToWorld(float3( 1, -1, 0));
-				float3 f3 = c->ClipToWorld(float3( 1,  1, 0));
-				
-				float3 f4 = c->ClipToWorld(float3(-1, -1, 1));
-				float3 f5 = c->ClipToWorld(float3(-1,  1, 1));
-				float3 f6 = c->ClipToWorld(float3( 1, -1, 1));
-				float3 f7 = c->ClipToWorld(float3( 1,  1, 1));
-
-				mGizmos->DrawLine(f0, f1, 1);
-				mGizmos->DrawLine(f0, f2, 1);
-				mGizmos->DrawLine(f3, f1, 1);
-				mGizmos->DrawLine(f3, f2, 1);
-
-				mGizmos->DrawLine(f4, f5, 1);
-				mGizmos->DrawLine(f4, f6, 1);
-				mGizmos->DrawLine(f7, f5, 1);
-				mGizmos->DrawLine(f7, f6, 1);
-
-				mGizmos->DrawLine(f0, f4, 1);
-				mGizmos->DrawLine(f1, f5, 1);
-				mGizmos->DrawLine(f2, f6, 1);
-				mGizmos->DrawLine(f3, f7, 1);
-			}
-
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);
@@ -412,21 +394,24 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
-
+	
 	if (startRenderPass)
 		vkCmdEndRenderPass(*commandBuffer);
-	
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
+
+	if (camera->DepthFramebuffer() && (pass & Depth))
+		camera->DepthFramebuffer()->Resolve(commandBuffer);
+	else
+		camera->Framebuffer()->Resolve(commandBuffer);
 
 	// Post Render
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
-		if (p->mEnabled)
-			p->PostRender(commandBuffer, camera, pass);
+		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
 	PROFILER_END;
 
-	camera->ResolveWindow(commandBuffer);
+	if (pass & Main) camera->ResolveWindow(commandBuffer);
 }
 
 Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {

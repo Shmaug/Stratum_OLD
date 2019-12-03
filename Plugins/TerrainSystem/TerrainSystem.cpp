@@ -31,6 +31,7 @@ private:
 	Camera* mMainCamera;
 
 	float3 mPlayerVelocity;
+	bool mFlying;
 	float mHeadBob;
 
 	TextRenderer* mFpsText;
@@ -45,7 +46,7 @@ private:
 
 ENGINE_PLUGIN(TerrainSystem)
 
-TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr) {
+TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr), mFlying(false) {
 	mEnabled = true;
 	mHeadBob = 0;
 	mCameraEuler = 0;
@@ -81,7 +82,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	mat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_nrm.jpg", false));
 	mat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_msk.png", false));
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 10000.f, 1000.f);
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 10000.f, 1200.f);
 	mScene->AddObject(terrain);
 	terrain->Material(mat);
 	mTerrain = terrain.get();
@@ -155,6 +156,8 @@ void TerrainSystem::Update() {
 
 	if (mInput->KeyDownFirst(GLFW_KEY_O))
 		mMainCamera->Orthographic(!mMainCamera->Orthographic());
+	if (mInput->KeyDownFirst(GLFW_KEY_V))
+		mFlying = !mFlying;
 
 	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
 		mInput->LockMouse(!mInput->LockMouse());
@@ -178,19 +181,20 @@ void TerrainSystem::Update() {
 	if (mInput->KeyDown(GLFW_KEY_S)) move.z -= 1;
 	if (mInput->KeyDown(GLFW_KEY_D)) move.x += 1;
 	if (mInput->KeyDown(GLFW_KEY_A)) move.x -= 1;
-	move = mPlayer->WorldRotation() * move;
+	move = (mFlying ? mMainCamera->WorldRotation() : mPlayer->WorldRotation()) * move;
 	if (dot(move, move) > .001f) {
 		move = normalize(move);
 		move *= 2.5f;
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
 			move *= 2.5f;
 	}
-	float3 mf = 10.f * (move - mPlayerVelocity) * mScene->Instance()->DeltaTime();
-	mf.y = 0;
+	if (mFlying) move *= 100.f;
+	float3 mf = 5 * (move - mPlayerVelocity) * mScene->Instance()->DeltaTime();
+	if (!mFlying) mf.y = 0;
 	mPlayerVelocity += mf;
 	#pragma endregion
 
-	mPlayerVelocity.y -= 9.8f * mScene->Instance()->DeltaTime(); // gravity
+	if (!mFlying) mPlayerVelocity.y -= 9.8f * mScene->Instance()->DeltaTime(); // gravity
 
 	float3 p = mPlayer->WorldPosition();
 	p += mPlayerVelocity * mScene->Instance()->DeltaTime(); // integrate velocity
@@ -200,7 +204,7 @@ void TerrainSystem::Update() {
 		p.y = ty;
 		mPlayerVelocity.y = 0;
 
-		if (mInput->KeyDown(GLFW_KEY_SPACE))
+		if (!mFlying && mInput->KeyDown(GLFW_KEY_SPACE))
 			mPlayerVelocity.y += 4.f;
 
 	}
@@ -253,10 +257,10 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 			case LightType::Spot:
 				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
 				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
-					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				gizmos->DrawWireCircle(
 					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
-					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle() * .5f), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				break;
 
 			case LightType::Point:
@@ -266,15 +270,16 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 			}
 		}
 
+		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
 		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
 			quaternion r = mSelected->WorldRotation();
-			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r)) {
+			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);
 				change = false;
 			}
 		} else {
 			float3 p = mSelected->WorldPosition();
-			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p)) {
+			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
 				mSelected->LocalPosition(p);
 				change = false;
 			}
@@ -293,8 +298,6 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 		if (hover) {
 			hitT = lt;
-			if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
-				light->mEnabled = !light->mEnabled;
 			if (change) mSelected = light;
 		}
 	}

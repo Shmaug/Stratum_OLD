@@ -5,8 +5,6 @@
 #include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
-#include <Shaders/shadercompat.h>
-
 using namespace std;
 
 TextRenderer::TextRenderer(const string& name)

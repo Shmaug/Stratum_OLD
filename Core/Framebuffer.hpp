@@ -25,8 +25,10 @@ public:
 	inline void ClearValue(uint32_t i, const VkClearValue& value) { mClearValues[i] = value; }
 
 	inline Texture* ColorBuffer(uint32_t i) { return mColorBuffers[mDevice->FrameContextIndex()][i]; }
+	inline Texture* ResolveBuffer(uint32_t i) { return mResolveBuffers ? mResolveBuffers[mDevice->FrameContextIndex()][i] : ColorBuffer(i); }
 	inline Texture* DepthBuffer() { return mDepthBuffers[mDevice->FrameContextIndex()]; }
 
+	ENGINE_EXPORT void Resolve(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 	inline ::Device* Device() const { return mDevice; }
@@ -34,6 +36,7 @@ public:
 private:
 	::Device* mDevice;
 	std::vector<Texture*>* mColorBuffers;
+	std::vector<Texture*>* mResolveBuffers;
 	Texture** mDepthBuffers;
 	VkFramebuffer* mFramebuffers;
 	::RenderPass* mRenderPass;

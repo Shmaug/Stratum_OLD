@@ -1,5 +1,5 @@
 #include <Content/Material.hpp>
-#include <Shaders/shadercompat.h>
+#include <Shaders/include/shadercompat.h>
 #include <Scene/Camera.hpp>
 
 using namespace std;

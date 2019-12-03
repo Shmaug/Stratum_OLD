@@ -8,8 +8,6 @@
 #include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
-#include <Shaders/shadercompat.h>
-
 using namespace std;
 
 UIImage::UIImage(const string& name, UICanvas* canvas)

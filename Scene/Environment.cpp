@@ -10,12 +10,12 @@ Environment::Environment(Scene* scene) :
 	mTimeOfDay(.25f),
 	mScene(scene), mSkybox(nullptr),
 	mIncomingLight(float4(2.5f)),
-	mRayleighScatterCoef(2),
-	mRayleighExtinctionCoef(.5f),
-	mMieScatterCoef(1),
-	mMieExtinctionCoef(1),
+	mRayleighScatterCoef(2.3f),
+	mRayleighExtinctionCoef(.7f),
+	mMieScatterCoef(1.5f),
+	mMieExtinctionCoef(.8f),
 	mMieG(0.76f),
-	mDistanceScale(200),
+	mDistanceScale(150),
 	mSunIntensity(.1f),
 	mAtmosphereHeight(80000.0f),
 	mPlanetRadius(6371000.0f),
@@ -79,7 +79,7 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(particleDensity, "_AtmosphereHeight", &mAtmosphereHeight);
 		commandBuffer->PushConstant(particleDensity, "_PlanetRadius", &mPlanetRadius);
 		commandBuffer->PushConstant(particleDensity, "_DensityScaleHeight", &mDensityScale);
-		vkCmdDispatch(*commandBuffer, 1024, 1024, 1);
+		vkCmdDispatch(*commandBuffer, 128, 128, 1);
 
 		dlut.mParticleDensityLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
@@ -104,7 +104,7 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(skybox, "_IncomingLight", &mIncomingLight);
 		commandBuffer->PushConstant(skybox, "_MieG", &mMieG);
 		commandBuffer->PushConstant(skybox, "_SunIntensity", &mSunIntensity);
-		vkCmdDispatch(*commandBuffer, 32, 128, 32);
+		vkCmdDispatch(*commandBuffer, 8, 32, 8);
 
 		mDeviceLUTs.emplace(device, dlut);
 
@@ -144,7 +144,7 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(ambient, "_IncomingLight", &mIncomingLight);
 		commandBuffer->PushConstant(ambient, "_MieG", &mMieG);
 		commandBuffer->PushConstant(ambient, "_SunIntensity", &mSunIntensity);
-		vkCmdDispatch(*commandBuffer, 128, 1, 1);
+		vkCmdDispatch(*commandBuffer, 2, 1, 1);
 
 
 		ComputeShader* direct = mShader->GetCompute(commandBuffer->Device(), "DirectLightLUT", {});
@@ -166,7 +166,7 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(direct, "_IncomingLight", &mIncomingLight);
 		commandBuffer->PushConstant(direct, "_MieG", &mMieG);
 		commandBuffer->PushConstant(direct, "_SunIntensity", &mSunIntensity);
-		vkCmdDispatch(*commandBuffer, 128, 1, 1);
+		vkCmdDispatch(*commandBuffer, 2, 1, 1);
 
 		device->Execute(commandBuffer, false)->Wait();
 
@@ -192,9 +192,9 @@ Environment::Environment(Scene* scene) :
 
 	shared_ptr<Light> moon = make_shared<Light>("Moon");
 	mScene->AddObject(moon);
-	moon->mEnabled = false;
+	moon->CastShadows(true);
+	sun->ShadowDistance(1024);
 	moon->Color(float3(1));
-	moon->Intensity(.1f);
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	moon->Type(Sun);
 	mMoon = moon.get();
@@ -207,6 +207,7 @@ Environment::~Environment() {
 		for (uint32_t i = 0; i < t.first->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(t.second[i].mInscatterLUT);
 			safe_delete(t.second[i].mOutscatterLUT);
+			safe_delete(t.second[i].mLightShaftLUT);
 		}
 		safe_delete_array(t.second);
 	}
@@ -222,44 +223,22 @@ void Environment::SetEnvironment(Camera* camera, Material* mat) {
 	CamLUT* l = mCameraLUTs.at(camera) + camera->Device()->FrameContextIndex();
 	mat->SetParameter("InscatteringLUT", l->mInscatterLUT);
 	mat->SetParameter("ExtinctionLUT", l->mOutscatterLUT);
+	mat->SetParameter("LightShaftLUT", l->mLightShaftLUT);
 	mat->SetParameter("AmbientLight", mAmbientLight);
 }
 
 void Environment::Update() {
-	const float sunsetDuration = .04f;
-	const float moonIntensity = .1f;
-
-	if (mTimeOfDay > .5f - sunsetDuration && mTimeOfDay < .5f + sunsetDuration) {
-		// sunset
-		mSun->mEnabled = true;
-		float f = (mTimeOfDay - (.5f - sunsetDuration)) / (2 * sunsetDuration);
-		mMoon->Intensity(moonIntensity * f);
-	} else if (mTimeOfDay < sunsetDuration || mTimeOfDay > 1 - sunsetDuration) {
-		// sunrise
-		mSun->mEnabled = true;
-		float f = 0;
-		if (mTimeOfDay < sunsetDuration)
-			f = .5f + .5f * mTimeOfDay / sunsetDuration;
-		else
-			f = .5f * (mTimeOfDay - (1 - sunsetDuration)) / sunsetDuration;
-		mMoon->Intensity(moonIntensity * (1 - f));
-	} else if (mTimeOfDay > .5f + sunsetDuration) {
-		// night time
-		mSun->mEnabled = false;
-		mMoon->Intensity(moonIntensity);
-	} else if (mTimeOfDay > sunsetDuration) {
-		// day time
-		mSun->mEnabled = true;
-	}
-
-	float fwd = -10 * mMoon->WorldRotation().forward().y + .1f;
-	mMoon->Intensity(mMoon->Intensity() * clamp(fwd * fwd * fwd, 0.f, 1.f));
-
 	mSun->LocalRotation(quaternion(float3(0, radians(23.5f), radians(23.5f))) * quaternion(float3(mTimeOfDay * PI * 2, 0, 0)));
 	mMoon->LocalRotation(quaternion(float3(0, radians(70.f), radians(70.f))) * quaternion(float3(PI + mTimeOfDay * PI * 2, 0, 0)));
 
+	float f = clamp(10 * (-mMoon->WorldRotation().forward().y + .1f), 0.f, 1.f);
+	mMoon->Intensity(.05f * f*f);
+
+	f = clamp(10 * (-mSun->WorldRotation().forward().y + .1f), 0.f, 1.f);
+	mSun->Intensity(1 * f*f);
+
 	float cosAngle = dot(float3(0, 1, 0), -mSun->WorldRotation().forward());
-	float u = (cosAngle + 0.1f) / 1.1f;// * 0.5f + 0.5f;
+	float u = (cosAngle + 0.1f) / 1.1f;
 	u = u * 128;
 	int index0 = (int)u;
 	int index1 = index0 + 1;
@@ -281,6 +260,9 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	CamLUT* l = mCameraLUTs.at(camera) + commandBuffer->Device()->FrameContextIndex();
 	DevLUT* dlut = &mDeviceLUTs.at(camera->Device());
 
+	if (l->mLightShaftLUT && (l->mLightShaftLUT->Width() != camera->FramebufferWidth()/2 || l->mLightShaftLUT->Height() != camera->FramebufferHeight()/2))
+		safe_delete(l->mLightShaftLUT);
+
 	if (!l->mInscatterLUT) {
 		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
@@ -289,9 +271,15 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
+	if (!l->mLightShaftLUT){
+		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth()/2, camera->FramebufferHeight()/2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+	}
 
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
 	float3 r0 = camera->ScreenToWorldRay(float2(0, 1)).mDirection * camera->Far();
 	float3 r1 = camera->ScreenToWorldRay(float2(0, 0)).mDirection * camera->Far();
@@ -335,18 +323,43 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
 	commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
-	vkCmdDispatch(*commandBuffer, 16, 16, 1);
+	vkCmdDispatch(*commandBuffer, 2, 2, 1);
 	#pragma endregion
 
+	#pragma region Precompute light shafts
+	ComputeShader* shaft = mShader->GetCompute(commandBuffer->Device(), "LightShaftLUT", {});
+
+	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipeline);
+	ds = commandBuffer->Device()->GetTempDescriptorSet("Light Shaft LUT", shaft->mDescriptorSetLayouts[0]);
+	ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("_LightShaftLUT").second.binding);
+	ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer()->ColorBuffer(0), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
+	ds->CreateStorageBufferDescriptor(mScene->LightBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Lights").second.binding);
+	ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
+	ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
+
+	vds = *ds;
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+
+	commandBuffer->PushConstant(shaft, "_BottomLeftCorner", &r0);
+	commandBuffer->PushConstant(shaft, "_TopLeftCorner", &r1);
+	commandBuffer->PushConstant(shaft, "_TopRightCorner", &r2);
+	commandBuffer->PushConstant(shaft, "_BottomRightCorner", &r3);
+
+	commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
+	vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight()/2 + 7) / 8, 1);
+	#pragma endregion
+
+	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
-	mSkyboxMaterial->SetParameter("_SkyboxLUT", dlut->mSkyboxLUT);
-	mSkyboxMaterial->SetParameter("_SkyboxLUT2", dlut->mSkyboxLUT2);
-	mSkyboxMaterial->SetParameter("_MoonTex", mMoonTexture);
-	mSkyboxMaterial->SetParameter("_StarCube", mStarTexture);
-	mSkyboxMaterial->SetParameter("_MoonDir", -mMoon->WorldRotation().forward());
-	mSkyboxMaterial->SetParameter("_MoonRight", mMoon->WorldRotation() * float3(-1,0,0));
+	mSkyboxMaterial->SetParameter("SkyboxLUT", dlut->mSkyboxLUT);
+	mSkyboxMaterial->SetParameter("SkyboxLUT2", dlut->mSkyboxLUT2);
+	mSkyboxMaterial->SetParameter("LightShaftLUT", l->mLightShaftLUT);
+	mSkyboxMaterial->SetParameter("MoonTexture", mMoonTexture);
+	mSkyboxMaterial->SetParameter("StarTexture", mStarTexture);
+	mSkyboxMaterial->SetParameter("_MoonRotation", inverse(mMoon->WorldRotation()).xyzw);
 	mSkyboxMaterial->SetParameter("_MoonSize", mMoonSize);
 	mSkyboxMaterial->SetParameter("_IncomingLight", mIncomingLight.xyz);
 	mSkyboxMaterial->SetParameter("_SunDir", lightdir);
@@ -357,5 +370,5 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	mSkyboxMaterial->SetParameter("_ScatteringR", scatterR.xyz);
 	mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
 	mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
-	mSkyboxMaterial->SetParameter("_StarFade", clamp(lightdir.y*10.f, 0.f, 1.f));
+	mSkyboxMaterial->SetParameter("_StarFade", clamp(lightdir.y*10.f, 0.5f, 1.f));
 }
