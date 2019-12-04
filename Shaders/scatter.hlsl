@@ -440,13 +440,21 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 	float3 rayEnd = lerp(v1, v2, uv.y);
 	rayEnd *= maxDepth;
 	
+	const uint SampleCount = 512;
+
 	float attenuation = 0;
 	
-	for (uint i = 0; i < 512; i++) {
-		float depth = i / 511.0;
+	for (uint i = 0; i < SampleCount; i++) {
+		float depth = i / ((float)SampleCount - 1.0);
+		depth *= depth; // bias samples towards 0
 		float3 worldPos = rayEnd * depth;
-		attenuation += SampleShadow(Lights[0], _CameraPos, worldPos, depth);
+		attenuation += 1 - SampleShadow(Lights[0], _CameraPos, worldPos, depth);
 	}
 
-	_LightShaftLUT[id.xy] = attenuation / 512.0;
+	attenuation /= SampleCount;
+	attenuation = 1 - attenuation;
+
+	attenuation* attenuation;
+
+	_LightShaftLUT[id.xy] = attenuation * attenuation;
 }

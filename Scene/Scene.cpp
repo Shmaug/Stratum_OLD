@@ -209,7 +209,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Sun: {
 					float4 cascadeSplits = 0;
 					float cn = mainCamera->Near();
-					float cf = mainCamera->Far();//min(l->ShadowDistance(), mainCamera->Far());
+					float cf = min(l->ShadowDistance(), mainCamera->Far());
 					float i_f = 1;
 					for (uint32_t i = 0; i < 4 - 1; i++, i_f += 1.f)
 						cascadeSplits[i] = lerp(cn + (i_f / 4) * (cf - cn), cn * powf(cf / cn, i_f / 4), .9f);
@@ -221,7 +221,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 					float mn = mainCamera->Near();
 					for (uint32_t ci = 0; ci < 4; ci++) {
 						float mx = cascadeSplits[ci];
-						float sz = 2 * ct * mx;
+						float sz = 2*ct * mx;
 						float d = max(sz*2, 300);
 						AddShadowCamera(&data, si, &shadows[si], true, sz, cp + fwd * (mx + mn)*.5f, l->WorldRotation(), -d, d);
 						si++;

@@ -243,11 +243,10 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	if (!mMaterial) return;
 
 	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-
 	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
 	else mMaterial->DisableKeyword("DEPTH_PASS");
-	if (pass & Shadow)cull = VK_CULL_MODE_FRONT_BIT;
+	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
 
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
 	if (!layout) return;

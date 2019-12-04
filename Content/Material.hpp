@@ -29,6 +29,9 @@ public:
 
 	ENGINE_EXPORT GraphicsShader* GetShader(Device* device);
 
+	inline void PassMask(PassType p) { mPassMask = p; }
+	inline PassType PassMask() const { return mPassMask; }
+
 	inline void RenderQueue(uint32_t q) { mRenderQueueOverride = q; }
 	inline uint32_t RenderQueue() const { return (mRenderQueueOverride == ~0) ? Shader()->RenderQueue() : mRenderQueueOverride; }
 
@@ -55,6 +58,8 @@ private:
 	std::set<std::string> mShaderKeywords;
 	VkCullModeFlags mCullMode;
 	::BlendMode mBlendMode;
+
+	PassType mPassMask;
 
 	uint32_t mRenderQueueOverride;
 
