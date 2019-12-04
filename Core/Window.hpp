@@ -45,7 +45,7 @@ public:
 
 private:
 	friend class Camera;
-	friend class VkCAVE;
+	friend class Stratum;
 	friend class Instance;
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position);
 	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex);

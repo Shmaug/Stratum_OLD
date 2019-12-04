@@ -3,7 +3,6 @@
 #include <Core/EnginePlugin.hpp>
 #include <vector>
 
-class VkCAVE;
 class Scene;
 class EnginePlugin;
 
@@ -22,7 +21,7 @@ public:
 	}
 	
 private:
-	friend class VkCAVE;
+	friend class Stratum;
 
 	#ifdef WINDOWS
 	typedef HMODULE PluginHandle;

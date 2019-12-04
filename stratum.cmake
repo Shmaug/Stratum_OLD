@@ -15,9 +15,9 @@ endif()
 
 function(link_plugin TARGET_NAME)
 	target_include_directories(${TARGET_NAME} PUBLIC
-		"${VKCAVE_HOME}"
-		"${VKCAVE_HOME}/ThirdParty/assimp/include"
-		"${VKCAVE_HOME}/ThirdParty/glfw/include" )
+		"${STRATUM_HOME}"
+		"${STRATUM_HOME}/ThirdParty/assimp/include"
+		"${STRATUM_HOME}/ThirdParty/glfw/include" )
 
 	if(WIN32)
 		if(DEFINED ENV{VULKAN_SDK})
@@ -28,21 +28,21 @@ function(link_plugin TARGET_NAME)
 		
 		target_include_directories(${TARGET_NAME} PUBLIC
 			"$ENV{VULKAN_SDK}/include"
-			"${VKCAVE_HOME}/ThirdParty/assimp/include"
-			"${VKCAVE_HOME}/ThirdParty/glfw/include" )
+			"${STRATUM_HOME}/ThirdParty/assimp/include"
+			"${STRATUM_HOME}/ThirdParty/glfw/include" )
 		target_compile_definitions(${TARGET_NAME} PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 
 		# Link vulkan and assimp
 		target_link_libraries(${TARGET_NAME}
 			"${PROJECT_BINARY_DIR}/lib/Engine.lib"
 			"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-			"${VKCAVE_HOME}/ThirdParty/glfw/lib/glfw3.lib"
-			"${VKCAVE_HOME}/ThirdParty/assimp/lib/assimp.lib"
-			"${VKCAVE_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
+			"${STRATUM_HOME}/ThirdParty/glfw/lib/glfw3.lib"
+			"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
+			"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
 		if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-			target_link_libraries(${TARGET_NAME} "${VKCAVE_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
+			target_link_libraries(${TARGET_NAME} "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
 		else()
-			target_link_libraries(${TARGET_NAME} "${VKCAVE_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
+			target_link_libraries(${TARGET_NAME} "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
 		endif()
 
 		if (${ENABLE_DEBUG_LAYERS})
@@ -60,7 +60,7 @@ function(link_plugin TARGET_NAME)
 	set_target_properties(${TARGET_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/Plugins")
 	set_target_properties(${TARGET_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/Plugins")
 
-	add_dependencies(VkCave ${TARGET_NAME})
+	add_dependencies(Stratum ${TARGET_NAME})
 	add_dependencies(${TARGET_NAME} Engine)
 endfunction()
 

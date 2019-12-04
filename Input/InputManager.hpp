@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-
 #include <Input/InputDevice.hpp>
 
 class InputManager {
@@ -26,6 +24,6 @@ public:
 	}
 
 private:
-	friend class VkCAVE;
+	friend class Stratum;
 	std::vector<InputDevice*> mInputDevices;
 };
