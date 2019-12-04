@@ -258,24 +258,21 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 	_InscatteringLUT.GetDimensions(w, h, d);
 	float2 uv = float2(id.x / float(w - 1), id.y / float(h - 1));
 
+	uint3 coords = id;
+	uint sampleCount = d;
+
 	float3 v1 = lerp(_BottomLeftCorner.xyz, _BottomRightCorner.xyz, uv.x);
 	float3 v2 = lerp(_TopLeftCorner.xyz, _TopRightCorner.xyz, uv.x);
 
 	float3 rayEnd = lerp(v1, v2, uv.y);
-	float3 rayStart = _CameraPos;
+	float3 rayDir = normalize(rayEnd);
 
-	float3 rayDir = rayEnd - rayStart;
-	float rayLength = length(rayDir);
-	rayDir /= rayLength;
-
-	float3 planetCenter = float3(0, -_PlanetRadius, 0);
-	float3 lightDir = normalize(_LightDir);
-	uint3 coords = id;
-	uint sampleCount = d;
-	
-	float3 step = rayDir * (rayLength / (float)(sampleCount - 1));
+	float3 step = rayEnd / (float)(sampleCount - 1);
 	float stepSize = length(step) * _DistanceScale;
 
+	float3 planetCenter = float3(0, -_PlanetRadius, 0) - _CameraPos;
+	float3 lightDir = normalize(_LightDir);
+	
 	float2 densityCP = 0;
 	float3 scatterR = 0;
 	float3 scatterM = 0;
@@ -285,7 +282,7 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 
 	float2 prevLocalDensity;
 	float3 prevLocalInscatterR, prevLocalInscatterM;
-	GetAtmosphereDensity(rayStart, planetCenter, lightDir, prevLocalDensity, densityPA);
+	GetAtmosphereDensity(0, planetCenter, lightDir, prevLocalDensity, densityPA);
 	ComputeLocalInscattering(prevLocalDensity, densityPA, densityCP, prevLocalInscatterR, prevLocalInscatterM);
 
 	_InscatteringLUT[coords] = float4(0, 0, 0, 1);
@@ -295,9 +292,7 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 	// C - camera position
 	// A - top of the atmosphere
 	for (coords.z = 1; coords.z < sampleCount; coords.z += 1) {
-		float3 p = rayStart + step * coords.z;
-
-		GetAtmosphereDensity(p, planetCenter, lightDir, localDensity, densityPA);
+		GetAtmosphereDensity(step * coords.z, planetCenter, lightDir, localDensity, densityPA);
 		densityCP += (localDensity + prevLocalDensity) * (stepSize / 2.0);
 
 		prevLocalDensity = localDensity;
@@ -435,21 +430,17 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 
 	float2 screenUV = uv;
 	screenUV.y = 1 - screenUV.y;
-	float maxDepth = 0;
-	maxDepth += DepthTexture.SampleLevel(LinearClampSampler, screenUV, 0);
-	maxDepth += DepthTexture.SampleLevel(LinearClampSampler, screenUV, 0, int2(1,0));
-	maxDepth += DepthTexture.SampleLevel(LinearClampSampler, screenUV, 0, int2(0,1));
-	maxDepth += DepthTexture.SampleLevel(LinearClampSampler, screenUV, 0, int2(1,1));
-	maxDepth /= 4;
+	float maxDepth = DepthTexture.Gather(LinearClampSampler, screenUV) / 4;
 
-	float3 rayEnd = lerp(v1, v2, uv.y) * maxDepth;
+	float3 rayEnd = lerp(v1, v2, uv.y);
 	
-	const uint SampleCount = 512;
+	const uint SampleCount = 256;
 
 	float attenuation = 0;
 	for (uint i = 0; i < SampleCount; i++) {
-		float depth = i / ((float)SampleCount - 1.0);
+		float depth = i / (float)SampleCount;
+		depth *= maxDepth;
 		attenuation += SampleShadow(Lights[0], _CameraPos, rayEnd * depth, depth);
 	}
-	_LightShaftLUT[id.xy] = attenuation / SampleCount;
+	_LightShaftLUT[id.xy] = attenuation / (float)SampleCount;
 }

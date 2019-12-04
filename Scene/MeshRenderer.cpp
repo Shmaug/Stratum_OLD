@@ -24,18 +24,18 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 	mMaterial = m;
 }
 
+void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
+	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
+	else mMaterial->DisableKeyword("DEPTH_PASS");
+}
+
 void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
 	if (!mMaterial) return;
 	::Mesh* m = Mesh();
 	if (!m) return;
 
-	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
-	else mMaterial->DisableKeyword("DEPTH_PASS");
-	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
-
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), cull);
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM);
 	if (!layout) return;
 	auto shader = mMaterial->GetShader(commandBuffer->Device());
 

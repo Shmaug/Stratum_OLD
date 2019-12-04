@@ -33,7 +33,6 @@ private:
 
 	float3 mPlayerVelocity;
 	bool mFlying;
-	float mHeadBob;
 
 	TextRenderer* mFpsText;
 
@@ -49,7 +48,6 @@ ENGINE_PLUGIN(TerrainSystem)
 
 TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr), mFlying(false) {
 	mEnabled = true;
-	mHeadBob = 0;
 	mCameraEuler = 0;
 	mTriangleCount = 0;
 	mFrameCount = 0;
@@ -114,13 +112,13 @@ bool TerrainSystem::Init(Scene* scene) {
 	rock->Material(rockMat);
 	rock->LocalPosition(0, mTerrain->Height(0) + 20, 0);
 	rock->LocalScale(3);
-	//mScene->AddObject(rock);
-	//mObjects.push_back(rock.get());
+	mScene->AddObject(rock);
+	mObjects.push_back(rock.get());
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
 	camera->Near(.01f);
-	camera->Far(8192.f);
+	camera->Far(2048.f);
 	camera->FieldOfView(radians(65.f));
 	camera->LocalPosition(0, 1.6f, 0);
 	mMainCamera = camera.get();
@@ -134,7 +132,6 @@ bool TerrainSystem::Init(Scene* scene) {
 	fpsText->VerticalAnchor(Maximum);
 	fpsText->HorizontalAnchor(Minimum);
 	mFpsText = fpsText.get();
-	camera->AddChild(mFpsText);
 	mObjects.push_back(mFpsText);
 
 	shared_ptr<Light> light = make_shared<Light>("Light");
@@ -166,10 +163,6 @@ void TerrainSystem::Update() {
 
 	if (mInput->KeyDownFirst(GLFW_KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
-
-	float3 lp = (mMainCamera->WorldToObject() * float4(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
-	lp.z = mMainCamera->Near() + .00001f;
-	mFpsText->LocalPosition(lp);
 
 	if (mMainCamera->Orthographic()) {
 		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
@@ -233,18 +226,10 @@ void TerrainSystem::Update() {
 	}
 	mPlayer->LocalPosition(p);
 
-	float m = length(move);
-	if (p.y - ty < .05f && m > 0)
-		mHeadBob += m * mScene->Instance()->DeltaTime();
-	else
-		mHeadBob = 0;
-
-	//float sb = sin(-2 * mHeadBob);
-	//sb *= sb;
-	//float dy = 1.6f + .2f * -sb - mMainCamera->LocalPosition().y;
-	//mMainCamera->LocalPosition(0, mMainCamera->LocalPosition().y + min(mScene->Instance()->DeltaTime(), dy), 0);
-
 	mTerrain->UpdateLOD(mMainCamera);
+
+	mFpsText->LocalRotation(mMainCamera->WorldRotation());
+	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.001f)));
 
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
