@@ -53,7 +53,7 @@ public:
 	inline ::Environment* Environment() const { return mEnvironment; }
 
 private:
-	friend class VkCAVE;
+	friend class Stratum;
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
 
 	float2 mShadowTexelSize;

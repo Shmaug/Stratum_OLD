@@ -54,7 +54,7 @@ struct Configuration {
 	bool mDebugMessenger;
 };
 
-class VkCAVE {
+class Stratum {
 private:
 	Instance* mInstance;
 	InputManager* mInputManager;
@@ -101,7 +101,7 @@ private:
 	}
 
 public:
-	VkCAVE(const Configuration* config) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
+	Stratum(const Configuration* config) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
 #ifdef ENABLE_DEBUG_LAYERS
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
@@ -148,7 +148,7 @@ public:
 			mInputManager->RegisterInputDevice(mInstance->GetWindow(i)->mInput);
 	}
 
-	VkCAVE* Loop() {
+	Stratum* Loop() {
 		mPluginManager->LoadPlugins(mScene);
 
 		while (true) {
@@ -195,7 +195,7 @@ public:
 		return this;
 	}
 
-	~VkCAVE() {
+	~Stratum() {
 		safe_delete(mScene);
 
 		#ifdef ENABLE_DEBUG_LAYERS
@@ -278,7 +278,7 @@ int main(int argc, char* argv[]) {
 			config.mDebugMessenger = true;
 
 		// create, run, and delete the engine all in one line :)
-		delete (new VkCAVE(&config))->Loop();
+		delete (new Stratum(&config))->Loop();
 
 		#ifdef WINDOWS
 		WSACleanup();

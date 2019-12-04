@@ -1,8 +1,8 @@
-vkCAVE
+Stratum
 
 Trevor Hedstrom
 
-vkCAVE is a high-performance Vulkan rendering engine with multi-GPU support, and minimal dependencies. It provides developers with rapid
+Stratum is a high-performance Vulkan rendering engine with multi-GPU support, and minimal dependencies. It provides developers with rapid
 prototyping capabilities and easy extensibility for all varieties of rendering implementations.
 
 # Features

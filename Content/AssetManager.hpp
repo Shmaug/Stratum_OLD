@@ -22,7 +22,7 @@ public:
 	ENGINE_EXPORT Font*		LoadFont	(const std::string& filename, uint32_t pixelHeight);
 
 private:
-	friend class VkCAVE;
+	friend class Stratum;
 	ENGINE_EXPORT AssetManager(Instance* instance);
 
 	Instance* mInstance;

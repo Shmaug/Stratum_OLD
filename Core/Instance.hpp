@@ -3,7 +3,6 @@
 #include <Util/Util.hpp>
 
 class Window;
-class VkCAVE;
 class Device;
 
 class Instance {
@@ -39,7 +38,7 @@ public:
 	inline operator VkInstance() const { return mInstance; }
 
 private:
-	friend class VkCAVE;
+	friend class Stratum;
 	ENGINE_EXPORT Instance(bool supportDirectDisplay, bool useGLFW);
 
 	// Asks GLFW if any windows should be closed, and polls GLFW events. Also computes DeltaTime and TotalTime
