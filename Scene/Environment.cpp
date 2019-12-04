@@ -11,9 +11,9 @@ Environment::Environment(Scene* scene) :
 	mScene(scene), mSkybox(nullptr),
 	mIncomingLight(float4(2.5f)),
 	mRayleighScatterCoef(2.3f),
-	mRayleighExtinctionCoef(.7f),
+	mRayleighExtinctionCoef(.5f),
 	mMieScatterCoef(1.5f),
-	mMieExtinctionCoef(.8f),
+	mMieExtinctionCoef(.7f),
 	mMieG(0.76f),
 	mDistanceScale(150),
 	mSunIntensity(.1f),
@@ -281,10 +281,10 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
-	float3 r0 = camera->ScreenToWorldRay(float2(0, 1)).mDirection * camera->Far();
-	float3 r1 = camera->ScreenToWorldRay(float2(0, 0)).mDirection * camera->Far();
-	float3 r2 = camera->ScreenToWorldRay(float2(1, 0)).mDirection * camera->Far();
-	float3 r3 = camera->ScreenToWorldRay(float2(1, 1)).mDirection * camera->Far();
+	float3 r0 = camera->ClipToWorld(float3(-1,  1, 1));
+	float3 r1 = camera->ClipToWorld(float3(-1, -1, 1));
+	float3 r2 = camera->ClipToWorld(float3( 1, -1, 1));
+	float3 r3 = camera->ClipToWorld(float3( 1,  1, 1));
 	float4 scatterR = mRayleighSct * mRayleighScatterCoef;
 	float4 scatterM = mMieSct * mMieScatterCoef;
 	float4 extinctR = mRayleighSct * mRayleighExtinctionCoef;
@@ -325,7 +325,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
 	vkCmdDispatch(*commandBuffer, 2, 2, 1);
 	#pragma endregion
-
+	
 	#pragma region Precompute light shafts
 	ComputeShader* shaft = mShader->GetCompute(commandBuffer->Device(), "LightShaftLUT", {});
 
@@ -348,7 +348,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
 	vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight()/2 + 7) / 8, 1);
 	#pragma endregion
-
+	
 	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
