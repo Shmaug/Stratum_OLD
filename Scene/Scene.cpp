@@ -221,7 +221,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 					float mn = mainCamera->Near();
 					for (uint32_t ci = 0; ci < 4; ci++) {
 						float mx = cascadeSplits[ci];
-						float sz = 2*ct * mx;
+						float sz = 4*ct * mx;
 						float d = max(sz*2, 300);
 						AddShadowCamera(&data, si, &shadows[si], true, sz, cp + fwd * (mx + mn)*.5f, l->WorldRotation(), -d, d);
 						si++;
