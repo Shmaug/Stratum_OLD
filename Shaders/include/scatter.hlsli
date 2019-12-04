@@ -5,8 +5,7 @@ void ApplyScattering(inout float3 color, float2 uv, float linearDepth) {
 	float shadow = LightShaftLUT.SampleLevel(AtmosphereSampler, uv, 0);
 	float shadow4 = shadow*shadow;
 	shadow4 *= shadow4;
-	shadow = (shadow4 + shadow) / 2;
-	inscattering *= max(.1, shadow);
+	inscattering *= shadow * .2 + shadow4 * .8;
 
 	color *= extinction;
 	color += inscattering;

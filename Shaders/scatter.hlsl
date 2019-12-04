@@ -421,6 +421,11 @@ void DirectLightLUT(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
+	if (Lights[0].ShadowIndex < 0 || Lights[0].Type != LIGHT_SUN) {
+		_LightShaftLUT[id.xy] = 1;
+		return;
+	}
+
 	uint w, h;
 	_LightShaftLUT.GetDimensions(w, h);
 	float2 uv = float2(id.x / float(w - 1), id.y / float(h - 1));
@@ -437,24 +442,14 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 	maxDepth += DepthTexture.SampleLevel(LinearClampSampler, screenUV, 0, int2(1,1));
 	maxDepth /= 4;
 
-	float3 rayEnd = lerp(v1, v2, uv.y);
-	rayEnd *= maxDepth;
+	float3 rayEnd = lerp(v1, v2, uv.y) * maxDepth;
 	
 	const uint SampleCount = 512;
 
 	float attenuation = 0;
-	
 	for (uint i = 0; i < SampleCount; i++) {
 		float depth = i / ((float)SampleCount - 1.0);
-		depth *= depth; // bias samples towards 0
-		float3 worldPos = rayEnd * depth;
-		attenuation += 1 - SampleShadow(Lights[0], _CameraPos, worldPos, depth);
+		attenuation += SampleShadow(Lights[0], _CameraPos, rayEnd * depth, depth);
 	}
-
-	attenuation /= SampleCount;
-	attenuation = 1 - attenuation;
-
-	attenuation* attenuation;
-
-	_LightShaftLUT[id.xy] = attenuation * attenuation;
+	_LightShaftLUT[id.xy] = attenuation / SampleCount;
 }

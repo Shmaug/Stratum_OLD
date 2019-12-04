@@ -114,8 +114,8 @@ bool TerrainSystem::Init(Scene* scene) {
 	rock->Material(rockMat);
 	rock->LocalPosition(0, mTerrain->Height(0) + 20, 0);
 	rock->LocalScale(3);
-	mScene->AddObject(rock);
-	mObjects.push_back(rock.get());
+	//mScene->AddObject(rock);
+	//mObjects.push_back(rock.get());
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
