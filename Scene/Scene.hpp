@@ -14,7 +14,6 @@
 #include <Scene/Collider.hpp>
 #include <Util/Util.hpp>
 
-class VkCAVE;
 class Renderer;
 
 /*

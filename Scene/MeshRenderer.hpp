@@ -14,7 +14,7 @@ public:
 	ENGINE_EXPORT MeshRenderer(const std::string& name);
 	ENGINE_EXPORT ~MeshRenderer();
 
-	inline virtual PassType PassMask() override { return mMaterial ? mMaterial->PassMask() : None; }
+	inline virtual PassType PassMask() override { return (PassType)(mMaterial ? mMaterial->PassMask() : None); }
 
 	inline virtual void Mesh(::Mesh* m) { mMesh = m; Dirty(); }
 	inline virtual void Mesh(std::shared_ptr<::Mesh> m) { mMesh = m; Dirty(); }

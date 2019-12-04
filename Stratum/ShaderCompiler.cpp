@@ -585,8 +585,8 @@ int main(int argc, char* argv[]) {
 	if (argc < 3) {
 		printf("Usage: %s <input> <output> <options>\n", argv[0]);
 		//return EXIT_FAILURE;
-		inputFile = "E:/Projects/vkCAVE/Shaders/pbr.hlsl";
-		outputFile = "E:/Projets/vkCAVE/build/Debug/bin/Shaders/pbr.shader";
+		inputFile = "E:/Projects/Stratum/Shaders/pbr.hlsl";
+		outputFile = "E:/Projets/Stratum/build/Debug/bin/Shaders/pbr.shader";
 	} else {
 		inputFile = argv[1];
 		outputFile = argv[2];
