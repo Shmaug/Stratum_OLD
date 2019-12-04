@@ -9,7 +9,7 @@
 using namespace std;
 
 MeshRenderer::MeshRenderer(const string& name)
-	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01), mPassMask(Main) {}
+	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01) {}
 MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
@@ -30,11 +30,10 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	if (!m) return;
 
 	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-
 	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
 	else mMaterial->DisableKeyword("DEPTH_PASS");
-	if (pass & Shadow)cull = VK_CULL_MODE_FRONT_BIT;
+	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
 
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), cull);
 	if (!layout) return;

@@ -3,6 +3,7 @@
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/TextRenderer.hpp>
+#include <Scene/MeshRenderer.hpp>
 #include <Util/Profiler.hpp>
 
 #include "TerrainRenderer.hpp"
@@ -65,6 +66,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	mScene = scene;
 
 	shared_ptr<Material> mat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
+	shared_ptr<Material> rockMat = make_shared<Material>("Rock", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
 
 	mat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
 	mat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
@@ -82,6 +84,19 @@ bool TerrainSystem::Init(Scene* scene) {
 	mat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_nrm.jpg", false));
 	mat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_msk.png", false));
 
+
+	rockMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_col.png"));
+	rockMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_nrm.png"));
+	rockMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_msk.png"));
+	rockMat->SetParameter("Color", float4(1));
+	rockMat->SetParameter("Roughness", 1.f);
+	rockMat->SetParameter("Metallic", 1.f);
+	rockMat->SetParameter("BumpStrength", 1.f);
+	rockMat->EnableKeyword("COLOR_MAP");
+	rockMat->EnableKeyword("NORMAL_MAP");
+	rockMat->EnableKeyword("MASK_MAP");
+	rockMat->PassMask((PassType)(Main | Depth));
+
 	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 10000.f, 1200.f);
 	mScene->AddObject(terrain);
 	terrain->Material(mat);
@@ -93,6 +108,14 @@ bool TerrainSystem::Init(Scene* scene) {
 	mPlayer = player.get();
 	mObjects.push_back(mPlayer);
 	mPlayer->LocalPosition(0, mTerrain->Height(0), 0);
+
+	shared_ptr<MeshRenderer> rock = make_shared<MeshRenderer>("Rock");
+	rock->Mesh(mScene->AssetManager()->LoadMesh("Assets/rock_mesh/rock.fbx"));
+	rock->Material(rockMat);
+	rock->LocalPosition(0, mTerrain->Height(0) + 20, 0);
+	rock->LocalScale(3);
+	mScene->AddObject(rock);
+	mObjects.push_back(rock.get());
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);

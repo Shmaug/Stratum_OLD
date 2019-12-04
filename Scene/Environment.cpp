@@ -184,7 +184,7 @@ Environment::Environment(Scene* scene) :
 	shared_ptr<Light> sun = make_shared<Light>("Sun");
 	mScene->AddObject(sun);
 	sun->CastShadows(true);
-	sun->ShadowDistance(1024);
+	sun->ShadowDistance(4096);
 	sun->Color(float3(1, .99f, .95f));
 	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	sun->Type(Sun);
@@ -193,7 +193,7 @@ Environment::Environment(Scene* scene) :
 	shared_ptr<Light> moon = make_shared<Light>("Moon");
 	mScene->AddObject(moon);
 	moon->CastShadows(true);
-	sun->ShadowDistance(1024);
+	sun->ShadowDistance(4096);
 	moon->Color(float3(1));
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	moon->Type(Sun);
