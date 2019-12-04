@@ -71,9 +71,9 @@ Instance::Instance(bool supportDirectDisplay, bool useGLFW)
 
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "VkCAVE";
+	appInfo.pApplicationName = "Stratum";
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "Engine";
+	appInfo.pEngineName = "Stratum";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_1;
 
@@ -175,7 +175,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 		if (it.mDirectDisplay >= 0)
 			w = new Window(this, physicalDevice, it.mDirectDisplay);
 		else
-			w = new Window(this, "VkCave " + to_string(mWindows.size()), windowInput, it.mWindowPosition);
+			w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition);
 		
 		if (!mDevices[deviceIndex]) {
 			uint32_t gq, pq;

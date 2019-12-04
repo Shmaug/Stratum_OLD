@@ -9,8 +9,8 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 8192
-#define SHADOW_RESOLUTION 2048
+#define SHADOW_ATLAS_RESOLUTION 4096
+#define SHADOW_RESOLUTION 1024
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
