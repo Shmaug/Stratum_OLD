@@ -9,13 +9,13 @@ using namespace std;
 Environment::Environment(Scene* scene) : 
 	mTimeOfDay(.25f),
 	mScene(scene), mSkybox(nullptr),
-	mIncomingLight(float4(2.5f)),
-	mRayleighScatterCoef(2.3f),
+	mIncomingLight(float4(2)),
+	mRayleighScatterCoef(2),
 	mRayleighExtinctionCoef(.5f),
-	mMieScatterCoef(1.5f),
-	mMieExtinctionCoef(.7f),
+	mMieScatterCoef(2),
+	mMieExtinctionCoef(2),
 	mMieG(0.76f),
-	mDistanceScale(150),
+	mDistanceScale(50),
 	mSunIntensity(.1f),
 	mAtmosphereHeight(80000.0f),
 	mPlanetRadius(6371000.0f),
@@ -264,15 +264,15 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		safe_delete(l->mLightShaftLUT);
 
 	if (!l->mInscatterLUT) {
-		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 32, 32, 128, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mOutscatterLUT) {
-		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 16, 16, 128, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 32, 32, 128, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mLightShaftLUT){
-		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth()/2, camera->FramebufferHeight()/2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth() / 2, camera->FramebufferHeight() / 2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 
@@ -323,7 +323,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
 	commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
-	vkCmdDispatch(*commandBuffer, 2, 2, 1);
+	vkCmdDispatch(*commandBuffer, l->mInscatterLUT->Width() / 8, l->mInscatterLUT->Width() / 8, 1);
 	#pragma endregion
 	
 	#pragma region Precompute light shafts
@@ -346,7 +346,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(shaft, "_BottomRightCorner", &r3);
 
 	commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
-	vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight()/2 + 7) / 8, 1);
+	vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
 	#pragma endregion
 	
 	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
