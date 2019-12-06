@@ -16,8 +16,8 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture3D<float4> SkyboxLUT : register(t3);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture3D<float2> SkyboxLUT2 : register(t3);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture3D<float3> SkyboxLUTR : register(t3);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture3D<float3> SkyboxLUTM : register(t3);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MoonTexture : register(t4);
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT : register(t5);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] TextureCube<float4> StarTexture : register(t6);
@@ -103,23 +103,13 @@ void fsmain(
 	float3 rayStart = Camera.Position;
 	float3 ray = normalize(viewRay);
 
-	float3 realRay = ray;
-	float fadeOut = 1;
-	if (ray.y < 0 && ray.y > -.075) {
-		fadeOut = 1 + ray.y / .075;
-		ray.y = -ray.y;
-	}
-
 	float3 planetCenter = float3(0, -_PlanetRadius, 0);
-
-	float4 scatterR = 0;
-	float4 scatterM = 0;
 
 	float rp = length(rayStart - planetCenter);
 	float height = max(0, rp - _PlanetRadius);
 	float3 normal = (rayStart - planetCenter) / rp;
 
-	float viewZenith = dot(normal, ray);
+	float viewZenith = max(-.075, dot(normal, ray));
 	float sunZenith = dot(normal, _SunDir);
 
 	float3 coords = float3(height / _AtmosphereHeight, viewZenith * 0.5 + 0.5, sunZenith * 0.5 + 0.5);
@@ -133,31 +123,28 @@ void fsmain(
 	coords.z = 0.5 * ((atan(max(sunZenith, -0.1975) * tan(1.26 * 1.1)) / 1.1) + (1 - 0.26));
 
 	coords = saturate(coords);
-	scatterR = SkyboxLUT.SampleLevel(Sampler, coords, 0);
-	scatterM.x = scatterR.w;
-	scatterM.yz = SkyboxLUT2.SampleLevel(Sampler, coords, 0).xy;
+	float3 scatterR = SkyboxLUTR.SampleLevel(Sampler, coords, 0);
+	float3 scatterM = SkyboxLUTM.SampleLevel(Sampler, coords, 0);
 
-	float3 m = scatterM.xyz;
+	float3 m = scatterM;
 
 	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, _SunDir));
 	float3 lightInscatter = (scatterR * _ScatteringR + scatterM * _ScatteringM) * _IncomingLight;
 
-
-	ray = realRay;
-	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
-
+	// light shafts
 	float shadow = LightShaftLUT.SampleLevel(Sampler, screenPos.xy / screenPos.w, 0);
 	float shadow4 = shadow*shadow;
 	shadow4 *= shadow4;
-	shadow = (shadow4 + shadow) / 2;
-	lightInscatter *= max(0.1, shadow);
+	lightInscatter *= shadow * .2 + shadow4 * .8;
 	
-	color = float4(lightInscatter * fadeOut, 1);
+	// sun and moon
+	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
+	RenderMoon(lightInscatter, ray);
 
-	RenderMoon(color.rgb, ray);
-
+	// stars
 	float3 star = StarTexture.SampleLevel(Sampler, rotate(_StarRotation, ray), .25);
-	color.rgb += star * (1 - saturate(_StarFade * dot(color, color)));
+	lightInscatter += star * (1 - saturate(_StarFade * dot(lightInscatter, lightInscatter)));
 
+	color = float4(lightInscatter, 1);
 	depthNormal = float4(0, 0, 0, 1);
 }

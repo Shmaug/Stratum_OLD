@@ -11,11 +11,11 @@
 
 #include "include/shadercompat.h"
 
-[[vk::binding(0, 0)]] RWTexture3D<float4> _SkyboxLUT : register(u0);
-[[vk::binding(1, 0)]] RWTexture3D<float2> _SkyboxLUT2 : register(u1);
+[[vk::binding(0, 0)]] RWTexture3D<float3> SkyboxLUTR : register(u0);
+[[vk::binding(1, 0)]] RWTexture3D<float3> SkyboxLUTM : register(u1);
 
-[[vk::binding(2, 0)]] RWTexture3D<float4> _InscatteringLUT : register(u2);
-[[vk::binding(3, 0)]] RWTexture3D<float4> _ExtinctionLUT : register(u3);
+[[vk::binding(2, 0)]] RWTexture3D<float3> _InscatteringLUT : register(u2);
+[[vk::binding(3, 0)]] RWTexture3D<float3> _ExtinctionLUT : register(u3);
 
 [[vk::binding(4, 0)]] RWTexture2D<float> _LightShaftLUT : register(u4);
 
@@ -215,7 +215,7 @@ float4 IntegrateInscattering(float3 rayStart, float3 rayDir, float rayLength, fl
 [numthreads(4, 4, 4)]
 void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 	float w, h, d;
-	_SkyboxLUT.GetDimensions(w, h, d);
+	SkyboxLUTR.GetDimensions(w, h, d);
 	float3 coords = float3(id.x / (w - 1), id.y / (h - 1), id.z / (d - 1));
 	
 	float height = coords.x * coords.x * _AtmosphereHeight;
@@ -248,8 +248,8 @@ void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 	float3 mie;
 	IntegrateInscattering(rayStart, rayDir, rayLength, planetCenter, lightDir, rayleigh, mie);
 
-	_SkyboxLUT[id.xyz] = float4(rayleigh, mie.x);
-	_SkyboxLUT2[id.xyz] = mie.yz;
+	SkyboxLUTR[id.xyz] = rayleigh;
+	SkyboxLUTM[id.xyz] = mie;
 }
 
 [numthreads(8, 8, 1)]
@@ -285,8 +285,8 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 	GetAtmosphereDensity(0, planetCenter, lightDir, prevLocalDensity, densityPA);
 	ComputeLocalInscattering(prevLocalDensity, densityPA, densityCP, prevLocalInscatterR, prevLocalInscatterM);
 
-	_InscatteringLUT[coords] = float4(0, 0, 0, 1);
-	_ExtinctionLUT[coords] = float4(1, 1, 1, 1);
+	_InscatteringLUT[coords] = 0;
+	_ExtinctionLUT[coords] = 1;
 
 	// P - current integration point
 	// C - camera position
@@ -313,8 +313,8 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 		float3 lightInscatter = (currentScatterR * _ScatteringR + currentScatterM * _ScatteringM) * _IncomingLight.xyz;
 		float3 lightExtinction = exp(-(densityCP.x * _ExtinctionR + densityCP.y * _ExtinctionM));
 
-		_InscatteringLUT[coords] = float4(lightInscatter, 1);
-		_ExtinctionLUT[coords] = float4(lightExtinction, 1);
+		_InscatteringLUT[coords] = lightInscatter;
+		_ExtinctionLUT[coords] = lightExtinction;
 	}
 }
 
@@ -433,7 +433,7 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 
 	float maxDepth = DepthTexture.Gather(LinearClampSampler, uv) / 4;
 	
-	const uint SampleCount = 1024;
+	const uint SampleCount = 128;
 
 	float attenuation = 0;
 	for (uint i = 0; i < SampleCount; i++) {

@@ -62,7 +62,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4), mPerspectiveSize(0),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(0),
+	mRenderPriority(100),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
@@ -86,7 +86,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4), mPerspectiveSize(0),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(0),
+	mRenderPriority(100),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 
 	mTargetWindow->mTargetCamera = this;
@@ -113,7 +113,7 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4), mPerspectiveSize(0),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(0),
+	mRenderPriority(100),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
 	CreateDescriptorSet();
 }

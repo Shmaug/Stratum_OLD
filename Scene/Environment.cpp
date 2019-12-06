@@ -61,13 +61,13 @@ Environment::Environment(Scene* scene) :
 		DevLUT dlut = {};
 
 		dlut.mParticleDensityLUT = new Texture("Particle Density LUT", device, 1024, 1024, 1, VK_FORMAT_R32G32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
-		dlut.mSkyboxLUT = new Texture("Skybox LUT", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		dlut.mSkyboxLUT2 = new Texture("Skybox LUT 2", commandBuffer->Device(), 32, 128, 32, VK_FORMAT_R32G32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		dlut.mSkyboxLUTR = new Texture("Skybox LUT R", commandBuffer->Device(), 64, 256, 64, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		dlut.mSkyboxLUTM = new Texture("Skybox LUT M", commandBuffer->Device(), 64, 256, 64, VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
 		// compute particle density LUT
 		dlut.mParticleDensityLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
-		dlut.mSkyboxLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
-		dlut.mSkyboxLUT2->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
+		dlut.mSkyboxLUTR->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
+		dlut.mSkyboxLUTM->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
 
 		ComputeShader* particleDensity = mShader->GetCompute(commandBuffer->Device(), "ParticleDensityLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipeline);
@@ -88,8 +88,8 @@ Environment::Environment(Scene* scene) :
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skybox->mPipeline);
 
 		DescriptorSet* ds2 = new DescriptorSet("Scatter LUT", device, skybox->mDescriptorSetLayouts[0]);
-		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUT, skybox->mDescriptorBindings.at("_SkyboxLUT").second.binding);
-		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUT2, skybox->mDescriptorBindings.at("_SkyboxLUT2").second.binding);
+		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUTR, skybox->mDescriptorBindings.at("SkyboxLUTR").second.binding);
+		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUTM, skybox->mDescriptorBindings.at("SkyboxLUTM").second.binding);
 		ds2->CreateSampledTextureDescriptor(dlut.mParticleDensityLUT, skybox->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 		vds = *ds2;
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skybox->mPipelineLayout, 0, 1, &vds, 0, nullptr);
@@ -104,12 +104,12 @@ Environment::Environment(Scene* scene) :
 		commandBuffer->PushConstant(skybox, "_IncomingLight", &mIncomingLight);
 		commandBuffer->PushConstant(skybox, "_MieG", &mMieG);
 		commandBuffer->PushConstant(skybox, "_SunIntensity", &mSunIntensity);
-		vkCmdDispatch(*commandBuffer, 8, 32, 8);
+		vkCmdDispatch(*commandBuffer, 16, 64, 16);
 
 		mDeviceLUTs.emplace(device, dlut);
 
-		dlut.mSkyboxLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
-		dlut.mSkyboxLUT2->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		dlut.mSkyboxLUTR->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		dlut.mSkyboxLUTM->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 		device->Execute(commandBuffer, false)->Wait();
 
@@ -213,8 +213,8 @@ Environment::~Environment() {
 	}
 	for (auto t : mDeviceLUTs) {
 		safe_delete(t.second.mParticleDensityLUT);
-		safe_delete(t.second.mSkyboxLUT);
-		safe_delete(t.second.mSkyboxLUT2);
+		safe_delete(t.second.mSkyboxLUTR);
+		safe_delete(t.second.mSkyboxLUTM);
 	}
 	mScene->RemoveObject(mSkybox);
 }
@@ -354,8 +354,8 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
-	mSkyboxMaterial->SetParameter("SkyboxLUT", dlut->mSkyboxLUT);
-	mSkyboxMaterial->SetParameter("SkyboxLUT2", dlut->mSkyboxLUT2);
+	mSkyboxMaterial->SetParameter("SkyboxLUTR", dlut->mSkyboxLUTR);
+	mSkyboxMaterial->SetParameter("SkyboxLUTM", dlut->mSkyboxLUTM);
 	mSkyboxMaterial->SetParameter("LightShaftLUT", l->mLightShaftLUT);
 	mSkyboxMaterial->SetParameter("MoonTexture", mMoonTexture);
 	mSkyboxMaterial->SetParameter("StarTexture", mStarTexture);
