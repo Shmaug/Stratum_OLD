@@ -70,7 +70,7 @@ private:
 		PROFILER_BEGIN("Sort Cameras");
 		// sort cameras so that RenderDepth of 0 is last
 		sort(mScene->mCameras.begin(), mScene->mCameras.end(), [](const auto& a, const auto& b) {
-			return a->RenderPriority() < b->RenderPriority();
+			return a->RenderPriority() > b->RenderPriority();
 		});
 		PROFILER_END;
 
@@ -89,8 +89,8 @@ private:
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras()) {
-			if (!camera->EnabledHierarchy()) continue;
-			mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Main);
+			if (camera->EnabledHierarchy())
+				mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Main);
 		}
 		PROFILER_END;
 

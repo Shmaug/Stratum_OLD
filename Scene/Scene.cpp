@@ -142,6 +142,9 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	Camera* mainCamera = nullptr;
+	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
+		return a->RenderPriority() > b->RenderPriority();
+	});
 	for (Camera* c : mCameras)
 		if (c->EnabledHierarchy()) {
 			mainCamera = c;
@@ -235,7 +238,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 						float3 mn = 1e20f;
 						
 						for (uint32_t j = 0; j < 4; j++) {
-							corners[j] = rays[j].mOrigin + rays[j].mDirection * z0;
+							corners[j]   = rays[j].mOrigin + rays[j].mDirection * z0;
 							corners[2*j] = rays[j].mOrigin + rays[j].mDirection * z1;
 							center += corners[j] + corners[2 * j];
 							mx = max(mx, max(corners[j], corners[2*j]));
@@ -406,6 +409,29 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 
 	if (mDrawGizmos && (pass & Main)) {
 		PROFILER_BEGIN("Draw Gizmos");
+		for (Camera* c : data.mShadowCameras)
+			if (camera != c) {
+				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
+				float3 f1 = c->ClipToWorld(float3(-1, 1, 0));
+				float3 f2 = c->ClipToWorld(float3(1, -1, 0));
+				float3 f3 = c->ClipToWorld(float3(1, 1, 0));
+				float3 f4 = c->ClipToWorld(float3(-1, -1, 1));
+				float3 f5 = c->ClipToWorld(float3(-1, 1, 1));
+				float3 f6 = c->ClipToWorld(float3(1, -1, 1));
+				float3 f7 = c->ClipToWorld(float3(1, 1, 1));
+				mGizmos->DrawLine(f0, f1, 1);
+				mGizmos->DrawLine(f0, f2, 1);
+				mGizmos->DrawLine(f3, f1, 1);
+				mGizmos->DrawLine(f3, f2, 1);
+				mGizmos->DrawLine(f4, f5, 1);
+				mGizmos->DrawLine(f4, f6, 1);
+				mGizmos->DrawLine(f7, f5, 1);
+				mGizmos->DrawLine(f7, f6, 1);
+				mGizmos->DrawLine(f0, f4, 1);
+				mGizmos->DrawLine(f1, f5, 1);
+				mGizmos->DrawLine(f2, f6, 1);
+				mGizmos->DrawLine(f3, f7, 1);
+			}
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);

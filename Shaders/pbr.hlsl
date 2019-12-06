@@ -37,8 +37,8 @@
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTexture			: register(t6); // rgba -> rgh, hgt, ao, 1-metallic
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture		: register(t8);
 
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float4> InscatteringLUT		: register(t9);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float4> ExtinctionLUT		: register(t10);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t9);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t10);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT		: register(t11);
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 8, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);

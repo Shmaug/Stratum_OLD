@@ -30,6 +30,7 @@ private:
 
 	Object* mPlayer;
 	Camera* mMainCamera;
+	Camera* mDebugCamera;
 
 	float3 mPlayerVelocity;
 	bool mFlying;
@@ -125,6 +126,17 @@ bool TerrainSystem::Init(Scene* scene) {
 	mPlayer->AddChild(mMainCamera);
 	mObjects.push_back(mMainCamera);
 
+	shared_ptr<Camera> camera2 = make_shared<Camera>("Debug Camera", mScene->Instance()->GetWindow(0));
+	mScene->AddObject(camera2);
+	camera2->Near(.01f);
+	camera2->Far(8192.f);
+	camera2->FieldOfView(radians(65.f));
+	camera2->LocalPosition(0, 1.6f, 0);
+	camera2->mEnabled = false;
+	camera2->RenderPriority(0); // render this camera last
+	mDebugCamera = camera2.get();
+	mObjects.push_back(mDebugCamera);
+
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
 	mScene->AddObject(fpsText);
 	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36));
@@ -154,32 +166,14 @@ bool TerrainSystem::Init(Scene* scene) {
 
 void TerrainSystem::Update() {
 	float tod = mScene->Environment()->TimeOfDay();
-	tod += mScene->Instance()->DeltaTime() * .0011111f; // 15min days
-	if (mInput->KeyDown(GLFW_KEY_F3)) {
-		tod += mScene->Instance()->DeltaTime() * .1f; // zoooom
+	tod += mScene->Instance()->DeltaTime() * .000555555555f; // 30min days
+	if (mInput->KeyDown(GLFW_KEY_T)) {
+		tod += mScene->Instance()->DeltaTime() * .075f; // zoooom
 		if (tod > 1) tod -= 1;
 	}
 	mScene->Environment()->TimeOfDay(tod);
 
-	if (mInput->KeyDownFirst(GLFW_KEY_F1))
-		mScene->DrawGizmos(!mScene->DrawGizmos());
-
-	if (mMainCamera->Orthographic()) {
-		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
-		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
-	} else
-		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
-
-	if (mInput->KeyDownFirst(GLFW_KEY_O))
-		mMainCamera->Orthographic(!mMainCamera->Orthographic());
-	if (mInput->KeyDownFirst(GLFW_KEY_V))
-		mFlying = !mFlying;
-
-	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
-		mInput->LockMouse(!mInput->LockMouse());
-
-	mMainCamera->FieldOfView(clamp(mMainCamera->FieldOfView() - mInput->ScrollDelta().y * .01f, radians(10.f), radians(110.f)));
-
+	#pragma region player movement
 	#pragma region rotate camera
 	if (mInput->LockMouse()) {
 		float3 md = float3(mInput->CursorDelta(), 0);
@@ -225,12 +219,36 @@ void TerrainSystem::Update() {
 
 	}
 	mPlayer->LocalPosition(p);
+	#pragma endregion
+
+	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
+		mInput->LockMouse(!mInput->LockMouse());
+	if (mInput->KeyDownFirst(GLFW_KEY_F1))
+		mScene->DrawGizmos(!mScene->DrawGizmos());
+	if (mInput->KeyDownFirst(GLFW_KEY_F2))
+		mFlying = !mFlying;
+	if (mInput->KeyDownFirst(GLFW_KEY_F3)) {
+		mDebugCamera->LocalPosition(mMainCamera->WorldPosition());
+		mDebugCamera->LocalRotation(mMainCamera->WorldRotation());
+	}
+	if (mInput->KeyDownFirst(GLFW_KEY_F5))
+		mDebugCamera->mEnabled = !mDebugCamera->mEnabled;
+
+	if (mInput->KeyDownFirst(GLFW_KEY_F9))
+		mMainCamera->Orthographic(!mMainCamera->Orthographic());
 
 	mTerrain->UpdateLOD(mMainCamera);
 
+
+	if (mMainCamera->Orthographic()) {
+		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
+		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
+	} else
+		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
 	mFpsText->LocalRotation(mMainCamera->WorldRotation());
 	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.001f)));
 
+	// count fps
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
 	if (mFrameTimeAccum > 1.f) {

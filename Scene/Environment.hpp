@@ -45,8 +45,8 @@ private:
 
 	struct DevLUT {
 		Texture* mParticleDensityLUT;
-		Texture* mSkyboxLUT;
-		Texture* mSkyboxLUT2;
+		Texture* mSkyboxLUTR;
+		Texture* mSkyboxLUTM;
 	};
 	struct CamLUT {
 		Texture* mInscatterLUT;
