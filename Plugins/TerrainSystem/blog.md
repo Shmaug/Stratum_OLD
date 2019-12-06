@@ -45,6 +45,7 @@ Additionally, there are 3 lookup tables generated at the start of each frame:
 The last lookup table (and most expensive to compute) roughly approximates volumetric light shafts by sampling the sun's shadow maps for each pixel (this is done at half-resolution)
 along the view ray and accumulating the total shadow attenuation. This is simply multiplied into the final inscattering value for each pixel.
 ![Scattering](https://i.imgur.com/6VPDNMi.png)
+![Sky](https://i.imgur.com/vxACLtK.png)
 ![Light Shafts](https://i.imgur.com/Agn5XNF.png)
 
 ## Day/Night Cycle
