@@ -256,11 +256,11 @@ void SkyboxLUT(uint3 id : SV_DispatchThreadID) {
 void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 	uint w, h, d;
 	_InscatteringLUT.GetDimensions(w, h, d);
-	float2 uv = float2(id.x / float(w - 1), id.y / float(h - 1));
 
 	uint3 coords = id;
 	uint sampleCount = d;
 
+	float2 uv = float2(id.x / float(w - 1), id.y / float(h - 1));
 	float3 v1 = lerp(_BottomLeftCorner.xyz, _BottomRightCorner.xyz, uv.x);
 	float3 v2 = lerp(_TopLeftCorner.xyz, _TopRightCorner.xyz, uv.x);
 
@@ -299,7 +299,7 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 
 		float3 localInscatterR, localInscatterM;
 		ComputeLocalInscattering(localDensity, densityPA, densityCP, localInscatterR, localInscatterM);
-
+		
 		scatterR += (localInscatterR + prevLocalInscatterR) * (stepSize / 2.0);
 		scatterM += (localInscatterM + prevLocalInscatterM) * (stepSize / 2.0);
 
@@ -425,16 +425,15 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 	_LightShaftLUT.GetDimensions(w, h);
 	float2 uv = float2(id.x / float(w - 1), id.y / float(h - 1));
 
+	uv.y = 1 - uv.y;
+
 	float3 v1 = lerp(_BottomLeftCorner.xyz, _BottomRightCorner.xyz, uv.x);
 	float3 v2 = lerp(_TopLeftCorner.xyz, _TopRightCorner.xyz, uv.x);
+	float3 rayEnd = lerp(v1, v2, 1 - uv.y);
 
-	float2 screenUV = uv;
-	screenUV.y = 1 - screenUV.y;
-	float maxDepth = DepthTexture.Gather(LinearClampSampler, screenUV) / 4;
-
-	float3 rayEnd = lerp(v1, v2, uv.y);
+	float maxDepth = DepthTexture.Gather(LinearClampSampler, uv) / 4;
 	
-	const uint SampleCount = 256;
+	const uint SampleCount = 1024;
 
 	float attenuation = 0;
 	for (uint i = 0; i < SampleCount; i++) {

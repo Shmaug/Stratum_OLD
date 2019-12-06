@@ -187,6 +187,14 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		float3 cp = mainCamera->WorldPosition();
 		float3 fwd = mainCamera->WorldRotation().forward();
 
+		Ray rays[4] {
+			mainCamera->ScreenToWorldRay(float2(0, 0)),
+			mainCamera->ScreenToWorldRay(float2(1, 0)),
+			mainCamera->ScreenToWorldRay(float2(0, 1)),
+			mainCamera->ScreenToWorldRay(float2(1, 1))
+		};
+		float3 corners[8];
+
 		for (Light* l : mLights) {
 			if (!l->EnabledHierarchy()) continue;
 			mActiveLights.push_back(l);
@@ -218,14 +226,30 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
 					lights[li].ShadowIndex = (int32_t)si;
 					
-					float mn = mainCamera->Near();
+					float z0 = mainCamera->Near();
 					for (uint32_t ci = 0; ci < 4; ci++) {
-						float mx = cascadeSplits[ci];
-						float sz = 4*ct * mx;
-						float d = max(sz*2, 300);
-						AddShadowCamera(&data, si, &shadows[si], true, sz, cp + fwd * (mx + mn)*.5f, l->WorldRotation(), -d, d);
+						float z1 = cascadeSplits[ci];
+
+						float3 center = 0;
+						float3 mx = 0;
+						float3 mn = 1e20f;
+						
+						for (uint32_t j = 0; j < 4; j++) {
+							corners[j] = rays[j].mOrigin + rays[j].mDirection * z0;
+							corners[2*j] = rays[j].mOrigin + rays[j].mDirection * z1;
+							center += corners[j] + corners[2 * j];
+							mx = max(mx, max(corners[j], corners[2*j]));
+							mn = min(mn, min(corners[j], corners[2*j]));
+						}
+
+						float3 ext = mx - mn;
+						float sx = dot(ext, l->WorldRotation() * float3(1, 0, 0));
+						float sy = dot(ext, l->WorldRotation() * float3(0, 1, 0));
+						float sz = 2 * max(sx, sy);
+
+						AddShadowCamera(&data, si, &shadows[si], true, sz, center / 8, l->WorldRotation(), -3*sz, sz);
 						si++;
-						mn = mx;
+						z0 = z1;
 					}
 
 					break;

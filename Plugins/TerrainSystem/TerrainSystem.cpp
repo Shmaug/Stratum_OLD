@@ -118,7 +118,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
 	camera->Near(.01f);
-	camera->Far(2048.f);
+	camera->Far(8192.f);
 	camera->FieldOfView(radians(65.f));
 	camera->LocalPosition(0, 1.6f, 0);
 	mMainCamera = camera.get();
