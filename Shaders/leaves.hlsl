@@ -3,26 +3,20 @@
 
 #pragma multi_compile DEPTH_PASS
 
-#pragma multi_compile TWO_SIDED
-#pragma multi_compile COLOR_MAP
-#pragma multi_compile NORMAL_MAP
-#pragma multi_compile MASK_MAP
-#pragma multi_compile EMISSION
-
 #pragma render_queue 1000
 
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP)
-#define NEED_TEXCOORD
-#endif
-#ifdef NORMAL_MAP
-#define NEED_TANGENT
-#endif
-
 #include "include/shadercompat.h"
+
+struct TreeVertex {
+	float3 position;
+	float3 normal;
+	float4 tangent;
+	float2 uv;
+};
 
 // per-object
 [[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<ObjectBuffer> Instances : register(t0);
@@ -33,9 +27,7 @@
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
 [[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture			: register(t4);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture		: register(t5);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTexture			: register(t6); // rgba -> rgh, hgt, ao, 1-metallic
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture		: register(t8);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] StructuredBuffer<TreeVertex> Tree      : register(t5);
 
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t9);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t10);
@@ -45,16 +37,6 @@
 [[vk::binding(BINDING_START + 9, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	float4 Color;
-	float Metallic;
-	float Roughness;
-#ifdef NORMAL_MAP
-	float BumpStrength;
-#endif
-#ifdef EMISSION
-	float3 Emission;
-#endif
-
 	float3 AmbientLight;
 	uint LightCount;
 	float2 ShadowTexelSize;
@@ -73,27 +55,18 @@ struct v2f {
 #ifndef DEPTH_PASS
 	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
-	#ifdef NEED_TANGENT
-	float3 tangent : TANGENT;
-	#endif
-	#ifdef NEED_TEXCOORD
 	float2 texcoord : TEXCOORD2;
-	#endif
 #endif
 };
 
 v2f vsmain(
-	[[vk::location(0)]] float3 vertex : POSITION,
-	[[vk::location(1)]] float3 normal : NORMAL,
-	#ifdef NEED_TANGENT
-	[[vk::location(2)]] float4 tangent : TANGENT,
-	#endif
-	#ifdef NEED_TEXCOORD
-	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
-	#endif
+	uint vertexID : SV_VertexID,
 	uint instance : SV_InstanceID ) {
 	v2f o;
 	
+	float3 vertex = Tree[vertexID].position;
+	float3 normal = Tree[vertexID].normal;
+
 	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
 	float4 worldPos = mul(mul(ct, Instances[instance].ObjectToWorld), float4(vertex, 1.0));
 
@@ -103,14 +76,7 @@ v2f vsmain(
 	#ifndef DEPTH_PASS
 	o.screenPos = ComputeScreenPos(o.position);
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
-	
-	#ifdef NEED_TANGENT
-	o.tangent = mul(tangent, Instances[instance].WorldToObject).xyz * tangent.w;
-	#endif
-	
-	#ifdef NEED_TEXCOORD
-	o.texcoord = texcoord;
-	#endif
+	o.texcoord = 0;
 	#endif
 
 	return o;
@@ -126,40 +92,19 @@ void fsmain(v2f i,
 	out float4 depthNormal : SV_Target1) {
 
 	float3 view = ComputeView(i.worldPos.xyz, i.screenPos);
+	float4 col = MainTexture.Sample(Sampler, i.texcoord);
 
-	#ifdef COLOR_MAP
-	float4 col = MainTexture.Sample(Sampler, i.texcoord) * Color;
-	#else
-	float4 col = Color;
-	#endif
+	clip(col.a - .9);
 
 	float3 normal = normalize(i.normal);
-	#ifdef TWO_SIDED
 	if (dot(normal, view) < 0) normal = -normal;
-	#endif
-
-	#ifdef NORMAL_MAP
-	float4 bump = NormalTexture.Sample(Sampler, i.texcoord);
-	bump.xyz = bump.xyz * 2 - 1;
-	float3 tangent = normalize(i.tangent);
-	float3 bitangent = normalize(cross(i.normal, i.tangent));
-	bump.xy *= BumpStrength;
-	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
-	#endif
 
 	MaterialInfo material;
-	#ifdef MASK_MAP
-	float4 mask = MaskTexture.Sample(Sampler, i.texcoord);
-	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, Metallic*(1-mask.a), material.specular, material.oneMinusReflectivity);
-	material.perceptualRoughness = Roughness * mask.r * .99;
-	material.occlusion = mask.a;
-	#endif
+	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, 0, material.specular, material.oneMinusReflectivity);
+	material.perceptualRoughness = .5;
+	material.occlusion = 1;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
-	#ifdef EMISSION
-	material.emission = Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;
-	#else
 	material.emission = 0;
-	#endif
 	
 	float3 eval = EvaluateLighting(material, i.worldPos.xyz, normal, view, i.worldPos.w);
 	ApplyScattering(eval, i.screenPos.xy / i.screenPos.w, i.worldPos.w);
