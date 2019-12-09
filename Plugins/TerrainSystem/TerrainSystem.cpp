@@ -30,7 +30,6 @@ private:
 
 	Object* mPlayer;
 	Camera* mMainCamera;
-	Camera* mDebugCamera;
 
 	float3 mPlayerVelocity;
 	bool mFlying;
@@ -66,6 +65,7 @@ bool TerrainSystem::Init(Scene* scene) {
 
 	shared_ptr<Material> mat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
 	shared_ptr<Material> rockMat = make_shared<Material>("Rock", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
+	shared_ptr<Material> treeMat = make_shared<Material>("Tree", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
 
 	mat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
 	mat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
@@ -83,6 +83,19 @@ bool TerrainSystem::Init(Scene* scene) {
 	mat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_nrm.jpg", false));
 	mat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_msk.png", false));
 
+	Mesh* treeMesh = mScene->AssetManager()->LoadMesh("Assets/tree/oaktree.fbx", .05f);
+
+	treeMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_col.png"));
+	treeMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_nrm.png"));
+	treeMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_msk.png"));
+	treeMat->SetParameter("Color", float4(1));
+	treeMat->SetParameter("Roughness", 1.f);
+	treeMat->SetParameter("Metallic", 1.f);
+	treeMat->SetParameter("BumpStrength", 1.f);
+	treeMat->EnableKeyword("COLOR_MAP");
+	treeMat->EnableKeyword("NORMAL_MAP");
+	treeMat->EnableKeyword("MASK_MAP");
+	treeMat->PassMask((PassType)(Main | Depth));
 
 	rockMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_col.png"));
 	rockMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_nrm.png"));
@@ -96,11 +109,12 @@ bool TerrainSystem::Init(Scene* scene) {
 	rockMat->EnableKeyword("MASK_MAP");
 	rockMat->PassMask((PassType)(Main | Depth));
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 10000.f, 1200.f);
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 8192.f, 800.f);
 	mScene->AddObject(terrain);
 	terrain->Material(mat);
 	mTerrain = terrain.get();
 	mObjects.push_back(mTerrain);
+	mTerrain->Initialize();
 
 	shared_ptr<Object> player = make_shared<Object>("Player");
 	mScene->AddObject(player);
@@ -109,12 +123,18 @@ bool TerrainSystem::Init(Scene* scene) {
 	mPlayer->LocalPosition(0, mTerrain->Height(0), 0);
 
 	shared_ptr<MeshRenderer> rock = make_shared<MeshRenderer>("Rock");
-	rock->Mesh(mScene->AssetManager()->LoadMesh("Assets/rock_mesh/rock.fbx"));
+	rock->Mesh(mScene->AssetManager()->LoadMesh("Assets/rock_mesh/rock.fbx", .2f));
 	rock->Material(rockMat);
-	rock->LocalPosition(0, mTerrain->Height(0) + 20, 0);
-	rock->LocalScale(3);
+	rock->LocalPosition(0, mTerrain->Height(float3(10, 0, -10)) - .25f, -10);
 	mScene->AddObject(rock);
 	mObjects.push_back(rock.get());
+
+	shared_ptr<MeshRenderer> tree = make_shared<MeshRenderer>("Tree");
+	tree->Mesh(treeMesh);
+	tree->Material(treeMat);
+	tree->LocalPosition(10, mTerrain->Height(float3(10, 0, 10)), 10);
+	mScene->AddObject(tree);
+	mObjects.push_back(tree.get());
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
@@ -125,17 +145,6 @@ bool TerrainSystem::Init(Scene* scene) {
 	mMainCamera = camera.get();
 	mPlayer->AddChild(mMainCamera);
 	mObjects.push_back(mMainCamera);
-
-	shared_ptr<Camera> camera2 = make_shared<Camera>("Debug Camera", mScene->Instance()->GetWindow(0));
-	mScene->AddObject(camera2);
-	camera2->Near(.01f);
-	camera2->Far(8192.f);
-	camera2->FieldOfView(radians(65.f));
-	camera2->LocalPosition(0, 1.6f, 0);
-	camera2->mEnabled = false;
-	camera2->RenderPriority(0); // render this camera last
-	mDebugCamera = camera2.get();
-	mObjects.push_back(mDebugCamera);
 
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
 	mScene->AddObject(fpsText);
@@ -227,12 +236,6 @@ void TerrainSystem::Update() {
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	if (mInput->KeyDownFirst(GLFW_KEY_F2))
 		mFlying = !mFlying;
-	if (mInput->KeyDownFirst(GLFW_KEY_F3)) {
-		mDebugCamera->LocalPosition(mMainCamera->WorldPosition());
-		mDebugCamera->LocalRotation(mMainCamera->WorldRotation());
-	}
-	if (mInput->KeyDownFirst(GLFW_KEY_F5))
-		mDebugCamera->mEnabled = !mDebugCamera->mEnabled;
 
 	if (mInput->KeyDownFirst(GLFW_KEY_F9))
 		mMainCamera->Orthographic(!mMainCamera->Orthographic());
@@ -246,7 +249,7 @@ void TerrainSystem::Update() {
 	} else
 		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
 	mFpsText->LocalRotation(mMainCamera->WorldRotation());
-	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.001f)));
+	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.005f)));
 
 	// count fps
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();

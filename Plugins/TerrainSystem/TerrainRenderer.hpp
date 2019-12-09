@@ -23,6 +23,7 @@ public:
 	inline ::Material* Material() const { return mMaterial.get(); }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
+	PLUGIN_EXPORT void Initialize();
 	PLUGIN_EXPORT void UpdateLOD(Camera* camera);
 
 	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
@@ -71,6 +72,11 @@ private:
 	std::unordered_map<Device*, Buffer*> mIndexBuffers;
 	std::vector<uint32_t> mIndexOffsets;
 	std::vector<uint32_t> mIndexCounts;
+
+	Texture* mHeightmap;
+	float* mHeights;
+
+	std::vector<Mesh*> mTreeMeshes;
 
 	QuadNode* mRootNode;
 	std::vector<QuadNode*> mLeafNodes;

@@ -8,6 +8,7 @@
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler PointClampSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_edge filter=nearest
 #pragma static_sampler LinearClampSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_edge filter=linear
+#pragma static_sampler Sampler maxAnisotropy=0 maxLod=0
 
 #include "include/shadercompat.h"
 
@@ -34,6 +35,7 @@
 [[vk::binding(14, 0)]] SamplerComparisonState ShadowSampler : register(s0);
 [[vk::binding(15, 0)]] SamplerState PointClampSampler : register(s1);
 [[vk::binding(16, 0)]] SamplerState LinearClampSampler : register(s2);
+[[vk::binding(17, 0)]] SamplerState Sampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 _DensityScaleHeight;
@@ -433,13 +435,10 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 
 	float maxDepth = DepthTexture.Gather(LinearClampSampler, uv) / 4;
 	
-	const uint SampleCount = 128;
-
 	float attenuation = 0;
-	for (uint i = 0; i < SampleCount; i++) {
-		float depth = i / (float)SampleCount;
-		depth *= maxDepth;
+	for (uint i = 0; i < 32; i++) {
+		float depth = maxDepth * i / 31.0;
 		attenuation += SampleShadow(Lights[0], _CameraPos, rayEnd * depth, depth);
 	}
-	_LightShaftLUT[id.xy] = attenuation / (float)SampleCount;
+	_LightShaftLUT[id.xy] = attenuation / 32.0;
 }

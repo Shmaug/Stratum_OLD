@@ -109,7 +109,7 @@ void fsmain(
 	float height = max(0, rp - _PlanetRadius);
 	float3 normal = (rayStart - planetCenter) / rp;
 
-	float viewZenith = max(-.075, dot(normal, ray));
+	float viewZenith = abs(dot(normal, ray));
 	float sunZenith = dot(normal, _SunDir);
 
 	float3 coords = float3(height / _AtmosphereHeight, viewZenith * 0.5 + 0.5, sunZenith * 0.5 + 0.5);
@@ -132,17 +132,17 @@ void fsmain(
 	float3 lightInscatter = (scatterR * _ScatteringR + scatterM * _ScatteringM) * _IncomingLight;
 
 	// light shafts
-	float shadow = LightShaftLUT.SampleLevel(Sampler, screenPos.xy / screenPos.w, 0);
-	float shadow4 = shadow*shadow;
-	shadow4 *= shadow4;
-	lightInscatter *= shadow * .2 + shadow4 * .8;
+	//float shadow = LightShaftLUT.SampleLevel(Sampler, screenPos.xy / screenPos.w, 0);
+	//float shadow4 = shadow*shadow;
+	//shadow4 *= shadow4;
+	//lightInscatter *= shadow * .2 + shadow4 * .8;
 	
 	// sun and moon
 	lightInscatter += RenderSun(m, dot(ray, _SunDir)) * _SunIntensity;
 	RenderMoon(lightInscatter, ray);
 
 	// stars
-	float3 star = StarTexture.SampleLevel(Sampler, rotate(_StarRotation, ray), .25);
+	float3 star = StarTexture.SampleLevel(Sampler, rotate(_StarRotation, ray), .25).rgb;
 	lightInscatter += star * (1 - saturate(_StarFade * dot(lightInscatter, lightInscatter)));
 
 	color = float4(lightInscatter, 1);

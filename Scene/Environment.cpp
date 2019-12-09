@@ -9,13 +9,13 @@ using namespace std;
 Environment::Environment(Scene* scene) : 
 	mTimeOfDay(.25f),
 	mScene(scene), mSkybox(nullptr),
-	mIncomingLight(float4(2)),
+	mIncomingLight(2.3f),
 	mRayleighScatterCoef(2),
 	mRayleighExtinctionCoef(.5f),
-	mMieScatterCoef(2),
+	mMieScatterCoef(4),
 	mMieExtinctionCoef(2),
 	mMieG(0.76f),
-	mDistanceScale(50),
+	mDistanceScale(100),
 	mSunIntensity(.1f),
 	mAtmosphereHeight(80000.0f),
 	mPlanetRadius(6371000.0f),
@@ -192,8 +192,7 @@ Environment::Environment(Scene* scene) :
 
 	shared_ptr<Light> moon = make_shared<Light>("Moon");
 	mScene->AddObject(moon);
-	moon->CastShadows(true);
-	sun->ShadowDistance(4096);
+	moon->CastShadows(false);
 	moon->Color(float3(1));
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	moon->Type(Sun);
@@ -272,7 +271,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mLightShaftLUT){
-		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth() / 2, camera->FramebufferHeight() / 2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth()/2, camera->FramebufferHeight()/2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 
@@ -325,7 +324,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
 	vkCmdDispatch(*commandBuffer, l->mInscatterLUT->Width() / 8, l->mInscatterLUT->Width() / 8, 1);
 	#pragma endregion
-	
+	/*
 	#pragma region Precompute light shafts
 	ComputeShader* shaft = mShader->GetCompute(commandBuffer->Device(), "LightShaftLUT", {});
 
@@ -348,7 +347,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
 	vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
 	#pragma endregion
-	
+	*/
 	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
@@ -370,5 +369,5 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	mSkyboxMaterial->SetParameter("_ScatteringR", scatterR.xyz);
 	mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
 	mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
-	mSkyboxMaterial->SetParameter("_StarFade", clamp(lightdir.y*10.f, 0.5f, 1.f));
+	mSkyboxMaterial->SetParameter("_StarFade", 100 * clamp(lightdir.y, 0.f, 1.f));
 }

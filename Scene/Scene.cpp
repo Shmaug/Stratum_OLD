@@ -9,8 +9,8 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 4096
-#define SHADOW_RESOLUTION 1024
+#define SHADOW_ATLAS_RESOLUTION 8192
+#define SHADOW_RESOLUTION 2048
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -219,11 +219,10 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				switch (l->Type()) {
 				case Sun: {
 					float4 cascadeSplits = 0;
-					float cn = mainCamera->Near();
 					float cf = min(l->ShadowDistance(), mainCamera->Far());
-					float i_f = 1;
-					for (uint32_t i = 0; i < 4 - 1; i++, i_f += 1.f)
-						cascadeSplits[i] = lerp(cn + (i_f / 4) * (cf - cn), cn * powf(cf / cn, i_f / 4), .9f);
+					cascadeSplits[0] = .02f * cf;
+					cascadeSplits[1] = .11f * cf;
+					cascadeSplits[2] = .50f * cf;
 					cascadeSplits[3] = cf;
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
@@ -236,21 +235,22 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 						float3 center = 0;
 						float3 mx = 0;
 						float3 mn = 1e20f;
+						quaternion r = inverse(l->WorldRotation());
 						
 						for (uint32_t j = 0; j < 4; j++) {
 							corners[j]   = rays[j].mOrigin + rays[j].mDirection * z0;
 							corners[2*j] = rays[j].mOrigin + rays[j].mDirection * z1;
 							center += corners[j] + corners[2 * j];
-							mx = max(mx, max(corners[j], corners[2*j]));
-							mn = min(mn, min(corners[j], corners[2*j]));
+						}
+						for (uint32_t j = 0; j < 8; j++) {
+							corners[j] = r * (corners[j] - center);
+							mx = max(mx, corners[j]);
+							mn = min(mn, corners[j]);
 						}
 
 						float3 ext = mx - mn;
-						float sx = dot(ext, l->WorldRotation() * float3(1, 0, 0));
-						float sy = dot(ext, l->WorldRotation() * float3(0, 1, 0));
-						float sz = 2 * max(sx, sy);
-
-						AddShadowCamera(&data, si, &shadows[si], true, sz, center / 8, l->WorldRotation(), -3*sz, sz);
+						float sz = max(ext.x, ext.y);
+						AddShadowCamera(&data, si, &shadows[si], true, .5f*sz, center / 8, l->WorldRotation(), -2*sz, sz);
 						si++;
 						z0 = z1;
 					}
@@ -409,6 +409,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 
 	if (mDrawGizmos && (pass & Main)) {
 		PROFILER_BEGIN("Draw Gizmos");
+		/*
 		for (Camera* c : data.mShadowCameras)
 			if (camera != c) {
 				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
@@ -432,6 +433,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 				mGizmos->DrawLine(f2, f6, 1);
 				mGizmos->DrawLine(f3, f7, 1);
 			}
+		*/
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);

@@ -60,6 +60,8 @@
 	float2 ShadowTexelSize;
 };
 
+//#define SHOW_CASCADE_SPLITS
+
 #include "include/util.hlsli"
 #include "include/shadow.hlsli"
 #include "include/brdf.hlsli"

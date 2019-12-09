@@ -2,9 +2,10 @@
 #include <Core/CommandBuffer.hpp>
 #include <Scene/Environment.hpp>
 
-#include "TriangleFan.hpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include <ThirdParty/stb_image.h>
 
-#include <Shaders/include/noise.hlsli>
+#include "TriangleFan.hpp"
 
 using namespace std;
 
@@ -89,10 +90,12 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 }
 
 bool TerrainRenderer::QuadNode::ShouldSplit(const float3& camPos, float tanFov) {
-	float3 v = abs(mPosition - camPos);
+	if (mLod < 3) return true;
 
-	float verticesPerPixel = mVertexResolution * length(v) * tanFov;
-	if (mVertexResolution < 2 && verticesPerPixel < .02f) return true;
+	float3 v = abs(mPosition - camPos) - mSize;
+
+	float x = dot(v, v) / (mSize*mSize) * tanFov;
+	if (mVertexResolution < 2 && x < 50) return true;
 
 	QuadNode* l = LeftNeighbor();
 	if (l && l->mChildren && (l->mChildren[1].mChildren || l->mChildren[3].mChildren)) return true;
@@ -175,15 +178,76 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 	return nullptr;
 }
 
-
 TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
- : Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f) {
+	: Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f), mHeights(nullptr) {}
+void TerrainRenderer::Initialize() {
 	mVisible = true;
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
+
+	int x, y, channels;
+	mHeights = stbi_loadf("Assets/heightmap.png", &x, &y, &channels, 1);
+
+	mHeightmap = new Texture("Heightmap", Scene()->Instance(), mHeights, x*y*sizeof(float), x, y, 1,
+		VK_FORMAT_R32_SFLOAT, 1);
+
+	/*
+	uint32_t Resolution = 8192;
+	Shader* shader = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
+	float scale = mSize / Resolution;
+	float offset = -mSize * .5f;
+
+	for (uint32_t i = 0; i < Scene()->Instance()->DeviceCount(); i++) {
+		Device* device = Scene()->Instance()->GetDevice(i);
+		ComputeShader* gen = shader->GetCompute(device, "GenHeight", {});
+
+		auto commandBuffer = device->GetCommandBuffer();
+		mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
+
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gen->mPipeline);
+		DescriptorSet* ds = new DescriptorSet("Terrain DS", device, gen->mDescriptorSetLayouts[0]);
+		ds->CreateStorageTextureDescriptor(mHeightmap, gen->mDescriptorBindings.at("Heightmap").second.binding);
+		
+		VkDescriptorSet vds = *ds;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gen->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		
+		commandBuffer->PushConstant(gen, "Height", &mHeight);
+		commandBuffer->PushConstant(gen, "Scale", &scale);
+		commandBuffer->PushConstant(gen, "Offset", &offset);
+		vkCmdDispatch(*commandBuffer, (Resolution + 7) / 8, (Resolution + 7) / 8, 1);
+
+		Buffer* dst = nullptr;
+		if (i == 0) {
+			mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
+
+			dst = new Buffer("Heightmap", device, sizeof(float)*x*y, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				
+			VkBufferImageCopy rgn = {};
+			rgn.imageExtent = { x, y, 1 };
+			rgn.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			rgn.imageSubresource.layerCount = 1;
+			vkCmdCopyImageToBuffer(*commandBuffer, mHeightmap->Image(device), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *dst, 1, &rgn);
+
+			mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		}else
+			mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		device->Execute(commandBuffer, false)->Wait();
+
+		if (dst) {
+			dst->Map();
+			memcpy(mHeights, dst->MappedData(), sizeof(float) * Resolution * Resolution);
+			delete dst;
+		}
+
+		delete ds;
+	}
+	*/
+
 	mRootNode = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 }
 TerrainRenderer::~TerrainRenderer() {
+	safe_delete_array(mHeights);
+	safe_delete(mHeightmap);
 	safe_delete(mRootNode);
 	for (auto d : mIndexBuffers)
 		safe_delete(d.second);
@@ -192,14 +256,12 @@ TerrainRenderer::~TerrainRenderer() {
 void TerrainRenderer::UpdateLOD(Camera* camera) {
 	// Create node buffer
 	float3 cp = (WorldToObject() * float4(camera->WorldPosition(), 1)).xyz;
-	float tanFov = tan(.5f * camera->FieldOfView()) / (.5f * camera->FramebufferHeight());
+	float tanFov = tan(.5f * camera->FieldOfView());
 	queue<QuadNode*> nodes;
 	nodes.push(mRootNode);
 	while (nodes.size()) {
 		QuadNode* n = nodes.front();
 		nodes.pop();
-
-		if (!camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f))) continue;
 
 		if (n->ShouldSplit(cp, tanFov)) {
 			n->Split();
@@ -229,13 +291,19 @@ void TerrainRenderer::UpdateLOD(Camera* camera) {
 }
 
 float TerrainRenderer::Height(const float3& lp) {
-	float m, l;
-	return SampleTerrain(float2(lp.x, lp.z), m, l) * mHeight;
+	float2 p = (float2(lp.x, lp.z) + mSize * .5f) / mSize;
+	p *= float2(mHeightmap->Width(), mHeightmap->Height());
+	uint2 pi = clamp(uint2((uint32_t)p.x, (uint32_t)p.y), 0, uint2(mHeightmap->Width(), mHeightmap->Height()) - 2);
+	float y0 = mHeights[pi.y * mHeightmap->Width() + pi.x];
+	float y1 = mHeights[pi.y * mHeightmap->Width() + pi.x+1];
+	float y2 = mHeights[(pi.y+1) * mHeightmap->Width() + pi.x];
+	float y3 = mHeights[(pi.y+1) * mHeightmap->Width() + pi.x+1];
+	return mHeight * lerp(lerp(y0, y1, p.x - pi.x), lerp(y2, y3, p.x - pi.x), p.y - pi.y);
 }
 
 bool TerrainRenderer::UpdateTransform(){
     if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(float3(0, 0, 0), float3(mSize, mHeight, mSize) / 2) * ObjectToWorld();
+	mAABB = AABB(float3(0, mHeight * .5f, 0), float3(mSize, mHeight, mSize) * .5f) * ObjectToWorld();
     return true;
 }
 
@@ -248,19 +316,27 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	else mMaterial->DisableKeyword("DEPTH_PASS");
 	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
 
+	mMaterial->SetParameter("Heightmap", mHeightmap);
+
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
 	if (!layout) return;
 
     GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
-	if (!mLeafNodes.size()) return;
+	vector<QuadNode*> leafNodes;
+	for (QuadNode* n : mLeafNodes)
+		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+			leafNodes.push_back(n);
 
-	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", mLeafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	if (!leafNodes.size()) return;
+
+	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
-	for (QuadNode* n : mLeafNodes) {
+	for (QuadNode* n : leafNodes) {
 		*bn = float4(n->mPosition.x, 0, n->mPosition.z, n->mSize);
 		bn++;
 	}
+
 
 	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
@@ -275,6 +351,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	VkDescriptorSet ds = *objds;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
 
+	float sz = mSize * .5f;
+
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
 	float4x4 o2w = ObjectToWorld();
@@ -283,6 +361,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
 	commandBuffer->PushConstant(shader, "ObjectToWorld", &o2w);
 	commandBuffer->PushConstant(shader, "WorldToObject", &w2o);
+	commandBuffer->PushConstant(shader, "TerrainSize", &sz);
 	commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
 	#pragma endregion
 
@@ -300,8 +379,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	uint32_t i = 0;
 	uint32_t si = 0;
-	QuadNode* sn = mLeafNodes[0];
-	for (QuadNode* n : mLeafNodes) {
+	QuadNode* sn = leafNodes[0];
+	for (QuadNode* n : leafNodes) {
 		if (n->mTriangleMask != sn->mTriangleMask) {
 			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
 			commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
@@ -316,6 +395,4 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	}
 }
 
-void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-   
-}
+void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
