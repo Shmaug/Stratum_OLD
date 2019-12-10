@@ -133,9 +133,9 @@ void fsmain(v2f i,
 	blend *= blend * blend;
 	blend /= dot(blend, 1);
 
-	float3 wp = .2 * (i.worldPos.xyz + Camera.Position);
+	float3 wp = .25 * (i.worldPos.xyz + Camera.Position);
 	
-	triplanar(2, 0, wp, blend, col, mask, bump, 1); // grass
+	triplanar(0, 2, wp, blend, col, mask, bump, 1); // dirt
 
 	bump = normalize(bump);
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);

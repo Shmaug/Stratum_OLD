@@ -23,6 +23,8 @@ public:
 	inline ::Material* Material() const { return mMaterial.get(); }
 	inline void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
+	PLUGIN_EXPORT void AddDetail(Mesh* mesh, std::shared_ptr<::Material> material, bool surfaceAlign, float frequency, float offset = 0);
+
 	PLUGIN_EXPORT void Initialize();
 	PLUGIN_EXPORT void UpdateLOD(Camera* camera);
 
@@ -34,6 +36,15 @@ public:
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 private:
+	struct Detail {
+		Mesh* mMesh;
+		std::shared_ptr<::Material> mMaterial;
+		bool mAlignToSurface;
+		/// Instances per square meter (roughly)
+		float mFrequency;
+		float mOffset;
+	};
+
 	struct QuadNode {
 		static const uint32_t Resolution = 16;
 
@@ -47,6 +58,7 @@ private:
 		float3 mPosition;
 
 		float mSize;
+		// vertices per meter
 		float mVertexResolution;
 
 		uint8_t mTriangleMask;
@@ -73,8 +85,10 @@ private:
 	std::vector<uint32_t> mIndexOffsets;
 	std::vector<uint32_t> mIndexCounts;
 
+	std::vector<Detail> mDetails;
+
 	Texture* mHeightmap;
-	float* mHeights;
+	uint16_t* mHeights;
 
 	std::vector<Mesh*> mTreeMeshes;
 
@@ -84,6 +98,7 @@ private:
 	float mSize;
 	float mHeight;
 	float mMaxVertexResolution;
+	float mDetailVertexResolution;
 
     std::shared_ptr<::Material> mMaterial;
 	AABB mAABB;

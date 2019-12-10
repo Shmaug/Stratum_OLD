@@ -225,7 +225,8 @@ VkCompareOp atocmp(const string& str) {
 	if (str == "nequal")	return VK_COMPARE_OP_NOT_EQUAL;
 	if (str == "never")		return VK_COMPARE_OP_NEVER;
 	if (str == "always")	return VK_COMPARE_OP_ALWAYS;
-	return VK_COMPARE_OP_MAX_ENUM;
+	fprintf(stderr, "Unknown comparison: %s\n", str.c_str());
+	throw;
 }
 VkColorComponentFlags atomask(const string& str) {
 	VkColorComponentFlags mask = 0;
@@ -239,7 +240,8 @@ VkFilter atofilter(const string& str) {
 	if (str == "nearest") return VK_FILTER_NEAREST;
 	if (str == "linear")  return VK_FILTER_LINEAR;
 	if (str == "cubic")   return VK_FILTER_CUBIC_IMG;
-	return VK_FILTER_MAX_ENUM;
+	fprintf(stderr, "Unknown filter: %s\n", str.c_str());
+	throw;
 }
 VkSamplerAddressMode atoaddressmode(const string& str) {
 	if (str == "repeat")		    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -247,7 +249,8 @@ VkSamplerAddressMode atoaddressmode(const string& str) {
 	if (str == "clamp_edge")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	if (str == "clamp_border")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 	if (str == "mirror_clamp_edge") return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-	return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
+	fprintf(stderr, "Unknown address mode: %s\n", str.c_str());
+	throw;
 }
 VkBorderColor atobordercolor(const string& str) {
 	if (str == "float_transparent_black") return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
@@ -256,12 +259,14 @@ VkBorderColor atobordercolor(const string& str) {
 	if (str == "int_opaque_black")		  return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	if (str == "float_opaque_white")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	if (str == "int_opaque_white")		  return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-	return VK_BORDER_COLOR_MAX_ENUM;
+	fprintf(stderr, "Unknown border color: %s\n", str.c_str());
+	throw;
 }
 VkSamplerMipmapMode atomipmapmode(const string& str) {
 	if (str == "nearest") return VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	if (str == "linear") return VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	return VK_SAMPLER_MIPMAP_MODE_MAX_ENUM;
+	fprintf(stderr, "Unknown mipmap mode: %s\n", str.c_str());
+	throw;
 }
 
 bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
@@ -352,7 +357,10 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					if (++it == words.end()) return false;
 					if (*it == "true") depthStencilState.depthWriteEnable = VK_TRUE;
 					else if (*it == "false") depthStencilState.depthWriteEnable = VK_FALSE;
-					else return false;
+					else {
+						fprintf(stderr, "zwrite must be true or false.\n");
+						return false;
+					}
 
 				} else if (*it == "ztest") {
 					if (++it == words.end()) return false;
@@ -360,27 +368,34 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 						depthStencilState.depthTestEnable = VK_TRUE;
 					else if (*it == "false")
 						depthStencilState.depthTestEnable = VK_FALSE;
-					else
+					else{
+						fprintf(stderr, "ztest must be true or false.\n");
 						return false;
+					}
 
 				} else if (*it == "depth_op") {
 					if (++it == words.end()) return false;
 					depthStencilState.depthCompareOp = atocmp(*it);
-					if (depthStencilState.depthCompareOp == VK_COMPARE_OP_MAX_ENUM) return false;
 
 				} else if (*it == "cull") {
 					if (++it == words.end()) return false;
 					if (*it == "front") cullMode = VK_CULL_MODE_FRONT_BIT;
 					else if (*it == "back") cullMode = VK_CULL_MODE_BACK_BIT;
 					else if (*it == "false") cullMode = VK_CULL_MODE_NONE;
-					else return false;
+					else {
+						fprintf(stderr, "Unknown cull mode: %s\n", it->c_str());
+						return false;
+					}
 
 				} else if (*it == "fill") {
 					if (++it == words.end()) return false;
 					if (*it == "solid") fillMode = VK_POLYGON_MODE_FILL;
 					else if (*it == "line") fillMode = VK_POLYGON_MODE_LINE;
 					else if (*it == "point") fillMode = VK_POLYGON_MODE_POINT;
-					else return false;
+					else {
+						fprintf(stderr, "Unknown fill mode: %s\n", it->c_str());
+						return false;
+					}
 
 				} else if (*it == "blend") {
 					if (++it == words.end()) return false;
@@ -388,7 +403,10 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					else if (*it == "alpha") blendMode = Alpha;
 					else if (*it == "add") blendMode = Additive;
 					else if (*it == "multiply")	blendMode = Multiply;
-					else return false;
+					else {
+						fprintf(stderr, "Unknown blend mode: %s\n", it->c_str());
+						return false;
+					}
 
 				} else if (*it == "static_sampler") {
 					if (++it == words.end()) return false;

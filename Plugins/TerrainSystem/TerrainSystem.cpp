@@ -63,31 +63,42 @@ TerrainSystem::~TerrainSystem() {
 bool TerrainSystem::Init(Scene* scene) {
 	mScene = scene;
 
-	shared_ptr<Material> mat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
+	#pragma region Terrain object
+	shared_ptr<Material> terrainMat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
+
+	terrainMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_col.jpg"));
+	terrainMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_nrm.jpg", false));
+	terrainMat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_msk.png", false));
+
+	terrainMat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_col.png"));
+	terrainMat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_nrm.png", false));
+	terrainMat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_msk.png", false));
+
+	//terrainMat->SetParameter("MainTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_col.jpg"));
+	//terrainMat->SetParameter("NormalTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_nrm.jpg", false));
+	//terrainMat->SetParameter("MaskTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_msk.jpg", false));
+
+	//terrainMat->SetParameter("MainTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_col.jpg"));
+	//terrainMat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_nrm.jpg", false));
+	//terrainMat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_msk.png", false));
+
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 8192.f, 800.f);
+	mScene->AddObject(terrain);
+	terrain->Material(terrainMat);
+	mTerrain = terrain.get();
+	mObjects.push_back(mTerrain);
+	mTerrain->Initialize();
+	#pragma endregion
+	
+	#pragma region Detail meshes
 	shared_ptr<Material> rockMat = make_shared<Material>("Rock", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
 	shared_ptr<Material> treeMat = make_shared<Material>("Tree", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
+	shared_ptr<Material> bushMat = make_shared<Material>("Bush", mScene->AssetManager()->LoadShader("Shaders/leaves.shader"));
+	shared_ptr<Material> grassMat = make_shared<Material>("Grass", mScene->AssetManager()->LoadShader("Shaders/leaves.shader"));
 
-	mat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_col.png"));
-	mat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_nrm.png", false));
-	mat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/grass/grass1_msk.png", false));
-
-	mat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/dirt/ground3_col.jpg"));
-	mat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/dirt/ground3_nrm.jpg", false));
-	mat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/dirt/ground3_msk.jpg", false));
-
-	mat->SetParameter("MainTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_col.jpg"));
-	mat->SetParameter("NormalTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_nrm.jpg", false));
-	mat->SetParameter("MaskTextures", 2, mScene->AssetManager()->LoadTexture("Assets/rock/rock13_msk.png", false));
-
-	mat->SetParameter("MainTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_col.jpg"));
-	mat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_nrm.jpg", false));
-	mat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/snow/Snow06_msk.png", false));
-
-	Mesh* treeMesh = mScene->AssetManager()->LoadMesh("Assets/tree/oaktree.fbx", .05f);
-
-	treeMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_col.png"));
-	treeMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_nrm.png"));
-	treeMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/tree/bark_msk.png"));
+	treeMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/bark/bark_col.png"));
+	treeMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/bark/bark_nrm.png"));
+	treeMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/bark/bark_msk.png"));
 	treeMat->SetParameter("Color", float4(1));
 	treeMat->SetParameter("Roughness", 1.f);
 	treeMat->SetParameter("Metallic", 1.f);
@@ -97,9 +108,21 @@ bool TerrainSystem::Init(Scene* scene) {
 	treeMat->EnableKeyword("MASK_MAP");
 	treeMat->PassMask((PassType)(Main | Depth));
 
-	rockMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_col.png"));
-	rockMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_nrm.png"));
-	rockMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/rock_mesh/rock_msk.png"));
+	bushMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/leaves/leaves_col.png"));
+	bushMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/leaves/leaves_nrm.png"));
+	bushMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/leaves/leaves_msk.png"));
+	bushMat->SetParameter("BumpStrength", 1.f);
+	bushMat->PassMask((PassType)(Main | Depth));
+
+	grassMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/white.png"));
+	grassMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/bump.png"));
+	grassMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/Textures/white.png"));
+	grassMat->SetParameter("BumpStrength", 1.f);
+	grassMat->PassMask((PassType)(Main | Depth));
+
+	rockMat->SetParameter("MainTexture", mScene->AssetManager()->LoadTexture("Assets/Models/rock/rock_col.png"));
+	rockMat->SetParameter("NormalTexture", mScene->AssetManager()->LoadTexture("Assets/Models/rock/rock_nrm.png"));
+	rockMat->SetParameter("MaskTexture", mScene->AssetManager()->LoadTexture("Assets/Models/rock/rock_msk.png"));
 	rockMat->SetParameter("Color", float4(1));
 	rockMat->SetParameter("Roughness", 1.f);
 	rockMat->SetParameter("Metallic", 1.f);
@@ -109,32 +132,28 @@ bool TerrainSystem::Init(Scene* scene) {
 	rockMat->EnableKeyword("MASK_MAP");
 	rockMat->PassMask((PassType)(Main | Depth));
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 8192.f, 800.f);
-	mScene->AddObject(terrain);
-	terrain->Material(mat);
-	mTerrain = terrain.get();
-	mObjects.push_back(mTerrain);
-	mTerrain->Initialize();
+	mTerrain->AddDetail(
+		mScene->AssetManager()->LoadMesh("Assets/Models/oaktree.fbx", .05f),
+		treeMat, false, .01f );
+
+	mTerrain->AddDetail(
+		mScene->AssetManager()->LoadMesh("Assets/Models/rock.fbx", .05f),
+		rockMat, true, .01f, -.4f );
+
+	mTerrain->AddDetail(
+		mScene->AssetManager()->LoadMesh("Assets/Models/bush_01.fbx", .05f),
+		bushMat, true, 3.f, 0 );
+
+	mTerrain->AddDetail(
+		mScene->AssetManager()->LoadMesh("Assets/Models/grass_clump_01.fbx", .05f),
+		grassMat, true, 5.f, 0 );
+	#pragma endregion
 
 	shared_ptr<Object> player = make_shared<Object>("Player");
 	mScene->AddObject(player);
 	mPlayer = player.get();
 	mObjects.push_back(mPlayer);
 	mPlayer->LocalPosition(0, mTerrain->Height(0), 0);
-
-	shared_ptr<MeshRenderer> rock = make_shared<MeshRenderer>("Rock");
-	rock->Mesh(mScene->AssetManager()->LoadMesh("Assets/rock_mesh/rock.fbx", .2f));
-	rock->Material(rockMat);
-	rock->LocalPosition(0, mTerrain->Height(float3(10, 0, -10)) - .25f, -10);
-	mScene->AddObject(rock);
-	mObjects.push_back(rock.get());
-
-	shared_ptr<MeshRenderer> tree = make_shared<MeshRenderer>("Tree");
-	tree->Mesh(treeMesh);
-	tree->Material(treeMat);
-	tree->LocalPosition(10, mTerrain->Height(float3(10, 0, 10)), 10);
-	mScene->AddObject(tree);
-	mObjects.push_back(tree.get());
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
@@ -148,7 +167,7 @@ bool TerrainSystem::Init(Scene* scene) {
 
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
 	mScene->AddObject(fpsText);
-	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36));
+	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 36));
 	fpsText->Text("");
 	fpsText->VerticalAnchor(Maximum);
 	fpsText->HorizontalAnchor(Minimum);
@@ -323,7 +342,7 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
 		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
-			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
+			mScene->AssetManager()->LoadTexture("Assets/Textures/icons.png"), float4(.5f, .5f, 0, 0));
 
 		if (hover) {
 			hitT = lt;

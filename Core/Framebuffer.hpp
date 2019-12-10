@@ -15,20 +15,18 @@ public:
 
 	inline void Width(uint32_t w) { mWidth = w; }
 	inline void Height(uint32_t h) { mHeight = h; }
-	inline void BufferUsage(VkImageUsageFlags u) { mUsage = u; }
 
 	inline uint32_t Width() const { return mWidth; }
 	inline uint32_t Height() const { return mHeight; }
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
-	inline VkImageUsageFlags BufferUsage() const { return mUsage; }
 
 	inline void ClearValue(uint32_t i, const VkClearValue& value) { mClearValues[i] = value; }
 
-	inline Texture* ColorBuffer(uint32_t i) { return mColorBuffers[mDevice->FrameContextIndex()][i]; }
-	inline Texture* ResolveBuffer(uint32_t i) { return mResolveBuffers ? mResolveBuffers[mDevice->FrameContextIndex()][i] : ColorBuffer(i); }
-	inline Texture* DepthBuffer() { return mDepthBuffers[mDevice->FrameContextIndex()]; }
+	inline Texture* ColorBuffer(uint32_t i) { return mResolveBuffers[mDevice->FrameContextIndex()][i]; }	
+	inline Texture* DepthBuffer() { return mResolveDepthBuffers[mDevice->FrameContextIndex()]; }
 
-	ENGINE_EXPORT void Resolve(CommandBuffer* commandBuffer);
+	ENGINE_EXPORT void ResolveColor(CommandBuffer* commandBuffer);
+	ENGINE_EXPORT void ResolveDepth(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 	inline ::Device* Device() const { return mDevice; }
@@ -36,14 +34,16 @@ public:
 private:
 	::Device* mDevice;
 	std::vector<Texture*>* mColorBuffers;
-	std::vector<Texture*>* mResolveBuffers;
 	Texture** mDepthBuffers;
+	std::vector<Texture*>* mResolveBuffers;
+	Texture** mResolveDepthBuffers;
 	VkFramebuffer* mFramebuffers;
 	::RenderPass* mRenderPass;
 
 	uint32_t mWidth;
 	uint32_t mHeight;
-	VkImageUsageFlags mUsage;
+	VkImageUsageFlags mColorUsage;
+	VkImageUsageFlags mDepthUsage;
 	VkSampleCountFlagBits mSampleCount;
 	std::vector<VkFormat> mColorFormats;
 	std::vector<VkClearValue> mClearValues;

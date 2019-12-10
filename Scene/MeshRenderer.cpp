@@ -41,6 +41,8 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
+	float t = Scene()->Instance()->TotalTime();
+	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
 	if (instanceDS != VK_NULL_HANDLE)

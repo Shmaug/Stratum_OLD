@@ -9,7 +9,7 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 8192
+#define SHADOW_ATLAS_RESOLUTION 4096
 #define SHADOW_RESOLUTION 2048
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
@@ -156,9 +156,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	
 	if (mDeviceData.count(device) == 0) {
 		DeviceData& data = mDeviceData[device];
-		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, { VK_FORMAT_R32_SFLOAT }, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
-		data.mShadowAtlasFramebuffer->BufferUsage(data.mShadowAtlasFramebuffer->BufferUsage() | VK_IMAGE_USAGE_SAMPLED_BIT);
-		data.mShadowAtlasFramebuffer->ClearValue(0, { 1.f, 1.f, 1.f, 1.f });
+		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
 		uint32_t c = device->MaxFramesInFlight();
 		data.mLightBuffers = new Buffer*[c];
 		data.mShadowBuffers = new Buffer*[c];
@@ -172,8 +170,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	DeviceData& data = mDeviceData.at(device);
 
 	PROFILER_BEGIN("Lighting");
-	if (data.mShadowAtlasFramebuffer->ColorBuffer(0))
-		data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
 
 	mActiveLights.clear();
@@ -185,6 +181,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		ShadowData* shadows = (ShadowData*)data.mShadowBuffers[frameContextIndex]->MappedData();
 
 		uint32_t si = 0;
+		uint32_t maxShadows = (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION) * (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION);
 
 		float ct = tanf(mainCamera->FieldOfView() * .5f) * max(1.f, mainCamera->Aspect());
 		float3 cp = mainCamera->WorldPosition();
@@ -215,7 +212,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			lights[li].ShadowIndex = -1;
 			lights[li].CascadeSplits = -1.f;
 
-			if (l->CastShadows()) {
+			if (l->CastShadows() && si+1 < maxShadows) {
 				switch (l->Type()) {
 				case Sun: {
 					float4 cascadeSplits = 0;
@@ -288,7 +285,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	}
 
 	vkCmdEndRenderPass(*commandBuffer);
-	data.mShadowAtlasFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+	data.mShadowAtlasFramebuffer->ResolveDepth(commandBuffer);
 	PROFILER_END;
 
 	mGizmos->PreFrame(device);
@@ -376,7 +373,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 					if (curShader->mDescriptorBindings.count("Shadows"))
 						batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[frameContextIndex], 0, data.mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
 					if (curShader->mDescriptorBindings.count("ShadowAtlas"))
-						batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->ColorBuffer(0), SHADOW_ATLAS_BINDING);
+						batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
 				}
 				// append to batch
 				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
@@ -453,9 +450,9 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	PROFILER_END;
 
 	if (camera->DepthFramebuffer() && (pass & Depth))
-		camera->DepthFramebuffer()->Resolve(commandBuffer);
+		camera->DepthFramebuffer()->ResolveDepth(commandBuffer);
 	else
-		camera->Framebuffer()->Resolve(commandBuffer);
+		camera->Framebuffer()->ResolveColor(commandBuffer);
 
 	// Post Render
 	PROFILER_BEGIN("Post Render");

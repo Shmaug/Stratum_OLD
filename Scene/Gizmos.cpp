@@ -33,7 +33,7 @@ const ::VertexInput GizmoVertexInput {
 
 Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0) {
 	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.shader");
-	mWhiteTexture = scene->AssetManager()->LoadTexture("Assets/white.png");
+	mWhiteTexture = scene->AssetManager()->LoadTexture("Assets/Textures/white.png");
 	mTextures.push_back(mWhiteTexture);
 	mTextureMap.emplace(mWhiteTexture, 0);
 	

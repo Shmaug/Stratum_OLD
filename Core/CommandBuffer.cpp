@@ -138,6 +138,9 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, const VertexInp
 	GraphicsShader* shader = material->GetShader(mDevice);
 	if (!shader) return VK_NULL_HANDLE;
 
+	if (blendMode == BLEND_MODE_MAX_ENUM) blendMode = material->BlendMode();
+	if (cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM) cullMode = material->CullMode();
+
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology, cullMode, blendMode, polyMode);
 	if (pipeline == mCurrentPipeline) {
 		if (material != mCurrentMaterial || mCurrentCamera != camera) {

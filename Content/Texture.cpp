@@ -315,11 +315,21 @@ Texture::Texture(const string& name, Instance* devices, uint32_t width, uint32_t
 		mDeviceData.emplace(devices->GetDevice(i), DeviceData());
 	CreateImage();
 
-	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	if (mUsage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
+	VkImageAspectFlags aspect = 0;
+	switch (mFormat){
+	default:
+		aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM:
+	case VK_FORMAT_D32_SFLOAT:
 		aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-	if (HasStencilComponent(mFormat))
-		aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		break;
+	}
 	CreateImageView(aspect);
 }
 Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
@@ -328,9 +338,21 @@ Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t he
 	mDeviceData.emplace(device, DeviceData());
 	CreateImage();
 
-	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-	if (mUsage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-	if (HasStencilComponent(mFormat)) aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+	VkImageAspectFlags aspect = 0;
+	switch (mFormat){
+	default:
+		aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM:
+	case VK_FORMAT_D32_SFLOAT:
+		aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		break;
+	}
 	CreateImageView(aspect);
 }
 
@@ -482,13 +504,21 @@ void Texture::TransitionImageLayout(VkImage image, VkFormat format, uint32_t mip
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
 
-	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		if (HasStencilComponent(format))
-			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-	} else
+	switch (format){
+	default:
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
+		break;
+	case VK_FORMAT_D16_UNORM:
+	case VK_FORMAT_D32_SFLOAT:
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		break;
+	}
+	
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = mipLevels;
 	barrier.subresourceRange.baseArrayLayer = 0;
@@ -571,12 +601,20 @@ void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLa
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = d.mImage;
 
-	if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		if (HasStencilComponent(mFormat))
-			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-	} else
+	switch (mFormat){
+	default:
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM:
+	case VK_FORMAT_D32_SFLOAT:
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		break;
+	case VK_FORMAT_D16_UNORM_S8_UINT:
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+	case VK_FORMAT_D32_SFLOAT_S8_UINT:
+		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		break;
+	}
 
 	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = mMipLevels;

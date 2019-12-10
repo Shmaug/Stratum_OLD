@@ -1,6 +1,6 @@
 float hash12(float2 p) {
-	float3 p3 = frac(float3(p.x, p.y, p.x) * .1013f);
-	p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 19.19f);
+	float3 p3 = frac(p.xyx * .1013f);
+	p3 += dot(p3, p3.yzx + 19.19f);
 	return frac((p3.x + p3.y) * p3.z);
 }
 float noise(float2 xz) {
@@ -46,11 +46,11 @@ float noise(float2 p, uint seed) {
 	return lerp(lerp(i0, i1, u.x), lerp(i2, i3, u.x), u.y);
 }
 
-float fbm3(float2 p, float lac, uint seed) {
+float fbm6(float2 p, float lac, uint seed) {
 	float value = 0;
 	float amp = .5f;
 	float d = 0;
-	for (uint i = 0; i < 3; i++) {
+	for (uint i = 0; i < 6; i++) {
 		d += amp;
 		value += noise(p, seed + i * 300) * amp;
 		p *= lac;
