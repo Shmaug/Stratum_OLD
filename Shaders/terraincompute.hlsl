@@ -3,7 +3,19 @@
 
 #include "include/shadercompat.h"
 
+struct VkDrawIndexedIndirectCommand {
+	uint indexCount;
+	uint instanceCount;
+	uint firstIndex;
+	int  vertexOffset;
+	uint firstInstance;
+};
+
 [[vk::binding(0, 0)]] RWTexture2D<float3> Heightmap : register(u0);
+
+[[vk::binding(1, 0)]] RWStructuredBuffer<VkDrawIndexedIndirectCommand> IndirectCommands : register(u1);
+[[vk::binding(2, 0)]] StructuredBuffer<DetailTransform> DetailTransforms : register(u2);
+[[vk::binding(3, 0)]] RWStructuredBuffer<ObjectBuffer> DetailBuffers : register(u3);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float Scale;

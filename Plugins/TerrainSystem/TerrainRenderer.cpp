@@ -232,7 +232,7 @@ void TerrainRenderer::Initialize() {
 	mIndexCounts.resize(16);
 
 	uint32_t Resolution = 4096;
-	Shader* shader = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
+	mTerrainCompute = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
 	float scale = mSize / Resolution;
 	float offset = -mSize * .5f;
 
@@ -243,7 +243,7 @@ void TerrainRenderer::Initialize() {
 
 	for (uint32_t i = 0; i < Scene()->Instance()->DeviceCount(); i++) {
 		Device* device = Scene()->Instance()->GetDevice(i);
-		ComputeShader* gen = shader->GetCompute(device, "GenHeight", {});
+		ComputeShader* gen = mTerrainCompute->GetCompute(device, "GenHeight", {});
 
 		auto commandBuffer = device->GetCommandBuffer();
 		mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
@@ -456,7 +456,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		uint32_t count = 0;
 		for (QuadNode* n : detailNodes)
 			count += n->mDetails[i].size();
-		Buffer* transformBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", count * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Buffer* transformBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Transforms", count * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		DetailTransform* transforms = (DetailTransform*)transformBuffer->MappedData();
 		for (QuadNode* n : detailNodes) {
 			if (n->mDetails[i].size()) {
@@ -465,9 +465,16 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 			}
 		}
 
-		Buffer* indirectBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		Buffer* instanceBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", count * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		Buffer* indirectBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Indirect", sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		Buffer* instanceBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Buffers", count * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		// TODO: run compute shader to generate draw data
+
+		ComputeShader* compute = mTerrainCompute->GetCompute(commandBuffer->Device(), "DrawDetails", {});
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipeline);
+		DescriptorSet* compDesc = commandBuffer->Device()->GetTempDescriptorSet(mName + " Detail Compute", compute->mDescriptorSetLayouts[0]);
+		ds = *compDesc;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, &ds, 0, nullptr);
+		vkCmdDispatch(*commandBuffer, (count + 63) / 64, 1, 1);
 
 		if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mDetails[i].mMaterial.get());
 		if (pass & Depth) mDetails[i].mMaterial->EnableKeyword("DEPTH_PASS");

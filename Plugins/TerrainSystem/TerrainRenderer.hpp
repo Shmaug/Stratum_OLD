@@ -103,6 +103,8 @@ private:
 
 	std::vector<Detail> mDetails;
 
+	Shader* mTerrainCompute;
+
 	Texture* mHeightmap;
 	uint16_t* mHeights;
 
