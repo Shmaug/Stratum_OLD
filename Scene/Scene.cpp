@@ -217,9 +217,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Sun: {
 					float4 cascadeSplits = 0;
 					float cf = min(l->ShadowDistance(), mainCamera->Far());
-					cascadeSplits[0] = .02f * cf;
-					cascadeSplits[1] = .11f * cf;
-					cascadeSplits[2] = .50f * cf;
+					cascadeSplits[0] = .01f * cf;
+					cascadeSplits[1] = .10f * cf;
+					cascadeSplits[2] = .40f * cf;
 					cascadeSplits[3] = cf;
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();

@@ -72,7 +72,7 @@ public:
 
 	inline ::Device* Device() const { return mDevice; }
 
-	uint32_t mTriangleCount;
+	size_t mTriangleCount;
 
 private:
 	friend class Device;

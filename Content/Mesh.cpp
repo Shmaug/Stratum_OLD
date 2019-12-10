@@ -162,8 +162,8 @@ Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, floa
 
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
 	if (!scene) {
-		cerr << "Failed to open " << filename <<  ": " << aiGetErrorString() << endl;
-		return;
+		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
+		throw;
 	}
 	vector<Vertex> vertices;
 	vector<AIWeight> weights;

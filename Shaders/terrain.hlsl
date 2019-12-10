@@ -135,7 +135,7 @@ void fsmain(v2f i,
 
 	float3 wp = .25 * (i.worldPos.xyz + Camera.Position);
 	
-	triplanar(0, 2, wp, blend, col, mask, bump, 1); // dirt
+	triplanar(0, 1, wp, blend, col, mask, bump, 1);
 
 	bump = normalize(bump);
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
