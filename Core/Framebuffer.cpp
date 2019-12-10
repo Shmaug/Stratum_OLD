@@ -7,21 +7,20 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	: mName(name), mDevice(device), mWidth(width), mHeight(height), mSampleCount(sampleCount), mColorFormats(colorFormats), mDepthFormat(depthFormat) {
 
 	mFramebuffers = new VkFramebuffer[mDevice->MaxFramesInFlight()];
-	mColorBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
-	mDepthBuffers = new Texture * [mDevice->MaxFramesInFlight()];
-	if (mSampleCount != VK_SAMPLE_COUNT_1_BIT)
-		mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
-	else
-		mResolveBuffers = nullptr;
+	mColorBuffers = colorFormats.size() ? new vector<Texture*>[mDevice->MaxFramesInFlight()] : nullptr;
+	mDepthBuffers = new Texture*[mDevice->MaxFramesInFlight()];
+	mResolveBuffers = colorFormats.size() ? new vector<Texture*>[mDevice->MaxFramesInFlight()] : nullptr;
+	mResolveDepthBuffers = new Texture*[mDevice->MaxFramesInFlight()];
+
 	memset(mFramebuffers, VK_NULL_HANDLE, sizeof(VkFramebuffer) * mDevice->MaxFramesInFlight());
 	memset(mDepthBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
+	memset(mResolveDepthBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
 
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
-		mColorBuffers[i] = vector<Texture*>(colorFormats.size());
-		memset(mColorBuffers[i].data(), 0, sizeof(Texture*) * colorFormats.size());
-		
-		if (mResolveBuffers) {
+		if (mColorBuffers) {
+			mColorBuffers[i] = vector<Texture*>(colorFormats.size());
 			mResolveBuffers[i] = vector<Texture*>(colorFormats.size());
+			memset(mColorBuffers[i].data(), 0, sizeof(Texture*) * colorFormats.size());
 			memset(mResolveBuffers[i].data(), 0, sizeof(Texture*) * colorFormats.size());
 		}
 	}
@@ -66,22 +65,26 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
 	mRenderPass = new ::RenderPass(mName + "RenderPass", this, attachments, subpasses);
-	mUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	mColorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	mDepthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 }
 Framebuffer::~Framebuffer() {
 	safe_delete(mRenderPass);
 	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
 		if (mFramebuffers[i] != VK_NULL_HANDLE)
 			vkDestroyFramebuffer(*mDevice, mFramebuffers[i], nullptr);
-		for (Texture* t : mColorBuffers[i])
-			safe_delete(t);
+		if (mColorBuffers)
+			for (Texture* t : mColorBuffers[i])
+				safe_delete(t);
 		if (mResolveBuffers)
 			for (Texture* t : mResolveBuffers[i])
 				safe_delete(t);
 		safe_delete(mDepthBuffers[i]);
+		safe_delete(mResolveDepthBuffers[i]);
 	}
 	safe_delete_array(mColorBuffers);
 	safe_delete_array(mResolveBuffers);
+	safe_delete_array(mResolveDepthBuffers);
 	safe_delete_array(mDepthBuffers);
 	safe_delete_array(mFramebuffers);
 }
@@ -89,26 +92,29 @@ Framebuffer::~Framebuffer() {
 bool Framebuffer::UpdateBuffers() {
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
 	if (mFramebuffers[frameContextIndex] == VK_NULL_HANDLE
-		|| mDepthBuffers[frameContextIndex]->Width() != mWidth || mDepthBuffers[frameContextIndex]->Height() != mHeight || mColorBuffers[frameContextIndex][0]->Usage() != mUsage) {
+		|| mDepthBuffers[frameContextIndex]->Width() != mWidth || mDepthBuffers[frameContextIndex]->Height() != mHeight) {
 
 		if (mFramebuffers[frameContextIndex] != VK_NULL_HANDLE)
 			vkDestroyFramebuffer(*mDevice, mFramebuffers[frameContextIndex], nullptr);
 
-		vector<VkImageView> views(mColorBuffers[frameContextIndex].size() + 1);
+		vector<VkImageView> views((mColorBuffers ? mColorBuffers[frameContextIndex].size() : 0) + 1);
 
 		for (uint32_t i = 0; i < mColorFormats.size(); i++) {
 			safe_delete(mColorBuffers[frameContextIndex][i]);
-			mColorBuffers[frameContextIndex][i] = new Texture(mName + "ColorBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i], mSampleCount, VK_IMAGE_TILING_OPTIMAL, mUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			mColorBuffers[frameContextIndex][i] = new Texture(mName + "ColorBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i],
+				mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 			views[i] = mColorBuffers[frameContextIndex][i]->View(mDevice);
+			
 			if (mResolveBuffers){
 				safe_delete(mResolveBuffers[frameContextIndex][i]);
-				mResolveBuffers[frameContextIndex][i] = new Texture(mName + "ResolveBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i], VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, mUsage | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+				mResolveBuffers[frameContextIndex][i] = new Texture(mName + "ResolveBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i],
+					VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 			}
 		}
 
 		safe_delete(mDepthBuffers[frameContextIndex]);
-		mDepthBuffers[frameContextIndex] = new Texture(mName + "DepthBuffer", mDevice, mWidth, mHeight, 1, mDepthFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		views[mColorBuffers[frameContextIndex].size()] = mDepthBuffers[frameContextIndex]->View(mDevice);
+		mDepthBuffers[frameContextIndex] = new Texture(mName + "DepthBuffer", mDevice, mWidth, mHeight, 1, mDepthFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		views[views.size() - 1] = mDepthBuffers[frameContextIndex]->View(mDevice);
 
 		VkFramebufferCreateInfo fb = {};
 		fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -140,27 +146,90 @@ void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
 	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], mClearValues.data(), (uint32_t)mClearValues.size());
 }
 
-void Framebuffer::Resolve(CommandBuffer* commandBuffer) {
-	if (mSampleCount == VK_SAMPLE_COUNT_1_BIT) return;
+void Framebuffer::ResolveColor(CommandBuffer* commandBuffer) {
+	if (!mColorBuffers) return;
 
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
 	
 	for (uint32_t i = 0; i < mColorBuffers[frameContextIndex].size(); i++){
+		if (mResolveBuffers[frameContextIndex][i] && 
+			(mResolveBuffers[frameContextIndex][i]->Width()  != mWidth || 
+			 mResolveBuffers[frameContextIndex][i]->Height() != mHeight)){
+			delete mResolveBuffers[frameContextIndex][i];
+		}
+		if (!mResolveBuffers[frameContextIndex][i]){
+			mResolveBuffers[frameContextIndex][i] = new Texture(mName + " Resolve", mDevice, mWidth, mHeight, 1, mColorFormats[i], VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			mResolveBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		}
+
 		mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 		mResolveBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 
-		VkImageResolve region = {};
-		region.extent = { mWidth, mHeight, 1 };
-		region.dstSubresource.layerCount = 1;
-		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.srcSubresource.layerCount = 1;
-		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		vkCmdResolveImage(*commandBuffer,
-			mColorBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			mResolveBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		if (mSampleCount == VK_SAMPLE_COUNT_1_BIT){
+			VkImageCopy region = {};
+			region.extent = { mWidth, mHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdCopyImage(*commandBuffer,
+				mColorBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mResolveBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}else{
+			VkImageResolve region = {};
+			region.extent = { mWidth, mHeight, 1 };
+			region.dstSubresource.layerCount = 1;
+			region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.srcSubresource.layerCount = 1;
+			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			vkCmdResolveImage(*commandBuffer,
+				mColorBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mResolveBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		}
 
 		mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 		mResolveBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
+}
 
+void Framebuffer::ResolveDepth(CommandBuffer* commandBuffer) {
+	uint32_t frameContextIndex = mDevice->FrameContextIndex();
+
+	if (mResolveDepthBuffers[frameContextIndex] && 
+		(mResolveDepthBuffers[frameContextIndex]->Width()  != mWidth || 
+		 mResolveDepthBuffers[frameContextIndex]->Height() != mHeight)){
+		delete mResolveDepthBuffers[frameContextIndex];
+	}
+	if (!mResolveDepthBuffers[frameContextIndex]){
+		mResolveDepthBuffers[frameContextIndex] = new Texture(mName + " Resolve", mDevice, mWidth, mHeight, 1, mDepthFormat, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		mResolveDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+	}
+
+	mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
+	mResolveDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+
+	if (mSampleCount == VK_SAMPLE_COUNT_1_BIT){
+		VkImageCopy region = {};
+		region.extent = { mWidth, mHeight, 1 };
+		region.dstSubresource.layerCount = 1;
+		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		region.srcSubresource.layerCount = 1;
+		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		vkCmdCopyImage(*commandBuffer,
+			mDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mResolveDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	}else{
+		VkImageResolve region = {};
+		region.extent = { mWidth, mHeight, 1 };
+		region.dstSubresource.layerCount = 1;
+		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		region.srcSubresource.layerCount = 1;
+		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		vkCmdResolveImage(*commandBuffer,
+			mDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mResolveDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+	}
+
+	mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
+	mResolveDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 }

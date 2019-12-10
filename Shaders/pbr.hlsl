@@ -15,7 +15,7 @@
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP)
+#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP) || defined(ALPHA_CLIP)
 #define NEED_TEXCOORD
 #endif
 #ifdef NORMAL_MAP
@@ -79,6 +79,10 @@ struct v2f {
 	#ifdef NEED_TEXCOORD
 	float2 texcoord : TEXCOORD2;
 	#endif
+#else
+	#ifdef ALPHA_CLIP
+	float2 texcoord : TEXCOORD2;
+	#endif
 #endif
 };
 
@@ -111,13 +115,22 @@ v2f vsmain(
 	#ifdef NEED_TEXCOORD
 	o.texcoord = texcoord;
 	#endif
+	#else
+	#ifdef ALPHA_CLIP
+	o.texcoord = texcoord;
+	#endif
 	#endif
 
 	return o;
 }
 
 #ifdef DEPTH_PASS
-float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0{
+#ifdef ALPHA_CLIP
+float fsmain(in float4 worldPos : TEXCOORD0, in float2 texcoord : TEXCOORD2 ) : SV_Target0 {
+	clip((MainTexture.Sample(Sampler, i.texcoord) * Color).a - .75);
+#else
+float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0 {
+#endif
 	return worldPos.w;
 }
 #else
@@ -163,7 +176,7 @@ void fsmain(v2f i,
 	
 	float3 eval = EvaluateLighting(material, i.worldPos.xyz, normal, view, i.worldPos.w);
 	ApplyScattering(eval, i.screenPos.xy / i.screenPos.w, i.worldPos.w);
-	color = float4(eval, 1);
+	color = float4(eval, col.a);
 	depthNormal = float4(normal * .5 + .5, i.worldPos.w);
 }
 #endif

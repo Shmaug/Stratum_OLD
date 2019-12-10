@@ -82,9 +82,9 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 	ifstream file(filename, ios::binary);
 	if (!file.is_open()) {
 		fprintf_color(BoldRed, stderr, "Could not load shader: %s\n", filename.c_str());
-		throw;
+		throw;;
 	}
-
+	
 	uint32_t vc;
 	file.read(reinterpret_cast<char*>(&vc), sizeof(uint32_t));
 	for (uint32_t v = 0; v < vc; v++) {
@@ -365,7 +365,7 @@ Shader::~Shader() {
 VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
 	BlendMode blend = blendMode == BLEND_MODE_MAX_ENUM ? mShader->mBlendMode : blendMode;
 	VkCullModeFlags cull = cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM ? mShader->mRasterizationState.cullMode : cullMode;
-	VkPolygonMode poly = polyMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM ? mShader->mRasterizationState.polygonMode : polyMode;
+	VkPolygonMode poly = polyMode == VK_POLYGON_MODE_MAX_ENUM ? mShader->mRasterizationState.polygonMode : polyMode;
 	PipelineInstance instance(*renderPass, vertexInput, topology, cull, blendMode, poly);
 
 	if (mPipelines.count(instance))

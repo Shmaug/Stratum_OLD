@@ -36,7 +36,7 @@ public:
 
 	inline Buffer* LightBuffer(Device* device) const { return mDeviceData.at(device).mLightBuffers[device->FrameContextIndex()]; }
 	inline Buffer* ShadowBuffer(Device* device) const { return mDeviceData.at(device).mShadowBuffers[device->FrameContextIndex()]; }
-	inline Texture* ShadowAtlas(Device* device) const { return mDeviceData.at(device).mShadowAtlasFramebuffer->ColorBuffer(0); }
+	inline Texture* ShadowAtlas(Device* device) const { return mDeviceData.at(device).mShadowAtlasFramebuffer->DepthBuffer(); }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 

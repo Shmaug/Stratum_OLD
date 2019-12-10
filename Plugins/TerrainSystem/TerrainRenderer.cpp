@@ -13,6 +13,13 @@ TerrainRenderer::QuadNode::QuadNode(TerrainRenderer* terrain, QuadNode* parent, 
  : mTerrain(terrain), mParent(parent), mSiblingIndex(siblingIndex), mSize(size), mLod(lod), mChildren(nullptr), mPosition(float3(pos.x, terrain->Height(float3(pos.x, 0, pos.y)), pos.y)) {
 	mVertexResolution = Resolution / size;
 	mTriangleMask = 0;
+
+	if (mVertexResolution > mTerrain->mDetailVertexResolution && mParent && mParent->mVertexResolution < mTerrain->mDetailVertexResolution) {
+		srand(siblingIndex ^ mParent->mSiblingIndex);
+		for (Detail& d : mTerrain->mDetails) {
+			
+		}
+	}
 }
 TerrainRenderer::QuadNode::~QuadNode() {
 	safe_delete_array(mChildren);
@@ -179,23 +186,21 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 }
 
 TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
-	: Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f), mHeights(nullptr) {}
+	: Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f), mDetailVertexResolution(10.f), mHeights(nullptr) {}
 void TerrainRenderer::Initialize() {
 	mVisible = true;
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
 
-	int x, y, channels;
-	mHeights = stbi_loadf("Assets/heightmap.png", &x, &y, &channels, 1);
-
-	mHeightmap = new Texture("Heightmap", Scene()->Instance(), mHeights, x*y*sizeof(float), x, y, 1,
-		VK_FORMAT_R32_SFLOAT, 1);
-
-	/*
-	uint32_t Resolution = 8192;
+	uint32_t Resolution = 4096;
 	Shader* shader = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
 	float scale = mSize / Resolution;
 	float offset = -mSize * .5f;
+
+	mHeights = new uint16_t[Resolution * Resolution];
+
+	mHeightmap = new Texture(mName + " Heightmap", Scene()->Instance(), Resolution, Resolution, 1, VK_FORMAT_R16_UNORM,
+		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
 
 	for (uint32_t i = 0; i < Scene()->Instance()->DeviceCount(); i++) {
 		Device* device = Scene()->Instance()->GetDevice(i);
@@ -211,7 +216,6 @@ void TerrainRenderer::Initialize() {
 		VkDescriptorSet vds = *ds;
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gen->mPipelineLayout, 0, 1, &vds, 0, nullptr);
 		
-		commandBuffer->PushConstant(gen, "Height", &mHeight);
 		commandBuffer->PushConstant(gen, "Scale", &scale);
 		commandBuffer->PushConstant(gen, "Offset", &offset);
 		vkCmdDispatch(*commandBuffer, (Resolution + 7) / 8, (Resolution + 7) / 8, 1);
@@ -220,10 +224,10 @@ void TerrainRenderer::Initialize() {
 		if (i == 0) {
 			mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
 
-			dst = new Buffer("Heightmap", device, sizeof(float)*x*y, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			dst = new Buffer("Heightmap", device, sizeof(uint16_t)*Resolution*Resolution, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 				
 			VkBufferImageCopy rgn = {};
-			rgn.imageExtent = { x, y, 1 };
+			rgn.imageExtent = { Resolution, Resolution, 1 };
 			rgn.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			rgn.imageSubresource.layerCount = 1;
 			vkCmdCopyImageToBuffer(*commandBuffer, mHeightmap->Image(device), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *dst, 1, &rgn);
@@ -235,13 +239,12 @@ void TerrainRenderer::Initialize() {
 
 		if (dst) {
 			dst->Map();
-			memcpy(mHeights, dst->MappedData(), sizeof(float) * Resolution * Resolution);
+			memcpy(mHeights, dst->MappedData(), sizeof(uint16_t) * Resolution * Resolution);
 			delete dst;
 		}
 
 		delete ds;
 	}
-	*/
 
 	mRootNode = new QuadNode(this, nullptr, 0, 0, 0, mSize);
 }
@@ -294,17 +297,21 @@ float TerrainRenderer::Height(const float3& lp) {
 	float2 p = (float2(lp.x, lp.z) + mSize * .5f) / mSize;
 	p *= float2(mHeightmap->Width(), mHeightmap->Height());
 	uint2 pi = clamp(uint2((uint32_t)p.x, (uint32_t)p.y), 0, uint2(mHeightmap->Width(), mHeightmap->Height()) - 2);
-	float y0 = mHeights[pi.y * mHeightmap->Width() + pi.x];
-	float y1 = mHeights[pi.y * mHeightmap->Width() + pi.x+1];
-	float y2 = mHeights[(pi.y+1) * mHeightmap->Width() + pi.x];
-	float y3 = mHeights[(pi.y+1) * mHeightmap->Width() + pi.x+1];
-	return mHeight * lerp(lerp(y0, y1, p.x - pi.x), lerp(y2, y3, p.x - pi.x), p.y - pi.y);
+	float y0 = (float)mHeights[pi.y * mHeightmap->Width() + pi.x];
+	float y1 = (float)mHeights[pi.y * mHeightmap->Width() + pi.x+1];
+	float y2 = (float)mHeights[(pi.y+1) * mHeightmap->Width() + pi.x];
+	float y3 = (float)mHeights[(pi.y+1) * mHeightmap->Width() + pi.x+1];
+	return mHeight * lerp(lerp(y0, y1, p.x - pi.x), lerp(y2, y3, p.x - pi.x), p.y - pi.y) / (float)0xFFFF;;
 }
 
 bool TerrainRenderer::UpdateTransform(){
     if (!Object::UpdateTransform()) return false;
 	mAABB = AABB(float3(0, mHeight * .5f, 0), float3(mSize, mHeight, mSize) * .5f) * ObjectToWorld();
     return true;
+}
+
+void TerrainRenderer::AddDetail(Mesh* mesh, std::shared_ptr<::Material> material, bool surfaceAlign, float frequency, float offset) {
+	mDetails.push_back({ mesh, material, surfaceAlign, frequency, offset });
 }
 
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
@@ -318,11 +325,6 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	mMaterial->SetParameter("Heightmap", mHeightmap);
 
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
-	if (!layout) return;
-
-    GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
-
 	vector<QuadNode*> leafNodes;
 	for (QuadNode* n : mLeafNodes)
 		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
@@ -330,15 +332,16 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	if (!leafNodes.size()) return;
 
+	#pragma region Populate descriptor set/push constants
 	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
 	for (QuadNode* n : leafNodes) {
 		*bn = float4(n->mPosition.x, 0, n->mPosition.z, n->mSize);
 		bn++;
 	}
+    
+	GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
-
-	#pragma region Populate descriptor set/push constants
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
 	objds->CreateStorageBufferDescriptor(nodeBuffer, OBJECT_BUFFER_BINDING);
 	if (shader->mDescriptorBindings.count("Lights"))
@@ -348,6 +351,9 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	if (shader->mDescriptorBindings.count("ShadowAtlas"))
 		objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
 	
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
+	if (!layout) return;
+
 	VkDescriptorSet ds = *objds;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
 
@@ -377,6 +383,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 	vkCmdBindIndexBuffer(*commandBuffer, *mIndexBuffers.at(commandBuffer->Device()), 0, VK_INDEX_TYPE_UINT16);
 
+	// Render terrain surface
 	uint32_t i = 0;
 	uint32_t si = 0;
 	QuadNode* sn = leafNodes[0];
@@ -393,6 +400,9 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
 		commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
 	}
+
+	// Details
+
 }
 
 void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}

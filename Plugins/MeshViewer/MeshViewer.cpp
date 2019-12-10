@@ -774,7 +774,7 @@ void MeshViewer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
 		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
-			mScene->AssetManager()->LoadTexture("Assets/icons.png"), float4(.5f, .5f, 0, 0));
+			mScene->AssetManager()->LoadTexture("Assets/Textures/icons.png"), float4(.5f, .5f, 0, 0));
 
 		if (hover) {
 			hitT = lt;

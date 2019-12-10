@@ -36,8 +36,14 @@ Environment::Environment(Scene* scene) :
 	mSkyboxMaterial = skyboxMat.get();
 
 	mShader = mScene->AssetManager()->LoadShader("Shaders/scatter.shader");
-	mMoonTexture = mScene->AssetManager()->LoadTexture("Assets/moon.png");
-	mStarTexture = mScene->AssetManager()->LoadCubemap("Assets/stars/posx.png", "Assets/stars/negx.png", "Assets/stars/posy.png", "Assets/stars/negy.png", "Assets/stars/posz.png", "Assets/stars/negz.png", false);
+	mMoonTexture = mScene->AssetManager()->LoadTexture("Assets/Textures/moon.png");
+	mStarTexture = mScene->AssetManager()->LoadCubemap(
+		"Assets/Textures/stars/posx.png",
+		"Assets/Textures/stars/negx.png",
+		"Assets/Textures/stars/posy.png",
+		"Assets/Textures/stars/negy.png",
+		"Assets/Textures/stars/posz.png",
+		"Assets/Textures/stars/negz.png", false);
 
 	float4 scatterR = mRayleighSct * mRayleighScatterCoef;
 	float4 scatterM = mMieSct * mMieScatterCoef;
@@ -278,7 +284,6 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
 	float3 r0 = camera->ClipToWorld(float3(-1,  1, 1));
 	float3 r1 = camera->ClipToWorld(float3(-1, -1, 1));
@@ -331,7 +336,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipeline);
 	ds = commandBuffer->Device()->GetTempDescriptorSet("Light Shaft LUT", shaft->mDescriptorSetLayouts[0]);
 	ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("_LightShaftLUT").second.binding);
-	ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer()->ColorBuffer(0), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
+	ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer(), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
 	ds->CreateStorageBufferDescriptor(mScene->LightBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Lights").second.binding);
 	ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
 	ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
@@ -348,7 +353,6 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
 	#pragma endregion
 	*/
-	camera->DepthFramebuffer()->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
