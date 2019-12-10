@@ -9,20 +9,58 @@
 
 using namespace std;
 
+inline float2 iqhash(float2 p) {
+	return frac(sin(float2(dot(p, float2(127.1f, 311.7f)), dot(p, float2(269.5f, 183.3f)))) * 18.5453f);
+}
+inline float2 voronoi(const float2& x, float u) {
+	float2 n = floor(x);
+	float2 f = frac(x);
+
+	float3 m = 8;
+	for (int j = -1; j <= 1; j++)
+		for (int i = -1; i <= 1; i++) {
+			float2 g((float)i, (float)j);
+			float2 o = g + iqhash(n + g) * u;
+			float2 r = o - f;
+			float d = dot(r, r);
+			if (d < m.z) m = float3(o, d);
+		}
+
+	return n + m.xy;
+}
+
 TerrainRenderer::QuadNode::QuadNode(TerrainRenderer* terrain, QuadNode* parent, uint32_t siblingIndex, uint32_t lod, const float2& pos, float size)
- : mTerrain(terrain), mParent(parent), mSiblingIndex(siblingIndex), mSize(size), mLod(lod), mChildren(nullptr), mPosition(float3(pos.x, terrain->Height(float3(pos.x, 0, pos.y)), pos.y)) {
+ : mTerrain(terrain), mParent(parent), mSiblingIndex(siblingIndex), mSize(size), mLod(lod), mChildren(nullptr), mHasDetails(false), mPosition(float3(pos.x, terrain->Height(float3(pos.x, 0, pos.y)), pos.y)) {
 	mVertexResolution = Resolution / size;
 	mTriangleMask = 0;
-
-	if (mVertexResolution > mTerrain->mDetailVertexResolution && mParent && mParent->mVertexResolution < mTerrain->mDetailVertexResolution) {
-		srand(siblingIndex ^ mParent->mSiblingIndex);
-		for (Detail& d : mTerrain->mDetails) {
-			
-		}
-	}
+	mDetails.resize(mTerrain->mDetails.size());
 }
 TerrainRenderer::QuadNode::~QuadNode() {
 	safe_delete_array(mChildren);
+}
+
+void TerrainRenderer::QuadNode::GenerateDetails() {
+	mHasDetails = false;
+	mDetails.resize(mTerrain->mDetails.size());
+
+	float3 corner = mPosition - mSize * .5f;
+	for (uint32_t i = 0; i < mTerrain->mDetails.size(); i++) {
+		if (mParent->mVertexResolution >= mTerrain->mDetails[i].mMinVertexResolution || mVertexResolution < mTerrain->mDetails[i].mMinVertexResolution) continue;
+
+		mHasDetails = true;
+
+		uint32_t c = mSize * mTerrain->mDetails[i].mFrequency;
+		mDetails[i].resize(c * c);
+		for (uint32_t x = 0; x < c; x++)
+			for (uint32_t z = 0; z < c; z++) {
+				DetailTransform* d = mDetails[i].data() + (x * c + z);
+				float2 p = mSize * voronoi(float2((float)x, (float)z), 1) / (float)c;
+				d->mPosition = corner + float3(p.x, 0, p.y);
+				d->mPosition.y = mTerrain->Height(d->mPosition) + mTerrain->mDetails[i].mOffset;
+				d->mScale = 1;
+				d->mRotation = quaternion(0, 0, 0, 1);
+			}
+	}
 }
 
 void TerrainRenderer::QuadNode::Split() {
@@ -52,6 +90,7 @@ void TerrainRenderer::QuadNode::Split() {
 		mChildren[i].mSize = s2;
 		mChildren[i].mVertexResolution = 2 * mVertexResolution;
 		mChildren[i].mTriangleMask = 0;
+		mChildren[i].GenerateDetails();
 	}
 
 	for (uint32_t i = 0; i < 4; i++)
@@ -186,7 +225,7 @@ TerrainRenderer::QuadNode* TerrainRenderer::QuadNode::ForwardNeighbor() {
 }
 
 TerrainRenderer::TerrainRenderer(const string& name, float size, float height)
-	: Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f), mDetailVertexResolution(10.f), mHeights(nullptr) {}
+	: Object(name), Renderer(), mSize(size), mHeight(height), mMaxVertexResolution(2.f), mHeights(nullptr) {}
 void TerrainRenderer::Initialize() {
 	mVisible = true;
 	mIndexOffsets.resize(16);
@@ -275,10 +314,15 @@ void TerrainRenderer::UpdateLOD(Camera* camera) {
 	}
 
 	mLeafNodes.clear();
+	mDetailNodes.clear();
 	nodes.push(mRootNode);
 	while (nodes.size()) {
 		QuadNode* n = nodes.front();
 		nodes.pop();
+
+		if (n->mHasDetails)
+			mDetailNodes.push_back(n);
+
 		if (n->mChildren)
 			for (uint32_t i = 0; i < 4; i++)
 				nodes.push(&n->mChildren[i]);
@@ -287,7 +331,6 @@ void TerrainRenderer::UpdateLOD(Camera* camera) {
 	}
 
 	if (!mLeafNodes.size()) return;
-
 	sort(mLeafNodes.begin(), mLeafNodes.end(), [](QuadNode* a, QuadNode* b) {
 		return a->mTriangleMask < b->mTriangleMask;
 	});
@@ -310,8 +353,8 @@ bool TerrainRenderer::UpdateTransform(){
     return true;
 }
 
-void TerrainRenderer::AddDetail(Mesh* mesh, std::shared_ptr<::Material> material, bool surfaceAlign, float frequency, float offset) {
-	mDetails.push_back({ mesh, material, surfaceAlign, frequency, offset });
+void TerrainRenderer::AddDetail(Mesh* mesh, std::shared_ptr<::Material> material, float imposterRange, bool surfaceAlign, float frequency, float res, float offset) {
+	mDetails.push_back({ nullptr, imposterRange, mesh, material, surfaceAlign, frequency, offset, res });
 }
 
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
@@ -384,25 +427,84 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	vkCmdBindIndexBuffer(*commandBuffer, *mIndexBuffers.at(commandBuffer->Device()), 0, VK_INDEX_TYPE_UINT16);
 
 	// Render terrain surface
-	uint32_t i = 0;
+	uint32_t ni = 0;
 	uint32_t si = 0;
 	QuadNode* sn = leafNodes[0];
 	for (QuadNode* n : leafNodes) {
 		if (n->mTriangleMask != sn->mTriangleMask) {
-			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
-			commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
+			vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], ni - si, mIndexOffsets[sn->mTriangleMask], 0, si);
+			commandBuffer->mTriangleCount += (ni - si) * mIndexCounts[sn->mTriangleMask] / 3;
 			sn = n;
-			si = i;
+			si = ni;
 		}
-		i++;
+		ni++;
 	}
-	if (i > si){
-		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], i - si, mIndexOffsets[sn->mTriangleMask], 0, si);
-		commandBuffer->mTriangleCount += (i - si) * mIndexCounts[sn->mTriangleMask] / 3;
+	if (ni > si) {
+		vkCmdDrawIndexed(*commandBuffer, mIndexCounts[sn->mTriangleMask], ni - si, mIndexOffsets[sn->mTriangleMask], 0, si);
+		commandBuffer->mTriangleCount += (ni - si) * mIndexCounts[sn->mTriangleMask] / 3;
 	}
 
 	// Details
+	vector<QuadNode*> detailNodes;
+	for (QuadNode* n : mDetailNodes)
+		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+			detailNodes.push_back(n);
 
+	if (!detailNodes.size()) return;
+
+	for (uint32_t i = 0; i < mDetails.size(); i++) {
+		uint32_t count = 0;
+		for (QuadNode* n : detailNodes)
+			count += n->mDetails[i].size();
+		Buffer* transformBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", count * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		DetailTransform* transforms = (DetailTransform*)transformBuffer->MappedData();
+		for (QuadNode* n : detailNodes) {
+			if (n->mDetails[i].size()) {
+				memcpy(transforms, n->mDetails[i].data(), n->mDetails[i].size() * sizeof(DetailTransform));
+				transforms += n->mDetails[i].size();
+			}
+		}
+
+		Buffer* indirectBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		Buffer* instanceBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Details", count * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		// TODO: run compute shader to generate draw data
+
+		if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mDetails[i].mMaterial.get());
+		if (pass & Depth) mDetails[i].mMaterial->EnableKeyword("DEPTH_PASS");
+		else mDetails[i].mMaterial->DisableKeyword("DEPTH_PASS");
+
+		layout = commandBuffer->BindMaterial(mDetails[i].mMaterial.get(), mDetails[i].mMesh->VertexInput(), camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
+		if (!layout) return;
+
+		shader = mDetails[i].mMaterial->GetShader(commandBuffer->Device());
+
+		#pragma region Parameters
+		objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
+		objds->CreateStorageBufferDescriptor(instanceBuffer, OBJECT_BUFFER_BINDING);
+		if (shader->mDescriptorBindings.count("Lights"))
+			objds->CreateStorageBufferDescriptor(Scene()->LightBuffer(commandBuffer->Device()), LIGHT_BUFFER_BINDING);
+		if (shader->mDescriptorBindings.count("Shadows"))
+			objds->CreateStorageBufferDescriptor(Scene()->ShadowBuffer(commandBuffer->Device()), SHADOW_BUFFER_BINDING);
+		if (shader->mDescriptorBindings.count("ShadowAtlas"))
+			objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
+
+		ds = *objds;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+
+		float t = Scene()->Instance()->TotalTime();
+		commandBuffer->PushConstant(shader, "Time", &t);
+		commandBuffer->PushConstant(shader, "LightCount", &lc);
+		commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
+		commandBuffer->PushConstant(shader, "TerrainSize", &sz);
+		commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
+		#pragma endregion
+
+		VkDeviceSize vboffset = 0;
+		VkBuffer vb = *mDetails[i].mMesh->VertexBuffer(commandBuffer->Device());
+		//vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
+		//vkCmdBindIndexBuffer(*commandBuffer, *mDetails[i].mMesh->IndexBuffer(commandBuffer->Device()), 0, mDetails[i].mMesh->IndexType());
+		//vkCmdDrawIndexedIndirect(*commandBuffer, *indirectBuffer, 0, 1, 0);
+	}
 }
 
 void TerrainRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}

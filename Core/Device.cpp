@@ -288,7 +288,7 @@ Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBuff
 
 	vector<Buffer*>::iterator closest = frame->mTempBuffers.end();
 	for (auto it = frame->mTempBuffers.begin(); it != frame->mTempBuffers.end(); it++) {
-		if ((*it)->Size() >= size) {
+		if ((((*it)->Usage() & usage) == usage) && (((*it)->MemoryProperties() & properties) == properties) && (*it)->Size() >= size) {
 			if (closest == frame->mTempBuffers.end() || (*it)->Size() < (*closest)->Size())
 				closest = it;
 			if ((*closest)->Size() == size) break;

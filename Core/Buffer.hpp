@@ -21,6 +21,8 @@ public:
 
 	inline VkDeviceMemory Memory() const { return mMemory; }
 	inline VkDeviceSize Size() const { return mSize; }
+	inline VkBufferUsageFlags Usage() const { return mUsageFlags; }
+	inline VkMemoryPropertyFlags MemoryProperties() const { return mMemoryFlags; }
 
 	ENGINE_EXPORT void CopyFrom(const Buffer& other);
 	Buffer& operator=(const Buffer& other) = delete;

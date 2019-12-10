@@ -41,7 +41,7 @@ private:
 	float mFrameTimeAccum;
 	float mFps;
 	uint32_t mFrameCount;
-	uint32_t mTriangleCount;
+	size_t mTriangleCount;
 };
 
 ENGINE_PLUGIN(TerrainSystem)
@@ -134,19 +134,19 @@ bool TerrainSystem::Init(Scene* scene) {
 
 	mTerrain->AddDetail(
 		mScene->AssetManager()->LoadMesh("Assets/Models/oaktree.fbx", .05f),
-		treeMat, false, .01f );
+		treeMat, false, 50, .005f, 0.005f, -.1f );
 
 	mTerrain->AddDetail(
-		mScene->AssetManager()->LoadMesh("Assets/Models/rock.fbx", .05f),
-		rockMat, true, .01f, -.4f );
+		mScene->AssetManager()->LoadMesh("Assets/Models/rock/rock.fbx", .05f),
+		rockMat, true, 40, .005f, .005f, -.4f );
 
 	mTerrain->AddDetail(
 		mScene->AssetManager()->LoadMesh("Assets/Models/bush_01.fbx", .05f),
-		bushMat, true, 3.f, 0 );
+		bushMat, true, 20, .05f, .05f, 0 );
 
-	mTerrain->AddDetail(
-		mScene->AssetManager()->LoadMesh("Assets/Models/grass_clump_01.fbx", .05f),
-		grassMat, true, 5.f, 0 );
+	//mTerrain->AddDetail(
+	//	mScene->AssetManager()->LoadMesh("Assets/Models/grass_clump_01.fbx", .05f),
+	//	grassMat, true, 5.f, .1f, 0 );
 	#pragma endregion
 
 	shared_ptr<Object> player = make_shared<Object>("Player");
@@ -278,7 +278,7 @@ void TerrainSystem::Update() {
 		mFrameTimeAccum -= 1.f;
 		mFrameCount = 0;
 		char buf[256];
-		sprintf(buf, "%.2f fps | %d tris\n", mFps, mTriangleCount);
+		sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
 		mFpsText->Text(buf);
 	}
 }

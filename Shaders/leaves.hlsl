@@ -111,7 +111,7 @@ v2f vsmain(
 	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
 	uint instance : SV_InstanceID ) {
 
-	vertex.xz += Sway(vertex.y, Instances[instance].ObjectToWorld[3].xz);
+	vertex.xz += Sway(vertex.y, float2(Instances[instance].ObjectToWorld[0].z, Instances[instance].ObjectToWorld[2].z));
 #endif
 	v2f o;
 

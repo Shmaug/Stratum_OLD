@@ -1,4 +1,5 @@
 #pragma kernel GenHeight
+#pragma kernel DrawDetails
 
 #include "include/shadercompat.h"
 
@@ -23,4 +24,9 @@ float SampleTerrain(float2 p) {
 [numthreads(8, 8, 1)]
 void GenHeight(uint3 id : SV_DispatchThreadID) {
 	Heightmap[id.xy] = SampleTerrain((float2)id.xy * Scale + Offset);
+}
+
+[numthreads(64, 1, 1)]
+void DrawDetails(uint3 id : SV_DispatchThreadID) {
+	
 }
