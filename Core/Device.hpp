@@ -35,6 +35,8 @@ public:
 	inline uint32_t PhysicalDeviceIndex() const { return mPhysicalDeviceIndex; }
 	inline VkQueue GraphicsQueue() const { return mGraphicsQueue; };
 	inline VkQueue PresentQueue() const { return mPresentQueue; };
+	inline uint32_t GraphicsQueueFamily() const { return mGraphicsQueueFamily; };
+	inline uint32_t PresentQueueFamily() const { return mPresentQueueFamily; };
 
 	ENGINE_EXPORT void SetObjectName(void* object, const std::string& name, VkObjectType type) const;
 

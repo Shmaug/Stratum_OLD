@@ -3,7 +3,9 @@
 
 using namespace std;
 
-Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, uint32_t height, const vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount)
+Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, uint32_t height, 
+	const vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount,
+	const vector<VkSubpassDependency>& dependencies)
 	: mName(name), mDevice(device), mWidth(width), mHeight(height), mSampleCount(sampleCount), mColorFormats(colorFormats), mDepthFormat(depthFormat) {
 
 	mFramebuffers = new VkFramebuffer[mDevice->MaxFramesInFlight()];
@@ -64,7 +66,7 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	subpasses[0].pColorAttachments = colorAttachments.data();
 	subpasses[0].pDepthStencilAttachment = &depthAttachmentRef;
 
-	mRenderPass = new ::RenderPass(mName + "RenderPass", this, attachments, subpasses);
+	mRenderPass = new ::RenderPass(mName + "RenderPass", this, attachments, subpasses, dependencies);
 	mColorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	mDepthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 }
@@ -142,7 +144,6 @@ void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
 		}
 		mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
 	}
-
 	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], mClearValues.data(), (uint32_t)mClearValues.size());
 }
 

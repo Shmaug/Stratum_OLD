@@ -4,15 +4,19 @@ High performance modular plugin-based Vulkan rendering engine in C++17 with mini
 
 ## How to Build
 
-Install the LunarG VulkanSDK and make sure the VULKAN_SDK environment variable points to it. Then, clone the submodules:
+On Windows: install the LunarG VulkanSDK and make sure the VULKAN_SDK environment variable points to it.
+
+On Linux: Install the `vulkan` and `vulkan-devel` packages.
+
+Then, clone the submodules:
 
 git submodule update --init
 
-Build the submodules into their respective folders.
-Make sure to build them to be linked statically. For Assimp, enable ASSIMP_BUILD_ZLIB unless 
-zlib is already installed. It is recommended to disable testing, examples, and any binary tools
-that the submodules might build as they are unneccesary. Also make sure to remove any library suffixes
-(namely for Assimp).
+Build the submodules into their respective folders with `BUILD_SHARED_LIBS` turned `OFF` to link statically.
+For Assimp, enable `ASSIMP_BUILD_ZLIB` unless  zlib is already installed. Also make sure to remove any
+library suffixes (namely for Assimp).
+Builduing any testing, examples, and any binary tools for the dependencies is not required and disabling them
+might reduce compilation time for the dependencies.
 
 ## TODO
 

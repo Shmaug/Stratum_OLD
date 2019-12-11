@@ -10,7 +10,9 @@ class Framebuffer {
 public:
 	const std::string mName;
 
-	ENGINE_EXPORT Framebuffer(const std::string& name, ::Device* device, uint32_t width, uint32_t height, const std::vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount);
+	ENGINE_EXPORT Framebuffer(const std::string& name, ::Device* device, uint32_t width, uint32_t height,
+		const std::vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount,
+		const std::vector<VkSubpassDependency>& dependencies);
 	ENGINE_EXPORT ~Framebuffer();
 
 	inline void Width(uint32_t w) { mWidth = w; }

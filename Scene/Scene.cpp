@@ -156,7 +156,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	
 	if (mDeviceData.count(device) == 0) {
 		DeviceData& data = mDeviceData[device];
-		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT);
+		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {});
 		uint32_t c = device->MaxFramesInFlight();
 		data.mLightBuffers = new Buffer*[c];
 		data.mShadowBuffers = new Buffer*[c];
@@ -170,7 +170,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	DeviceData& data = mDeviceData.at(device);
 
 	PROFILER_BEGIN("Lighting");
-	data.mShadowAtlasFramebuffer->BeginRenderPass(commandBuffer);
+	uint32_t si = 0;
 
 	mActiveLights.clear();
 	if (mLights.size()) {
@@ -180,7 +180,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		GPULight* lights = (GPULight*)data.mLightBuffers[frameContextIndex]->MappedData();
 		ShadowData* shadows = (ShadowData*)data.mShadowBuffers[frameContextIndex]->MappedData();
 
-		uint32_t si = 0;
 		uint32_t maxShadows = (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION) * (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION);
 
 		float ct = tanf(mainCamera->FieldOfView() * .5f) * max(1.f, mainCamera->Aspect());
@@ -268,39 +267,45 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			if (li >= MAX_GPU_LIGHTS) break;
 		}
 		PROFILER_END;
+	}
 
+	if (si) {
 		PROFILER_BEGIN("Render Shadows");
 		BEGIN_CMD_REGION(commandBuffer, "Render Shadows");
+		
 		bool g = mDrawGizmos;
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++) {
 			data.mShadowCameras[i]->mEnabled = true;
-			Render(data.mShadowCameras[i], commandBuffer, (PassType)(Depth | Shadow), false);
+			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, (PassType)(Depth | Shadow));
 		}
 		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
 			data.mShadowCameras[i]->mEnabled = false;
 		mDrawGizmos = g;
+
+		data.mShadowAtlasFramebuffer->ResolveDepth(commandBuffer);
+
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
 
-	vkCmdEndRenderPass(*commandBuffer);
-	data.mShadowAtlasFramebuffer->ResolveDepth(commandBuffer);
 	PROFILER_END;
 
 	mGizmos->PreFrame(device);
 	mEnvironment->Update();
 }
 
-void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, bool startRenderPass) {
+void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
 	PROFILER_BEGIN("Pre Render");
 	camera->PreRender();
 	if (pass & Main) {
-		BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
-		Render(camera, commandBuffer, Depth);
-		END_CMD_REGION(commandBuffer);
+		if (camera->DepthFramebuffer()){
+			BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
+			Render(commandBuffer, camera, camera->DepthFramebuffer(), Depth);
+			END_CMD_REGION(commandBuffer);
+		}
 		mEnvironment->PreRender(commandBuffer, camera);
 	}
 	for (const auto& p : mPluginManager->Plugins())
@@ -330,12 +335,7 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 	// combine MeshRenderers that have the same material and mesh
 	PROFILER_BEGIN("Draw");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
-	if (startRenderPass){
-		if (camera->DepthFramebuffer() && (pass & Depth))
-			camera->DepthFramebuffer()->BeginRenderPass(commandBuffer);
-		else
-			camera->Framebuffer()->BeginRenderPass(commandBuffer);
-	}
+	framebuffer->BeginRenderPass(commandBuffer);
 	camera->Set(commandBuffer);
 	
 	DescriptorSet* batchDS = nullptr;
@@ -444,23 +444,16 @@ void Scene::Render(Camera* camera, CommandBuffer* commandBuffer, PassType pass, 
 		PROFILER_END;
 	}
 	
-	if (startRenderPass)
-		vkCmdEndRenderPass(*commandBuffer);
+	vkCmdEndRenderPass(*commandBuffer);
+
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
-
-	if (camera->DepthFramebuffer() && (pass & Depth))
-		camera->DepthFramebuffer()->ResolveDepth(commandBuffer);
-	else
-		camera->Framebuffer()->ResolveColor(commandBuffer);
 
 	// Post Render
 	PROFILER_BEGIN("Post Render");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
 	PROFILER_END;
-
-	if (pass & Main) camera->ResolveWindow(commandBuffer);
 }
 
 Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {

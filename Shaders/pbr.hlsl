@@ -98,7 +98,11 @@ v2f vsmain(
 	uint instance : SV_InstanceID ) {
 	v2f o;
 	
-	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
+	float4x4 ct = float4x4(
+		1,0,0,-Camera.Position.x,
+		0,1,0,-Camera.Position.y,
+		0,0,1,-Camera.Position.z,
+		0,0,0,1);
 	float4 worldPos = mul(mul(ct, Instances[instance].ObjectToWorld), float4(vertex, 1.0));
 
 	o.position = mul(Camera.ViewProjection, worldPos);
