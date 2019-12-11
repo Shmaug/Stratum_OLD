@@ -3,7 +3,10 @@
 
 using namespace std;
 
-RenderPass::RenderPass(const string& name, ::Device* device, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)
+RenderPass::RenderPass(const string& name, ::Device* device,
+	const vector<VkAttachmentDescription>& attachments,
+	const vector<VkSubpassDescription>& subpasses,
+	const vector<VkSubpassDependency>& dependencies)
 	: mName(name), mDevice(device), mFramebuffer(nullptr) {
 	mRasterizationSamples = attachments[subpasses[0].pDepthStencilAttachment->attachment].samples;
 	mColorAttachmentCount = subpasses[0].colorAttachmentCount;
@@ -14,11 +17,16 @@ RenderPass::RenderPass(const string& name, ::Device* device, const std::vector<V
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = (uint32_t)subpasses.size();
 	renderPassInfo.pSubpasses = subpasses.data();
+	renderPassInfo.dependencyCount = (uint32_t)dependencies.size();
+	renderPassInfo.pDependencies = dependencies.data();
 	ThrowIfFailed(vkCreateRenderPass(*mDevice, &renderPassInfo, nullptr, &mRenderPass), "vkCreateRenderPass failed");
 	mDevice->SetObjectName(mRenderPass, mName + " RenderPass", VK_OBJECT_TYPE_RENDER_PASS);
 }
-RenderPass::RenderPass(const string& name, ::Framebuffer* frameBuffer, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses)
-	: RenderPass(name, frameBuffer->Device(), attachments, subpasses) {
+RenderPass::RenderPass(const string& name, ::Framebuffer* frameBuffer,
+	const vector<VkAttachmentDescription>& attachments,
+	const vector<VkSubpassDescription>& subpasses,
+	const vector<VkSubpassDependency>& dependencies)
+	: RenderPass(name, frameBuffer->Device(), attachments, subpasses, dependencies) {
 	mFramebuffer = frameBuffer;
 }
 RenderPass::~RenderPass() {

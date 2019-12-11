@@ -10,8 +10,14 @@ class RenderPass {
 public:
 	const std::string mName;
 
-	ENGINE_EXPORT RenderPass(const std::string& name, ::Device* device, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses);
-	ENGINE_EXPORT RenderPass(const std::string& name, ::Framebuffer* frameBuffer, const std::vector<VkAttachmentDescription>& attachments, const std::vector<VkSubpassDescription>& subpasses);
+	ENGINE_EXPORT RenderPass(const std::string& name, ::Device* device,
+		const std::vector<VkAttachmentDescription>& attachments,
+		const std::vector<VkSubpassDescription>& subpasses,
+		const std::vector<VkSubpassDependency>& dependencies);
+	ENGINE_EXPORT RenderPass(const std::string& name, ::Framebuffer* frameBuffer,
+		const std::vector<VkAttachmentDescription>& attachments,
+		const std::vector<VkSubpassDescription>& subpasses,
+		const std::vector<VkSubpassDependency>& dependencies);
 	ENGINE_EXPORT ~RenderPass();
 
 	inline uint32_t ColorAttachmentCount() const { return mColorAttachmentCount; }

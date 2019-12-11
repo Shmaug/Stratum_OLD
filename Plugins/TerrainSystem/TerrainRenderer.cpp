@@ -357,6 +357,92 @@ void TerrainRenderer::AddDetail(Mesh* mesh, std::shared_ptr<::Material> material
 	mDetails.push_back({ nullptr, imposterRange, mesh, material, surfaceAlign, frequency, offset, res });
 }
 
+void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	vector<QuadNode*> detailNodes;
+	for (QuadNode* n : mDetailNodes)
+		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+			detailNodes.push_back(n);
+	if (!detailNodes.size()) return;
+
+	float3 cp = camera->WorldPosition();
+	mIndirectBuffers.resize(mDetails.size());
+	mInstanceBuffers.resize(mDetails.size());
+	mIndirectBuffers.clear();
+	mInstanceBuffers.clear();
+	vector<uint32_t> counts(mDetails.size());
+	vector<Buffer*> transformBuffers(mDetails.size());
+	vector<VkBufferMemoryBarrier> barriers;
+
+	for (uint32_t i = 0; i < mDetails.size(); i++) {
+		counts[i] = 0;
+		for (QuadNode* n : detailNodes)
+			counts[i] += n->mDetails[i].size();
+		transformBuffers[i] = commandBuffer->Device()->GetTempBuffer(mName + " Detail Transforms", counts[i] * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		DetailTransform* transforms = (DetailTransform*)transformBuffers[i]->MappedData();
+		for (QuadNode* n : detailNodes) {
+			if (n->mDetails[i].size()) {
+				memcpy(transforms, n->mDetails[i].data(), n->mDetails[i].size() * sizeof(DetailTransform));
+				transforms += n->mDetails[i].size();
+			}
+		}
+
+		mIndirectBuffers[i] = commandBuffer->Device()->GetTempBuffer(mName + " Detail Indirect", 2*sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		memset(mIndirectBuffers[i]->MappedData(), 0, mIndirectBuffers[i]->Size());
+		VkDrawIndexedIndirectCommand* indirect = (VkDrawIndexedIndirectCommand*)mIndirectBuffers[i]->MappedData();
+		indirect->indexCount = mDetails[i].mMesh->IndexCount();
+
+		VkBufferMemoryBarrier b = {};
+		b.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		b.buffer = *mIndirectBuffers[i];
+		b.dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT;
+		b.size = VK_WHOLE_SIZE;
+		barriers.push_back(b);
+	}
+
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+		0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
+	barriers.clear();
+
+	for (uint32_t i = 0; i < mDetails.size(); i++) {
+		mInstanceBuffers[i] = commandBuffer->Device()->GetTempBuffer(mName + " Detail Buffers", counts[i] * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		
+		ComputeShader* compute = mTerrainCompute->GetCompute(commandBuffer->Device(), "DrawDetails", {});
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipeline);
+		commandBuffer->PushConstant(compute, "DetailCount", &counts[i]);
+		commandBuffer->PushConstant(compute, "CameraPosition", &cp);
+		commandBuffer->PushConstant(compute, "ImposterRange", &mDetails[i].mImposterRange);
+		DescriptorSet* compDesc = commandBuffer->Device()->GetTempDescriptorSet(mName + " Detail Compute", compute->mDescriptorSetLayouts[0]);
+		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("IndirectCommands").second.binding);
+		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("DetailInstances").second.binding);
+		compDesc->CreateStorageBufferDescriptor(transformBuffers[i], compute->mDescriptorBindings.at("DetailTransforms").second.binding);
+		VkDescriptorSet ds = *compDesc;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, &ds, 0, nullptr);
+		vkCmdDispatch(*commandBuffer, (counts[i] + 63) / 64, 1, 1);
+
+		VkBufferMemoryBarrier b = {};
+		b.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		b.buffer = *mIndirectBuffers[i];
+		b.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+		b.size = VK_WHOLE_SIZE;
+		barriers.push_back(b);
+		b.buffer = *mInstanceBuffers[i];
+		b.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		b.size = VK_WHOLE_SIZE;
+		barriers.push_back(b);
+	}
+
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0,
+		0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
+
+}
+
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mMaterial) return;
 
@@ -445,37 +531,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	}
 
 	// Details
-	vector<QuadNode*> detailNodes;
-	for (QuadNode* n : mDetailNodes)
-		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
-			detailNodes.push_back(n);
-
-	if (!detailNodes.size()) return;
-
-	for (uint32_t i = 0; i < mDetails.size(); i++) {
-		uint32_t count = 0;
-		for (QuadNode* n : detailNodes)
-			count += n->mDetails[i].size();
-		Buffer* transformBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Transforms", count * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		DetailTransform* transforms = (DetailTransform*)transformBuffer->MappedData();
-		for (QuadNode* n : detailNodes) {
-			if (n->mDetails[i].size()) {
-				memcpy(transforms, n->mDetails[i].data(), n->mDetails[i].size() * sizeof(DetailTransform));
-				transforms += n->mDetails[i].size();
-			}
-		}
-
-		Buffer* indirectBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Indirect", sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		Buffer* instanceBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Detail Buffers", count * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		// TODO: run compute shader to generate draw data
-
-		ComputeShader* compute = mTerrainCompute->GetCompute(commandBuffer->Device(), "DrawDetails", {});
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipeline);
-		DescriptorSet* compDesc = commandBuffer->Device()->GetTempDescriptorSet(mName + " Detail Compute", compute->mDescriptorSetLayouts[0]);
-		ds = *compDesc;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, &ds, 0, nullptr);
-		vkCmdDispatch(*commandBuffer, (count + 63) / 64, 1, 1);
-
+	for (uint32_t i = 0; i < mDetails.size(); i++){
 		if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mDetails[i].mMaterial.get());
 		if (pass & Depth) mDetails[i].mMaterial->EnableKeyword("DEPTH_PASS");
 		else mDetails[i].mMaterial->DisableKeyword("DEPTH_PASS");
@@ -485,9 +541,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 
 		shader = mDetails[i].mMaterial->GetShader(commandBuffer->Device());
 
-		#pragma region Parameters
 		objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		objds->CreateStorageBufferDescriptor(instanceBuffer, OBJECT_BUFFER_BINDING);
+		objds->CreateStorageBufferDescriptor(mInstanceBuffers[i], OBJECT_BUFFER_BINDING);
 		if (shader->mDescriptorBindings.count("Lights"))
 			objds->CreateStorageBufferDescriptor(Scene()->LightBuffer(commandBuffer->Device()), LIGHT_BUFFER_BINDING);
 		if (shader->mDescriptorBindings.count("Shadows"))
@@ -504,13 +559,12 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
 		commandBuffer->PushConstant(shader, "TerrainSize", &sz);
 		commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
-		#pragma endregion
 
 		VkDeviceSize vboffset = 0;
 		VkBuffer vb = *mDetails[i].mMesh->VertexBuffer(commandBuffer->Device());
-		//vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-		//vkCmdBindIndexBuffer(*commandBuffer, *mDetails[i].mMesh->IndexBuffer(commandBuffer->Device()), 0, mDetails[i].mMesh->IndexType());
-		//vkCmdDrawIndexedIndirect(*commandBuffer, *indirectBuffer, 0, 1, 0);
+		vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
+		vkCmdBindIndexBuffer(*commandBuffer, *mDetails[i].mMesh->IndexBuffer(commandBuffer->Device()), 0, mDetails[i].mMesh->IndexType());
+		vkCmdDrawIndexedIndirect(*commandBuffer, *mIndirectBuffers[i], 0, 1, 0);
 	}
 }
 

@@ -67,8 +67,8 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 
 	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount);
-	mDepthFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT);
+	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount, {});
+	mDepthFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT, {});
 
 	CreateDescriptorSet();
 }
@@ -90,8 +90,8 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	vector<VkFormat> colorFormats;
 	colorFormats.push_back(targetWindow->Format().format);
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount);
-	mDepthFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT);
+	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {});
+	mDepthFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT, {});
 
 	CreateDescriptorSet();
 }
@@ -168,6 +168,7 @@ void Camera::PreRender() {
 	}
 }
 void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
+	mFramebuffer->ResolveColor(commandBuffer);
 	// resolve or copy render target to target window
 	if (mTargetWindow) {
 		PROFILER_BEGIN("Copy RenderTarget");

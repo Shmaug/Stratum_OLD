@@ -88,10 +88,12 @@ private:
 		PROFILER_END;
 
 		PROFILER_BEGIN("Render Cameras");
-		for (const auto& camera : mScene->Cameras()) {
-			if (camera->EnabledHierarchy())
-				mScene->Render(camera, commandBuffers.at(camera->Device()).get(), Main);
-		}
+		for (const auto& camera : mScene->Cameras())
+			if (camera->EnabledHierarchy()){
+				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
+				mScene->Render(cb, camera, camera->Framebuffer(), Main);
+				camera->ResolveWindow(cb);
+			}
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffers");

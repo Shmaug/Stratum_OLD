@@ -30,6 +30,7 @@ public:
 
 	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
 	inline uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : 1000; }
+	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	PLUGIN_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	
@@ -96,6 +97,9 @@ private:
 		PLUGIN_EXPORT QuadNode* ForwardNeighbor();
 		PLUGIN_EXPORT QuadNode* BackNeighbor();
 	};
+
+	std::vector<Buffer*> mIndirectBuffers;
+	std::vector<Buffer*> mInstanceBuffers;
 
 	std::unordered_map<Device*, Buffer*> mIndexBuffers;
 	std::vector<uint32_t> mIndexOffsets;
