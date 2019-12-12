@@ -14,8 +14,8 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 4096
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 4096
-#define SHADOW_RESOLUTION 2048
+#define SHADOW_ATLAS_RESOLUTION 8192
+#define SHADOW_RESOLUTION 4096
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -47,7 +47,7 @@ Scene::~Scene(){
 	mObjects.clear();
 }
 
-Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(aiMaterial*, void*), void* materialFuncData, float scale) {
+Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale) {
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
@@ -60,7 +60,7 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 	vector<shared_ptr<Material>> materials;
 
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
-		materials.push_back(materialSetupFunc(scene->mMaterials[m], materialFuncData));
+		materials.push_back(materialSetupFunc(this, scene->mMaterials[m], materialFuncData));
 
 	vector<StdVertex> vertices;
 	vector<uint32_t> indices32;
@@ -337,9 +337,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Sun: {
 					float4 cascadeSplits = 0;
 					float cf = min(l->ShadowDistance(), mainCamera->Far());
-					cascadeSplits[0] = .01f * cf;
-					cascadeSplits[1] = .10f * cf;
-					cascadeSplits[2] = .40f * cf;
+					cascadeSplits[0] = .10f * cf;
+					cascadeSplits[1] = .30f * cf;
+					cascadeSplits[2] = .60f * cf;
 					cascadeSplits[3] = cf;
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
