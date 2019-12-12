@@ -4,10 +4,6 @@
 
 #include <Core/EnginePlugin.hpp>
 
-#define IMPORT_PLUGIN
-#include <Plugins/TerrainSystem/TerrainSystem.hpp>
-#undef IMPORT_PLUGIN
-
 #include <thread>
 
 using namespace std;
@@ -91,19 +87,175 @@ bool DicomVis::Init(Scene* scene) {
 	mObjects.push_back(mFpsText);
 
 	Shader* pbrShader = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
-	auto func = [](aiMaterial* m, void* data) {
+	auto func = [](Scene* s, aiMaterial* m, void* data) {
 		shared_ptr<Material> mat = make_shared<Material>("PBR", (Shader*)data);
-		mat->PassMask((PassType)(Main | Depth | Shadow));
-		mat->SetParameter("Color", float4(.8f));
-		mat->SetParameter("Roughness", 1.f);
-		mat->SetParameter("Metallic", 0.f);
+		std::string name = m->GetName().C_Str();
+		if (name == "MetalBrushed") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_col.png"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_nrm.png", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "MetalPainted") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.8f));
+			mat->SetParameter("Roughness", .3f);
+			mat->SetParameter("Metallic", 1.f);
+		} else if (name == "MetalSmooth") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.9f));
+			mat->SetParameter("Roughness", .05f);
+			mat->SetParameter("Metallic", 1.f);
+		} else if (name == "DarkMetal") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.4f));
+			mat->SetParameter("Roughness", .6f);
+			mat->SetParameter("Metallic", 1.f);
+		} else if (name == "WhitePlastic") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.95));
+			mat->SetParameter("Roughness", .3f);
+			mat->SetParameter("Metallic", .0f);
+		} else if (name == "BlackPlastic") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.1));
+			mat->SetParameter("Roughness", .3f);
+			mat->SetParameter("Metallic", .0f);
+		} else if (name == "Wood") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_col.png"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_nrm.png", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_msk.png", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Wood2") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Hardwood") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.3f));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_col.png"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_nrm.png", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_msk.png", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Wall") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Paper") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_col.png"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_nrm.png", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Leather") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Palette") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(1));
+			mat->SetParameter("Roughness", .2f);
+			mat->SetParameter("Metallic", .0f);
+			mat->SetParameter("MainTexture", s->AssetManager()->LoadTexture("Assets/Textures/palette.png"));
+			mat->EnableKeyword("COLOR_MAP");
+		} else if (name == "ClearGlass") {
+			mat->PassMask((PassType)(Main));
+			mat->SetParameter("Color", float4(.9f, .9f, 1, .25f));
+			mat->SetParameter("Roughness", .1f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->BlendMode(Alpha);
+			mat->CullMode(VK_CULL_MODE_NONE);
+		} else if (name == "TableGlass") {
+			mat->PassMask((PassType)(Main));
+			mat->SetParameter("Color", float4(1, 1, 1, .75f));
+			mat->SetParameter("Roughness", .6f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->BlendMode(Alpha);
+		} else if (name == "Ceiling") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.6f));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_col.png"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_nrm.png", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_msk.png", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Fabric") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.6f));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else if (name == "Carpet") {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.405f, .594f, .714f, 1.f));
+			mat->SetParameter("Roughness", 1.f);
+			mat->SetParameter("Metallic", 1.f);
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_msk.jpg", false));
+			mat->EnableKeyword("COLOR_MAP");
+			mat->EnableKeyword("NORMAL_MAP");
+			mat->EnableKeyword("MASK_MAP");
+		} else {
+			mat->PassMask((PassType)(Main | Depth | Shadow));
+			mat->SetParameter("Color", float4(.9f));
+			mat->SetParameter("Roughness", .5f);
+			mat->SetParameter("Metallic", 0.f);
+			printf("\t\"%s\"\n", name.c_str());
+		}
 		return mat;
 	};
 	mScene->LoadModelScene("Assets/Models/room.fbx", func, pbrShader, .01f)->LocalPosition(0, .01f, 0);
-
-	//TerrainSystem* terrain = mScene->PluginManager()->GetPlugin<TerrainSystem>();
-	//if (terrain) mPlayer->LocalPosition(0, terrain->Terrain()->Height(0), 0);
-
+	
 	return true;
 }
 
@@ -189,6 +341,4 @@ void DicomVis::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType
 	mTriangleCount = commandBuffer->mTriangleCount;
 }
 
-void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-
-}
+void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}

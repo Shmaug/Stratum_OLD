@@ -5,7 +5,7 @@
 #pragma multi_compile ALPHA_CLIP
 
 #pragma multi_compile TWO_SIDED
-#pragma multi_compile COLOR_MAP
+#pragma multi_compile COLOR_MP
 #pragma multi_compile NORMAL_MAP
 #pragma multi_compile MASK_MAP
 #pragma multi_compile EMISSION
