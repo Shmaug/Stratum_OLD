@@ -26,16 +26,15 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 
 void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
-	else mMaterial->DisableKeyword("DEPTH_PASS");
+	if (pass & Depth) mMaterial->EnableKeyword("PASS_DEPTH");
+	else mMaterial->DisableKeyword("PASS_DEPTH");
 }
 
 void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
-	if (!mMaterial) return;
-	::Mesh* m = Mesh();
-	if (!m) return;
+	::Mesh* mesh = Mesh();
 
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM);
+	VkCullModeFlags cull = (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), mesh->VertexInput(), camera, mesh->Topology(), cull);
 	if (!layout) return;
 	auto shader = mMaterial->GetShader(commandBuffer->Device());
 
@@ -49,11 +48,11 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
 	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *m->VertexBuffer(commandBuffer->Device());
+	VkBuffer vb = *mesh->VertexBuffer(commandBuffer->Device());
 	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *m->IndexBuffer(commandBuffer->Device()), 0, m->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), instanceCount, 0, 0, 0);
-	commandBuffer->mTriangleCount += instanceCount * (m->IndexCount() / 3);
+	vkCmdBindIndexBuffer(*commandBuffer, *mesh->IndexBuffer(commandBuffer->Device()), 0, mesh->IndexType());
+	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, 0, 0, 0);
+	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
 }
 
 void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {

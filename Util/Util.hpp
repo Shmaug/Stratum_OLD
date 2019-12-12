@@ -39,7 +39,11 @@
 #define PLUGIN_EXPORT
 #else
 #define ENGINE_EXPORT __declspec(dllimport)
+#ifdef IMPORT_PLUGIN
+#define PLUGIN_EXPORT __declspec(dllimport)
+#else
 #define PLUGIN_EXPORT __declspec(dllexport)
+#endif
 #endif
 #else
 #ifdef ENGINE_CORE

@@ -68,9 +68,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
 	
 	string error = result.GetErrorMessage();
-	if (error.size()) {
-		cerr << error.c_str() << endl;
-	}
+	if (error.size()) fprintf(stderr, "%s\n", error.c_str());
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:
 		VkShaderStageFlagBits vkstage;
@@ -592,28 +590,16 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 }
 
 int main(int argc, char* argv[]) {
-	if (argc == 2 && strcmp(argv[1], "--help") == 0) {
-		printf("Usage: %s <input> <output> <options>\n", argv[0]);
-		printf("\t-D\tGenerate debug info\n");
-		return EXIT_SUCCESS;
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
+		return EXIT_FAILURE;
 	}
 
-	const char* inputFile;
-	const char* outputFile;
-	if (argc < 3) {
-		printf("Usage: %s <input> <output> <options>\n", argv[0]);
-		//return EXIT_FAILURE;
-		inputFile = "E:/Projects/Stratum/Shaders/pbr.hlsl";
-		outputFile = "E:/Projets/Stratum/build/Debug/bin/Shaders/pbr.shader";
-	} else {
-		inputFile = argv[1];
-		outputFile = argv[2];
-	}
+	const char* inputFile = argv[1];
+	const char* outputFile = argv[2];
 
-	printf("Compiling %s\n", argv[1]);
+	printf("Compiling %s\n", inputFile);
 	
-	vector<char> data;
-
 	options.SetIncluder(make_unique<Includer>());
 	options.SetSourceLanguage(shaderc_source_language_hlsl);
 

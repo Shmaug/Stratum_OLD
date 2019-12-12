@@ -7,12 +7,12 @@
 #include <Core/RenderPass.hpp>
 #include <Core/DescriptorSet.hpp>
 
+// Referenced in material, shader, and commandbuffer
 typedef std::variant<
 	std::shared_ptr<Texture>,
 	std::shared_ptr<Sampler>,
 	Texture*,
 	Sampler*,
-	std::unordered_map<uint32_t, std::variant<std::shared_ptr<Texture>, Texture*>>,
 	float,
 	float2,
 	float3,
@@ -64,6 +64,7 @@ private:
 	uint32_t mRenderQueueOverride;
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
+	std::unordered_map<std::string, std::unordered_map<uint32_t, std::variant<std::shared_ptr<Texture>, Texture*>>> mArrayParameters;
 
 	struct DeviceData {
 		GraphicsShader* mShaderVariant;

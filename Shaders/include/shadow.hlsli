@@ -93,16 +93,16 @@ float SampleShadowCascadePCF(uint index, float3 cameraPos, float3 worldPos, floa
 
 	float attenuation = 0;
 	[unroll]
-	for (uint i = 0; i < 24; i++)
+	for (uint i = 0; i < 32; i++)
 		attenuation += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, saturate(shadowUV + PoissonSamples[i] * sz) * s.ShadowST.xy + s.ShadowST.zw, z);
-	return attenuation / 24;
+	return attenuation / 32;
 }
 float SampleShadowPCF(GPULight l, float3 cameraPos, float3 worldPos, float depth) {
 	float2 ct = l.Type == LIGHT_SUN ? CascadeSplit(l.CascadeSplits, depth) : 0;
 	uint ci = (uint)ct.x;
 	if (ci < 0) return 1;
 	float s = SampleShadowCascadePCF(l.ShadowIndex + ci, cameraPos, worldPos, ct.y);
-	if (ci < 3) s = lerp(s, SampleShadowCascadePCF(l.ShadowIndex + ci + 1, cameraPos, worldPos, ct.y * .5f), frac(ct.x));
+	//if (ci < 3) s = lerp(s, SampleShadowCascadePCF(l.ShadowIndex + ci + 1, cameraPos, worldPos, ct.y * .5f), frac(ct.x));
 	return s;
 }
 

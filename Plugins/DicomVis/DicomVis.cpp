@@ -2,103 +2,193 @@
 #include <Scene/TextRenderer.hpp>
 #include <Util/Profiler.hpp>
 
-#include "DicomVis.hpp"
+#include <Core/EnginePlugin.hpp>
+
+#define IMPORT_PLUGIN
+#include <Plugins/TerrainSystem/TerrainSystem.hpp>
+#undef IMPORT_PLUGIN
 
 #include <thread>
 
-#define THREAD_COUNT 1
-
 using namespace std;
+
+class DicomVis : public EnginePlugin {
+public:
+	PLUGIN_EXPORT DicomVis();
+	PLUGIN_EXPORT ~DicomVis();
+
+	PLUGIN_EXPORT bool Init(Scene* scene) override;
+	PLUGIN_EXPORT void Update() override;
+
+	PLUGIN_EXPORT void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass);
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
+
+private:
+	Scene* mScene;
+	vector<Object*> mObjects;
+	Object* mSelected;
+
+	float3 mCameraEuler;
+
+	Object* mPlayer;
+	Camera* mMainCamera;
+
+	float3 mPlayerVelocity;
+	bool mFlying;
+
+	TextRenderer* mFpsText;
+
+	MouseKeyboardInput* mInput;
+
+	float mFrameTimeAccum;
+	float mFps;
+	uint32_t mFrameCount;
+	size_t mTriangleCount;
+};
 
 ENGINE_PLUGIN(DicomVis)
 
-DicomVis::DicomVis() : mScene(nullptr) {
+DicomVis::DicomVis() : mScene(nullptr), mSelected(nullptr), mFlying(false) {
 	mEnabled = true;
+	mCameraEuler = 0;
+	mTriangleCount = 0;
+	mFrameCount = 0;
+	mFrameTimeAccum = 0;
+	mPlayerVelocity = 0;
+	mFps = 0;
 }
-DicomVis::~DicomVis() {}
+DicomVis::~DicomVis() {
+	for (Object* obj : mObjects)
+		mScene->RemoveObject(obj);
+}
 
 bool DicomVis::Init(Scene* scene) {
 	mScene = scene;
+	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
-	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
-	Font* font = mScene->AssetManager()->LoadFont("Assets/segoeui.ttf", 24);
+	shared_ptr<Object> player = make_shared<Object>("Player");
+	mScene->AddObject(player);
+	mPlayer = player.get();
+	mObjects.push_back(mPlayer);
 
-	shared_ptr<Material> fontMat = make_shared<Material>("Segoe UI", fontshader);
-	fontMat->SetParameter("MainTexture", font->Texture());
+	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
+	mScene->AddObject(camera);
+	camera->Near(.01f);
+	camera->Far(800.f);
+	camera->FieldOfView(radians(65.f));
+	camera->LocalPosition(0, 1.6f, 0);
+	mMainCamera = camera.get();
+	mPlayer->AddChild(mMainCamera);
+	mObjects.push_back(mMainCamera);
 
+	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
+	mScene->AddObject(fpsText);
+	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 36));
+	fpsText->Text("");
+	fpsText->VerticalAnchor(Maximum);
+	fpsText->HorizontalAnchor(Minimum);
+	mFpsText = fpsText.get();
+	mObjects.push_back(mFpsText);
+
+	Shader* pbrShader = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
+	auto func = [](aiMaterial* m, void* data) {
+		shared_ptr<Material> mat = make_shared<Material>("PBR", (Shader*)data);
+		mat->PassMask((PassType)(Main | Depth | Shadow));
+		mat->SetParameter("Color", float4(.8f));
+		mat->SetParameter("Roughness", 1.f);
+		mat->SetParameter("Metallic", 0.f);
+		return mat;
+	};
+	mScene->LoadModelScene("Assets/Models/room.fbx", func, pbrShader, .01f)->LocalPosition(0, .01f, 0);
+
+	//TerrainSystem* terrain = mScene->PluginManager()->GetPlugin<TerrainSystem>();
+	//if (terrain) mPlayer->LocalPosition(0, terrain->Terrain()->Height(0), 0);
 
 	return true;
 }
 
 void DicomVis::Update() {
+	#pragma region player movement
+	#pragma region rotate camera
+	if (mInput->LockMouse()) {
+		float3 md = float3(mInput->CursorDelta(), 0);
+		md = float3(md.y, md.x, 0) * .003f;
+		mCameraEuler += md;
+		mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
+		mMainCamera->LocalRotation(quaternion(float3(mCameraEuler.x, 0, 0)));
+		mPlayer->LocalRotation(quaternion(float3(0, mCameraEuler.y, 0)));
+	}
+	#pragma endregion
 
+	#pragma region apply movement force
+	float3 move = 0;
+	if (mInput->KeyDown(GLFW_KEY_W)) move.z += 1;
+	if (mInput->KeyDown(GLFW_KEY_S)) move.z -= 1;
+	if (mInput->KeyDown(GLFW_KEY_D)) move.x += 1;
+	if (mInput->KeyDown(GLFW_KEY_A)) move.x -= 1;
+	move = (mFlying ? mMainCamera->WorldRotation() : mPlayer->WorldRotation()) * move;
+	if (dot(move, move) > .001f) {
+		move = normalize(move);
+		move *= 2.5f;
+		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
+			move *= 2.5f;
+	}
+	float3 mf = 5 * (move - mPlayerVelocity) * mScene->Instance()->DeltaTime();
+	if (!mFlying) mf.y = 0;
+	mPlayerVelocity += mf;
+	#pragma endregion
+
+	if (!mFlying) mPlayerVelocity.y -= 9.8f * mScene->Instance()->DeltaTime(); // gravity
+
+	float3 p = mPlayer->WorldPosition();
+	p += mPlayerVelocity * mScene->Instance()->DeltaTime(); // integrate velocity
+
+	if (p.y < .5f) {
+		p.y = .5f;
+		mPlayerVelocity.y = 0;
+
+		if (!mFlying && mInput->KeyDown(GLFW_KEY_SPACE))
+			mPlayerVelocity.y += 4.f;
+
+	}
+	mPlayer->LocalPosition(p);
+	#pragma endregion
+
+	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
+		mInput->LockMouse(!mInput->LockMouse());
+	if (mInput->KeyDownFirst(GLFW_KEY_F1))
+		mScene->DrawGizmos(!mScene->DrawGizmos());
+	if (mInput->KeyDownFirst(GLFW_KEY_F2))
+		mFlying = !mFlying;
+
+	if (mInput->KeyDownFirst(GLFW_KEY_F9))
+		mMainCamera->Orthographic(!mMainCamera->Orthographic());
+
+	if (mMainCamera->Orthographic()) {
+		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
+		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
+	} else
+		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
+	mFpsText->LocalRotation(mMainCamera->WorldRotation());
+	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.005f)));
+
+	// count fps
+	mFrameTimeAccum += mScene->Instance()->DeltaTime();
+	mFrameCount++;
+	if (mFrameTimeAccum > 1.f) {
+		mFps = mFrameCount / mFrameTimeAccum;
+		mFrameTimeAccum -= 1.f;
+		mFrameCount = 0;
+		char buf[256];
+		sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
+		mFpsText->Text(buf);
+	}
 }
 
-shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size, DeviceManager* devices) {
-	struct Slice {
-		float mLocation;
-		vec3 mSize;
-	};
-	vector<Slice> slices;
-	
-	uint32_t w = 0;
-	uint32_t h = 0;
-	uint32_t d = 0;
+void DicomVis::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	mTriangleCount = commandBuffer->mTriangleCount;
+}
 
-	size = vec3(0, 0, 0);
+void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
-	for (uint32_t i = 0; i < (int)files.size(); i++) {
-		
-	}
-
-	std::sort(slices.begin(), slices.end(), [](const Slice& a, const Slice& b) {
-		return a.mLocation < b.mLocation;
-	});
-
-	printf("%.02fm x %.02fm x %.02fm\n", size.x, size.y, size.z);
-
-	#pragma pack(push)
-	#pragma pack(1)
-	struct VolumePixel {
-		uint16_t color;
-		uint16_t mask;
-	};
-	#pragma pack(pop)
-
-	VkDeviceSize imageSize = (VkDeviceSize)w * (VkDeviceSize)h * (VkDeviceSize)d;
-	VolumePixel* pixels = new VolumePixel[imageSize];
-	imageSize *= sizeof(VolumePixel);
-	memset(pixels, 0xFFFF, imageSize);
-
-	auto readImages = [&](uint32_t begin, uint32_t end) {
-		for (uint32_t i = begin; i < end; i++) {
-			VolumePixel* slice = pixels + (VkDeviceSize)w * (VkDeviceSize)h * (VkDeviceSize)i;
-			slices[i].mImage->setMinMaxWindow();
-			const uint16_t* pixelData = (const uint16_t*)slices[i].mImage->getOutputData(16);
-			uint32_t j = 0;
-			for (uint32_t x = 0; x < w; x++)
-				for (uint32_t y = 0; y < h; y++) {
-					j = x + y * w;
-					slice[j].color = pixelData[j];
-				}
-		}
-	};
-
-	if (THREAD_COUNT > 1) {
-		vector<thread> threads;
-		uint32_t s = ((uint32_t)slices.size() + THREAD_COUNT - 1) / THREAD_COUNT;
-		for (uint32_t i = 0; i < (uint32_t)slices.size(); i += s)
-			threads.push_back(thread(readImages, i, gmin(i + s, (uint32_t)slices.size())));
-		for (uint32_t i = 0; i < (uint32_t)threads.size(); i++)
-			threads[i].join();
-	} else
-		readImages(0, (uint32_t)slices.size());
-
-	shared_ptr<Texture> tex = shared_ptr<Texture>(new Texture("Dicom Volume", devices,
-		pixels, imageSize, w, h, d, VK_FORMAT_R16G16_UNORM, 0,
-		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT) );
-
-	delete[] pixels;
-
-	return tex;
 }

@@ -16,18 +16,10 @@
 
 using namespace std;
 
-struct Vertex {
-	float3 position;
-	float3 normal;
-	float4 tangent;
-	float2 uv;
-
-	static const ::VertexInput VertexInput;
-};
-const ::VertexInput Vertex::VertexInput {
+const ::VertexInput StdVertex::VertexInput {
 	{
 		0, // binding
-		sizeof(Vertex), // stride
+		sizeof(StdVertex), // stride
 		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
 	},
 	{
@@ -35,25 +27,25 @@ const ::VertexInput Vertex::VertexInput {
 			0, // location
 			0, // binding
 			VK_FORMAT_R32G32B32_SFLOAT, // format
-			offsetof(Vertex, position) // offset
+			offsetof(StdVertex, position) // offset
 		},
 		{
 			1, // location
 			0, // binding
 			VK_FORMAT_R32G32B32_SFLOAT, // format
-			offsetof(Vertex, normal) // offset
+			offsetof(StdVertex, normal) // offset
 		},
 		{
 			2, // location
 			0, // binding
 			VK_FORMAT_R32G32B32A32_SFLOAT, // format
-			offsetof(Vertex, tangent) // offset
+			offsetof(StdVertex, tangent) // offset
 		},
 		{
 			3, // location
 			0, // binding
 			VK_FORMAT_R32G32_SFLOAT, // format
-			offsetof(Vertex, uv) // offset
+			offsetof(StdVertex, uv) // offset
 		}
 	}
 };
@@ -165,7 +157,7 @@ Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, floa
 		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
 		throw;
 	}
-	vector<Vertex> vertices;
+	vector<StdVertex> vertices;
 	vector<AIWeight> weights;
 	unordered_map<string, aiBone*> uniqueBones;
 	vector<uint16_t> indices16;
@@ -185,8 +177,8 @@ Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, floa
 		if ((mesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE) == 0) continue;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
-			Vertex vertex = {};
-			memset(&vertex, 0, sizeof(Vertex));
+			StdVertex vertex = {};
+			memset(&vertex, 0, sizeof(StdVertex));
 
 			vertex.position = { (float)mesh->mVertices[i].x, (float)mesh->mVertices[i].y, (float)mesh->mVertices[i].z };
 			if (mesh->HasNormals()) vertex.normal = { (float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z };
@@ -337,14 +329,14 @@ Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, floa
 
 	mVertexCount = (uint32_t)vertices.size();
 	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
-	mVertexInput = &Vertex::VertexInput;
+	mVertexInput = &StdVertex::VertexInput;
 
 	for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
 		Device* device = devices->GetDevice(i);
 		DeviceData& d = mDeviceData[device];
 		if (!uniqueBones.size())
 			d.mWeightBuffer = nullptr;
-		d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | (uniqueBones.size() ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0));
+		d.mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(StdVertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | (uniqueBones.size() ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT : 0));
 		if (use32bit)
 			d.mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices32.data(), sizeof(uint32_t) * indices32.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 		else
@@ -412,7 +404,7 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 }
 
 Mesh* Mesh::CreatePlane(const string& name, Instance* devices, float s) {
-	const Vertex verts[4]{
+	const StdVertex verts[4]{
 		{ float3(-s, -s, 0), float3(0,0,1), float4(1,0,0,1), float2(0,0) },
 		{ float3( s, -s, 0), float3(0,0,1), float4(1,0,0,1), float2(1,0) },
 		{ float3(-s,  s, 0), float3(0,0,1), float4(1,0,0,1), float2(0,1) },
@@ -421,7 +413,7 @@ Mesh* Mesh::CreatePlane(const string& name, Instance* devices, float s) {
 	const uint16_t indices[6]{
 		0,2,1,2,3,1,
 	};
-	return new Mesh(name, devices, verts, indices, 8, sizeof(Vertex), 6, &Vertex::VertexInput, VK_INDEX_TYPE_UINT16);
+	return new Mesh(name, devices, verts, indices, 8, sizeof(StdVertex), 6, &StdVertex::VertexInput, VK_INDEX_TYPE_UINT16);
 }
 Mesh* Mesh::CreateCube(const string& name, Instance* devices, float r) {
 	float3 verts[8]{

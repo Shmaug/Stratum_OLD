@@ -1,7 +1,8 @@
 #pragma vertex vsmain
 #pragma fragment fsmain
 
-#pragma multi_compile DEPTH_PASS
+#pragma multi_compile PASS_DEPTH
+#pragma multi_compile ALPHA_CLIP
 
 #pragma multi_compile TWO_SIDED
 #pragma multi_compile COLOR_MAP
@@ -15,7 +16,7 @@
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
-#if defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP) || defined(ALPHA_CLIP)
+#if defined(ALPHA_CLIP) || (!defined(PASS_DEPTH) && (defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP)))
 #define NEED_TEXCOORD
 #endif
 #ifdef NORMAL_MAP
@@ -70,20 +71,16 @@
 struct v2f {
 	float4 position : SV_Position;
 	float4 worldPos : TEXCOORD0;
-#ifndef DEPTH_PASS
+	#ifndef PASS_DEPTH
 	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
+	#endif
 	#ifdef NEED_TANGENT
 	float3 tangent : TANGENT;
 	#endif
 	#ifdef NEED_TEXCOORD
 	float2 texcoord : TEXCOORD2;
 	#endif
-#else
-	#ifdef ALPHA_CLIP
-	float2 texcoord : TEXCOORD2;
-	#endif
-#endif
 };
 
 v2f vsmain(
@@ -108,9 +105,10 @@ v2f vsmain(
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	
-	#ifndef DEPTH_PASS
+	#ifndef PASS_DEPTH
 	o.screenPos = ComputeScreenPos(o.position);
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
+	#endif
 	
 	#ifdef NEED_TANGENT
 	o.tangent = mul(tangent, Instances[instance].WorldToObject).xyz * tangent.w;
@@ -119,19 +117,14 @@ v2f vsmain(
 	#ifdef NEED_TEXCOORD
 	o.texcoord = texcoord;
 	#endif
-	#else
-	#ifdef ALPHA_CLIP
-	o.texcoord = texcoord;
-	#endif
-	#endif
 
 	return o;
 }
 
-#ifdef DEPTH_PASS
+#ifdef PASS_DEPTH
 #ifdef ALPHA_CLIP
-float fsmain(in float4 worldPos : TEXCOORD0, in float2 texcoord : TEXCOORD2 ) : SV_Target0 {
-	clip((MainTexture.Sample(Sampler, i.texcoord) * Color).a - .75);
+float fsmain(in float4 worldPos : TEXCOORD0, in float2 texcoord : TEXCOORD2) : SV_Target0{
+	clip((MainTexture.Sample(Sampler, texcoord) * Color).a - .75);
 #else
 float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 #endif
@@ -164,13 +157,16 @@ void fsmain(v2f i,
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 	#endif
 
-	MaterialInfo material;
 	#ifdef MASK_MAP
 	float4 mask = MaskTexture.Sample(Sampler, i.texcoord);
+	#else
+	float4 mask = float4(1, .5, 1, 0);
+	#endif
+
+	MaterialInfo material;
 	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, Metallic*(1-mask.a), material.specular, material.oneMinusReflectivity);
 	material.perceptualRoughness = Roughness * mask.r * .99;
-	material.occlusion = mask.a;
-	#endif
+	material.occlusion = mask.b;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	#ifdef EMISSION
 	material.emission = Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;

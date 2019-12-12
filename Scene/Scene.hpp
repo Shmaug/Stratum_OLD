@@ -16,21 +16,25 @@
 
 class Renderer;
 
-/*
-Holds scene Objects. In general, plugins will add objects during their lifetime,
-and remove objects during or at the end of their lifetime.
-This makes the shared_ptr destroy when the plugin removes the object, allowing the plugin's module
-to free the memory.
-*/
+/// Holds scene Objects. In general, plugins will add objects during their lifetime,
+/// and remove objects during or at the end of their lifetime.
+/// This makes the shared_ptr destroy when the plugin removes the object, allowing the plugin's module
+/// to free the memory.
 class Scene {
 public:
 	ENGINE_EXPORT ~Scene();
+
 	ENGINE_EXPORT void AddObject(std::shared_ptr<Object> object);
 	ENGINE_EXPORT void RemoveObject(Object* object);
+	
+	/// Loads a 3d scene from a file, separating all meshes with different topologies/materials into separate MeshRenderers and 
+	/// replicating the heirarchy stored in the file, and creating new materials using the specified shader.
+	/// Calls materialSetupFunc for every aiMaterial in the file, to create a corresponding Material
+	ENGINE_EXPORT Object* LoadModelScene(const std::string& filename, std::shared_ptr<Material>(*materialSetupFunc)(aiMaterial*, void*), void* materialFuncData, float scale);
 
 	ENGINE_EXPORT void Update();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PassType::Main);
+	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PassType::Main, bool clear = true);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 
@@ -42,14 +46,15 @@ public:
 
 	inline float2 ShadowTexelSize() const { return mShadowTexelSize; }
 
-	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
-	inline bool DrawGizmos() const { return mDrawGizmos; }
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
 	inline ::Instance* Instance() const { return mInstance; }
 	inline ::Gizmos* Gizmos() const { return mGizmos; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 	inline ::Environment* Environment() const { return mEnvironment; }
+
+	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
+	inline bool DrawGizmos() const { return mDrawGizmos; }
 
 private:
 	friend class Stratum;

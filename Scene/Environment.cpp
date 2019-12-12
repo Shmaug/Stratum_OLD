@@ -269,11 +269,11 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		safe_delete(l->mLightShaftLUT);
 
 	if (!l->mInscatterLUT) {
-		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 32, 32, 128, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mOutscatterLUT) {
-		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 32, 32, 128, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 	if (!l->mLightShaftLUT){

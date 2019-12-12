@@ -4,6 +4,11 @@
 #include <Core/Instance.hpp>
 #include <Util/Profiler.hpp>
 
+#include <assimp/scene.h>
+#include <assimp/cimport.h>
+#include <assimp/postprocess.h>
+#include <assimp/material.h>
+
 using namespace std;
 
 #define INSTANCE_BATCH_SIZE 4096
@@ -19,6 +24,9 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mEnvironment = new ::Environment(this);
 }
 Scene::~Scene(){
+	while (mObjects.size())
+		RemoveObject(mObjects[0].get());
+
 	safe_delete(mGizmos);
 	safe_delete(mEnvironment);
 
@@ -33,13 +41,125 @@ Scene::~Scene(){
 		for (Camera* c : kp.second.mShadowCameras) safe_delete(c);
 	}
 
-	while (mObjects.size())
-		RemoveObject(mObjects[0].get());
-
 	mCameras.clear();
 	mRenderers.clear();
 	mLights.clear();
 	mObjects.clear();
+}
+
+Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(aiMaterial*, void*), void* materialFuncData, float scale) {
+	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded | aiProcess_SortByPType);
+	if (!scene) {
+		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
+		throw;
+	}
+
+	Object* root = nullptr;
+
+	vector<shared_ptr<Mesh>> meshes;
+	vector<shared_ptr<Material>> materials;
+
+	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
+		materials.push_back(materialSetupFunc(scene->mMaterials[m], materialFuncData));
+
+	vector<StdVertex> vertices;
+	vector<uint32_t> indices32;
+	vector<uint16_t> indices16;
+	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
+		vertices.clear();
+
+		const aiMesh* mesh = scene->mMeshes[m];
+		VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
+			StdVertex vertex = {};
+			memset(&vertex, 0, sizeof(StdVertex));
+
+			vertex.position = { (float)mesh->mVertices[i].x, (float)mesh->mVertices[i].y, (float)mesh->mVertices[i].z };
+			if (mesh->HasNormals()) vertex.normal = { (float)mesh->mNormals[i].x, (float)mesh->mNormals[i].y, (float)mesh->mNormals[i].z };
+			if (mesh->HasTangentsAndBitangents()) {
+				vertex.tangent = { (float)mesh->mTangents[i].x, (float)mesh->mTangents[i].y, (float)mesh->mTangents[i].z, 1.f };
+				float3 bt = float3((float)mesh->mBitangents[i].x, (float)mesh->mBitangents[i].y, (float)mesh->mBitangents[i].z);
+				vertex.tangent.w = dot(cross(vertex.tangent.xyz, vertex.normal), bt) > 0.f ? 1.f : -1.f;
+			}
+			if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
+			vertex.position *= scale;
+			vertices.push_back(vertex);
+		}
+
+		if (vertices.size() > 0xFFFF) {
+			indices32.clear();
+			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+				const aiFace& f = mesh->mFaces[i];
+				indices32.push_back((uint32_t)f.mIndices[0]);
+				if (f.mNumIndices > 1) {
+					indices32.push_back((uint32_t)f.mIndices[1]);
+					if (f.mNumIndices > 2)
+						indices32.push_back((uint32_t)f.mIndices[2]);
+					else
+						topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+				} else
+					topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+			}
+			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance, vertices.data(), indices32.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(StdVertex), (uint32_t)indices32.size(), &StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
+		} else {
+			indices16.clear();
+			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+				const aiFace& f = mesh->mFaces[i];
+				indices16.push_back((uint16_t)f.mIndices[0]);
+				if (f.mNumIndices > 1) {
+					indices16.push_back((uint16_t)f.mIndices[1]);
+					if (f.mNumIndices > 2)
+						indices16.push_back((uint16_t)f.mIndices[2]);
+					else
+						topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+				} else
+					topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+			}
+			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance, vertices.data(), indices16.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(StdVertex), (uint32_t)indices16.size(), &StdVertex::VertexInput, VK_INDEX_TYPE_UINT16, topo));
+		}
+	}
+
+	queue<pair<Object*, aiNode*>> nodes;
+	nodes.push(make_pair((Object*)nullptr, scene->mRootNode));
+	while (nodes.size()) {
+		auto np = nodes.front();
+		nodes.pop();
+		aiNode* n = np.second;
+
+		aiVector3D position;
+		aiVector3D nscale;
+		aiQuaternion rotation;
+		n->mTransformation.Decompose(nscale, rotation, position);
+
+		shared_ptr<Object> obj = make_shared<Object>(n->mName.C_Str());
+		AddObject(obj);
+		obj->LocalPosition(position.x * scale, position.y * scale, position.z * scale);
+		obj->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
+		obj->LocalScale(nscale.x, nscale.y, nscale.z);
+
+		if (np.first)
+			np.first->AddChild(obj.get());
+		else
+			root = obj.get();
+
+		for (uint32_t i = 0; i < n->mNumMeshes; i++) {
+			shared_ptr<Mesh> mesh = meshes[n->mMeshes[i]];
+			uint32_t mat = scene->mMeshes[n->mMeshes[i]]->mMaterialIndex;
+
+			shared_ptr<MeshRenderer> mr = make_shared<MeshRenderer>(n->mName.C_Str() + mesh->mName);
+			AddObject(mr);
+			mr->Material(mat < materials.size() ? materials[mat] : nullptr);
+			mr->Mesh(mesh);
+			obj->AddChild(mr.get());
+		}
+
+		for (uint32_t i = 0; i < n->mNumChildren; i++)
+			nodes.push({ obj.get(), n->mChildren[i] });
+	}
+
+	printf("Loaded %s\n", filename.c_str());
+	return root;
 }
 
 void Scene::Update() {
@@ -129,14 +249,14 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 	sc->LocalPosition(pos);
 	sc->LocalRotation(rot);
 
-	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION) + 1);
-	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION) + 1);
-	sc->ViewportWidth(SHADOW_RESOLUTION - 2);
-	sc->ViewportHeight(SHADOW_RESOLUTION - 2);
+	sc->ViewportX((float)((si % (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
+	sc->ViewportY((float)((si / (SHADOW_ATLAS_RESOLUTION / SHADOW_RESOLUTION)) * SHADOW_RESOLUTION));
+	sc->ViewportWidth(SHADOW_RESOLUTION);
+	sc->ViewportHeight(SHADOW_RESOLUTION);
 
 	sd->WorldToShadow = sc->ViewProjection();
 	sd->CameraPosition = pos;
-	sd->ShadowST = float4(sc->ViewportWidth(), sc->ViewportHeight(), sc->ViewportX(), sc->ViewportY()) / SHADOW_ATLAS_RESOLUTION;
+	sd->ShadowST = float4(sc->ViewportWidth() - 2, sc->ViewportHeight() - 2, sc->ViewportX() + 1, sc->ViewportY() + 1) / SHADOW_ATLAS_RESOLUTION;
 	sd->InvProj22 = 1.f / (sc->Projection()[2][2] * (sc->Far() - sc->Near()));
 };
 
@@ -156,7 +276,8 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	
 	if (mDeviceData.count(device) == 0) {
 		DeviceData& data = mDeviceData[device];
-		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {});
+		data.mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", device, SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, 
+			VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_LOAD);
 		uint32_t c = device->MaxFramesInFlight();
 		data.mLightBuffers = new Buffer*[c];
 		data.mShadowBuffers = new Buffer*[c];
@@ -246,7 +367,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 						float3 ext = mx - mn;
 						float sz = max(ext.x, ext.y);
-						AddShadowCamera(&data, si, &shadows[si], true, .5f*sz, center / 8, l->WorldRotation(), -2*sz, sz);
+						AddShadowCamera(&data, si, &shadows[si], true, sz, center / 8, l->WorldRotation(), -5*sz, sz);
 						si++;
 						z0 = z1;
 					}
@@ -272,12 +393,12 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	if (si) {
 		PROFILER_BEGIN("Render Shadows");
 		BEGIN_CMD_REGION(commandBuffer, "Render Shadows");
-		
+
 		bool g = mDrawGizmos;
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++) {
 			data.mShadowCameras[i]->mEnabled = true;
-			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, (PassType)(Depth | Shadow));
+			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, (PassType)(Depth | Shadow), i == 0);
 		}
 		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
 			data.mShadowCameras[i]->mEnabled = false;
@@ -295,7 +416,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	mEnvironment->Update();
 }
 
-void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass) {
+void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
 	PROFILER_BEGIN("Pre Render");
@@ -318,24 +439,25 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	for (Renderer* r : mRenderers)
 		if (r->Visible() && camera->IntersectFrustum(r->Bounds()) && (r->PassMask() & pass))
 			mRenderList.push_back(r);
+	// combine MeshRenderers that have the same material and mesh
 	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
 		if (a->RenderQueue() == b->RenderQueue())
 			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
 				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
-					if (ma->Mesh() == mb->Mesh())
-						return ma->Material() < mb->Material();
-					else
+					if (ma->Material() == mb->Material())
 						return ma->Mesh() < mb->Mesh();
+					else
+						return ma->Material() < mb->Material();
 		return a->RenderQueue() < b->RenderQueue();
 	});
 	PROFILER_END;
 	for (Renderer* r : mRenderList)
 		r->PreRender(commandBuffer, camera, pass);
 
-	// combine MeshRenderers that have the same material and mesh
 	PROFILER_BEGIN("Draw");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
 	framebuffer->BeginRenderPass(commandBuffer);
+	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
 	
 	DescriptorSet* batchDS = nullptr;

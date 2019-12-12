@@ -138,10 +138,10 @@ void TerrainRenderer::QuadNode::UpdateNeighbors() {
 bool TerrainRenderer::QuadNode::ShouldSplit(const float3& camPos, float tanFov) {
 	if (mLod < 3) return true;
 
-	float3 v = abs(mPosition - camPos) - mSize;
+	float3 v = max(0.f, abs(mPosition - camPos) - mSize);
 
 	float x = dot(v, v) / (mSize*mSize) * tanFov;
-	if (mVertexResolution < 2 && x < 50) return true;
+	if (mVertexResolution < 2 && x < .5f) return true;
 
 	QuadNode* l = LeftNeighbor();
 	if (l && l->mChildren && (l->mChildren[1].mChildren || l->mChildren[3].mChildren)) return true;
@@ -231,14 +231,14 @@ void TerrainRenderer::Initialize() {
 	mIndexOffsets.resize(16);
 	mIndexCounts.resize(16);
 
-	uint32_t Resolution = 4096;
+	uint32_t Resolution = 1024;
 	mTerrainCompute = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
 	float scale = mSize / Resolution;
 	float offset = -mSize * .5f;
 
-	mHeights = new uint16_t[Resolution * Resolution];
+	mHeights = new uint16_t[Resolution * Resolution * 4];
 
-	mHeightmap = new Texture(mName + " Heightmap", Scene()->Instance(), Resolution, Resolution, 1, VK_FORMAT_R16_UNORM,
+	mHeightmap = new Texture(mName + " Heightmap", Scene()->Instance(), Resolution, Resolution, 1, VK_FORMAT_R16G16B16A16_UNORM,
 		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
 
 	for (uint32_t i = 0; i < Scene()->Instance()->DeviceCount(); i++) {
@@ -263,7 +263,7 @@ void TerrainRenderer::Initialize() {
 		if (i == 0) {
 			mHeightmap->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
 
-			dst = new Buffer("Heightmap", device, sizeof(uint16_t)*Resolution*Resolution, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			dst = new Buffer("Heightmap", device, sizeof(uint16_t)*Resolution*Resolution*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 				
 			VkBufferImageCopy rgn = {};
 			rgn.imageExtent = { Resolution, Resolution, 1 };
@@ -340,10 +340,10 @@ float TerrainRenderer::Height(const float3& lp) {
 	float2 p = (float2(lp.x, lp.z) + mSize * .5f) / mSize;
 	p *= float2(mHeightmap->Width(), mHeightmap->Height());
 	uint2 pi = clamp(uint2((uint32_t)p.x, (uint32_t)p.y), 0, uint2(mHeightmap->Width(), mHeightmap->Height()) - 2);
-	float y0 = (float)mHeights[pi.y * mHeightmap->Width() + pi.x];
-	float y1 = (float)mHeights[pi.y * mHeightmap->Width() + pi.x+1];
-	float y2 = (float)mHeights[(pi.y+1) * mHeightmap->Width() + pi.x];
-	float y3 = (float)mHeights[(pi.y+1) * mHeightmap->Width() + pi.x+1];
+	float y0 = (float)mHeights[4*( pi.y * mHeightmap->Width() + pi.x)];
+	float y1 = (float)mHeights[4*( pi.y * mHeightmap->Width() + pi.x+1)];
+	float y2 = (float)mHeights[4*((pi.y+1) * mHeightmap->Width() + pi.x)];
+	float y3 = (float)mHeights[4*((pi.y+1) * mHeightmap->Width() + pi.x+1)];
 	return mHeight * lerp(lerp(y0, y1, p.x - pi.x), lerp(y2, y3, p.x - pi.x), p.y - pi.y) / (float)0xFFFF;;
 }
 
@@ -354,10 +354,24 @@ bool TerrainRenderer::UpdateTransform(){
 }
 
 void TerrainRenderer::AddDetail(Mesh* mesh, std::shared_ptr<::Material> material, float imposterRange, bool surfaceAlign, float frequency, float res, float offset) {
-	mDetails.push_back({ nullptr, imposterRange, mesh, material, surfaceAlign, frequency, offset, res });
+	Detail d = {};
+	d.mImposter = nullptr;
+	d.mImposterRange = imposterRange;
+	d.mMesh = mesh;
+	d.mMaterial = material;
+	d.mAlignToSurface = surfaceAlign;
+	d.mFrequency = frequency;
+	d.mMinVertexResolution = res;
+	d.mOffset = offset;
+	mDetails.push_back(d);
 }
 
 void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
+	if (pass & Depth) mMaterial->EnableKeyword("PASS_DEPTH");
+	else mMaterial->DisableKeyword("PASS_DEPTH");
+	mMaterial->SetParameter("Heightmap", mHeightmap);
+
 	vector<QuadNode*> detailNodes;
 	for (QuadNode* n : mDetailNodes)
 		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
@@ -377,6 +391,9 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 		counts[i] = 0;
 		for (QuadNode* n : detailNodes)
 			counts[i] += n->mDetails[i].size();
+
+		if (!counts[i]) continue;
+
 		transformBuffers[i] = commandBuffer->Device()->GetTempBuffer(mName + " Detail Transforms", counts[i] * sizeof(DetailTransform), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		DetailTransform* transforms = (DetailTransform*)transformBuffers[i]->MappedData();
 		for (QuadNode* n : detailNodes) {
@@ -402,25 +419,29 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 		barriers.push_back(b);
 	}
 
+	if (!barriers.size()) return;
+
 	vkCmdPipelineBarrier(*commandBuffer,
 		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
 		0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
 	barriers.clear();
 
 	for (uint32_t i = 0; i < mDetails.size(); i++) {
+		if (!counts[i]) continue;
+
 		mInstanceBuffers[i] = commandBuffer->Device()->GetTempBuffer(mName + " Detail Buffers", counts[i] * sizeof(ObjectBuffer), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
 		ComputeShader* compute = mTerrainCompute->GetCompute(commandBuffer->Device(), "DrawDetails", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipeline);
-		commandBuffer->PushConstant(compute, "DetailCount", &counts[i]);
-		commandBuffer->PushConstant(compute, "CameraPosition", &cp);
-		commandBuffer->PushConstant(compute, "ImposterRange", &mDetails[i].mImposterRange);
 		DescriptorSet* compDesc = commandBuffer->Device()->GetTempDescriptorSet(mName + " Detail Compute", compute->mDescriptorSetLayouts[0]);
 		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("IndirectCommands").second.binding);
 		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("DetailInstances").second.binding);
 		compDesc->CreateStorageBufferDescriptor(transformBuffers[i], compute->mDescriptorBindings.at("DetailTransforms").second.binding);
 		VkDescriptorSet ds = *compDesc;
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, &ds, 0, nullptr);
+		commandBuffer->PushConstant(compute, "DetailCount", &counts[i]);
+		commandBuffer->PushConstant(compute, "CameraPosition", &cp);
+		commandBuffer->PushConstant(compute, "ImposterRange", &mDetails[i].mImposterRange);
 		vkCmdDispatch(*commandBuffer, (counts[i] + 63) / 64, 1, 1);
 
 		VkBufferMemoryBarrier b = {};
@@ -440,26 +461,19 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 	vkCmdPipelineBarrier(*commandBuffer,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0,
 		0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
-
 }
 
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	if (!mMaterial) return;
-
-	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
-	else mMaterial->DisableKeyword("DEPTH_PASS");
-	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
-
-	mMaterial->SetParameter("Heightmap", mHeightmap);
-
 	vector<QuadNode*> leafNodes;
 	for (QuadNode* n : mLeafNodes)
 		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
 			leafNodes.push_back(n);
 
 	if (!leafNodes.size()) return;
+
+	VkCullModeFlags cull = (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
+	if (!layout) return;
 
 	#pragma region Populate descriptor set/push constants
 	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -479,9 +493,6 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		objds->CreateStorageBufferDescriptor(Scene()->ShadowBuffer(commandBuffer->Device()), SHADOW_BUFFER_BINDING);
 	if (shader->mDescriptorBindings.count("ShadowAtlas"))
 		objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
-	
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
-	if (!layout) return;
 
 	VkDescriptorSet ds = *objds;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
