@@ -52,3 +52,9 @@ along the view ray and accumulating the total shadow attenuation. This is simply
 Since the amospheric scattering is computed in realtime, a fully dynamic day/night cycle is possible via rotating the sun and moon lights as well as rotating a star cubemap to
 simulate the rotation of the world.
 ![Night Time](https://i.imgur.com/cQMBzWx.png)
+
+## Scene Integration
+The terrain and atmosphere shaders can share data with the rest of the scene. The scene stores global environment data, including atmospheric scattering results,
+allowing for all other shaders in the scene to receive scattering. Additinoally, shaders that support instancing meshes are grouped during each render pass and automatically
+batched into a single draw call, allowing for drastic performance improvements.
+![Building](https://i.imgur.com/cdAEXQS.png)

@@ -114,19 +114,17 @@ void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera
 		for (uint32_t i = 0; i < mRig.size(); i++)
 			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
     }
+
+	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
+	if (pass & Depth) mMaterial->EnableKeyword("PASS_DEPTH");
+	else mMaterial->DisableKeyword("PASS_DEPTH");
 }
 
 void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	if (!mMaterial) return;
 	::Mesh* m = Mesh();
 	if (!m) return;
 
-	VkCullModeFlags cull = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("DEPTH_PASS");
-	else mMaterial->DisableKeyword("DEPTH_PASS");
-	if (pass & Shadow) cull = VK_CULL_MODE_NONE;
-
+	VkCullModeFlags cull = (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), cull);
 	if (!layout) return;
 	auto shader = mMaterial->GetShader(commandBuffer->Device());

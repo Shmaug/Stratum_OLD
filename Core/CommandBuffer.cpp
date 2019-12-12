@@ -143,11 +143,41 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, const VertexInp
 
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology, cullMode, blendMode, polyMode);
 	if (pipeline == mCurrentPipeline) {
-		if (material != mCurrentMaterial || mCurrentCamera != camera) {
-			material->SetParameters(this, camera, shader);
-			mCurrentMaterial = material;
-			mCurrentCamera = camera;
+		// same pipeline/shader variant, see if we need to rebind...
+		bool needRebind = mCurrentCamera != camera;
+		if (!needRebind) {
+			for (auto b : shader->mDescriptorBindings) {
+				uint32_t c0 = material->mParameters.count(b.first);
+				uint32_t c1 = mCurrentMaterial->mParameters.count(b.first);
+				if (c0 && c1) {
+					if (material->mParameters.at(b.first) != mCurrentMaterial->mParameters.at(b.first)) {
+						needRebind = true;
+						break;
+					}
+				} else if (c0 != c1) {
+					needRebind = true;
+					break;
+				}
+			}
+			for (auto b : shader->mPushConstants) {
+				uint32_t c0 = material->mParameters.count(b.first);
+				uint32_t c1 = mCurrentMaterial->mParameters.count(b.first);
+				if (c0 && c1) {
+					if (material->mParameters.at(b.first) != mCurrentMaterial->mParameters.at(b.first)) {
+						needRebind = true;
+						break;
+					}
+				} else if (c0 != c1) {
+					needRebind = true;
+					break;
+				}
+			}
 		}
+
+		if (needRebind) material->SetParameters(this, camera, shader);
+		
+		mCurrentMaterial = material;
+		mCurrentCamera = camera;
 		return shader->mPipelineLayout;
 	}
 

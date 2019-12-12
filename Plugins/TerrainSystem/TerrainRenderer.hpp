@@ -28,7 +28,7 @@ public:
 	PLUGIN_EXPORT void Initialize();
 	PLUGIN_EXPORT void UpdateLOD(Camera* camera);
 
-	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
+	inline bool Visible() override { return mVisible && mMaterial && EnabledHierarchy(); }
 	inline uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : 1000; }
 	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	PLUGIN_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;

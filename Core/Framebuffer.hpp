@@ -12,7 +12,7 @@ public:
 
 	ENGINE_EXPORT Framebuffer(const std::string& name, ::Device* device, uint32_t width, uint32_t height,
 		const std::vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount,
-		const std::vector<VkSubpassDependency>& dependencies);
+		const std::vector<VkSubpassDependency>& dependencies, VkAttachmentLoadOp loadOp);
 	ENGINE_EXPORT ~Framebuffer();
 
 	inline void Width(uint32_t w) { mWidth = w; }
@@ -27,6 +27,7 @@ public:
 	inline Texture* ColorBuffer(uint32_t i) { return mResolveBuffers[mDevice->FrameContextIndex()][i]; }	
 	inline Texture* DepthBuffer() { return mResolveDepthBuffers[mDevice->FrameContextIndex()]; }
 
+	ENGINE_EXPORT void Clear(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void ResolveColor(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void ResolveDepth(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);

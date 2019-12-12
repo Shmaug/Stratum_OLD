@@ -186,6 +186,12 @@ struct int2 {
 	inline int32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const int2& a) const {
+		rpt2(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const int2& a) const { return !operator ==(a); }
 };
 struct int3 {
 	union {
@@ -328,6 +334,12 @@ struct int3 {
 	inline int32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const int3& a) const {
+		rpt3(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const int3& a) const { return !operator ==(a); }
 };
 struct int4 {
 	union {
@@ -474,6 +486,12 @@ struct int4 {
 	inline int32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const int4& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const int4& a) const { return !operator ==(a); }
 };
 
 struct uint2 {
@@ -609,6 +627,12 @@ struct uint2 {
 	inline uint32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const uint2& a) const {
+		rpt2(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const uint2& a) const { return !operator ==(a); }
 };
 struct uint3 {
 	union {
@@ -746,6 +770,12 @@ struct uint3 {
 	inline uint32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const uint3& a) const {
+		rpt3(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const uint3& a) const { return !operator ==(a); }
 };
 struct uint4 {
 	union {
@@ -887,6 +917,12 @@ struct uint4 {
 	inline uint32_t operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const uint4& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const uint4& a) const { return !operator ==(a); }
 };
 
 struct float2 {
@@ -997,6 +1033,12 @@ struct float2 {
 	inline float operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const float2& a) const {
+		rpt3(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const float2& a) const { return !operator ==(a); }
 };
 struct float3 {
 	union {
@@ -1110,6 +1152,12 @@ struct float3 {
 	inline float operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const float3& a) const {
+		rpt3(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const float3& a) const { return !operator ==(a); }
 };
 struct float4 {
 	union {
@@ -1228,6 +1276,12 @@ struct float4 {
 	inline float operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const float4& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const float4& a) const { return !operator ==(a); }
 };
 
 struct double2 {
@@ -1338,6 +1392,12 @@ struct double2 {
 	inline double operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const double2& a) const {
+		rpt2(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const double2& a) const { return !operator ==(a); }
 };
 struct double3 {
 	union {
@@ -1451,6 +1511,12 @@ struct double3 {
 	inline double operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const double3& a) const {
+		rpt3(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const double3& a) const { return !operator ==(a); }
 };
 struct double4 {
 	union {
@@ -1569,6 +1635,12 @@ struct double4 {
 	inline double operator[](int i) const {
 		return v[i];
 	}
+
+	inline bool operator ==(const double4& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const double4& a) const { return !operator ==(a); }
 };
 /*
 int2::int2(const uint2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
@@ -2026,6 +2098,12 @@ struct quaternion {
 	inline float3 operator *(const float3& vec) const {
 		return 2 * dot(xyz, vec) * xyz + (w * w - dot(xyz, xyz)) * vec + 2 * w * cross(xyz, vec);
 	}
+
+	inline bool operator ==(const quaternion& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const quaternion& a) const { return !operator ==(a); }
 };
 
 // Column-major 4x4 matrix
@@ -2162,6 +2240,12 @@ struct float4x4 {
 		*this = operator*(m);
 		return *this;
 	}
+
+	inline bool operator ==(const float4x4& a) const {
+		rpt4(i) if (v[i] != a.v[i]) return false;
+		return true;
+	}
+	inline bool operator !=(const float4x4& a) const { return !operator ==(a); }
 };
 #pragma pack(pop)
 

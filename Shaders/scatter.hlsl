@@ -274,6 +274,7 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 
 	float3 planetCenter = float3(0, -_PlanetRadius, 0) - _CameraPos;
 	float3 lightDir = normalize(_LightDir);
+	float rdl = saturate(dot(rayDir, lightDir));
 	
 	float2 densityCP = 0;
 	float3 scatterR = 0;
@@ -311,7 +312,7 @@ void InscatteringLUT(uint3 id : SV_DispatchThreadID) {
 		float3 currentScatterR = scatterR;
 		float3 currentScatterM = scatterM;
 
-		ApplyPhaseFunction(currentScatterR, currentScatterM, saturate(dot(rayDir, lightDir)));
+		ApplyPhaseFunction(currentScatterR, currentScatterM, rdl);
 		float3 lightInscatter = (currentScatterR * _ScatteringR + currentScatterM * _ScatteringM) * _IncomingLight.xyz;
 		float3 lightExtinction = exp(-(densityCP.x * _ExtinctionR + densityCP.y * _ExtinctionM));
 

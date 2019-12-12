@@ -17,7 +17,7 @@ struct DetailTransform{
 	float4 rotation;
 };
 
-[[vk::binding(0, 0)]] RWTexture2D<float3> Heightmap : register(u0);
+[[vk::binding(0, 0)]] RWTexture2D<float4> Heightmap : register(u0);
 
 [[vk::binding(1, 0)]] RWStructuredBuffer<VkDrawIndexedIndirectCommand> IndirectCommands : register(u1);
 [[vk::binding(2, 0)]] RWStructuredBuffer<ObjectBuffer> DetailInstances : register(u2);
@@ -25,9 +25,9 @@ struct DetailTransform{
 [[vk::binding(4, 0)]] StructuredBuffer<DetailTransform> DetailTransforms : register(t0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	uint DetailCount;
 	float3 CameraPosition;
 	float ImposterRange;
+	uint DetailCount;
 
 	float Scale;
 	float Offset;
@@ -35,13 +35,31 @@ struct DetailTransform{
 
 #include "include/noise.hlsli"
 
-float SampleTerrain(float2 p) {
-	float m = saturate(pow(1 - (billow4(p * .0005, .5, 6534)*.5+.5), 25));
-	m *= .7 + .3 * (ridged4(p * .01, .5, 5214) * .5 + .5);
+float CompositeHeight(float2 p, out float4 w) {
+	w = 0;
 
-	float n = multi8(p * .006, .5, 6325) * .5 + .5;
-	n = .98 * n + .02 * (fbm6(p * .1, .5, 7818) * .5 + .5);
+	float m = saturate(pow(1 - (billow4(p * .001, .5, 6534) * .5 + .5), 25));
+	w.x = m;
+	m *= .7 + .3 * (ridged4(p * .02, .5, 5214) * .5 + .5);
+
+	float n = multi8(p * .01, .5, 6325) * .5 + .5;
+	w.y = n;
+	n = .98 * n + .02 * (fbm6(p * .2, .5, 7818) * .5 + .5);
+
 	return .6 * m + .4 * n;
+}
+
+float4 SampleTerrain(float2 p) {
+	float4 w;
+	float h1 = CompositeHeight(0, w);
+	float h0 = CompositeHeight(p, w);
+
+	h1 = saturate(h1 - h0) * saturate(.03*(length(p) - 35));
+
+	w *= w;
+	w *= w;
+	float s = dot(w, 1);
+	return float4(h1, s > .0001 ? w.yzw / s : float3(1,0,0));
 }
 
 [numthreads(8, 8, 1)]

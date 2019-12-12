@@ -5,7 +5,7 @@ using namespace std;
 
 Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, uint32_t height, 
 	const vector<VkFormat>& colorFormats, VkFormat depthFormat, VkSampleCountFlagBits sampleCount,
-	const vector<VkSubpassDependency>& dependencies)
+	const vector<VkSubpassDependency>& dependencies, VkAttachmentLoadOp loadOp)
 	: mName(name), mDevice(device), mWidth(width), mHeight(height), mSampleCount(sampleCount), mColorFormats(colorFormats), mDepthFormat(depthFormat) {
 
 	mFramebuffers = new VkFramebuffer[mDevice->MaxFramesInFlight()];
@@ -37,11 +37,11 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	for (uint32_t i = 0; i < colorFormats.size(); i++) {
 		attachments[i].format = colorFormats[i];
 		attachments[i].samples = mSampleCount;
-		attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		attachments[i].loadOp = loadOp;
 		attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		attachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		attachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		attachments[i].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		colorAttachments[i].attachment = i;
@@ -49,11 +49,11 @@ Framebuffer::Framebuffer(const string& name, ::Device* device, uint32_t width, u
 	}
 	attachments[colorFormats.size()].format = mDepthFormat;
 	attachments[colorFormats.size()].samples = mSampleCount;
-	attachments[colorFormats.size()].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[colorFormats.size()].loadOp = loadOp;
 	attachments[colorFormats.size()].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[colorFormats.size()].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 	attachments[colorFormats.size()].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[colorFormats.size()].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[colorFormats.size()].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachments[colorFormats.size()].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference depthAttachmentRef = {};
@@ -147,6 +147,20 @@ void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
 	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], mClearValues.data(), (uint32_t)mClearValues.size());
 }
 
+void Framebuffer::Clear(CommandBuffer* commandBuffer) {
+	vector<VkClearAttachment> clears(mClearValues.size());
+	for (uint32_t i = 0; i < mClearValues.size(); i++) {
+		clears[i] = {};
+		clears[i].clearValue = mClearValues[i];
+		clears[i].colorAttachment = i;
+		clears[i].aspectMask = i == mColorFormats.size() ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
+	VkClearRect rect = {};
+	rect.layerCount = 1;
+	rect.rect.extent = { mWidth, mHeight };
+	vkCmdClearAttachments(*commandBuffer, clears.size(), clears.data(), 1, &rect);
+}
 void Framebuffer::ResolveColor(CommandBuffer* commandBuffer) {
 	if (!mColorBuffers) return;
 
@@ -192,7 +206,6 @@ void Framebuffer::ResolveColor(CommandBuffer* commandBuffer) {
 		mResolveBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 	}
 }
-
 void Framebuffer::ResolveDepth(CommandBuffer* commandBuffer) {
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
 

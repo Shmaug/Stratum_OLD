@@ -6,54 +6,14 @@
 #include <Scene/MeshRenderer.hpp>
 #include <Util/Profiler.hpp>
 
-#include "TerrainRenderer.hpp"
+#include "TerrainSystem.hpp"
 
 using namespace std;
 
-class TerrainSystem : public EnginePlugin {
-public:
-	PLUGIN_EXPORT TerrainSystem();
-	PLUGIN_EXPORT ~TerrainSystem();
-
-	PLUGIN_EXPORT bool Init(Scene* scene) override;
-	PLUGIN_EXPORT void Update() override;
-	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
-	PLUGIN_EXPORT void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
-
-private:
-	Scene* mScene;
-	TerrainRenderer* mTerrain;
-	vector<Object*> mObjects;
-	Object* mSelected;
-
-	float3 mCameraEuler;
-
-	Object* mPlayer;
-	Camera* mMainCamera;
-
-	float3 mPlayerVelocity;
-	bool mFlying;
-
-	TextRenderer* mFpsText;
-
-	MouseKeyboardInput* mInput;
-
-	float mFrameTimeAccum;
-	float mFps;
-	uint32_t mFrameCount;
-	size_t mTriangleCount;
-};
-
 ENGINE_PLUGIN(TerrainSystem)
 
-TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr), mFlying(false) {
+TerrainSystem::TerrainSystem() : mScene(nullptr), mTerrain(nullptr), mSelected(nullptr) {
 	mEnabled = true;
-	mCameraEuler = 0;
-	mTriangleCount = 0;
-	mFrameCount = 0;
-	mFrameTimeAccum = 0;
-	mPlayerVelocity = 0;
-	mFps = 0;
 }
 TerrainSystem::~TerrainSystem() {
 	for (Object* obj : mObjects)
@@ -62,27 +22,28 @@ TerrainSystem::~TerrainSystem() {
 
 bool TerrainSystem::Init(Scene* scene) {
 	mScene = scene;
+	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	#pragma region Terrain object
 	shared_ptr<Material> terrainMat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
 
-	terrainMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_col.jpg"));
-	terrainMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_nrm.jpg", false));
-	terrainMat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock/rock13_msk.png", false));
+	terrainMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock13/rock13_col.jpg"));
+	terrainMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock13/rock13_nrm.jpg", false));
+	terrainMat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock13/rock13_msk.png", false));
 
-	terrainMat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_col.png"));
-	terrainMat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_nrm.png", false));
-	terrainMat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_msk.png", false));
-
+	//terrainMat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_col.png"));
+	//terrainMat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_nrm.png", false));
+	//terrainMat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/grass/grass1_msk.png", false));
+	
 	//terrainMat->SetParameter("MainTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_col.jpg"));
 	//terrainMat->SetParameter("NormalTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_nrm.jpg", false));
 	//terrainMat->SetParameter("MaskTextures", 2, mScene->AssetManager()->LoadTexture("Assets/Textures/dirt/ground3_msk.jpg", false));
 
-	//terrainMat->SetParameter("MainTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_col.jpg"));
-	//terrainMat->SetParameter("NormalTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_nrm.jpg", false));
-	//terrainMat->SetParameter("MaskTextures", 3, mScene->AssetManager()->LoadTexture("Assets/Textures/snow/Snow06_msk.png", false));
+	terrainMat->SetParameter("MainTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/snow06/Snow06_col.jpg", false));
+	terrainMat->SetParameter("NormalTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/snow06/Snow06_nrm.jpg", false));
+	terrainMat->SetParameter("MaskTextures", 1, mScene->AssetManager()->LoadTexture("Assets/Textures/snow06/Snow06_msk.png", false));
 
-	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 8192.f, 800.f);
+	shared_ptr<TerrainRenderer> terrain = make_shared<TerrainRenderer>("Terrain", 2048.f, 100.f);
 	mScene->AddObject(terrain);
 	terrain->Material(terrainMat);
 	mTerrain = terrain.get();
@@ -91,6 +52,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	#pragma endregion
 	
 	#pragma region Detail meshes
+	/*
 	shared_ptr<Material> rockMat = make_shared<Material>("Rock", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
 	shared_ptr<Material> treeMat = make_shared<Material>("Tree", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
 	shared_ptr<Material> bushMat = make_shared<Material>("Bush", mScene->AssetManager()->LoadShader("Shaders/leaves.shader"));
@@ -131,63 +93,22 @@ bool TerrainSystem::Init(Scene* scene) {
 	rockMat->EnableKeyword("NORMAL_MAP");
 	rockMat->EnableKeyword("MASK_MAP");
 	rockMat->PassMask((PassType)(Main | Depth));
-
 	mTerrain->AddDetail(
 		mScene->AssetManager()->LoadMesh("Assets/Models/oaktree.fbx", .05f),
-		treeMat, false, 50, .005f, 0.005f, -.1f );
+		treeMat, 50, false, .005f, 0.005f, -.1f );
 
 	mTerrain->AddDetail(
 		mScene->AssetManager()->LoadMesh("Assets/Models/rock/rock.fbx", .05f),
-		rockMat, true, 40, .005f, .005f, -.4f );
+		rockMat, 40, true, .005f, .005f, -.4f );
 
 	mTerrain->AddDetail(
 		mScene->AssetManager()->LoadMesh("Assets/Models/bush_01.fbx", .05f),
-		bushMat, true, 20, .05f, .05f, 0 );
-
+		bushMat, 20, true, .05f, .05f, 0 );
+	*/
 	//mTerrain->AddDetail(
 	//	mScene->AssetManager()->LoadMesh("Assets/Models/grass_clump_01.fbx", .05f),
 	//	grassMat, true, 5.f, .1f, 0 );
 	#pragma endregion
-
-	shared_ptr<Object> player = make_shared<Object>("Player");
-	mScene->AddObject(player);
-	mPlayer = player.get();
-	mObjects.push_back(mPlayer);
-	mPlayer->LocalPosition(0, mTerrain->Height(0), 0);
-
-	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
-	mScene->AddObject(camera);
-	camera->Near(.01f);
-	camera->Far(8192.f);
-	camera->FieldOfView(radians(65.f));
-	camera->LocalPosition(0, 1.6f, 0);
-	mMainCamera = camera.get();
-	mPlayer->AddChild(mMainCamera);
-	mObjects.push_back(mMainCamera);
-
-	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
-	mScene->AddObject(fpsText);
-	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 36));
-	fpsText->Text("");
-	fpsText->VerticalAnchor(Maximum);
-	fpsText->HorizontalAnchor(Minimum);
-	mFpsText = fpsText.get();
-	mObjects.push_back(mFpsText);
-
-	shared_ptr<Light> light = make_shared<Light>("Light");
-	mScene->AddObject(light);
-	mObjects.push_back(light.get());
-	light->LocalPosition(0, mTerrain->Height(0) + 5, 0);
-	light->LocalRotation(quaternion(float3(PI * .4f)));
-	light->Type(Spot);
-	light->InnerSpotAngle(radians(20.f));
-	light->OuterSpotAngle(radians(25.f));
-	light->CastShadows(true);
-	light->Range(100);
-	light->Color(float3(1, .9f, .9f));
-	light->Intensity(100);
-
-	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	return true;
 }
@@ -201,90 +122,7 @@ void TerrainSystem::Update() {
 	}
 	mScene->Environment()->TimeOfDay(tod);
 
-	#pragma region player movement
-	#pragma region rotate camera
-	if (mInput->LockMouse()) {
-		float3 md = float3(mInput->CursorDelta(), 0);
-		md = float3(md.y, md.x, 0) * .003f;
-		mCameraEuler += md;
-		mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
-		mMainCamera->LocalRotation(quaternion(float3(mCameraEuler.x, 0, 0)));
-		mPlayer->LocalRotation(quaternion(float3(0, mCameraEuler.y, 0)));
-	}
-	#pragma endregion
-
-	#pragma region apply movement force
-	float3 move = 0;
-	if (mInput->KeyDown(GLFW_KEY_W)) move.z += 1;
-	if (mInput->KeyDown(GLFW_KEY_S)) move.z -= 1;
-	if (mInput->KeyDown(GLFW_KEY_D)) move.x += 1;
-	if (mInput->KeyDown(GLFW_KEY_A)) move.x -= 1;
-	move = (mFlying ? mMainCamera->WorldRotation() : mPlayer->WorldRotation()) * move;
-	if (dot(move, move) > .001f) {
-		move = normalize(move);
-		move *= 2.5f;
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
-			move *= 2.5f;
-	}
-	if (mFlying) move *= 100.f;
-	float3 mf = 5 * (move - mPlayerVelocity) * mScene->Instance()->DeltaTime();
-	if (!mFlying) mf.y = 0;
-	mPlayerVelocity += mf;
-	#pragma endregion
-
-	if (!mFlying) mPlayerVelocity.y -= 9.8f * mScene->Instance()->DeltaTime(); // gravity
-
-	float3 p = mPlayer->WorldPosition();
-	p += mPlayerVelocity * mScene->Instance()->DeltaTime(); // integrate velocity
-
-	float ty = mTerrain->Height(p) + 1.6f;
-	if (p.y < ty) {
-		p.y = ty;
-		mPlayerVelocity.y = 0;
-
-		if (!mFlying && mInput->KeyDown(GLFW_KEY_SPACE))
-			mPlayerVelocity.y += 4.f;
-
-	}
-	mPlayer->LocalPosition(p);
-	#pragma endregion
-
-	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
-		mInput->LockMouse(!mInput->LockMouse());
-	if (mInput->KeyDownFirst(GLFW_KEY_F1))
-		mScene->DrawGizmos(!mScene->DrawGizmos());
-	if (mInput->KeyDownFirst(GLFW_KEY_F2))
-		mFlying = !mFlying;
-
-	if (mInput->KeyDownFirst(GLFW_KEY_F9))
-		mMainCamera->Orthographic(!mMainCamera->Orthographic());
-
-	mTerrain->UpdateLOD(mMainCamera);
-
-
-	if (mMainCamera->Orthographic()) {
-		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
-		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
-	} else
-		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
-	mFpsText->LocalRotation(mMainCamera->WorldRotation());
-	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.005f)));
-
-	// count fps
-	mFrameTimeAccum += mScene->Instance()->DeltaTime();
-	mFrameCount++;
-	if (mFrameTimeAccum > 1.f) {
-		mFps = mFrameCount / mFrameTimeAccum;
-		mFrameTimeAccum -= 1.f;
-		mFrameCount = 0;
-		char buf[256];
-		sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
-		mFpsText->Text(buf);
-	}
-}
-
-void TerrainSystem::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	mTriangleCount = commandBuffer->mTriangleCount;
+	mTerrain->UpdateLOD(mScene->Cameras()[0]);
 }
 
 void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

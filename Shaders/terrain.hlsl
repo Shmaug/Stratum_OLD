@@ -5,7 +5,7 @@
 #pragma array NormalTextures 8
 #pragma array MaskTextures 8
 
-#pragma multi_compile DEPTH_PASS
+#pragma multi_compile PASS_DEPTH
 
 #pragma render_queue 1000
 
@@ -27,7 +27,7 @@
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTextures[8]	: register(t9);
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTextures[8]		: register(t10); // rgba -> rough, height, ao, 1-metallic
 
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float> Heightmap				: register(t4);
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> Heightmap			: register(t4);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t5);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t6);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT		: register(t7);
@@ -56,7 +56,7 @@ struct v2f {
 	float4 position : SV_Position;
 	float4 worldPos : TEXCOORD0;
 	float4 screenPos : TEXCOORD1;
-	#ifndef DEPTH_PASS
+	#ifndef PASS_DEPTH
 	float2 terrainPos : TEXCOORD2;
 	#endif
 };
@@ -97,13 +97,13 @@ v2f vsmain(
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.screenPos = ComputeScreenPos(o.position);
-	#ifndef DEPTH_PASS
+	#ifndef PASS_DEPTH
 	o.terrainPos = terrainPos;
 	#endif
 	return o;
 }
 
-#ifdef DEPTH_PASS
+#ifdef PASS_DEPTH
 float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 	return worldPos.w;
 }
@@ -118,10 +118,10 @@ void fsmain(v2f i,
 	Heightmap.GetDimensions(res.x, res.y);
 	res = TerrainSize / res;
 
-	float y = TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0);
-	float3 tangent   = normalize(float3(res.x, TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0, int2(1,0)) - y,  0));
-	float3 bitangent = normalize(float3(0, TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0, int2(0,1)) - y, -res.y));
-	float3 normal    = normalize(cross(tangent, bitangent));
+	float4 yt = TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0);
+	float3 tangent   = normalize(float3(res.x, TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0, int2(1,0)).x - yt.x,  0));
+	float3 bitangent = normalize(float3(0,     TerrainHeight * Heightmap.SampleLevel(Sampler, i.terrainPos, 0, int2(0,-1)).x - yt.x, res.y));
+	float3 normal    = normalize(cross(bitangent, tangent));
 
 	float4 col = 0;
 	float4 mask = 0;
@@ -133,7 +133,7 @@ void fsmain(v2f i,
 	blend *= blend * blend;
 	blend /= dot(blend, 1);
 
-	float3 wp = .25 * (i.worldPos.xyz + Camera.Position);
+	float3 wp = .2 * (i.worldPos.xyz + Camera.Position);
 	
 	triplanar(0, 1, wp, blend, col, mask, bump, 1);
 
