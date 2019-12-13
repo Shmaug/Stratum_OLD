@@ -142,9 +142,9 @@ bool DicomVis::Init(Scene* scene) {
 			mat->SetParameter("Color", float4(1));
 			mat->SetParameter("Roughness", 1.f);
 			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_msk.jpg", false));
+			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/wood02_col.jpg"));
+			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood02/wood02_nrm.jpg", false));
+			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/wood02_msk.jpg", false));
 			mat->EnableKeyword("COLOR_MAP");
 			mat->EnableKeyword("NORMAL_MAP");
 			mat->EnableKeyword("MASK_MAP");
@@ -201,6 +201,7 @@ bool DicomVis::Init(Scene* scene) {
 			mat->EnableKeyword("COLOR_MAP");
 		} else if (name == "ClearGlass") {
 			mat->PassMask((PassType)(Main));
+			mat->RenderQueue(5000);
 			mat->SetParameter("Color", float4(.9f, .9f, 1, .25f));
 			mat->SetParameter("Roughness", .1f);
 			mat->SetParameter("Metallic", 1.f);
@@ -208,6 +209,7 @@ bool DicomVis::Init(Scene* scene) {
 			mat->CullMode(VK_CULL_MODE_NONE);
 		} else if (name == "TableGlass") {
 			mat->PassMask((PassType)(Main));
+			mat->RenderQueue(5000);
 			mat->SetParameter("Color", float4(1, 1, 1, .75f));
 			mat->SetParameter("Roughness", .6f);
 			mat->SetParameter("Metallic", 1.f);
