@@ -135,9 +135,9 @@ else()
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libassimp.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
-	if (${ENABLE_DEBUG_LAYERS})
-		target_link_libraries(Engine "libVkLayer_utils.so")
-	endif()
+	#if (${ENABLE_DEBUG_LAYERS})
+	#	target_link_libraries(Engine "libVkLayer_utils.so")
+	#endif()
 
 	if (${LINK_PERFTOOLS_PROFILER})
 		target_compile_options(Engine PUBLIC -Wl,--no-as-needed -lprofiler -Wl,--as-needed)
