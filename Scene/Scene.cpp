@@ -47,7 +47,7 @@ Scene::~Scene(){
 	mObjects.clear();
 }
 
-Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale) {
+Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity) {
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
@@ -58,6 +58,7 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 
 	vector<shared_ptr<Mesh>> meshes;
 	vector<shared_ptr<Material>> materials;
+	unordered_map<aiNode*, Object*> objectMap;
 
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
 		materials.push_back(materialSetupFunc(this, scene->mMaterials[m], materialFuncData));
@@ -138,10 +139,10 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 		obj->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
 		obj->LocalScale(nscale.x, nscale.y, nscale.z);
 
-		if (np.first)
-			np.first->AddChild(obj.get());
-		else
-			root = obj.get();
+		if (np.first) np.first->AddChild(obj.get());
+		else root = obj.get();
+
+		objectMap.emplace(n, obj.get());
 
 		for (uint32_t i = 0; i < n->mNumMeshes; i++) {
 			shared_ptr<Mesh> mesh = meshes[n->mMeshes[i]];
@@ -156,6 +157,98 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 
 		for (uint32_t i = 0; i < n->mNumChildren; i++)
 			nodes.push({ obj.get(), n->mChildren[i] });
+	}
+
+	const float minAttenuation = .001f; // min light attenuation for computing range from infinite attenuation
+
+	for (uint32_t i = 0; i < scene->mNumLights; i++) {
+		switch (scene->mLights[i]->mType) {
+		case aiLightSource_DIRECTIONAL:
+		{
+			if (directionalLightIntensity <= 0) break;
+
+			aiNode* lightNode = scene->mRootNode->FindNode(scene->mLights[i]->mName);
+			aiVector3D position;
+			aiVector3D nscale;
+			aiQuaternion rotation;
+			lightNode->mTransformation.Decompose(nscale, rotation, position);
+
+			float3 col = float3(scene->mLights[i]->mColorDiffuse.r, scene->mLights[i]->mColorDiffuse.g, scene->mLights[i]->mColorDiffuse.b);
+			float li = length(col);
+
+			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
+			light->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
+			light->Type(Sun);
+			light->Intensity(li * directionalLightIntensity);
+			light->Color(col / li);
+			light->CastShadows(true);
+			AddObject(light);
+
+			objectMap.at(lightNode->mParent)->AddChild(light.get());
+			break;
+		}
+		case aiLightSource_SPOT:
+		{
+			if (spotLightIntensity <= 0) break;
+
+			aiNode* lightNode = scene->mRootNode->FindNode(scene->mLights[i]->mName);
+			aiVector3D position;
+			aiVector3D nscale;
+			aiQuaternion rotation;
+			lightNode->mTransformation.Decompose(nscale, rotation, position);
+
+			position += lightNode->mTransformation * scene->mLights[i]->mPosition;
+
+			float a = scene->mLights[i]->mAttenuationQuadratic;
+			float b = scene->mLights[i]->mAttenuationLinear;
+			float c = scene->mLights[i]->mAttenuationConstant - (1 / minAttenuation);
+			float3 col = float3(scene->mLights[i]->mColorDiffuse.r, scene->mLights[i]->mColorDiffuse.g, scene->mLights[i]->mColorDiffuse.b);
+			float li = length(col);
+
+			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
+			light->LocalPosition(position.x * scale, position.y * scale, position.z * scale);
+			light->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
+			light->Type(Spot);
+			light->InnerSpotAngle(scene->mLights[i]->mAngleInnerCone);
+			light->OuterSpotAngle(scene->mLights[i]->mAngleOuterCone);
+			light->Intensity(li * spotLightIntensity);
+			light->Range((-b + sqrtf(b * b - 4 * a * c)) / (2 * a));
+			light->Color(col / li);
+			AddObject(light);
+
+			objectMap.at(lightNode->mParent)->AddChild(light.get());
+			break;
+		}
+		case aiLightSource_POINT:
+		{
+			if (pointLightIntensity <= 0) break;
+
+			aiNode* lightNode = scene->mRootNode->FindNode(scene->mLights[i]->mName);
+			aiVector3D position;
+			aiVector3D nscale;
+			aiQuaternion rotation;
+			lightNode->mTransformation.Decompose(nscale, rotation, position);
+
+			position += lightNode->mTransformation * scene->mLights[i]->mPosition;
+
+			float a = scene->mLights[i]->mAttenuationQuadratic;
+			float b = scene->mLights[i]->mAttenuationLinear;
+			float c = scene->mLights[i]->mAttenuationConstant - (1 / minAttenuation);
+			float3 col = float3(scene->mLights[i]->mColorDiffuse.r, scene->mLights[i]->mColorDiffuse.g, scene->mLights[i]->mColorDiffuse.b);
+			float li = length(col);
+
+			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
+			light->LocalPosition(position.x * scale, position.y* scale, position.z* scale);
+			light->Type(Point);
+			light->Intensity(li * pointLightIntensity);
+			light->Range((-b + sqrtf(b*b - 4*a*c)) / (2 * a));
+			light->Color(col / li);
+			AddObject(light);
+
+			objectMap.at(lightNode->mParent)->AddChild(light.get());
+			break;
+		}
+		}
 	}
 
 	printf("Loaded %s\n", filename.c_str());

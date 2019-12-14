@@ -15,6 +15,18 @@ public:
 
 	ENGINE_EXPORT void Update();
 
+	inline float3 AmbientLight() const { return mAmbientLight; }
+	inline void AmbientLight(const float3& t) { mAmbientLight = t; }
+
+	inline Texture* EnvironmentTexture() const { return mEnvironmentTexture; }
+	inline void EnvironmentTexture(Texture* t) { mEnvironmentTexture = t; }
+
+	inline bool EnableScattering() const { return mEnableScattering; }
+	inline void EnableScattering(bool t) { mEnableScattering = t; }
+
+	inline bool EnableCelestials() const { return mEnableCelestials; }
+	inline void EnableCelestials(bool t) { mEnableCelestials = t; }
+
 	inline float TimeOfDay() const { return mTimeOfDay; }
 	inline void TimeOfDay(float t) { mTimeOfDay = t; }
 
@@ -23,6 +35,13 @@ public:
 private:
 	friend class Scene;
 	ENGINE_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera);
+
+	bool mEnableCelestials;
+	bool mEnableScattering;
+
+	Texture* mEnvironmentTexture;
+
+	// Scattering settings
 
 	float4 mIncomingLight;
 	float mRayleighScatterCoef;
@@ -43,6 +62,9 @@ private:
 	float4 mAmbientLUT[128];
 	float4 mDirectionalLUT[128];
 
+	Texture* mMoonTexture;
+	Texture* mStarTexture;
+
 	struct DevLUT {
 		Texture* mParticleDensityLUT;
 		Texture* mSkyboxLUTR;
@@ -59,6 +81,8 @@ private:
 
 	float mTimeOfDay; // 0-1
 
+	// global settings
+
 	float3 mAmbientLight;
 	Light* mSun;
 	Light* mMoon;
@@ -69,8 +93,6 @@ private:
 	Shader* mShader;
 	Material* mSkyboxMaterial;
 
-	Texture* mMoonTexture;
-	Texture* mStarTexture;
 
 	float mMoonSize;
 };

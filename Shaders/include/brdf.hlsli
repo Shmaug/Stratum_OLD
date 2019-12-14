@@ -133,17 +133,21 @@ float3 EvaluateLighting(MaterialInfo material, float3 worldPos, float3 normal, f
 		eval += attenuation * Lights[l].Color * BRDF(material, nv, L, normal, view);
 	}
 
-	//uint texWidth, texHeight, numMips;
-	//EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
-	//zfloat3 reflection = normalize(reflect(-view, normal));
-	//float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	//float3 env_spec = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb;
-	//float3 env_diff = EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
+	eval.rgb += material.emission;
 
 	float3 env_spec = AmbientLight;
 	float3 env_diff = AmbientLight;
+
+	#ifdef ENVIRONMENT_TEXTURE
+	uint texWidth, texHeight, numMips;
+	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	float3 reflection = normalize(reflect(-view, normal));
+	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
+	env_spec *= EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(material.perceptualRoughness) * numMips).rgb;
+	env_diff *= EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
+	#endif
+
 	eval += BRDFIndirect(material, normal, view, nv, env_diff, env_spec) * material.occlusion;
-	eval.rgb += material.emission;
 
 	#ifdef SHOW_CASCADE_SPLITS
 	if (cascadeColor.w) eval = lerp(eval.rgb, cascadeColor.rgb / cascadeColor.w, .5);

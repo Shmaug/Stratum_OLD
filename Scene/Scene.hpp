@@ -30,7 +30,7 @@ public:
 	/// Loads a 3d scene from a file, separating all meshes with different topologies/materials into separate MeshRenderers and 
 	/// replicating the heirarchy stored in the file, and creating new materials using the specified shader.
 	/// Calls materialSetupFunc for every aiMaterial in the file, to create a corresponding Material
-	ENGINE_EXPORT Object* LoadModelScene(const std::string& filename, std::shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale);
+	ENGINE_EXPORT Object* LoadModelScene(const std::string& filename, std::shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity);
 
 	ENGINE_EXPORT void Update();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);

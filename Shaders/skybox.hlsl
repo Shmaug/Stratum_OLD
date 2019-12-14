@@ -8,6 +8,8 @@
 
 #pragma static_sampler Sampler maxAnisotropy=0 addressMode=clamp_edge
 
+#pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
+
 #include "include/shadercompat.h"
 
 #define PI 3.1415926535897932
@@ -21,7 +23,10 @@
 [[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MoonTexture : register(t4);
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT : register(t5);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] TextureCube<float4> StarTexture : register(t6);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] SamplerState Sampler : register(s0);
+
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture : register(t7);
+
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 _MoonRotation;
@@ -42,6 +47,8 @@
 
 	float4 _StarRotation;
 	float _StarFade;
+
+	float3 AmbientLight;
 };
 
 #include "include/util.hlsli"
@@ -100,8 +107,10 @@ void fsmain(
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
 
-	float3 rayStart = Camera.Position;
 	float3 ray = normalize(viewRay);
+
+#ifdef ENABLE_SCATTER
+	float3 rayStart = Camera.Position;
 
 	float3 planetCenter = float3(0, -_PlanetRadius, 0);
 
@@ -146,5 +155,13 @@ void fsmain(
 	lightInscatter += star * (1 - saturate(_StarFade * dot(lightInscatter, lightInscatter)));
 
 	color = float4(lightInscatter, 1);
+#elif defined(ENVIRONMENT_TEXTURE)
+	uint texWidth, texHeight, numMips;
+	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	float2 envuv = float2(atan2(ray.z, ray.x) * INV_PI * .5 + .5, acos(ray.y) * INV_PI);
+	color = float4(EnvironmentTexture.SampleLevel(Sampler, envuv, 0).rgb, 1);
+#else
+	color = float4(AmbientLight, 1);
+#endif
 	depthNormal = float4(0, 0, 0, 1);
 }

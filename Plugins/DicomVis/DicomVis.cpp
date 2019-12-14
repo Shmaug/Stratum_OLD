@@ -3,8 +3,7 @@
 #include <Util/Profiler.hpp>
 
 #include <Core/EnginePlugin.hpp>
-
-#include <thread>
+#include <assimp/pbrmaterial.h>
 
 using namespace std;
 
@@ -87,175 +86,68 @@ bool DicomVis::Init(Scene* scene) {
 	mObjects.push_back(mFpsText);
 
 	Shader* pbrShader = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
-	auto func = [](Scene* s, aiMaterial* m, void* data) {
+	auto func = [](Scene* scene, aiMaterial* material, void* data) {
 		shared_ptr<Material> mat = make_shared<Material>("PBR", (Shader*)data);
-		std::string name = m->GetName().C_Str();
-		if (name == "MetalBrushed") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_col.png"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_nrm.png", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/metalbrushed/metalbrushed_msk.jpg", false));
+		mat->PassMask((PassType)(Main | Depth | Shadow));
+		aiColor3D emissiveColor(0);
+		aiColor4D baseColor(1);
+		float metallic = 1.f;
+		float roughness = 1.f;
+		aiString baseColorTexture, metalRoughTexture, normalTexture, emissiveTexture, alphaMode;
+		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, baseColor);
+		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic);
+		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness);
+		if (material->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &baseColorTexture) == AI_SUCCESS && baseColorTexture.length) {
+			mat->SetParameter("MainTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(baseColorTexture.C_Str())));
 			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "MetalPainted") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.8f));
-			mat->SetParameter("Roughness", .3f);
-			mat->SetParameter("Metallic", 1.f);
-		} else if (name == "MetalSmooth") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.9f));
-			mat->SetParameter("Roughness", .05f);
-			mat->SetParameter("Metallic", 1.f);
-		} else if (name == "DarkMetal") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.4f));
-			mat->SetParameter("Roughness", .6f);
-			mat->SetParameter("Metallic", 1.f);
-		} else if (name == "WhitePlastic") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.95));
-			mat->SetParameter("Roughness", .3f);
-			mat->SetParameter("Metallic", .0f);
-		} else if (name == "BlackPlastic") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.1));
-			mat->SetParameter("Roughness", .3f);
-			mat->SetParameter("Metallic", .0f);
-		} else if (name == "Wood") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_col.png"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_nrm.png", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood10/Wood10_msk.png", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Wood2") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood02/Wood02_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Hardwood") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.3f));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_col.png"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_nrm.png", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/wood2/wood2_msk.png", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Wall") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/concrete04/Concrete04_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Paper") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_col.png"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_nrm.png", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/paper01/paper01_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Leather") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/leather13/Leather13_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Palette") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(1));
-			mat->SetParameter("Roughness", .2f);
-			mat->SetParameter("Metallic", .0f);
-			mat->SetParameter("MainTexture", s->AssetManager()->LoadTexture("Assets/Textures/palette.png"));
-			mat->EnableKeyword("COLOR_MAP");
-		} else if (name == "ClearGlass") {
-			mat->PassMask((PassType)(Main));
-			mat->SetParameter("Color", float4(.9f, .9f, 1, .25f));
-			mat->SetParameter("Roughness", .1f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->BlendMode(Alpha);
-			mat->CullMode(VK_CULL_MODE_NONE);
-		} else if (name == "TableGlass") {
-			mat->PassMask((PassType)(Main));
-			mat->SetParameter("Color", float4(1, 1, 1, .75f));
-			mat->SetParameter("Roughness", .6f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->BlendMode(Alpha);
-		} else if (name == "Ceiling") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.6f));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_col.png"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_nrm.png", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/woodplank/woodplank_msk.png", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Fabric") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.6f));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/fabric01/Fabric01_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else if (name == "Carpet") {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.405f, .594f, .714f, 1.f));
-			mat->SetParameter("Roughness", 1.f);
-			mat->SetParameter("Metallic", 1.f);
-			mat->SetParameter("MainTexture",   s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_col.jpg"));
-			mat->SetParameter("NormalTexture", s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_nrm.jpg", false));
-			mat->SetParameter("MaskTexture",   s->AssetManager()->LoadTexture("Assets/Textures/carpet01/Carpet01_msk.jpg", false));
-			mat->EnableKeyword("COLOR_MAP");
-			mat->EnableKeyword("NORMAL_MAP");
-			mat->EnableKeyword("MASK_MAP");
-		} else {
-			mat->PassMask((PassType)(Main | Depth | Shadow));
-			mat->SetParameter("Color", float4(.9f));
-			mat->SetParameter("Roughness", .5f);
-			mat->SetParameter("Metallic", 0.f);
-			printf("\t\"%s\"\n", name.c_str());
 		}
+		if (material->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalRoughTexture) == AI_SUCCESS && metalRoughTexture.length) {
+			mat->SetParameter("MaskTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(metalRoughTexture.C_Str()), false));
+			mat->EnableKeyword("MASK_MAP");
+		}
+		if (material->GetTexture(aiTextureType_NORMALS, 0, &normalTexture) == AI_SUCCESS && normalTexture.length) {
+			mat->SetParameter("NormalTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(normalTexture.C_Str()), false));
+			mat->SetParameter("BumpStrength", 1.f);
+			mat->EnableKeyword("NORMAL_MAP");
+		}
+		if (material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor) == AI_SUCCESS) {
+			mat->SetParameter("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
+			mat->SetParameter("EmissionTexture", scene->AssetManager()->LoadTexture("Assets/Textures/white.png"));
+			mat->EnableKeyword("EMISSION");
+		}
+		if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissiveTexture) == AI_SUCCESS && emissiveTexture.length) {
+			mat->SetParameter("EmissionTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(emissiveTexture.C_Str())));
+			mat->EnableKeyword("EMISSION");
+		}
+		if (material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+			if (alphaMode == aiString("BLEND")) {
+				mat->RenderQueue(5000);
+				mat->PassMask((PassType)(Main));
+				mat->BlendMode(Alpha);
+				mat->CullMode(VK_CULL_MODE_NONE);
+			}
+		}
+		mat->SetParameter("Color", float4(baseColor.r, baseColor.g, baseColor.b, baseColor.a));
+		mat->SetParameter("Roughness", roughness);
+		mat->SetParameter("Metallic", metallic);
 		return mat;
 	};
-	mScene->LoadModelScene("Assets/Models/room.fbx", func, pbrShader, .01f)->LocalPosition(0, .01f, 0);
-	
+	Object* room = mScene->LoadModelScene("Assets/Models/room/CrohnsProtoRoom.gltf", func, pbrShader, 1.f, 1.f, .05f, .006f);
+	queue<Object*> nodes;
+	nodes.push(room);
+	while (nodes.size()) {
+		Object* o = nodes.front();
+		nodes.pop();
+		mObjects.push_back(o);
+		for (uint32_t i = 0; i < o->ChildCount(); i++)
+			nodes.push(o->Child(i));
+	}
+
+	mScene->Environment()->EnableCelestials(false);
+	mScene->Environment()->EnableScattering(false);
+	mScene->Environment()->AmbientLight(.2f);
+	mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/ocean hdri.jpg"));
+
 	return true;
 }
 
@@ -341,4 +233,66 @@ void DicomVis::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType
 	mTriangleCount = commandBuffer->mTriangleCount;
 }
 
-void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
+void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
+	const Ray& ray = mInput->GetPointer(0)->mWorldRay;
+	float hitT;
+	Collider* hit = mScene->Raycast(ray, hitT);
+
+	Gizmos* gizmos = mScene->Gizmos();
+
+	bool change = mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
+
+	// manipulate selection
+	Light* selectedLight = nullptr;
+	if (mSelected) {
+		selectedLight = dynamic_cast<Light*>(mSelected);
+		if (selectedLight) {
+			switch (selectedLight->Type()) {
+			case LightType::Spot:
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireCircle(
+					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
+				break;
+
+			case LightType::Point:
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
+				break;
+			}
+		}
+
+		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
+		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+			quaternion r = mSelected->WorldRotation();
+			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
+				mSelected->LocalRotation(r);
+				change = false;
+			}
+		} else {
+			float3 p = mSelected->WorldPosition();
+			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
+				mSelected->LocalPosition(p);
+				change = false;
+			}
+		}
+	}
+
+	// change selection
+	if (change) mSelected = nullptr;
+	for (Light* light : mScene->ActiveLights()) {
+		float lt = ray.Intersect(Sphere(light->WorldPosition(), .09f)).x;
+		bool hover = lt > 0 && (hitT < 0 || lt < hitT);
+
+		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
+		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
+			mScene->AssetManager()->LoadTexture("Assets/Textures/icons.png"), float4(.5f, .5f, 0, 0));
+
+		if (hover) {
+			hitT = lt;
+			if (change) mSelected = light;
+		}
+	}
+}
