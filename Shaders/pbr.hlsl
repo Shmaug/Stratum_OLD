@@ -5,10 +5,12 @@
 #pragma multi_compile ALPHA_CLIP
 
 #pragma multi_compile TWO_SIDED
-#pragma multi_compile COLOR_MP
+#pragma multi_compile COLOR_MAP
 #pragma multi_compile NORMAL_MAP
 #pragma multi_compile MASK_MAP
 #pragma multi_compile EMISSION
+
+#pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
 
 #pragma render_queue 1000
 
@@ -35,15 +37,18 @@
 // per-material
 [[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTexture			: register(t4);
 [[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTexture		: register(t5);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTexture			: register(t6); // rgba -> rgh, hgt, ao, 1-metallic
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTexture			: register(t6); // rgba ->ao, rough, metallic (glTF spec.)
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTexture		: register(t8);
 
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t9);
 [[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t10);
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT		: register(t11);
-[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] SamplerState Sampler : register(s0);
-[[vk::binding(BINDING_START + 8, PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
-[[vk::binding(BINDING_START + 9, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
+
+[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture	: register(t12);
+
+[[vk::binding(BINDING_START + 8 , PER_MATERIAL)]] SamplerState Sampler : register(s0);
+[[vk::binding(BINDING_START + 9 , PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);
+[[vk::binding(BINDING_START + 10, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 Color;
@@ -160,13 +165,13 @@ void fsmain(v2f i,
 	#ifdef MASK_MAP
 	float4 mask = MaskTexture.Sample(Sampler, i.texcoord);
 	#else
-	float4 mask = float4(1, .5, 1, 0);
+	float4 mask = 1;
 	#endif
 
 	MaterialInfo material;
-	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, Metallic*(1-mask.a), material.specular, material.oneMinusReflectivity);
-	material.perceptualRoughness = Roughness * mask.r * .99;
-	material.occlusion = mask.b;
+	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, Metallic*mask.b, material.specular, material.oneMinusReflectivity);
+	material.perceptualRoughness = Roughness * mask.g * .99;
+	material.occlusion = mask.r;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	#ifdef EMISSION
 	material.emission = Emission * EmissionTexture.Sample(Sampler, i.texcoord).rgb;
@@ -175,7 +180,11 @@ void fsmain(v2f i,
 	#endif
 	
 	float3 eval = EvaluateLighting(material, i.worldPos.xyz, normal, view, i.worldPos.w);
+
+	#ifdef ENABLE_SCATTERING
 	ApplyScattering(eval, i.screenPos.xy / i.screenPos.w, i.worldPos.w);
+	#endif
+
 	color = float4(eval, col.a);
 	depthNormal = float4(normal * .5 + .5, i.worldPos.w);
 }

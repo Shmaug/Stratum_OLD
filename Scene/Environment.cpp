@@ -23,7 +23,10 @@ Environment::Environment(Scene* scene) :
 	mRayleighSct(float4(5.8f, 13.5f, 33.1f, 0) * .000001f),
 	mMieSct(float4(2, 2, 2, 0) * .000001f),
 	mAmbientLight(0),
-	mMoonSize(.04f) {
+	mMoonSize(.04f),
+	mEnableCelestials(true),
+	mEnableScattering(true),
+	mEnvironmentTexture(nullptr) {
 
 	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.shader"));
 	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
@@ -225,153 +228,174 @@ Environment::~Environment() {
 }
 
 void Environment::SetEnvironment(Camera* camera, Material* mat) {
-	CamLUT* l = mCameraLUTs.at(camera) + camera->Device()->FrameContextIndex();
-	mat->SetParameter("InscatteringLUT", l->mInscatterLUT);
-	mat->SetParameter("ExtinctionLUT", l->mOutscatterLUT);
-	mat->SetParameter("LightShaftLUT", l->mLightShaftLUT);
+	if (mEnableScattering) {
+		CamLUT* l = mCameraLUTs.at(camera) + camera->Device()->FrameContextIndex();
+		mat->SetParameter("InscatteringLUT", l->mInscatterLUT);
+		mat->SetParameter("ExtinctionLUT", l->mOutscatterLUT);
+		mat->SetParameter("LightShaftLUT", l->mLightShaftLUT);
+		mat->SetParameter("AmbientLight", mAmbientLight);
+		mat->EnableKeyword("ENABLE_SCATTERING");
+		mat->DisableKeyword("ENVIRONMENT_TEXTURE");
+	} else if (mEnvironmentTexture) {
+		mat->EnableKeyword("ENVIRONMENT_TEXTURE");
+		mat->DisableKeyword("ENABLE_SCATTERING");
+		mat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+	}else{
+		mat->DisableKeyword("ENVIRONMENT_TEXTURE");
+		mat->DisableKeyword("ENABLE_SCATTERING");
+	}
 	mat->SetParameter("AmbientLight", mAmbientLight);
 }
 
 void Environment::Update() {
-	mSun->LocalRotation(quaternion(float3(0, radians(23.5f), radians(23.5f))) * quaternion(float3(mTimeOfDay * PI * 2, 0, 0)));
-	mMoon->LocalRotation(quaternion(float3(0, radians(70.f), radians(70.f))) * quaternion(float3(PI + mTimeOfDay * PI * 2, 0, 0)));
+	if (mEnableCelestials) {
+		mSun->LocalRotation(quaternion(float3(0, radians(23.5f), radians(23.5f))) * quaternion(float3(mTimeOfDay * PI * 2, 0, 0)));
+		mMoon->LocalRotation(quaternion(float3(0, radians(70.f), radians(70.f))) * quaternion(float3(PI + mTimeOfDay * PI * 2, 0, 0)));
 
-	float f = clamp(10 * (-mMoon->WorldRotation().forward().y + .1f), 0.f, 1.f);
-	mMoon->Intensity(.05f * f*f);
+		float f = clamp(10 * (-mMoon->WorldRotation().forward().y + .1f), 0.f, 1.f);
+		mMoon->Intensity(.05f * f * f);
 
-	f = clamp(10 * (-mSun->WorldRotation().forward().y + .1f), 0.f, 1.f);
-	mSun->Intensity(1 * f*f);
+		f = clamp(10 * (-mSun->WorldRotation().forward().y + .1f), 0.f, 1.f);
+		mSun->Intensity(1 * f * f);
 
-	float cosAngle = dot(float3(0, 1, 0), -mSun->WorldRotation().forward());
-	float u = (cosAngle + 0.1f) / 1.1f;
-	u = u * 128;
-	int index0 = (int)u;
-	int index1 = index0 + 1;
-	float weight1 = u - index0;
-	float weight0 = 1 - weight1;
-	index0 = clamp(index0, 0, 128 - 1);
-	index1 = clamp(index1, 0, 128 - 1);
+		float cosAngle = dot(float3(0, 1, 0), -mSun->WorldRotation().forward());
+		float u = (cosAngle + 0.1f) / 1.1f;
+		u = u * 128;
+		int index0 = (int)u;
+		int index1 = index0 + 1;
+		float weight1 = u - index0;
+		float weight0 = 1 - weight1;
+		index0 = clamp(index0, 0, 128 - 1);
+		index1 = clamp(index1, 0, 128 - 1);
 
-	mSun->Color((1.055f * pow((mDirectionalLUT[index0] * weight0 + mDirectionalLUT[index1] * weight1).rgb, 1.f / 2.4f) - .055f));
-	mAmbientLight = .1f * length(1.055f * pow(mAmbientLUT[index0] * weight0 + mAmbientLUT[index1] * weight1, 1.f / 2.4f) - .055f);
+		mSun->Color((1.055f * pow((mDirectionalLUT[index0] * weight0 + mDirectionalLUT[index1] * weight1).rgb, 1.f / 2.4f) - .055f));
+		mAmbientLight = .1f * length(1.055f * pow(mAmbientLUT[index0] * weight0 + mAmbientLUT[index1] * weight1, 1.f / 2.4f) - .055f);
+	} else {
+		mSun->mEnabled = false;
+		mMoon->mEnabled = false;
+	}
 }
 
 void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
-	if (mCameraLUTs.count(camera) == 0) {
-		CamLUT* t = new CamLUT[commandBuffer->Device()->MaxFramesInFlight()];
-		memset(t, 0, sizeof(CamLUT) * commandBuffer->Device()->MaxFramesInFlight());
-		mCameraLUTs.emplace(camera, t);
-	}
-	CamLUT* l = mCameraLUTs.at(camera) + commandBuffer->Device()->FrameContextIndex();
-	DevLUT* dlut = &mDeviceLUTs.at(camera->Device());
+	if (mEnableScattering) {
+		if (mCameraLUTs.count(camera) == 0) {
+			CamLUT* t = new CamLUT[commandBuffer->Device()->MaxFramesInFlight()];
+			memset(t, 0, sizeof(CamLUT) * commandBuffer->Device()->MaxFramesInFlight());
+			mCameraLUTs.emplace(camera, t);
+		}
+		CamLUT* l = mCameraLUTs.at(camera) + commandBuffer->Device()->FrameContextIndex();
+		DevLUT* dlut = &mDeviceLUTs.at(camera->Device());
 
-	if (l->mLightShaftLUT && (l->mLightShaftLUT->Width() != camera->FramebufferWidth()/2 || l->mLightShaftLUT->Height() != camera->FramebufferHeight()/2))
-		safe_delete(l->mLightShaftLUT);
+		if (l->mLightShaftLUT && (l->mLightShaftLUT->Width() != camera->FramebufferWidth() / 2 || l->mLightShaftLUT->Height() != camera->FramebufferHeight() / 2))
+			safe_delete(l->mLightShaftLUT);
 
-	if (!l->mInscatterLUT) {
-		l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-	}
-	if (!l->mOutscatterLUT) {
-		l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-	}
-	if (!l->mLightShaftLUT){
-		l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth()/2, camera->FramebufferHeight()/2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-	}
+		if (!l->mInscatterLUT) {
+			l->mInscatterLUT = new Texture("Inscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		}
+		if (!l->mOutscatterLUT) {
+			l->mOutscatterLUT = new Texture("Outscatter LUT", commandBuffer->Device(), 32, 32, 256, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		}
+		if (!l->mLightShaftLUT) {
+			l->mLightShaftLUT = new Texture("Light Shaft LUT", commandBuffer->Device(), camera->FramebufferWidth() / 2, camera->FramebufferHeight() / 2, 1, VK_FORMAT_R32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		}
 
-	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
-	float3 r0 = camera->ClipToWorld(float3(-1,  1, 1));
-	float3 r1 = camera->ClipToWorld(float3(-1, -1, 1));
-	float3 r2 = camera->ClipToWorld(float3( 1, -1, 1));
-	float3 r3 = camera->ClipToWorld(float3( 1,  1, 1));
-	float4 scatterR = mRayleighSct * mRayleighScatterCoef;
-	float4 scatterM = mMieSct * mMieScatterCoef;
-	float4 extinctR = mRayleighSct * mRayleighExtinctionCoef;
-	float4 extinctM = mMieSct * mMieExtinctionCoef;
-	float3 cp = camera->WorldPosition();
-	float3 lightdir = -normalize(mSun->WorldRotation().forward());
-	float4 incoming = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
+		float3 r0 = camera->ClipToWorld(float3(-1, 1, 1));
+		float3 r1 = camera->ClipToWorld(float3(-1, -1, 1));
+		float3 r2 = camera->ClipToWorld(float3(1, -1, 1));
+		float3 r3 = camera->ClipToWorld(float3(1, 1, 1));
+		float4 scatterR = mRayleighSct * mRayleighScatterCoef;
+		float4 scatterM = mMieSct * mMieScatterCoef;
+		float4 extinctR = mRayleighSct * mRayleighExtinctionCoef;
+		float4 extinctM = mMieSct * mMieExtinctionCoef;
+		float3 cp = camera->WorldPosition();
+		float3 lightdir = -normalize(mSun->WorldRotation().forward());
+		float4 incoming = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
 
-	#pragma region Precompute scattering
-	ComputeShader* scatter = mShader->GetCompute(commandBuffer->Device(), "InscatteringLUT", {});
+		#pragma region Precompute scattering
+		ComputeShader* scatter = mShader->GetCompute(commandBuffer->Device(), "InscatteringLUT", {});
 
-	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipeline);
-	DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Scatter LUT", scatter->mDescriptorSetLayouts[0]);
-	ds->CreateStorageTextureDescriptor(l->mInscatterLUT, scatter->mDescriptorBindings.at("_InscatteringLUT").second.binding);
-	ds->CreateStorageTextureDescriptor(l->mOutscatterLUT, scatter->mDescriptorBindings.at("_ExtinctionLUT").second.binding);
-	ds->CreateSampledTextureDescriptor(dlut->mParticleDensityLUT, scatter->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipeline);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Scatter LUT", scatter->mDescriptorSetLayouts[0]);
+		ds->CreateStorageTextureDescriptor(l->mInscatterLUT, scatter->mDescriptorBindings.at("_InscatteringLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(l->mOutscatterLUT, scatter->mDescriptorBindings.at("_ExtinctionLUT").second.binding);
+		ds->CreateSampledTextureDescriptor(dlut->mParticleDensityLUT, scatter->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 
-	VkDescriptorSet vds = *ds;
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		VkDescriptorSet vds = *ds;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipelineLayout, 0, 1, &vds, 0, nullptr);
 
-	commandBuffer->PushConstant(scatter, "_BottomLeftCorner", &r0);
-	commandBuffer->PushConstant(scatter, "_TopLeftCorner", &r1);
-	commandBuffer->PushConstant(scatter, "_TopRightCorner", &r2);
-	commandBuffer->PushConstant(scatter, "_BottomRightCorner", &r3);
+		commandBuffer->PushConstant(scatter, "_BottomLeftCorner", &r0);
+		commandBuffer->PushConstant(scatter, "_TopLeftCorner", &r1);
+		commandBuffer->PushConstant(scatter, "_TopRightCorner", &r2);
+		commandBuffer->PushConstant(scatter, "_BottomRightCorner", &r3);
 
-	commandBuffer->PushConstant(scatter, "_AtmosphereHeight", &mAtmosphereHeight);
-	commandBuffer->PushConstant(scatter, "_PlanetRadius", &mPlanetRadius);
-	commandBuffer->PushConstant(scatter, "_LightDir", &lightdir);
-	commandBuffer->PushConstant(scatter, "_CameraPos", &cp);
-	commandBuffer->PushConstant(scatter, "_DensityScaleHeight", &mDensityScale);
-	commandBuffer->PushConstant(scatter, "_ScatteringR", &scatterR);
-	commandBuffer->PushConstant(scatter, "_ScatteringM", &scatterM);
-	commandBuffer->PushConstant(scatter, "_ExtinctionR", &extinctR);
-	commandBuffer->PushConstant(scatter, "_ExtinctionM", &extinctM);
-	commandBuffer->PushConstant(scatter, "_IncomingLight", &incoming);
-	commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
-	commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
-	commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
-	vkCmdDispatch(*commandBuffer, l->mInscatterLUT->Width() / 8, l->mInscatterLUT->Width() / 8, 1);
-	#pragma endregion
-	/*
-	#pragma region Precompute light shafts
-	ComputeShader* shaft = mShader->GetCompute(commandBuffer->Device(), "LightShaftLUT", {});
+		commandBuffer->PushConstant(scatter, "_AtmosphereHeight", &mAtmosphereHeight);
+		commandBuffer->PushConstant(scatter, "_PlanetRadius", &mPlanetRadius);
+		commandBuffer->PushConstant(scatter, "_LightDir", &lightdir);
+		commandBuffer->PushConstant(scatter, "_CameraPos", &cp);
+		commandBuffer->PushConstant(scatter, "_DensityScaleHeight", &mDensityScale);
+		commandBuffer->PushConstant(scatter, "_ScatteringR", &scatterR);
+		commandBuffer->PushConstant(scatter, "_ScatteringM", &scatterM);
+		commandBuffer->PushConstant(scatter, "_ExtinctionR", &extinctR);
+		commandBuffer->PushConstant(scatter, "_ExtinctionM", &extinctM);
+		commandBuffer->PushConstant(scatter, "_IncomingLight", &incoming);
+		commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
+		commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
+		commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
+		vkCmdDispatch(*commandBuffer, l->mInscatterLUT->Width() / 8, l->mInscatterLUT->Width() / 8, 1);
+		#pragma endregion
+		/*
+		#pragma region Precompute light shafts
+		ComputeShader* shaft = mShader->GetCompute(commandBuffer->Device(), "LightShaftLUT", {});
 
-	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipeline);
-	ds = commandBuffer->Device()->GetTempDescriptorSet("Light Shaft LUT", shaft->mDescriptorSetLayouts[0]);
-	ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("_LightShaftLUT").second.binding);
-	ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer(), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
-	ds->CreateStorageBufferDescriptor(mScene->LightBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Lights").second.binding);
-	ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
-	ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipeline);
+		ds = commandBuffer->Device()->GetTempDescriptorSet("Light Shaft LUT", shaft->mDescriptorSetLayouts[0]);
+		ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("_LightShaftLUT").second.binding);
+		ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer(), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
+		ds->CreateStorageBufferDescriptor(mScene->LightBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Lights").second.binding);
+		ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
+		ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
 
-	vds = *ds;
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vds = *ds;
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, &vds, 0, nullptr);
 
-	commandBuffer->PushConstant(shaft, "_BottomLeftCorner", &r0);
-	commandBuffer->PushConstant(shaft, "_TopLeftCorner", &r1);
-	commandBuffer->PushConstant(shaft, "_TopRightCorner", &r2);
-	commandBuffer->PushConstant(shaft, "_BottomRightCorner", &r3);
+		commandBuffer->PushConstant(shaft, "_BottomLeftCorner", &r0);
+		commandBuffer->PushConstant(shaft, "_TopLeftCorner", &r1);
+		commandBuffer->PushConstant(shaft, "_TopRightCorner", &r2);
+		commandBuffer->PushConstant(shaft, "_BottomRightCorner", &r3);
 
-	commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
-	vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
-	#pragma endregion
-	*/
-	l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-	l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-	l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
+		vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
+		#pragma endregion
+		*/
+		l->mInscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
-	mSkyboxMaterial->SetParameter("SkyboxLUTR", dlut->mSkyboxLUTR);
-	mSkyboxMaterial->SetParameter("SkyboxLUTM", dlut->mSkyboxLUTM);
-	mSkyboxMaterial->SetParameter("LightShaftLUT", l->mLightShaftLUT);
-	mSkyboxMaterial->SetParameter("MoonTexture", mMoonTexture);
-	mSkyboxMaterial->SetParameter("StarTexture", mStarTexture);
-	mSkyboxMaterial->SetParameter("_MoonRotation", inverse(mMoon->WorldRotation()).xyzw);
-	mSkyboxMaterial->SetParameter("_MoonSize", mMoonSize);
-	mSkyboxMaterial->SetParameter("_IncomingLight", mIncomingLight.xyz);
-	mSkyboxMaterial->SetParameter("_SunDir", lightdir);
-	mSkyboxMaterial->SetParameter("_PlanetRadius", mPlanetRadius);
-	mSkyboxMaterial->SetParameter("_AtmosphereHeight", mAtmosphereHeight);
-	mSkyboxMaterial->SetParameter("_SunIntensity", mSunIntensity);
-	mSkyboxMaterial->SetParameter("_MieG", mMieG);
-	mSkyboxMaterial->SetParameter("_ScatteringR", scatterR.xyz);
-	mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
-	mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
-	mSkyboxMaterial->SetParameter("_StarFade", 100 * clamp(lightdir.y, 0.f, 1.f));
+		mSkyboxMaterial->SetParameter("SkyboxLUTR", dlut->mSkyboxLUTR);
+		mSkyboxMaterial->SetParameter("SkyboxLUTM", dlut->mSkyboxLUTM);
+		mSkyboxMaterial->SetParameter("LightShaftLUT", l->mLightShaftLUT);
+		mSkyboxMaterial->SetParameter("MoonTexture", mMoonTexture);
+		mSkyboxMaterial->SetParameter("StarTexture", mStarTexture);
+		mSkyboxMaterial->SetParameter("_MoonRotation", inverse(mMoon->WorldRotation()).xyzw);
+		mSkyboxMaterial->SetParameter("_MoonSize", mMoonSize);
+		mSkyboxMaterial->SetParameter("_IncomingLight", mIncomingLight.xyz);
+		mSkyboxMaterial->SetParameter("_SunDir", lightdir);
+		mSkyboxMaterial->SetParameter("_PlanetRadius", mPlanetRadius);
+		mSkyboxMaterial->SetParameter("_AtmosphereHeight", mAtmosphereHeight);
+		mSkyboxMaterial->SetParameter("_SunIntensity", mSunIntensity);
+		mSkyboxMaterial->SetParameter("_MieG", mMieG);
+		mSkyboxMaterial->SetParameter("_ScatteringR", scatterR.xyz);
+		mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
+		mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
+		mSkyboxMaterial->SetParameter("_StarFade", 100 * clamp(lightdir.y, 0.f, 1.f));
+	} else if (mEnvironmentTexture)
+		mSkyboxMaterial->SetParameter("EnvironmentTexture", mEnvironmentTexture);
+	mSkyboxMaterial->SetParameter("AmbientLight", mAmbientLight);
 }
