@@ -85,54 +85,94 @@ bool DicomVis::Init(Scene* scene) {
 	mFpsText = fpsText.get();
 	mObjects.push_back(mFpsText);
 
-	Shader* pbrShader = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
-	auto func = [](Scene* scene, aiMaterial* material, void* data) {
-		shared_ptr<Material> mat = make_shared<Material>("PBR", (Shader*)data);
-		mat->PassMask((PassType)(Main | Depth | Shadow));
+	shared_ptr<Material> transparent = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
+	transparent->PassMask((PassType)(Main | Depth | Shadow));
+	transparent->EnableKeyword("COLOR_MAP");
+	transparent->EnableKeyword("MASK_MAP");
+	transparent->EnableKeyword("NORMAL_MAP");
+	transparent->EnableKeyword("EMISSION");
+	transparent->SetParameter("BumpStrength", 1.f);
+	transparent->RenderQueue(5000);
+	transparent->PassMask((PassType)(Main));
+	transparent->BlendMode(Alpha);
+	transparent->CullMode(VK_CULL_MODE_NONE);
+
+	shared_ptr<Material> material = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
+	material->PassMask((PassType)(Main | Depth | Shadow));
+	material->EnableKeyword("COLOR_MAP");
+	material->EnableKeyword("MASK_MAP");
+	material->EnableKeyword("NORMAL_MAP");
+	material->EnableKeyword("EMISSION");
+	material->SetParameter("BumpStrength", 1.f);
+
+	uint32_t matidx = 0;
+	uint32_t transidx = 0;
+
+	auto matfunc = [&](Scene* scene, aiMaterial* aimaterial) {
+		aiString alphaMode;
+		if (aimaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS)
+			if (alphaMode == aiString("BLEND"))
+				return transparent;
+		return material;
+	};
+
+	auto objfunc = [&](Scene* scene, Object* object, aiMaterial* aimaterial) {
+		MeshRenderer* renderer = dynamic_cast<MeshRenderer*>(object);
+		if (!renderer) return;
+		
+		Material* mat = renderer->Material();
+		uint32_t idx;
+
+		aiString alphaMode;
+		if (mat == transparent.get()) {
+			idx = transidx;
+			transidx++;
+		} else {
+			idx = matidx;
+			matidx++;
+		}
+
 		aiColor3D emissiveColor(0);
 		aiColor4D baseColor(1);
 		float metallic = 1.f;
 		float roughness = 1.f;
-		aiString baseColorTexture, metalRoughTexture, normalTexture, emissiveTexture, alphaMode;
-		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, baseColor);
-		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic);
-		material->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness);
-		if (material->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &baseColorTexture) == AI_SUCCESS && baseColorTexture.length) {
-			mat->SetParameter("MainTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(baseColorTexture.C_Str())));
-			mat->EnableKeyword("COLOR_MAP");
-		}
-		if (material->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalRoughTexture) == AI_SUCCESS && metalRoughTexture.length) {
-			mat->SetParameter("MaskTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(metalRoughTexture.C_Str()), false));
-			mat->EnableKeyword("MASK_MAP");
-		}
-		if (material->GetTexture(aiTextureType_NORMALS, 0, &normalTexture) == AI_SUCCESS && normalTexture.length) {
-			mat->SetParameter("NormalTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(normalTexture.C_Str()), false));
-			mat->SetParameter("BumpStrength", 1.f);
-			mat->EnableKeyword("NORMAL_MAP");
-		}
-		if (material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor) == AI_SUCCESS) {
-			mat->SetParameter("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
-			mat->SetParameter("EmissionTexture", scene->AssetManager()->LoadTexture("Assets/Textures/white.png"));
-			mat->EnableKeyword("EMISSION");
-		}
-		if (material->GetTexture(aiTextureType_EMISSIVE, 0, &emissiveTexture) == AI_SUCCESS && emissiveTexture.length) {
-			mat->SetParameter("EmissionTexture", scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(emissiveTexture.C_Str())));
-			mat->EnableKeyword("EMISSION");
-		}
-		if (material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
-			if (alphaMode == aiString("BLEND")) {
-				mat->RenderQueue(5000);
-				mat->PassMask((PassType)(Main));
-				mat->BlendMode(Alpha);
-				mat->CullMode(VK_CULL_MODE_NONE);
-			}
-		}
-		mat->SetParameter("Color", float4(baseColor.r, baseColor.g, baseColor.b, baseColor.a));
-		mat->SetParameter("Roughness", roughness);
-		mat->SetParameter("Metallic", metallic);
-		return mat;
+		aiString baseColorTexture, metalRoughTexture, normalTexture, emissiveTexture;
+
+		if (aimaterial->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_TEXTURE, &baseColorTexture) == AI_SUCCESS && baseColorTexture.length) {
+			mat->SetParameter("MainTextures", idx, scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(baseColorTexture.C_Str())));
+			baseColor = aiColor4D(1);
+		} else
+			mat->SetParameter("MainTextures", idx, scene->AssetManager()->LoadTexture("Assets/Textures/white.png", false));
+
+		if (aimaterial->GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &metalRoughTexture) == AI_SUCCESS && metalRoughTexture.length)
+			mat->SetParameter("MaskTextures", idx, scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(metalRoughTexture.C_Str()), false));
+		else
+			mat->SetParameter("MaskTextures", idx, scene->AssetManager()->LoadTexture("Assets/Textures/white.png", false));
+
+		if (aimaterial->GetTexture(aiTextureType_NORMALS, 0, &normalTexture) == AI_SUCCESS && normalTexture.length)
+			mat->SetParameter("NormalTextures", idx, scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(normalTexture.C_Str()), false));
+		else
+			mat->SetParameter("NormalTextures", idx, scene->AssetManager()->LoadTexture("Assets/Textures/bump.png", false));
+		
+		if (aimaterial->GetTexture(aiTextureType_EMISSIVE, 0, &emissiveTexture) == AI_SUCCESS && emissiveTexture.length) {
+			mat->SetParameter("EmissionTextures", idx, scene->AssetManager()->LoadTexture("Assets/Models/room/" + string(emissiveTexture.C_Str())));
+			emissiveColor = aiColor3D(1);
+		} else
+			mat->SetParameter("EmissionTextures", idx, scene->AssetManager()->LoadTexture("Assets/Textures/white.png"));
+
+		aimaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, baseColor);
+		aimaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLIC_FACTOR, metallic);
+		aimaterial->Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_ROUGHNESS_FACTOR, roughness);
+		aimaterial->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor);
+
+		renderer->PushConstant("TextureIndex", idx);
+		renderer->PushConstant("Color", float4(baseColor.r, baseColor.g, baseColor.b, baseColor.a));
+		renderer->PushConstant("Roughness", roughness);
+		renderer->PushConstant("Metallic", metallic);
+		renderer->PushConstant("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
 	};
-	Object* room = mScene->LoadModelScene("Assets/Models/room/CrohnsProtoRoom.gltf", func, pbrShader, 1.f, 1.f, .05f, .006f);
+	
+	Object* room = mScene->LoadModelScene("Assets/Models/room/CrohnsProtoRoom.gltf", matfunc, objfunc, 1.f, 1.f, .05f, .006f);
 	queue<Object*> nodes;
 	nodes.push(room);
 	while (nodes.size()) {

@@ -37,7 +37,7 @@ struct Glyph {
 
 struct v2f {
 	float4 position : SV_Position;
-	float depth : TEXCOORD0;
+	float4 worldPos : TEXCOORD0;
 	#ifdef CANVAS_BOUNDS
 	float4 texcoord : TEXCOORD1;
 	#else
@@ -68,7 +68,7 @@ v2f vsmain(uint id : SV_VertexId) {
 	o.texcoord.zw = abs(p);
 	#endif
 	o.position = mul(Camera.ViewProjection, worldPos);
-	o.depth = LinearDepth01(o.position.z);
+	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
 
 	return o;
@@ -90,9 +90,10 @@ float4 SampleFont(float2 uv){
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
+	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
+
 	#ifdef CANVAS_BOUNDS
 	clip(any(Bounds - i.texcoord.zw));
 	#endif
 	color = SampleFont(i.texcoord.xy) * Color;
-	depthNormal = float4(normalize(WorldNormal) * .5 + .5, i.depth);
 }

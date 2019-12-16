@@ -47,7 +47,10 @@ Scene::~Scene(){
 	mObjects.clear();
 }
 
-Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*materialSetupFunc)(Scene*, aiMaterial*, void*), void* materialFuncData, float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity) {
+Object* Scene::LoadModelScene(const string& filename,
+	function<shared_ptr<Material>(Scene*, aiMaterial*)> materialSetupFunc,
+	function<void(Scene*, Object*, aiMaterial*)> objectSetupFunc,
+	float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity) {
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
@@ -61,7 +64,7 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 	unordered_map<aiNode*, Object*> objectMap;
 
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
-		materials.push_back(materialSetupFunc(this, scene->mMaterials[m], materialFuncData));
+		materials.push_back(materialSetupFunc(this, scene->mMaterials[m]));
 
 	vector<StdVertex> vertices;
 	vector<uint32_t> indices32;
@@ -142,6 +145,8 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 		if (np.first) np.first->AddChild(obj.get());
 		else root = obj.get();
 
+		objectSetupFunc(this, obj.get(), nullptr);
+
 		objectMap.emplace(n, obj.get());
 
 		for (uint32_t i = 0; i < n->mNumMeshes; i++) {
@@ -153,6 +158,8 @@ Object* Scene::LoadModelScene(const string& filename, shared_ptr<Material>(*mate
 			mr->Material(mat < materials.size() ? materials[mat] : nullptr);
 			mr->Mesh(mesh);
 			obj->AddChild(mr.get());
+
+			objectSetupFunc(this, mr.get(), scene->mMaterials[mat]);
 		}
 
 		for (uint32_t i = 0; i < n->mNumChildren; i++)
