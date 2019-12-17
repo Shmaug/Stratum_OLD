@@ -85,25 +85,14 @@ bool DicomVis::Init(Scene* scene) {
 	mFpsText = fpsText.get();
 	mObjects.push_back(mFpsText);
 
-	shared_ptr<Material> transparent = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
-	transparent->PassMask((PassType)(Main | Depth | Shadow));
-	transparent->EnableKeyword("COLOR_MAP");
-	transparent->EnableKeyword("MASK_MAP");
-	transparent->EnableKeyword("NORMAL_MAP");
-	transparent->EnableKeyword("EMISSION");
-	transparent->SetParameter("BumpStrength", 1.f);
+	shared_ptr<Material> transparent = make_shared<Material>("Transparent PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 	transparent->RenderQueue(5000);
-	transparent->PassMask((PassType)(Main));
-	transparent->BlendMode(Alpha);
+	transparent->BlendMode(BLEND_MODE_ALPHA);
 	transparent->CullMode(VK_CULL_MODE_NONE);
+	transparent->EnableKeyword("TEXTURED");
 
-	shared_ptr<Material> material = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.shader"));
-	material->PassMask((PassType)(Main | Depth | Shadow));
-	material->EnableKeyword("COLOR_MAP");
-	material->EnableKeyword("MASK_MAP");
-	material->EnableKeyword("NORMAL_MAP");
-	material->EnableKeyword("EMISSION");
-	material->SetParameter("BumpStrength", 1.f);
+	shared_ptr<Material> material = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
+	material->EnableKeyword("TEXTURED");
 
 	uint32_t matidx = 0;
 	uint32_t transidx = 0;
@@ -170,6 +159,7 @@ bool DicomVis::Init(Scene* scene) {
 		renderer->PushConstant("Roughness", roughness);
 		renderer->PushConstant("Metallic", metallic);
 		renderer->PushConstant("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
+		material->SetParameter("BumpStrength", 2.f);
 	};
 	
 	Object* room = mScene->LoadModelScene("Assets/Models/room/CrohnsProtoRoom.gltf", matfunc, objfunc, 1.f, 1.f, .05f, .006f);

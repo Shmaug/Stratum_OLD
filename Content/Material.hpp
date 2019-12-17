@@ -16,7 +16,15 @@ typedef std::variant<
 	float,
 	float2,
 	float3,
-	float4
+	float4,
+	uint32_t,
+	uint2,
+	uint3,
+	uint4,
+	int32_t,
+	int2,
+	int3,
+	int4
 > MaterialParameter;
 
 class Material {
@@ -27,10 +35,9 @@ public:
 	ENGINE_EXPORT Material(const std::string& name, std::shared_ptr<::Shader> shader);
 	ENGINE_EXPORT ~Material();
 
-	ENGINE_EXPORT GraphicsShader* GetShader(Device* device);
+	ENGINE_EXPORT GraphicsShader* GetShader(Device* device, PassType pass);
 
-	inline void PassMask(PassType p) { mPassMask = p; }
-	inline PassType PassMask() const { return mPassMask; }
+	inline PassType PassMask() { return Shader()->PassMask(); }
 
 	inline void RenderQueue(uint32_t q) { mRenderQueueOverride = q; }
 	inline uint32_t RenderQueue() const { return (mRenderQueueOverride == ~0) ? Shader()->RenderQueue() : mRenderQueueOverride; }
@@ -48,27 +55,30 @@ public:
 	ENGINE_EXPORT void EnableKeyword(const std::string& kw);
 
 private:
+	struct VariantData {
+		GraphicsShader* mShaderVariant;
+		DescriptorSet** mDescriptorSets;
+		bool* mDirty;
+		inline VariantData() {};
+	};
+
 	friend class CommandBuffer;
-	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, const VertexInput* input, Camera* camera = nullptr, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	ENGINE_EXPORT void SetParameters(CommandBuffer* commandBuffer, Camera* camera, GraphicsShader* variant);
+	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, PassType pass, const VertexInput* input, Camera* camera = nullptr, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	ENGINE_EXPORT void SetParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
 
 	inline ::Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
+
+	ENGINE_EXPORT VariantData* GetData(Device* device, PassType pass);
 
 	std::variant<::Shader*, std::shared_ptr<::Shader>> mShader;
 	std::set<std::string> mShaderKeywords;
 	VkCullModeFlags mCullMode;
 	::BlendMode mBlendMode;
 
-	PassType mPassMask;
-
 	uint32_t mRenderQueueOverride;
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 	std::unordered_map<std::string, std::unordered_map<uint32_t, std::variant<std::shared_ptr<Texture>, Texture*>>> mArrayParameters;
 
-	struct DeviceData {
-		GraphicsShader* mShaderVariant;
-		inline DeviceData() : mShaderVariant(nullptr) {};
-	};
-	std::unordered_map<Device*, DeviceData> mDeviceData;
+	std::unordered_map<Device*, std::unordered_map<PassType, VariantData*>> mVariantData;
 };

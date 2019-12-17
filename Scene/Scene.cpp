@@ -498,7 +498,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		mDrawGizmos = false;
 		for (uint32_t i = 0; i < si; i++) {
 			data.mShadowCameras[i]->mEnabled = true;
-			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, (PassType)(Depth | Shadow), i == 0);
+			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, PASS_DEPTH, i == 0);
 		}
 		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
 			data.mShadowCameras[i]->mEnabled = false;
@@ -521,11 +521,13 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	
 	PROFILER_BEGIN("Pre Render");
 	camera->PreRender();
-	if (pass & Main) {
+	if (pass == PASS_MAIN) {
 		if (camera->DepthFramebuffer()){
+			PROFILER_BEGIN("Depth Prepass");
 			BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
-			Render(commandBuffer, camera, camera->DepthFramebuffer(), Depth);
+			Render(commandBuffer, camera, camera->DepthFramebuffer(), PASS_DEPTH);
 			END_CMD_REGION(commandBuffer);
+			PROFILER_END;
 		}
 		mEnvironment->PreRender(commandBuffer, camera);
 	}
@@ -570,10 +572,9 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		bool batched = false;
 		MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r);
 		if (cur) {
-			GraphicsShader* curShader = cur->Material()->GetShader(commandBuffer->Device());
+			GraphicsShader* curShader = cur->Material()->GetShader(commandBuffer->Device(), pass);
 			if (curShader->mDescriptorBindings.count("Instances")) {
-				if (!batchStart || batchSize + 1 >= INSTANCE_BATCH_SIZE ||
-					(batchStart->Material() != cur->Material()) || batchStart->Mesh() != cur->Mesh()) {
+				if (!batchStart || batchSize + 1 >= INSTANCE_BATCH_SIZE || (batchStart->Material() != cur->Material()) || batchStart->Mesh() != cur->Mesh()) {
 					// render last batch
 					if (batchStart) {
 						BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
@@ -590,12 +591,15 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					curBatch = (ObjectBuffer*)batchBuffer->MappedData();
 					uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), OBJECT_BUFFER_BINDING);
-					if (curShader->mDescriptorBindings.count("Lights"))
-						batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[frameContextIndex], 0, data.mLightBuffers[frameContextIndex]->Size(), LIGHT_BUFFER_BINDING);
-					if (curShader->mDescriptorBindings.count("Shadows"))
-						batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[frameContextIndex], 0, data.mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
-					if (curShader->mDescriptorBindings.count("ShadowAtlas"))
-						batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
+					if (pass == PASS_MAIN) {
+						if (curShader->mDescriptorBindings.count("Lights"))
+							batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[frameContextIndex], 0, data.mLightBuffers[frameContextIndex]->Size(), LIGHT_BUFFER_BINDING);
+						if (curShader->mDescriptorBindings.count("Shadows"))
+							batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[frameContextIndex], 0, data.mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
+						if (curShader->mDescriptorBindings.count("ShadowAtlas"))
+							batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
+					}
+					batchDS->FlushWrites();
 				}
 				// append to batch
 				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
@@ -626,7 +630,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	}
 	PROFILER_END;
 
-	if (mDrawGizmos && (pass & Main)) {
+	if (mDrawGizmos && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw Gizmos");
 		/*
 		for (Camera* c : data.mShadowCameras)
@@ -661,7 +665,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 			if (p->mEnabled)
 				p->DrawGizmos(commandBuffer, camera);
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
-		mGizmos->Draw(commandBuffer, camera);
+		mGizmos->Draw(commandBuffer, pass, camera);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}

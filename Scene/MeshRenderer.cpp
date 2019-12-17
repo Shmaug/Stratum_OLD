@@ -25,18 +25,16 @@ void MeshRenderer::Material(shared_ptr<::Material> m) {
 }
 
 void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("PASS_DEPTH");
-	else mMaterial->DisableKeyword("PASS_DEPTH");
+	if (pass == PASS_MAIN) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 }
 
 void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
 	::Mesh* mesh = Mesh();
 
-	VkCullModeFlags cull = (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), mesh->VertexInput(), camera, mesh->Topology(), cull);
+	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, mesh->VertexInput(), camera, mesh->Topology(), cull);
 	if (!layout) return;
-	auto shader = mMaterial->GetShader(commandBuffer->Device());
+	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
 
 	for (const auto& kp : mPushConstants)
 		commandBuffer->PushConstant(shader, kp.first, &kp.second);

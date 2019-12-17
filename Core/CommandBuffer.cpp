@@ -112,10 +112,10 @@ bool CommandBuffer::PushConstant(ShaderVariant* shader, const std::string& name,
 	vkCmdPushConstants(*this, shader->mPipelineLayout, range.stageFlags, range.offset, range.size, value);
 	return true;
 }
-VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
+VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology, cullMode, blendMode, polyMode);
 	if (mCurrentPipeline == pipeline) {
-		if (mCurrentCamera != camera) {
+		if (mCurrentCamera != camera && camera) {
 			mCurrentCamera = camera;
 			if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera")) {
 				VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
@@ -126,66 +126,33 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, const VertexI
 	}
 	mCurrentPipeline = pipeline;
 	vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera")) {
-		VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
-		vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
+	if (camera) {
+		if (mCurrentRenderPass && shader->mDescriptorBindings.count("Camera")) {
+			VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
+			vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
+		}
+		mCurrentCamera = camera;
 	}
-	mCurrentCamera = camera;
 	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
 }
-VkPipelineLayout CommandBuffer::BindMaterial(Material* material, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
-	GraphicsShader* shader = material->GetShader(mDevice);
+VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
+	GraphicsShader* shader = material->GetShader(mDevice, pass);
 	if (!shader) return VK_NULL_HANDLE;
 
 	if (blendMode == BLEND_MODE_MAX_ENUM) blendMode = material->BlendMode();
 	if (cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM) cullMode = material->CullMode();
 
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology, cullMode, blendMode, polyMode);
-	if (pipeline == mCurrentPipeline) {
-		// same pipeline/shader variant, see if we need to rebind...
-		bool needRebind = mCurrentCamera != camera;
-		if (!needRebind) {
-			for (auto b : shader->mDescriptorBindings) {
-				uint32_t c0 = material->mParameters.count(b.first);
-				uint32_t c1 = mCurrentMaterial->mParameters.count(b.first);
-				if (c0 && c1) {
-					if (material->mParameters.at(b.first) != mCurrentMaterial->mParameters.at(b.first)) {
-						needRebind = true;
-						break;
-					}
-				} else if (c0 != c1) {
-					needRebind = true;
-					break;
-				}
-			}
-			for (auto b : shader->mPushConstants) {
-				uint32_t c0 = material->mParameters.count(b.first);
-				uint32_t c1 = mCurrentMaterial->mParameters.count(b.first);
-				if (c0 && c1) {
-					if (material->mParameters.at(b.first) != mCurrentMaterial->mParameters.at(b.first)) {
-						needRebind = true;
-						break;
-					}
-				} else if (c0 != c1) {
-					needRebind = true;
-					break;
-				}
-			}
-		}
-
-		if (needRebind) material->SetParameters(this, camera, shader);
-		
-		mCurrentMaterial = material;
-		mCurrentCamera = camera;
-		return shader->mPipelineLayout;
+	if (pipeline != mCurrentPipeline) {
+		vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		mCurrentPipeline = pipeline;
 	}
-
-	vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	material->SetParameters(this, camera, shader);
+	
+	Material::VariantData* data = material->GetData(mDevice, pass);
+	material->SetParameters(this, camera, data);
 
 	mCurrentCamera = camera;
-	mCurrentPipeline = pipeline;
 	mCurrentMaterial = material;
 	return shader->mPipelineLayout;
 }

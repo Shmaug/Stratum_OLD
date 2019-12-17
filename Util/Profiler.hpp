@@ -33,7 +33,7 @@ public:
 	ENGINE_EXPORT static void FrameStart();
 	ENGINE_EXPORT static void FrameEnd();
 
-	ENGINE_EXPORT static void PrintLastFrame(std::ostream& stream);
+	ENGINE_EXPORT static void PrintLastFrame(char* buffer, size_t size);
 
 private:
 	static const std::chrono::high_resolution_clock mTimer;

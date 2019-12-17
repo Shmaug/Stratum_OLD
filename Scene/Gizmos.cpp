@@ -32,7 +32,7 @@ const ::VertexInput GizmoVertexInput {
 };
 
 Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0) {
-	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.shader");
+	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.stm");
 	mWhiteTexture = scene->AssetManager()->LoadTexture("Assets/Textures/white.png");
 	mTextures.push_back(mWhiteTexture);
 	mTextureMap.emplace(mWhiteTexture, 0);
@@ -207,9 +207,9 @@ void Gizmos::PreFrame(Device* device) {
 	DeviceData& data = mDeviceData.at(device);
 	data.mBufferIndex[device->FrameContextIndex()] = 0;
 }
-void Gizmos::Draw(CommandBuffer* commandBuffer, Camera* camera) {
+void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	uint32_t instanceOffset = 0;
-	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), {});
+	GraphicsShader* shader = mGizmoShader->GetGraphics(commandBuffer->Device(), pass, {});
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
@@ -255,7 +255,9 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 	}
 
 	VkDescriptorSetLayoutBinding b = shader->mDescriptorBindings.at("MainTexture").second;
-	gizmoDS->CreateSampledTextureDescriptor(mTextures.data(), (uint32_t)mTextures.size(), b.descriptorCount, b.binding);
+	for (uint32_t i = 0; i < mTextures.size(); i++)
+		gizmoDS->CreateSampledTextureDescriptor(mTextures[i], i, b.binding);
+	gizmoDS->FlushWrites();
 
 	data.mBufferIndex[frameContextIndex]++;
 
@@ -275,7 +277,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 		memcpy(buf, mTriDrawList.data(), mTriDrawList.size() * sizeof(Gizmo));
 
 	if (wireCubeCount + wireCircleCount > 0) {
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;
@@ -295,7 +297,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 	}
 
 	if (cubeCount + billboardCount > 0){
-		VkPipelineLayout layout = commandBuffer->BindShader(shader, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 		if (layout) {
 			VkDeviceSize vboffset = 0;
 			VkBuffer vb = *data.mVertices;

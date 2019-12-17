@@ -40,7 +40,7 @@ void TextRenderer::Text(const string& text) {
 }
 
 void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	if (pass != Main) return;
+	if (pass != PASS_MAIN) return;
 
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
@@ -48,15 +48,17 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	uint32_t glyphCount = BuildText(commandBuffer->Device(), glyphBuffer);
 	if (!glyphCount) return;
 
-	if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/font.shader");
-	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), {});
+	if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/font.stm");
+	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), pass, {});
+	if (!shader) return;
 
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera);
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr, camera);
 	if (!layout) return;
 
 	DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
 	descriptorSet->CreateSampledTextureDescriptor(Font()->Texture(), BINDING_START + 0);
 	descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
+	descriptorSet->FlushWrites();
 
 	float4x4 mt = ObjectToWorld();
 	float3 normal = WorldRotation().forward();

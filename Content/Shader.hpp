@@ -58,8 +58,8 @@ public:
 };
 class GraphicsShader : public ShaderVariant {
 public:
-	std::vector<std::string> mEntryPoints;
-	std::vector<VkPipelineShaderStageCreateInfo> mStages;
+	std::string mEntryPoints[2];
+	VkPipelineShaderStageCreateInfo mStages[2];
 	std::unordered_map<PipelineInstance, VkPipeline> mPipelines;
 	Shader* mShader;
 
@@ -77,9 +77,12 @@ public:
 
 	ENGINE_EXPORT ~Shader() override;
 
-	ENGINE_EXPORT GraphicsShader* GetGraphics(Device* device, const std::set<std::string>& keywords) const;
+	/// Returns a shader variant for a specific pass and set of keywords, or nullptr if none exists
+	ENGINE_EXPORT GraphicsShader* GetGraphics(Device* device, PassType pass, const std::set<std::string>& keywords) const;
+	/// Returns a shader variant for a specific kernel and set of keywords, or nullptr if none exists
 	ENGINE_EXPORT ComputeShader* GetCompute(Device* device, const std::string& kernel, const std::set<std::string>& keywords) const;
 
+	inline PassType PassMask() const { return mPassMask; }
 	inline uint32_t RenderQueue() const { return mRenderQueue; }
 
 private:
@@ -90,6 +93,7 @@ private:
 	friend class GraphicsShader;
 	std::set<std::string> mKeywords;
 
+	PassType mPassMask;
 	VkColorComponentFlags mColorMask;
 	uint32_t mRenderQueue;
 	BlendMode mBlendMode;
@@ -101,7 +105,7 @@ private:
 
 	struct DeviceData {
 		std::unordered_map<std::string, std::unordered_map<std::string, ComputeShader*>> mComputeVariants;
-		std::unordered_map<std::string, GraphicsShader*> mGraphicsVariants;
+		std::unordered_map<PassType, std::unordered_map<std::string, GraphicsShader*>> mGraphicsVariants;
 		std::vector<Sampler*> mStaticSamplers;
 	};
 

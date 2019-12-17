@@ -25,7 +25,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	#pragma region Terrain object
-	shared_ptr<Material> terrainMat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.shader"));
+	shared_ptr<Material> terrainMat = make_shared<Material>("Terrain", mScene->AssetManager()->LoadShader("Shaders/terrain.stm"));
 
 	terrainMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock13/rock13_col.jpg"));
 	terrainMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/rock13/rock13_nrm.jpg", false));

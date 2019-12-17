@@ -1,11 +1,10 @@
 #pragma vertex vsmain
-#pragma fragment fsmain
+#pragma fragment fsmain main
+#pragma fragment fsdepth depth
 
 #pragma array MainTextures 8
 #pragma array NormalTextures 8
 #pragma array MaskTextures 8
-
-#pragma multi_compile PASS_DEPTH
 
 #pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
 
@@ -61,9 +60,7 @@ struct v2f {
 	float4 position : SV_Position;
 	float4 worldPos : TEXCOORD0;
 	float4 screenPos : TEXCOORD1;
-	#ifndef PASS_DEPTH
 	float2 terrainPos : TEXCOORD2;
-	#endif
 };
 
 void triplanar(uint index, uint topIndex, float3 p, float3 blend, inout float4 color, inout float4 mask, inout float3 bump, float weight) {
@@ -102,17 +99,14 @@ v2f vsmain(
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.screenPos = ComputeScreenPos(o.position);
-	#ifndef PASS_DEPTH
 	o.terrainPos = terrainPos;
-	#endif
 	return o;
 }
 
-#ifdef PASS_DEPTH
-float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0 {
+float fsdepth(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 	return worldPos.w;
 }
-#else
+
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
@@ -160,4 +154,3 @@ void fsmain(v2f i,
 
 	color = float4(eval, 1);
 }
-#endif

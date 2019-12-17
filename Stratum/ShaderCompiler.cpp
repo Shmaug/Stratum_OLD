@@ -11,7 +11,7 @@ namespace fs = std::experimental::filesystem;
 namespace fs = std::filesystem;
 #endif
 
-#include <Util/Util.hpp>
+#include "ShaderCompiler.hpp"
 #include <shaderc/shaderc.hpp>
 #include <../spirv_cross.hpp>
 
@@ -62,47 +62,44 @@ private:
 	unordered_map<string, string> mFullPaths;
 };
 
-bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& output, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint,
-	unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>>& descriptorBindings, unordered_map<string, VkPushConstantRange>& pushConstants) {
+bool CompileStage(Compiler* compiler, const CompileOptions& options, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint,
+	CompiledVariant& dest, CompiledShader& destShader) {
 	
 	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
 	
 	string error = result.GetErrorMessage();
-	if (error.size()) fprintf(stderr, "%s\n", error.c_str());
+	if (error.size()) fprintf_color(Red, stderr, "%s\n", error.c_str());
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:
+		// store SPIRV module
+		destShader.mModules.push_back({});
+		SpirvModule& m = destShader.mModules.back();
+		for (auto d = result.cbegin(); d != result.cend(); d++)
+			m.mSpirv.push_back(*d);
+
+		// assign SPIRV module
 		VkShaderStageFlagBits vkstage;
 		switch (stage) {
 		case shaderc_vertex_shader:
+			dest.mModules[0] = (uint32_t)destShader.mModules.size() - 1;
 			vkstage = VK_SHADER_STAGE_VERTEX_BIT;
 			break;
-		case shaderc_geometry_shader:
-			vkstage = VK_SHADER_STAGE_GEOMETRY_BIT;
-			break;
-		case shaderc_tess_control_shader:
-			vkstage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-			break;
-		case shaderc_tess_evaluation_shader:
-			vkstage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-			break;
 		case shaderc_fragment_shader:
+			dest.mModules[1] = (uint32_t)destShader.mModules.size() - 1;
 			vkstage = VK_SHADER_STAGE_FRAGMENT_BIT;
 			break;
 		case shaderc_compute_shader:
+			dest.mModules[0] = (uint32_t)destShader.mModules.size() - 1;
 			vkstage = VK_SHADER_STAGE_COMPUTE_BIT;
 			break;
 		}
 
-		vector<uint32_t> spirv;
-		for (auto d = result.cbegin(); d != result.cend(); d++)
-			spirv.push_back(*d);
-
-		spirv_cross::Compiler comp(spirv.data(), spirv.size());
+		spirv_cross::Compiler comp(m.mSpirv.data(), m.mSpirv.size());
 		spirv_cross::ShaderResources res = comp.get_shader_resources();
-
-		#pragma region Register resources
+		
+		#pragma region register resource bindings
 		auto registerResource = [&](const spirv_cross::Resource& res, VkDescriptorType type) {
-			auto& binding = descriptorBindings[res.name];
+			auto& binding = dest.mDescriptorBindings[res.name];
 
 			binding.first = comp.get_decoration(res.id, spv::DecorationDescriptorSet);
 
@@ -137,11 +134,11 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 			const auto& type = comp.get_type(r.base_type_id);
 
 			if (type.basetype == spirv_cross::SPIRType::Struct) {
-				for (unsigned int i = 0; i < type.member_types.size(); i++) {
+				for (uint32_t i = 0; i < type.member_types.size(); i++) {
 					const auto& mtype = comp.get_type(type.member_types[i]);
 
 					const string name = comp.get_member_name(r.base_type_id, index);
-					auto& range = pushConstants[name];
+					auto& range = dest.mPushConstants[name];
 					range.stageFlags |= vkstage;
 					range.offset = comp.type_struct_member_offset(type, index);
 
@@ -186,112 +183,50 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, ostream& ou
 		}
 		#pragma endregion
 		
-		uint32_t elen = (uint32_t)entryPoint.length();
-		output.write(reinterpret_cast<const char*>(&elen), sizeof(uint32_t));
-		output.write(entryPoint.c_str(), entryPoint.length());
-
-		uint32_t spirvSize = (uint32_t)spirv.size();
-		output.write(reinterpret_cast<const char*>(&spirvSize), sizeof(uint32_t));
-		output.write(reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(uint32_t));
-
 		if (vkstage == VK_SHADER_STAGE_COMPUTE_BIT) {
-			uint32_t workgroupSize[3]{ 0,0,0 };
 			auto entryPoints = comp.get_entry_points_and_stages();
 			for (const auto& e : entryPoints) {
 				if (e.name == entryPoint) {
 					auto& ep = comp.get_entry_point(e.name, e.execution_model);
-					workgroupSize[0] = ep.workgroup_size.x;
-					workgroupSize[1] = ep.workgroup_size.y;
-					workgroupSize[2] = ep.workgroup_size.z;
+					dest.mWorkgroupSize[0] = ep.workgroup_size.x;
+					dest.mWorkgroupSize[1] = ep.workgroup_size.y;
+					dest.mWorkgroupSize[2] = ep.workgroup_size.z;
 				}
 			}
-			output.write(reinterpret_cast<const char*>(workgroupSize), sizeof(uint32_t) * 3);
-		}
+		} else
+			dest.mWorkgroupSize = 0;
 
 		return true;
 	}
 	return false;
 }
 
-
-VkCompareOp atocmp(const string& str) {
-	if (str == "less")		return VK_COMPARE_OP_LESS;
-	if (str == "greater")	return VK_COMPARE_OP_GREATER;
-	if (str == "lequal")	return VK_COMPARE_OP_LESS_OR_EQUAL;
-	if (str == "gequal")	return VK_COMPARE_OP_GREATER_OR_EQUAL;
-	if (str == "equal")		return VK_COMPARE_OP_EQUAL;
-	if (str == "nequal")	return VK_COMPARE_OP_NOT_EQUAL;
-	if (str == "never")		return VK_COMPARE_OP_NEVER;
-	if (str == "always")	return VK_COMPARE_OP_ALWAYS;
-	fprintf(stderr, "Unknown comparison: %s\n", str.c_str());
-	throw;
-}
-VkColorComponentFlags atomask(const string& str) {
-	VkColorComponentFlags mask = 0;
-	if (str.find("r") != string::npos) mask |= VK_COLOR_COMPONENT_R_BIT;
-	if (str.find("g") != string::npos) mask |= VK_COLOR_COMPONENT_G_BIT;
-	if (str.find("b") != string::npos) mask |= VK_COLOR_COMPONENT_B_BIT;
-	if (str.find("a") != string::npos) mask |= VK_COLOR_COMPONENT_A_BIT;
-	return mask;
-}
-VkFilter atofilter(const string& str) {
-	if (str == "nearest") return VK_FILTER_NEAREST;
-	if (str == "linear")  return VK_FILTER_LINEAR;
-	if (str == "cubic")   return VK_FILTER_CUBIC_IMG;
-	fprintf(stderr, "Unknown filter: %s\n", str.c_str());
-	throw;
-}
-VkSamplerAddressMode atoaddressmode(const string& str) {
-	if (str == "repeat")		    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	if (str == "mirrored_repeat")   return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-	if (str == "clamp_edge")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	if (str == "clamp_border")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-	if (str == "mirror_clamp_edge") return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
-	fprintf(stderr, "Unknown address mode: %s\n", str.c_str());
-	throw;
-}
-VkBorderColor atobordercolor(const string& str) {
-	if (str == "float_transparent_black") return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-	if (str == "int_transparent_black")	  return VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-	if (str == "float_opaque_black")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-	if (str == "int_opaque_black")		  return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	if (str == "float_opaque_white")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-	if (str == "int_opaque_white")		  return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-	fprintf(stderr, "Unknown border color: %s\n", str.c_str());
-	throw;
-}
-VkSamplerMipmapMode atomipmapmode(const string& str) {
-	if (str == "nearest") return VK_SAMPLER_MIPMAP_MODE_NEAREST;
-	if (str == "linear") return VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	fprintf(stderr, "Unknown mipmap mode: %s\n", str.c_str());
-	throw;
-}
-
-bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& output) {
+CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 	string source;
 	if (!ReadFile(filename, source)) {
-		printf("Failed to read %s!\n", filename.c_str());
-		return false;
+		fprintf_color(Red, stderr, "Failed to read %s!\n", filename.c_str());
+		return nullptr;
 	}
 
-	unordered_map<shaderc_shader_kind, string> stages;
+	unordered_map<PassType, pair<string, string>> passes; // pass -> (vertex, fragment)
 	vector<string> kernels;
-	vector<pair<string, VkSamplerCreateInfo>> staticSamplers;
-	vector<pair<string, uint32_t>> arrays; // name, size
 
-	uint32_t renderQueue = 1000;
+	std::vector<std::pair<std::string, uint32_t>> arrays; // name, size
+	std::vector<std::pair<std::string, VkSamplerCreateInfo>> staticSamplers;
 
-	VkColorComponentFlags colorMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
-	VkPolygonMode fillMode = VK_POLYGON_MODE_FILL;
-	BlendMode blendMode = Opaque;
-	VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
-	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencilState.depthTestEnable = VK_TRUE;
-	depthStencilState.depthWriteEnable = VK_TRUE;
-	depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-	depthStencilState.front = depthStencilState.back;
-	depthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
+	CompiledShader* result = new CompiledShader();
+	result->mRenderQueue = 1000;
+	result->mColorMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	result->mCullMode = VK_CULL_MODE_BACK_BIT;
+	result->mFillMode = VK_POLYGON_MODE_FILL;
+	result->mBlendMode = BLEND_MODE_OPAQUE;
+	result->mDepthStencilState = {};
+	result->mDepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	result->mDepthStencilState.depthTestEnable = VK_TRUE;
+	result->mDepthStencilState.depthWriteEnable = VK_TRUE;
+	result->mDepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	result->mDepthStencilState.front = result->mDepthStencilState.back;
+	result->mDepthStencilState.back.compareOp = VK_COMPARE_OP_ALWAYS;
 
 	vector<set<string>> variants{ {} };
 
@@ -312,7 +247,7 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					// iterate all the keywords added by this multi_compile
 					while (it != words.end()) {
 						// duplicate all existing variants, add this keyword to each
-						for (unsigned int i = 0; i < kwc; i++) {
+						for (uint32_t i = 0; i < kwc; i++) {
 							variants.push_back(variants[i]);
 							variants.back().insert(*it);
 						}
@@ -320,94 +255,96 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					}
 				
 				} else if (*it == "vertex") {
-					if (++it == words.end()) return false;
-					stages[shaderc_vertex_shader] = *it;
+					if (++it == words.end()) return nullptr;
+					string ep = *it;
+					PassType pass = PASS_MAIN;
+					if (++it != words.end()) pass = atopass(*it);
+					if (passes.count(pass) && passes[pass].first != "") {
+						fprintf_color(Red, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
+						return nullptr;
+					}
+					passes[pass].first = ep;
 
 				} else if (*it == "fragment") {
-					if (++it == words.end()) return false;
-					stages[shaderc_fragment_shader] = *it;
-
-				} else if (*it == "geometry") {
-					if (++it == words.end()) return false;
-					stages[shaderc_geometry_shader] = *it;
-
-				} else if (*it == "tess_control") {
-					if (++it == words.end()) return false;
-					stages[shaderc_tess_control_shader] = *it;
-
-				} else if (*it == "tess_evaluation") {
-					if (++it == words.end()) return false;
-					stages[shaderc_tess_evaluation_shader] = *it;
+					if (++it == words.end()) return nullptr;
+					string ep = *it;
+					PassType pass = PASS_MAIN;
+					if (++it != words.end()) pass = atopass(*it);
+					if (passes.count(pass) && passes[pass].second != "") {
+						fprintf_color(Red, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
+						return nullptr;
+					}
+					passes[pass].second = ep;
 
 				} else if (*it == "kernel") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					kernels.push_back(*it);
 
 				} else if (*it == "render_queue"){
-					if (++it == words.end()) return false;
-					renderQueue = atoi(it->c_str());
+					if (++it == words.end()) return nullptr;
+					result->mRenderQueue = atoi(it->c_str());
 
 				} else if (*it == "color_mask") {
-					if (++it == words.end()) return false;
-					colorMask = atomask(*it);
+					if (++it == words.end()) return nullptr;
+					result->mColorMask = atomask(*it);
 
 				} else if (*it == "zwrite") {
-					if (++it == words.end()) return false;
-					if (*it == "true") depthStencilState.depthWriteEnable = VK_TRUE;
-					else if (*it == "false") depthStencilState.depthWriteEnable = VK_FALSE;
+					if (++it == words.end()) return nullptr;
+					if (*it == "true") result->mDepthStencilState.depthWriteEnable = VK_TRUE;
+					else if (*it == "false") result->mDepthStencilState.depthWriteEnable = VK_FALSE;
 					else {
-						fprintf(stderr, "zwrite must be true or false.\n");
-						return false;
+						fprintf_color(Red, stderr, "zwrite must be true or false.\n");
+						return nullptr;
 					}
 
 				} else if (*it == "ztest") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					if (*it == "true")
-						depthStencilState.depthTestEnable = VK_TRUE;
+						result->mDepthStencilState.depthTestEnable = VK_TRUE;
 					else if (*it == "false")
-						depthStencilState.depthTestEnable = VK_FALSE;
+						result->mDepthStencilState.depthTestEnable = VK_FALSE;
 					else{
-						fprintf(stderr, "ztest must be true or false.\n");
-						return false;
+						fprintf_color(Red, stderr, "ztest must be true or false.\n");
+						return nullptr;
 					}
 
 				} else if (*it == "depth_op") {
-					if (++it == words.end()) return false;
-					depthStencilState.depthCompareOp = atocmp(*it);
+					if (++it == words.end()) return nullptr;
+					result->mDepthStencilState.depthCompareOp = atocmp(*it);
 
 				} else if (*it == "cull") {
-					if (++it == words.end()) return false;
-					if (*it == "front") cullMode = VK_CULL_MODE_FRONT_BIT;
-					else if (*it == "back") cullMode = VK_CULL_MODE_BACK_BIT;
-					else if (*it == "false") cullMode = VK_CULL_MODE_NONE;
+					if (++it == words.end()) return nullptr;
+					if (*it == "front") result->mCullMode = VK_CULL_MODE_FRONT_BIT;
+					else if (*it == "back") result->mCullMode = VK_CULL_MODE_BACK_BIT;
+					else if (*it == "false") result->mCullMode = VK_CULL_MODE_NONE;
 					else {
-						fprintf(stderr, "Unknown cull mode: %s\n", it->c_str());
-						return false;
+						fprintf_color(Red, stderr, "Unknown cull mode: %s\n", it->c_str());
+						return nullptr;
 					}
 
 				} else if (*it == "fill") {
 					if (++it == words.end()) return false;
-					if (*it == "solid") fillMode = VK_POLYGON_MODE_FILL;
-					else if (*it == "line") fillMode = VK_POLYGON_MODE_LINE;
-					else if (*it == "point") fillMode = VK_POLYGON_MODE_POINT;
+					if (*it == "solid") result->mFillMode = VK_POLYGON_MODE_FILL;
+					else if (*it == "line") result->mFillMode = VK_POLYGON_MODE_LINE;
+					else if (*it == "point") result->mFillMode = VK_POLYGON_MODE_POINT;
 					else {
-						fprintf(stderr, "Unknown fill mode: %s\n", it->c_str());
-						return false;
+						fprintf_color(Red, stderr, "Unknown fill mode: %s\n", it->c_str());
+						return nullptr;
 					}
 
 				} else if (*it == "blend") {
 					if (++it == words.end()) return false;
-					if (*it == "opaque") blendMode = Opaque;
-					else if (*it == "alpha") blendMode = Alpha;
-					else if (*it == "add") blendMode = Additive;
-					else if (*it == "multiply")	blendMode = Multiply;
+					if (*it == "opaque")		result->mBlendMode = BLEND_MODE_OPAQUE;
+					else if (*it == "alpha")	result->mBlendMode = BLEND_MODE_ALPHA;
+					else if (*it == "add")		result->mBlendMode = BLEND_MODE_ADDITIVE;
+					else if (*it == "multiply")	result->mBlendMode = BLEND_MODE_MULTIPLY;
 					else {
-						fprintf(stderr, "Unknown blend mode: %s\n", it->c_str());
-						return false;
+						fprintf_color(Red, stderr, "Unknown blend mode: %s\n", it->c_str());
+						return nullptr;
 					}
 
 				} else if (*it == "static_sampler") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					string name = *it;
 
 					VkSamplerCreateInfo samplerInfo = {};
@@ -459,9 +396,9 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 					staticSamplers.push_back(make_pair(name, samplerInfo));
 
 				} else if (*it == "array") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					string name = *it;
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					arrays.push_back(make_pair(name, (uint32_t)atoi(it->c_str())));
 				}
 				break;
@@ -469,146 +406,142 @@ bool Compile(shaderc::Compiler* compiler, const string& filename, ostream& outpu
 		}
 	}
 
-	uint32_t vc = (uint32_t)variants.size();
-	output.write(reinterpret_cast<const char*>(&vc), sizeof(uint32_t));
 	for (const auto& variant : variants) {
 		auto variantOptions = options;
 
-		uint32_t vsize = (uint32_t)variant.size();
-		output.write(reinterpret_cast<const char*>(&vsize), sizeof(uint32_t));
+		vector<string> keywords;
 		for (const auto& kw : variant) {
 			if (kw.empty()) continue;
-			uint32_t klen = (uint32_t)kw.length();
-			output.write(reinterpret_cast<const char*>(&klen), sizeof(uint32_t));
-			output.write(kw.c_str(), klen);
+			keywords.push_back(kw);
 			variantOptions.AddMacroDefinition(kw);
 		}
 
-		unordered_map<string, pair<uint32_t, VkDescriptorSetLayoutBinding>> descriptorBindings;
-		unordered_map<string, VkPushConstantRange> pushConstants;
-
-		auto writeBindingsAndConstants = [&]() {
-			uint32_t bc = (uint32_t)descriptorBindings.size();
-			output.write(reinterpret_cast<const char*>(&bc), sizeof(uint32_t));
-			for (const auto& b : descriptorBindings) {
-				uint32_t descriptorCount = b.second.second.descriptorCount;
-				VkSamplerCreateInfo samplerInfo;
-				uint32_t static_sampler = 0;
+		/// applies array and static_sampler pragmas
+		auto UpdateBindings = [&](CompiledVariant& input) {
+			for (auto& b : input.mDescriptorBindings) {
 				for (const auto& s : staticSamplers)
 					if (s.first == b.first) {
-						static_sampler = 1;
-						samplerInfo = s.second;
+						input.mStaticSamplers.emplace(s.first, s.second);
 						break;
 					}
 				for (const auto& s : arrays)
 					if (s.first == b.first) {
-						descriptorCount = s.second;
+						b.second.second.descriptorCount = s.second;
 						break;
 					}
-
-				uint32_t nlen = (uint32_t)b.first.length();
-				output.write(reinterpret_cast<const char*>(&nlen), sizeof(uint32_t));
-				output.write(b.first.c_str(), nlen);
-				output.write(reinterpret_cast<const char*>(&b.second.first), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.binding), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&descriptorCount), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.descriptorType), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.second.stageFlags), sizeof(VkShaderStageFlagBits));
-				output.write(reinterpret_cast<const char*>(&static_sampler), sizeof(uint32_t));
-				if (static_sampler) output.write(reinterpret_cast<const char*>(&samplerInfo), sizeof(VkSamplerCreateInfo));
-			}
-
-			bc = (uint32_t)pushConstants.size();
-			output.write(reinterpret_cast<const char*>(&bc), sizeof(uint32_t));
-			for (const auto& b : pushConstants) {
-				uint32_t nlen = (uint32_t)b.first.length();
-				output.write(reinterpret_cast<const char*>(&nlen), sizeof(uint32_t));
-				output.write(b.first.c_str(), nlen);
-				output.write(reinterpret_cast<const char*>(&b.second.offset), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.size), sizeof(uint32_t));
-				output.write(reinterpret_cast<const char*>(&b.second.stageFlags), sizeof(VkShaderStageFlagBits));
 			}
 		};
 
-		uint32_t is_compute = !!kernels.size();
-		output.write(reinterpret_cast<const char*>(&is_compute), sizeof(uint32_t));
-		if (is_compute) {
+		if (kernels.size()) {
 			auto stageOptions = variantOptions;
 			stageOptions.AddMacroDefinition("SHADER_STAGE_COMPUTE");
-			uint32_t kernelc = (uint32_t)kernels.size();
-			output.write(reinterpret_cast<const char*>(&kernelc), sizeof(uint32_t));
 			for (const auto& k : kernels) {
-				descriptorBindings.clear();
-				if (!CompileStage(compiler, stageOptions, output, source, filename, shaderc_compute_shader, k, descriptorBindings, pushConstants)) return false;
-
-				writeBindingsAndConstants();
+				// compile all kernels for this variant
+				CompiledVariant v = {};
+				v.mPass = (PassType)0;
+				v.mKeywords = keywords;
+				v.mEntryPoints[0] = k;
+				if (!CompileStage(compiler, stageOptions, source, filename, shaderc_compute_shader, k, v, *result)) return false;
+				UpdateBindings(v);
+				result->mVariants.push_back(v);
 			}
 		} else {
-			uint32_t stagec = (uint32_t)stages.size();
-			output.write(reinterpret_cast<const char*>(&stagec), sizeof(uint32_t));
-			for (const auto& s : stages) {
-				auto stageOptions = variantOptions;
-				VkShaderStageFlagBits vkstage;
-				switch (s.first) {
-				case shaderc_vertex_shader:
-					vkstage = VK_SHADER_STAGE_VERTEX_BIT;
-					stageOptions.AddMacroDefinition("SHADER_STAGE_VERTEX");
+			unordered_map<string, uint32_t> compiled;
+
+			for (auto& stagep : passes) {
+				auto vsOptions = variantOptions;
+				auto fsOptions = variantOptions;
+				vsOptions.AddMacroDefinition("SHADER_STAGE_VERTEX");
+				fsOptions.AddMacroDefinition("SHADER_STAGE_FRAGMENT");
+				// compile all passes for this variant
+				switch (stagep.first) {
+				case PASS_MAIN:
+					vsOptions.AddMacroDefinition("PASS_MAIN");
+					fsOptions.AddMacroDefinition("PASS_MAIN");
 					break;
-				case shaderc_fragment_shader:
-					vkstage = VK_SHADER_STAGE_FRAGMENT_BIT;
-					stageOptions.AddMacroDefinition("SHADER_STAGE_FRAGMENT");
-					break;
-				case shaderc_geometry_shader:
-					vkstage = VK_SHADER_STAGE_GEOMETRY_BIT;
-					stageOptions.AddMacroDefinition("SHADER_STAGE_GEOMETRY");
-					break;
-				case shaderc_tess_control_shader:
-					vkstage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-					stageOptions.AddMacroDefinition("SHADER_STAGE_TESSELLATION_CONTROL");
-					break;
-				case shaderc_tess_evaluation_shader:
-					vkstage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-					stageOptions.AddMacroDefinition("SHADER_STAGE_TESSELLATION_EVALUATION");
+				case PASS_DEPTH:
+					vsOptions.AddMacroDefinition("PASS_DEPTH");
+					fsOptions.AddMacroDefinition("PASS_DEPTH");
 					break;
 				}
 
-				output.write(reinterpret_cast<const char*>(&vkstage), sizeof(VkShaderStageFlagBits));
-				if (!CompileStage(compiler, stageOptions, output, source, filename, s.first, s.second, descriptorBindings, pushConstants)) return false;
-			}
+				string vs = stagep.second.first;
+				string fs = stagep.second.second;
 
-			writeBindingsAndConstants();
+				if (vs == "" && passes.count(PASS_MAIN)) vs = passes.at(PASS_MAIN).first;
+				if (vs == "") {
+					fprintf_color(Red, stderr, "No vertex shader entry point found for fragment shader entry point: \n", fs.c_str());
+					return nullptr;
+				}
+				if (fs == "" && passes.count(PASS_MAIN)) fs = passes.at(PASS_MAIN).second;
+				if (fs == "") {
+					fprintf_color(Red, stderr, "No fragment shader entry point found for vertex shader entry point: \n", vs.c_str());
+					return nullptr;
+				}
+
+				CompiledVariant v = {};
+				v.mKeywords = keywords;
+				v.mPass = stagep.first;
+				v.mEntryPoints[0] = vs;
+				v.mEntryPoints[1] = fs;
+
+				// Don't recompile shared stages
+				//if (compiled.count(vs)) {
+				//	v.mModules[0] = compiled.at(vs);
+				//} else {
+					if (!CompileStage(compiler, vsOptions, source, filename, shaderc_vertex_shader, vs, v, *result)) return nullptr;
+				//	compiled.emplace(vs, v.mModules[0]);
+				//}
+				
+				//if (compiled.count(fs)) {
+				//	v.mModules[1] = compiled.at(fs);
+				//} else {
+					if (!CompileStage(compiler, fsOptions, source, filename, shaderc_fragment_shader, fs, v, *result)) return nullptr;
+				//	compiled.emplace(fs, v.mModules[1]);
+				//}
+
+				UpdateBindings(v);
+
+				result->mVariants.push_back(v);
+			}
 		}
 	}
-
-	output.write(reinterpret_cast<const char*>(&colorMask), sizeof(VkColorComponentFlags));
-	output.write(reinterpret_cast<const char*>(&renderQueue), sizeof(uint32_t));
-	output.write(reinterpret_cast<const char*>(&cullMode), sizeof(VkCullModeFlags));
-	output.write(reinterpret_cast<const char*>(&fillMode), sizeof(VkPolygonMode));
-	output.write(reinterpret_cast<const char*>(&blendMode), sizeof(BlendMode));
-	output.write(reinterpret_cast<const char*>(&depthStencilState), sizeof(VkPipelineDepthStencilStateCreateInfo));
-	return true;
+	return result;
 }
 
 int main(int argc, char* argv[]) {
+	char* inputFile;
+	char* outputFile;
+
 	if (argc < 2) {
+		/*
 		fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
 		return EXIT_FAILURE;
+		/*/
+		inputFile = "E:/Projects/Vulkan/Stratum/Shaders/pbr.hlsl";
+		outputFile = "Shaders/pbr.stm";
+		//*/
+	} else {
+		inputFile = argv[1];
+		outputFile = argv[2];
 	}
-
-	const char* inputFile = argv[1];
-	const char* outputFile = argv[2];
 
 	printf("Compiling %s\n", inputFile);
 	
 	options.SetIncluder(make_unique<Includer>());
 	options.SetSourceLanguage(shaderc_source_language_hlsl);
 
-	ofstream output(outputFile, ios::binary);
-
 	Compiler* compiler = new Compiler();
-	if (!Compile(compiler, inputFile, output))
-		return EXIT_FAILURE;
+	CompiledShader* shader = Compile(compiler, inputFile);
+	
+	if (!shader) return EXIT_FAILURE;
+
+	// write shader
+	ofstream output(outputFile, ios::binary);
+	shader->Write(output);
 	output.close();
+
+	delete shader;
 
 	delete compiler;
 

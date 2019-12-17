@@ -35,7 +35,7 @@ bool CameraControl::Init(Scene* scene) {
 	mCameras.push_back(camera.get());
 	mCameraPivot->AddChild(camera.get());
 
-	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.shader");
+	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.stm");
 	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
 
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");

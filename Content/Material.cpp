@@ -1,159 +1,253 @@
 #include <Content/Material.hpp>
 #include <Shaders/include/shadercompat.h>
 #include <Scene/Camera.hpp>
+#include <Scene/Scene.hpp>
+#include <Content/AssetManager.hpp>
 
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mPassMask(Main), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader)
-	: mName(name), mShader(shader), mPassMask(Main), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
-Material::~Material() {}
+	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+Material::~Material() {
+	for (auto& dkp : mVariantData) {
+		for (auto& kp : dkp.second) {
+			for (uint32_t i = 0; i < dkp.first->MaxFramesInFlight(); i++)
+				safe_delete(kp.second->mDescriptorSets[i]);
+			safe_delete_array(kp.second->mDescriptorSets);
+			safe_delete_array(kp.second->mDirty);
+			safe_delete(kp.second);
+		}
+	}
+}
 
 void Material::DisableKeyword(const string& kw) {
 	mShaderKeywords.erase(kw);
-	for (auto& d : mDeviceData)
-		d.second.mShaderVariant = nullptr;
+	for (auto& dkp : mVariantData)
+		for (auto& d : dkp.second) {
+			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+			d.second->mShaderVariant = nullptr;
+		}
 }
 void Material::EnableKeyword(const string& kw) {
 	mShaderKeywords.insert(kw);
-	for (auto& d : mDeviceData)
-		d.second.mShaderVariant = nullptr;
+	for (auto& dkp : mVariantData)
+		for (auto& d : dkp.second) {
+			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+			d.second->mShaderVariant = nullptr;
+		}
 }
 
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
-	mParameters[name] = param;
+	MaterialParameter& p = mParameters[name];
+	if (p != param) {
+		p = param;
+		if (param.index() < 4) // push constants dont make descriptors dirty
+			for (auto& dkp : mVariantData)
+				for (auto& d : dkp.second)
+					memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+	}
 }
 void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
-	if (!mArrayParameters.count(name))
-		mArrayParameters.emplace(name, unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>());
-	mArrayParameters.at(name)[index] = param;
+	auto& p = mArrayParameters[name][index];
+	if (p.index() != 1 || get<Texture*>(p) != param) {
+		p = param;
+		for (auto& dkp : mVariantData)
+			for (auto& d : dkp.second)
+				memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+	}
 }
 void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
-	if (!mArrayParameters.count(name))
-		mArrayParameters.emplace(name, unordered_map<uint32_t, variant<shared_ptr<Texture>, Texture*>>());
-	mArrayParameters.at(name)[index] = param;
-}
-
-GraphicsShader* Material::GetShader(Device* device) {
-	if (!mDeviceData.count(device)) {
-		DeviceData& d = mDeviceData[device];
-		d.mShaderVariant = Shader()->GetGraphics(device, mShaderKeywords);
-		return d.mShaderVariant;
-	} else {
-		auto& d = mDeviceData[device];
-		if (!d.mShaderVariant) d.mShaderVariant = Shader()->GetGraphics(device, mShaderKeywords);
-		return d.mShaderVariant;
+	auto& p = mArrayParameters[name][index];
+	if (p.index() != 0 || get<shared_ptr<Texture>>(p) != param) {
+		p = param;
+		for (auto& dkp : mVariantData)
+			for (auto& d : dkp.second)
+				memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
 	}
 }
 
-void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, GraphicsShader* variant) {
-	if (variant->mDescriptorSetLayouts.size() > PER_MATERIAL && variant->mDescriptorBindings.size()) {
+Material::VariantData* Material::GetData(Device* device, PassType pass) {
+	auto& d = mVariantData[device];
+	if (d.count(pass) == 0) {
+		GraphicsShader* shader = Shader()->GetGraphics(device, pass, mShaderKeywords);
+		if (!shader) return nullptr;
+
+		VariantData* data = new VariantData();
+		data->mDescriptorSets = new DescriptorSet*[device->MaxFramesInFlight()];
+		data->mDirty = new bool[device->MaxFramesInFlight()];
+		memset(data->mDescriptorSets, 0, sizeof(DescriptorSet*) * device->MaxFramesInFlight());
+		memset(data->mDirty, true, sizeof(bool) * device->MaxFramesInFlight());
+		data->mShaderVariant  = shader;
+		d.emplace(pass, data);
+		return data;
+	}
+
+	auto& data = d.at(pass);
+	if (!data->mShaderVariant) data->mShaderVariant = Shader()->GetGraphics(device, pass, mShaderKeywords);
+	return data;
+}
+GraphicsShader* Material::GetShader(Device* device, PassType pass) {
+	return GetData(device, pass)->mShaderVariant;
+}
+
+void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
+	GraphicsShader* shader = data->mShaderVariant;
+	if (shader->mDescriptorSetLayouts.size() > PER_MATERIAL && shader->mDescriptorBindings.size()) {
 		uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
-		auto& data = mDeviceData[commandBuffer->Device()];
 
-		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet(mName + " PerMaterial DescriptorSet", variant->mDescriptorSetLayouts[PER_MATERIAL]);
-
-		// set descriptor parameters
-
-		for (auto& m : mParameters) {
-			if (m.second.index() > 4) continue;
-			if (variant->mDescriptorBindings.count(m.first) == 0) continue;
-			auto& bindings = variant->mDescriptorBindings.at(m.first);
-			if (bindings.first != PER_MATERIAL) continue;
-
-			auto binding = bindings.second;
-
-			switch (m.second.index()) {
-			case 0:
-				ds->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), binding.binding);
-				break;
-			case 1:
-				ds->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), binding.binding);
-				break;
-			case 2:
-				ds->CreateSampledTextureDescriptor(get<Texture*>(m.second), binding.binding);
-				break;
-			case 3:
-				ds->CreateSamplerDescriptor(get<Sampler*>(m.second), binding.binding);
-				break;
-			}
+		DescriptorSet*& ds = data->mDescriptorSets[frameContextIndex];
+		if (!ds || (ds->Layout() != shader->mDescriptorSetLayouts[PER_MATERIAL])) {
+			safe_delete(ds);
+			ds = new DescriptorSet(mName + " DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_MATERIAL]);
+			data->mDirty[frameContextIndex] = true;
 		}
 
-		vector<Texture*> tmpArray;
-		for (auto& m : mArrayParameters) {
-			if (variant->mDescriptorBindings.count(m.first) == 0) continue;
-			auto& bindings = variant->mDescriptorBindings.at(m.first);
-			if (bindings.first != PER_MATERIAL) continue;
-			auto binding = bindings.second;
+		// set descriptor parameters
+		if (data->mDirty[frameContextIndex]) {
+			for (auto& m : mParameters) {
+				if (m.second.index() > 4) continue;
+				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
+				auto& bindings = shader->mDescriptorBindings.at(m.first);
+				if (bindings.first != PER_MATERIAL) continue;
 
-			tmpArray.assign(binding.descriptorCount, nullptr);
-			Texture* t = nullptr;
-			for (auto& p : m.second) {
-				if (p.first >= binding.descriptorCount) continue;
-				tmpArray[p.first] = p.second.index() == 0 ? get<shared_ptr<Texture>>(p.second).get() : get<Texture*>(p.second);
-				if (!t) t = tmpArray[p.first];
+				auto binding = bindings.second;
+
+				switch (m.second.index()) {
+				case 0:
+					ds->CreateSampledTextureDescriptor(get<shared_ptr<Texture>>(m.second).get(), binding.binding);
+					break;
+				case 1:
+					ds->CreateSamplerDescriptor(get<shared_ptr<Sampler>>(m.second).get(), binding.binding);
+					break;
+				case 2:
+					ds->CreateSampledTextureDescriptor(get<Texture*>(m.second), binding.binding);
+					break;
+				case 3:
+					ds->CreateSamplerDescriptor(get<Sampler*>(m.second), binding.binding);
+					break;
+				}
 			}
-			if (t) {
-				for (uint32_t i = 0; i < tmpArray.size(); i++)
-					if (!tmpArray[i]) tmpArray[i] = t;
-				ds->CreateSampledTextureDescriptor(tmpArray.data(), binding.descriptorCount, binding.descriptorCount, binding.binding);
+
+			vector<bool> tmpArray;
+			for (auto& m : mArrayParameters) {
+				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
+				auto& bindings = shader->mDescriptorBindings.at(m.first);
+				if (bindings.first != PER_MATERIAL) continue;
+				auto binding = bindings.second;
+
+				tmpArray.assign(binding.descriptorCount, false);
+				for (auto& p : m.second) {
+					if (p.first >= binding.descriptorCount) continue;
+					Texture* t = p.second.index() == 0 ? get<shared_ptr<Texture>>(p.second).get() : get<Texture*>(p.second);
+					ds->CreateSampledTextureDescriptor(t, p.first, binding.binding);
+					tmpArray[p.first] = true;
+				}
+				// fill any unassigned descriptors with a white texture
+				for (uint32_t i = 0; i < binding.descriptorCount; i++)
+					if (!tmpArray[i])
+						ds->CreateSampledTextureDescriptor(camera->Scene()->AssetManager()->LoadTexture("Assets/Textures/white.png", false), i, binding.binding);
+
 			}
+
+			ds->FlushWrites();
+			data->mDirty[frameContextIndex] = false;
 		}
 
 		VkDescriptorSet matds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 	}
 
-	if (camera && variant->mDescriptorBindings.count("Camera")) {
-		auto binding = variant->mDescriptorBindings.at("Camera");
+	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA && shader->mDescriptorBindings.size() && shader->mDescriptorBindings.count("Camera")) {
+		auto binding = shader->mDescriptorBindings.at("Camera");
 		VkDescriptorSet camds = *camera->DescriptorSet(binding.second.stageFlags);
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, variant->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
 
 	// set push constant parameters
 	for (auto& m : mParameters) {
 		if (m.second.index() < 4) continue;
-		if (variant->mPushConstants.count(m.first) == 0) continue;
-		auto& range = variant->mPushConstants.at(m.first);
+		if (shader->mPushConstants.count(m.first) == 0) continue;
+		auto& range = shader->mPushConstants.at(m.first);
 
-		float4 value(0);
+		union pvalue {
+			float4 fvalue;
+			uint4 uvalue;
+			int4 ivalue;
+		};
+		pvalue value = { uint4(0) };
 
 		switch (m.second.index()) {
 		case 4:
 			if (range.size != sizeof(float)) continue;
-			value = float4(get<float>(m.second), 0, 0, 0);
+			value.fvalue = float4(get<float>(m.second), 0, 0, 0);
 			break;
 		case 5:
 			if (range.size != sizeof(float2)) continue;
-			value = float4(get<float2>(m.second), 0, 0);
+			value.fvalue = float4(get<float2>(m.second), 0, 0);
 			break;
 		case 6:
 			if (range.size != sizeof(float3)) continue;
-			value = float4(get<float3>(m.second), 0);
+			value.fvalue = float4(get<float3>(m.second), 0);
 			break;
 		case 7:
 			if (range.size != sizeof(float4)) continue;
-			value = get<float4>(m.second);
+			value.fvalue = get<float4>(m.second);
+			break;
+
+		case 8:
+			if (range.size != sizeof(uint32_t)) continue;
+			value.uvalue = uint4(get<uint32_t>(m.second), 0, 0, 0);
+			break;
+		case 9:
+			if (range.size != sizeof(uint2)) continue;
+			value.uvalue = uint4(get<uint2>(m.second), 0, 0);
+			break;
+		case 10:
+			if (range.size != sizeof(uint3)) continue;
+			value.uvalue = uint4(get<uint3>(m.second), 0);
+			break;
+		case 11:
+			if (range.size != sizeof(uint4)) continue;
+			value.uvalue = get<uint4>(m.second);
+			break;
+
+		case 12:
+			if (range.size != sizeof(int32_t)) continue;
+			value.ivalue = int4(get<int32_t>(m.second), 0, 0, 0);
+			break;
+		case 13:
+			if (range.size != sizeof(int2)) continue;
+			value.ivalue = int4(get<int2>(m.second), 0, 0);
+			break;
+		case 14:
+			if (range.size != sizeof(int3)) continue;
+			value.ivalue = int4(get<int3>(m.second), 0);
+			break;
+		case 15:
+			if (range.size != sizeof(int4)) continue;
+			value.ivalue = get<int4>(m.second);
 			break;
 		}
 
-		vkCmdPushConstants(*commandBuffer, variant->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
+		vkCmdPushConstants(*commandBuffer, shader->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
 }
-VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
+VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
 	if (!commandBuffer->CurrentRenderPass()) {
 		fprintf_color(BoldRed, stderr, "Attempting to bind material outside of a RenderPass!");
 		throw;
 	}
 
-	GraphicsShader* variant = GetShader(commandBuffer->Device());
-	if (!variant) return VK_NULL_HANDLE;
+	VariantData* data = GetData(commandBuffer->Device(), pass);
+	if (!data) return VK_NULL_HANDLE;
+	GraphicsShader* shader = data->mShaderVariant;
 
-	VkPipeline pipeline = variant->GetPipeline(commandBuffer->CurrentRenderPass(), input, topology, mCullMode, mBlendMode);
+	VkPipeline pipeline = shader->GetPipeline(commandBuffer->CurrentRenderPass(), input, topology, mCullMode, mBlendMode);
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-	SetParameters(commandBuffer, camera, variant);
+	SetParameters(commandBuffer, camera, data);
 	
-	return variant->mPipelineLayout;
+	return shader->mPipelineLayout;
 }
