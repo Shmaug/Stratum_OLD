@@ -39,6 +39,7 @@ void Camera::CreateDescriptorSet() {
 			
 			::DescriptorSet* ds = new ::DescriptorSet(mName + " DescriptorSet", mDevice, layout);
 			ds->CreateUniformBufferDescriptor(mUniformBuffer, bufSize * i, bufSize, CAMERA_BUFFER_BINDING);
+			ds->FlushWrites();
 			mDescriptorSets[i].emplace(s, ds);
 
 		}

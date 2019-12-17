@@ -232,7 +232,7 @@ void TerrainRenderer::Initialize() {
 	mIndexCounts.resize(16);
 
 	uint32_t Resolution = 1024;
-	mTerrainCompute = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.shader");
+	mTerrainCompute = Scene()->AssetManager()->LoadShader("Shaders/terraincompute.stm");
 	float scale = mSize / Resolution;
 	float offset = -mSize * .5f;
 

@@ -388,7 +388,7 @@ bool MeshViewer::Init(Scene* scene) {
 	mScene = scene;
 
 	Texture* white = mScene->AssetManager()->LoadTexture("Assets/white.png");
-	mPBRShader  = mScene->AssetManager()->LoadShader("Shaders/pbr.shader");
+	mPBRShader  = mScene->AssetManager()->LoadShader("Shaders/pbr.stm");
 
 	#pragma region Lights
 	shared_ptr<Light> light0 = make_shared<Light>("Spot");

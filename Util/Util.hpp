@@ -59,11 +59,15 @@
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
 
 enum BlendMode {
-	Opaque = 0,
-	Alpha = 1,
-	Additive = 2,
-	Multiply = 3,
+	BLEND_MODE_OPAQUE = 0,
+	BLEND_MODE_ALPHA = 1,
+	BLEND_MODE_ADDITIVE = 2,
+	BLEND_MODE_MULTIPLY = 3,
 	BLEND_MODE_MAX_ENUM = 0x7FFFFFFF
+};
+enum PassType {
+	PASS_MAIN = 1,
+	PASS_DEPTH = 2,
 };
 
 enum ConsoleColor {
@@ -80,12 +84,6 @@ enum ConsoleColor {
 	BoldYellow,
 	BoldCyan,
 	BoldMagenta
-};
-enum PassType {
-	None = 0,
-	Depth = 1,
-	Main = 2,
-	Shadow = 4,
 };
 
 template<typename... Args>
@@ -640,4 +638,63 @@ inline const char* TopologyToString(VkPrimitiveTopology topology) {
     case VK_PRIMITIVE_TOPOLOGY_PATCH_LIST: return "VK_PRIMITIVE_TOPOLOGY_PATCH_LIST";
 	}
 	return "";
+}
+
+inline PassType atopass(const std::string& str) {
+	if (str == "main")	return PASS_MAIN;
+	if (str == "depth")	return PASS_DEPTH;
+	fprintf(stderr, "Unknown pass type: %s\n", str.c_str());
+	throw;
+}
+inline VkCompareOp atocmp(const std::string& str) {
+	if (str == "less")		return VK_COMPARE_OP_LESS;
+	if (str == "greater")	return VK_COMPARE_OP_GREATER;
+	if (str == "lequal")	return VK_COMPARE_OP_LESS_OR_EQUAL;
+	if (str == "gequal")	return VK_COMPARE_OP_GREATER_OR_EQUAL;
+	if (str == "equal")		return VK_COMPARE_OP_EQUAL;
+	if (str == "nequal")	return VK_COMPARE_OP_NOT_EQUAL;
+	if (str == "never")		return VK_COMPARE_OP_NEVER;
+	if (str == "always")	return VK_COMPARE_OP_ALWAYS;
+	fprintf(stderr, "Unknown comparison: %s\n", str.c_str());
+	throw;
+}
+inline VkColorComponentFlags atomask(const std::string& str) {
+	VkColorComponentFlags mask = 0;
+	if (str.find("r") != std::string::npos) mask |= VK_COLOR_COMPONENT_R_BIT;
+	if (str.find("g") != std::string::npos) mask |= VK_COLOR_COMPONENT_G_BIT;
+	if (str.find("b") != std::string::npos) mask |= VK_COLOR_COMPONENT_B_BIT;
+	if (str.find("a") != std::string::npos) mask |= VK_COLOR_COMPONENT_A_BIT;
+	return mask;
+}
+inline VkFilter atofilter(const std::string& str) {
+	if (str == "nearest") return VK_FILTER_NEAREST;
+	if (str == "linear")  return VK_FILTER_LINEAR;
+	if (str == "cubic")   return VK_FILTER_CUBIC_IMG;
+	fprintf(stderr, "Unknown filter: %s\n", str.c_str());
+	throw;
+}
+inline VkSamplerAddressMode atoaddressmode(const std::string& str) {
+	if (str == "repeat")		    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	if (str == "mirrored_repeat")   return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+	if (str == "clamp_edge")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	if (str == "clamp_border")	    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	if (str == "mirror_clamp_edge") return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+	fprintf(stderr, "Unknown address mode: %s\n", str.c_str());
+	throw;
+}
+inline VkBorderColor atobordercolor(const std::string& str) {
+	if (str == "float_transparent_black") return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+	if (str == "int_transparent_black")	  return VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+	if (str == "float_opaque_black")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+	if (str == "int_opaque_black")		  return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	if (str == "float_opaque_white")	  return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	if (str == "int_opaque_white")		  return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+	fprintf(stderr, "Unknown border color: %s\n", str.c_str());
+	throw;
+}
+inline VkSamplerMipmapMode atomipmapmode(const std::string& str) {
+	if (str == "nearest") return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	if (str == "linear") return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	fprintf(stderr, "Unknown mipmap mode: %s\n", str.c_str());
+	throw;
 }

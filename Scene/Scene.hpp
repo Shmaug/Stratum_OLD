@@ -39,7 +39,7 @@ public:
 
 	ENGINE_EXPORT void Update();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PassType::Main, bool clear = true);
+	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PASS_MAIN, bool clear = true);
 
 	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
 

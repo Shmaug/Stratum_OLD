@@ -30,7 +30,7 @@ public:
 private:
 	friend class Scene;
 	ENGINE_EXPORT void PreFrame(Device* device);
-	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera);
+	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera);
 
 	struct DeviceData {
 		Buffer* mVertices;

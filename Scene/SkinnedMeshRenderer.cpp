@@ -115,19 +115,17 @@ void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera
 			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
     }
 
-	if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
-	if (pass & Depth) mMaterial->EnableKeyword("PASS_DEPTH");
-	else mMaterial->DisableKeyword("PASS_DEPTH");
+	if (pass == PASS_MAIN) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 }
 
 void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	::Mesh* m = Mesh();
 	if (!m) return;
 
-	VkCullModeFlags cull = (pass & Shadow) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), m->VertexInput(), camera, m->Topology(), cull);
+	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, m->VertexInput(), camera, m->Topology(), cull);
 	if (!layout) return;
-	auto shader = mMaterial->GetShader(commandBuffer->Device());
+	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
 
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 
@@ -151,10 +149,9 @@ void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Pas
 			data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(lights, 0, lights->Size(), shader->mDescriptorBindings.at("Lights").second.binding);
 			data.mBoundLightBuffers[frameContextIndex] = lights;
 		}
-
-		VkPushConstantRange lightCountRange = shader->mPushConstants.at("LightCount");
+		data.mDescriptorSets[frameContextIndex]->FlushWrites();
 		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		vkCmdPushConstants(*commandBuffer, layout, lightCountRange.stageFlags, lightCountRange.offset, lightCountRange.size, &lc);
+		commandBuffer->PushConstant(shader, "LightCount", &lc);
 		VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	}

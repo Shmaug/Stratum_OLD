@@ -48,12 +48,13 @@ void UILabel::Text(const string& text) {
 		memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool));
 }
 
-void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera) {
+void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (!mVisible || !Font()) return;
-	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.shader");
-	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), { "CANVAS_BOUNDS" });
+	if (!mShader) mShader = Canvas()->Scene()->AssetManager()->LoadShader("Shaders/font.stm");
+	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), pass, { "CANVAS_BOUNDS" });
+	if (!shader) return;
 
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, nullptr, camera);
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr, camera);
 	if (!layout) return;
 
 	if (!mDeviceData.count(commandBuffer->Device())) {
@@ -84,6 +85,7 @@ void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera) {
 	}
 	// Assign glyph buffer
 	data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(data.mGlyphBuffers[frameContextIndex], 0, data.mGlyphBuffers[frameContextIndex]->Size(), BINDING_START + 2);
+	data.mDescriptorSets[frameContextIndex]->FlushWrites();
 
 	float2 offset = AbsolutePosition();
 	switch (mHorizontalAnchor) {

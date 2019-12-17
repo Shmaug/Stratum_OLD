@@ -95,7 +95,7 @@ private:
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy()){
 				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
-				mScene->Render(cb, camera, camera->Framebuffer(), Main);
+				mScene->Render(cb, camera, camera->Framebuffer(), PASS_MAIN);
 				camera->ResolveWindow(cb);
 			}
 		PROFILER_END;

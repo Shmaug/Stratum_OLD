@@ -1,16 +1,12 @@
 #pragma vertex vsmain
-#pragma fragment fsmain
-
-#pragma multi_compile PASS_DEPTH
-#pragma multi_compile ALPHA_CLIP
-
-#pragma multi_compile TWO_SIDED
-#pragma multi_compile COLOR_MAP
-#pragma multi_compile NORMAL_MAP
-#pragma multi_compile MASK_MAP
-#pragma multi_compile EMISSION
+#pragma fragment fsmain main
+#pragma fragment fsdepth depth
 
 #pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
+
+#pragma multi_compile ALPHA_CLIP
+#pragma multi_compile TWO_SIDED
+#pragma multi_compile TEXTURED
 
 #pragma render_queue 1000
 
@@ -22,13 +18,6 @@
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
-
-#if defined(ALPHA_CLIP) || (!defined(PASS_DEPTH) && (defined(NORMAL_MAP) || defined(COLOR_MAP) || defined(EMISSION) || defined(MASK_MAP)))
-#define NEED_TEXCOORD
-#endif
-#ifdef NORMAL_MAP
-#define NEED_TANGENT
-#endif
 
 #include "include/shadercompat.h"
 
@@ -60,13 +49,10 @@
 	float4 Color;
 	float Metallic;
 	float Roughness;
-#ifdef NORMAL_MAP
 	float BumpStrength;
-#endif
-#ifdef EMISSION
 	float3 Emission;
-#endif
 
+	// Set by scene
 	float3 AmbientLight;
 	uint LightCount;
 	float2 ShadowTexelSize;
@@ -82,14 +68,10 @@
 struct v2f {
 	float4 position : SV_Position;
 	float4 worldPos : TEXCOORD0;
-	#ifndef PASS_DEPTH
 	float4 screenPos : TEXCOORD1;
 	float3 normal : NORMAL;
-	#endif
-	#ifdef NEED_TANGENT
+	#ifdef TEXTURED
 	float3 tangent : TANGENT;
-	#endif
-	#ifdef NEED_TEXCOORD
 	float2 texcoord : TEXCOORD2;
 	#endif
 };
@@ -97,10 +79,8 @@ struct v2f {
 v2f vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
 	[[vk::location(1)]] float3 normal : NORMAL,
-	#ifdef NEED_TANGENT
+	#ifdef TEXTURED
 	[[vk::location(2)]] float4 tangent : TANGENT,
-	#endif
-	#ifdef NEED_TEXCOORD
 	[[vk::location(3)]] float2 texcoord : TEXCOORD0,
 	#endif
 	uint instance : SV_InstanceID ) {
@@ -116,32 +96,26 @@ v2f vsmain(
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	
-	#ifndef PASS_DEPTH
 	o.screenPos = ComputeScreenPos(o.position);
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
-	#endif
 	
-	#ifdef NEED_TANGENT
+	#ifdef TEXTURED
 	o.tangent = mul(tangent, Instances[instance].WorldToObject).xyz * tangent.w;
-	#endif
-	
-	#ifdef NEED_TEXCOORD
 	o.texcoord = texcoord;
 	#endif
 
 	return o;
 }
 
-#ifdef PASS_DEPTH
 #ifdef ALPHA_CLIP
-float fsmain(in float4 worldPos : TEXCOORD0, in float2 texcoord : TEXCOORD2) : SV_Target0{
+float fsdepth(in float4 worldPos : TEXCOORD0, in float2 texcoord : TEXCOORD2) : SV_Target0 {
 	clip((MainTextures[TextureIndex].Sample(Sampler, texcoord) * Color).a - .75);
 #else
-float fsmain(in float4 worldPos : TEXCOORD0) : SV_Target0 {
+float fsdepth(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 #endif
 	return worldPos.w;
 }
-#else
+
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
@@ -149,7 +123,7 @@ void fsmain(v2f i,
 
 	float3 view = ComputeView(i.worldPos.xyz, i.screenPos);
 
-	#ifdef COLOR_MAP
+	#ifdef TEXTURED
 	float4 col = MainTextures[TextureIndex].Sample(Sampler, i.texcoord) * Color;
 	#else
 	float4 col = Color;
@@ -160,7 +134,7 @@ void fsmain(v2f i,
 	if (dot(normal, view) < 0) normal = -normal;
 	#endif
 
-	#ifdef NORMAL_MAP
+	#ifdef TEXTURED
 	float4 bump = NormalTextures[TextureIndex].Sample(Sampler, i.texcoord);
 	bump.xyz = bump.xyz * 2 - 1;
 	float3 tangent = normalize(i.tangent);
@@ -169,7 +143,7 @@ void fsmain(v2f i,
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 	#endif
 
-	#ifdef MASK_MAP
+	#ifdef TEXTURED
 	float4 mask = MaskTextures[TextureIndex].Sample(Sampler, i.texcoord);
 	#else
 	float4 mask = 1;
@@ -194,4 +168,3 @@ void fsmain(v2f i,
 
 	color = float4(eval, col.a);
 }
-#endif

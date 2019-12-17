@@ -57,16 +57,21 @@ public:
 
 	ENGINE_EXPORT bool PushConstant(ShaderVariant* shader, const std::string& name, const void* value);
 
-	ENGINE_EXPORT VkPipelineLayout BindShader(GraphicsShader* shader, const VertexInput* input, Camera* camera = nullptr,
+	/// Binds a shader
+	/// If camera is not nullptr, attempts to bind the camera's uniform buffer to a descriptor named 'Camera'
+	ENGINE_EXPORT VkPipelineLayout BindShader(GraphicsShader* shader, PassType pass, const VertexInput* input, Camera* camera = nullptr,
 		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,
 		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
 		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
-	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, const VertexInput* input, Camera* camera = nullptr,
+
+	/// Binds a material and sets its parameters
+	ENGINE_EXPORT VkPipelineLayout BindMaterial(Material* material, PassType pass, const VertexInput* input, Camera* camera = nullptr,
 		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,
 		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
 		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
+
 	ENGINE_EXPORT void BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount);
 	ENGINE_EXPORT void EndRenderPass();
 

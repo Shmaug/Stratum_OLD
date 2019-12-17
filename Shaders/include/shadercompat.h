@@ -18,7 +18,7 @@
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
 
-struct ObjectBuffer{
+struct ObjectBuffer {
 	float4x4 ObjectToWorld;
 	float4x4 WorldToObject;
 };
