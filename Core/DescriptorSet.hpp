@@ -32,8 +32,11 @@ public:
 	inline operator VkDescriptorSet() const { return mDescriptorSet; }
 
 private:
-	std::vector<void*> mPendingData;
 	std::vector<VkWriteDescriptorSet> mPending;
+	std::queue<VkDescriptorBufferInfo*> mBufferInfoPool;
+	std::queue<VkDescriptorImageInfo*> mImageInfoPool;
+	std::vector<VkDescriptorBufferInfo*> mPendingBuffers;
+	std::vector<VkDescriptorImageInfo*>  mPendingImages;
 
 	Device* mDevice;
 	VkDescriptorSet mDescriptorSet;
