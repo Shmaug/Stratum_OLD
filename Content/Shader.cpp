@@ -19,7 +19,7 @@ Shader::Shader(const string& name, ::Instance* devices, const string& filename)
 	ifstream file(filename, ios::binary);
 	if (!file.is_open()) {
 		fprintf_color(BoldRed, stderr, "Could not load shader: %s\n", filename.c_str());
-		throw;;
+		throw;
 	}
 
 	CompiledShader compiled(file);

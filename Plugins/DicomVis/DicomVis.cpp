@@ -104,7 +104,6 @@ bool DicomVis::Init(Scene* scene) {
 				return transparent;
 		return material;
 	};
-
 	auto objfunc = [&](Scene* scene, Object* object, aiMaterial* aimaterial) {
 		MeshRenderer* renderer = dynamic_cast<MeshRenderer*>(object);
 		if (!renderer) return;
