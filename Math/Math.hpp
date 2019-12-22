@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef MATH_HPP
+#define MATH_HPP
+
 #ifdef WINDOWS
 #pragma warning(push)
 #pragma warning(disable:26495)
@@ -1642,31 +1645,30 @@ struct double4 {
 	}
 	inline bool operator !=(const double4& a) const { return !operator ==(a); }
 };
-/*
-int2::int2(const uint2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
-int3::int3(const uint3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
-int4::int4(const uint4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
 
-int2::int2(const float2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
-int3::int3(const float3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
-int4::int4(const float4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
+inline int2::int2(const uint2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
+inline int3::int3(const uint3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
+inline int4::int4(const uint4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
 
-int2::int2(const double2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
-int3::int3(const double3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
-int4::int4(const double4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
+inline int2::int2(const float2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
+inline int3::int3(const float3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
+inline int4::int4(const float4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
 
-uint2::uint2(const float2& s) { rpt2(i) v[i] = (uint32_t)s.v[i]; }
-uint3::uint3(const float3& s) { rpt3(i) v[i] = (uint32_t)s.v[i]; }
-uint4::uint4(const float4& s) { rpt4(i) v[i] = (uint32_t)s.v[i]; }
+inline int2::int2(const double2& s) { rpt2(i) v[i] = (int32_t)s.v[i]; }
+inline int3::int3(const double3& s) { rpt3(i) v[i] = (int32_t)s.v[i]; }
+inline int4::int4(const double4& s) { rpt4(i) v[i] = (int32_t)s.v[i]; }
 
-uint2::uint2(const double2& s) { rpt2(i) v[i] = (uint32_t)s.v[i]; }
-uint3::uint3(const double3& s) { rpt3(i) v[i] = (uint32_t)s.v[i]; }
-uint4::uint4(const double4& s) { rpt4(i) v[i] = (uint32_t)s.v[i]; }
+inline uint2::uint2(const float2& s) { rpt2(i) v[i] = (uint32_t)s.v[i]; }
+inline uint3::uint3(const float3& s) { rpt3(i) v[i] = (uint32_t)s.v[i]; }
+inline uint4::uint4(const float4& s) { rpt4(i) v[i] = (uint32_t)s.v[i]; }
 
-float2::float2(const double2& s) { rpt2(i) v[i] = (float)s.v[i]; }
-float3::float3(const double3& s) { rpt3(i) v[i] = (float)s.v[i]; }
-float4::float4(const double4& s) { rpt4(i) v[i] = (float)s.v[i]; }
-*/
+inline uint2::uint2(const double2& s) { rpt2(i) v[i] = (uint32_t)s.v[i]; }
+inline uint3::uint3(const double3& s) { rpt3(i) v[i] = (uint32_t)s.v[i]; }
+inline uint4::uint4(const double4& s) { rpt4(i) v[i] = (uint32_t)s.v[i]; }
+
+inline float2::float2(const double2& s) { rpt2(i) v[i] = (float)s.v[i]; }
+inline float3::float3(const double3& s) { rpt3(i) v[i] = (float)s.v[i]; }
+inline float4::float4(const double4& s) { rpt4(i) v[i] = (float)s.v[i]; }
 #pragma pack(pop)
 
 #pragma region trigonometry
@@ -2849,4 +2851,6 @@ inline quaternion slerp(const quaternion& v0, quaternion v1, float t){
 
 #ifdef WINDOWS
 #pragma warning(pop)
+#endif
+
 #endif
