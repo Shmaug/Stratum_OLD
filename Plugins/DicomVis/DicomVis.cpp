@@ -5,6 +5,9 @@
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <ThirdParty/stb_image.h>
+
 using namespace std;
 
 class DicomVis : public EnginePlugin {
@@ -60,6 +63,16 @@ DicomVis::~DicomVis() {
 bool DicomVis::Init(Scene* scene) {
 	mScene = scene;
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+
+	// set window icon
+	int comp;
+	GLFWimage icon;
+	icon.pixels = stbi_load("Assets/DicomVis.png", &icon.width, &icon.height, &comp, 4);
+	for (uint32_t i = 0; i < mScene->Instance()->WindowCount(); i++) {
+		mScene->Instance()->GetWindow(i)->Icon(&icon);
+		mScene->Instance()->GetWindow(i)->Title("DicomVis");
+	}
+	stbi_image_free(icon.pixels);
 
 	shared_ptr<Object> player = make_shared<Object>("Player");
 	mScene->AddObject(player);

@@ -11,6 +11,7 @@
 #define END_CMD_REGION(cmd)
 #endif
 
+class Buffer;
 class Device;
 class Material;
 class GraphicsShader;
@@ -72,6 +73,9 @@ public:
 		BlendMode blendMode = BLEND_MODE_MAX_ENUM,
 		VkPolygonMode polyMode = VK_POLYGON_MODE_MAX_ENUM);
 
+	ENGINE_EXPORT void BindVertexBuffer(Buffer* buffer, uint32_t index, VkDeviceSize offset);
+	ENGINE_EXPORT void BindIndexBuffer(Buffer* buffer, VkDeviceSize offset, VkIndexType indexType);
+
 	ENGINE_EXPORT void BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount);
 	ENGINE_EXPORT void EndRenderPass();
 
@@ -87,6 +91,9 @@ private:
 	VkCommandPool mCommandPool;
 	std::shared_ptr<Fence> mSignalFence;
 	std::vector<std::shared_ptr<Semaphore>> mSignalSemaphores;
+
+	std::unordered_map<uint32_t, Buffer*> mCurrentVertexBuffers;
+	Buffer* mCurrentIndexBuffer;
 
 	RenderPass* mCurrentRenderPass;
 	Camera* mCurrentCamera;

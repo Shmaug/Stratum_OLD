@@ -63,17 +63,38 @@ Object* Scene::LoadModelScene(const string& filename,
 	vector<shared_ptr<Material>> materials;
 	unordered_map<aiNode*, Object*> objectMap;
 
+	vector<StdVertex> vertices;
+	vector<uint32_t> indices;
+
+	uint32_t totalVertices = 0;
+	uint32_t totalIndices = 0;
+
+	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
+		const aiMesh* mesh = scene->mMeshes[m];
+		totalVertices += mesh->mNumVertices;
+		for (uint32_t i = 0; i < mesh->mNumFaces; i++)
+			totalIndices += min(mesh->mFaces[i].mNumIndices, 3u);
+	}
+
+	vector<shared_ptr<Buffer>> vertexBuffers(mInstance->DeviceCount());
+	vector<shared_ptr<Buffer>> indexBuffers (mInstance->DeviceCount());
+
+	for (uint32_t i = 0; i < mInstance->DeviceCount(); i++) {
+		vertexBuffers[i] = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Vertices"), mInstance->GetDevice(i), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+		indexBuffers[i]  = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Indices") , mInstance->GetDevice(i), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+	}
+
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
 		materials.push_back(materialSetupFunc(this, scene->mMaterials[m]));
 
-	vector<StdVertex> vertices;
-	vector<uint32_t> indices32;
-	vector<uint16_t> indices16;
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
-		vertices.clear();
-
 		const aiMesh* mesh = scene->mMeshes[m];
 		VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+		float3 mn, mx;
+
+		uint32_t baseVertex = (uint32_t)vertices.size();
+		uint32_t baseIndex  = (uint32_t)indices.size();
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
 			StdVertex vertex = {};
@@ -89,39 +110,39 @@ Object* Scene::LoadModelScene(const string& filename,
 			if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
 			vertex.position *= scale;
 			vertices.push_back(vertex);
+
+			if (i == 0)
+				mn = mx = vertex.position;
+			else {
+				mn = min(vertex.position, mn);
+				mx = max(vertex.position, mx);
+			}
 		}
 
-		if (vertices.size() > 0xFFFF) {
-			indices32.clear();
-			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
-				const aiFace& f = mesh->mFaces[i];
-				indices32.push_back((uint32_t)f.mIndices[0]);
-				if (f.mNumIndices > 1) {
-					indices32.push_back((uint32_t)f.mIndices[1]);
-					if (f.mNumIndices > 2)
-						indices32.push_back((uint32_t)f.mIndices[2]);
-					else
-						topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-				} else
-					topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-			}
-			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance, vertices.data(), indices32.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(StdVertex), (uint32_t)indices32.size(), &StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
-		} else {
-			indices16.clear();
-			for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
-				const aiFace& f = mesh->mFaces[i];
-				indices16.push_back((uint16_t)f.mIndices[0]);
-				if (f.mNumIndices > 1) {
-					indices16.push_back((uint16_t)f.mIndices[1]);
-					if (f.mNumIndices > 2)
-						indices16.push_back((uint16_t)f.mIndices[2]);
-					else
-						topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-				} else
-					topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-			}
-			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance, vertices.data(), indices16.data(), (uint32_t)vertices.size(), (uint32_t)sizeof(StdVertex), (uint32_t)indices16.size(), &StdVertex::VertexInput, VK_INDEX_TYPE_UINT16, topo));
+		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
+			const aiFace& f = mesh->mFaces[i];
+			indices.push_back((uint32_t)f.mIndices[0]);
+			if (f.mNumIndices > 1) {
+				indices.push_back((uint32_t)f.mIndices[1]);
+				if (f.mNumIndices > 2)
+					indices.push_back((uint32_t)f.mIndices[2]);
+				else
+					topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+			} else
+				topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 		}
+
+		uint32_t vertexCount = (uint32_t)vertices.size() - baseVertex;
+		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
+
+		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance,
+			vertexBuffers.data(), indexBuffers.data(), AABB((mx + mn) * .5f, (mx - mn) * .5f), baseVertex, vertexCount, baseIndex, indexCount,
+			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
+	}
+
+	for (uint32_t i = 0; i < mInstance->DeviceCount(); i++) {
+		vertexBuffers[i]->Upload(vertices.data(), vertices.size() * sizeof(StdVertex));
+		indexBuffers[i]->Upload(indices.data(), indices.size() * sizeof(uint32_t));
 	}
 
 	queue<pair<Object*, aiNode*>> nodes;
@@ -521,8 +542,12 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	
 	PROFILER_BEGIN("Pre Render");
 	camera->PreRender();
+	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0) {
+		PROFILER_END;
+		return;
+	}
 	if (pass == PASS_MAIN) {
-		if (camera->DepthFramebuffer()){
+		if (camera->DepthFramebuffer()) {
 			PROFILER_BEGIN("Depth Prepass");
 			BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
 			Render(commandBuffer, camera, camera->DepthFramebuffer(), PASS_DEPTH);
@@ -564,7 +589,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	
 	DescriptorSet* batchDS = nullptr;
 	Buffer* batchBuffer = nullptr;
-	ObjectBuffer* curBatch = nullptr;
+	InstanceBuffer* curBatch = nullptr;
 	MeshRenderer* batchStart = nullptr;
 	uint32_t batchSize = 0;
 
@@ -586,11 +611,11 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					batchSize = 0;
 					batchStart = cur;
 					
-					batchBuffer = commandBuffer->Device()->GetTempBuffer("Instance Batch", sizeof(ObjectBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+					batchBuffer = commandBuffer->Device()->GetTempBuffer("Instance Batch", sizeof(InstanceBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 					batchDS = commandBuffer->Device()->GetTempDescriptorSet("Instance Batch", curShader->mDescriptorSetLayouts[PER_OBJECT]);
-					curBatch = (ObjectBuffer*)batchBuffer->MappedData();
+					curBatch = (InstanceBuffer*)batchBuffer->MappedData();
 					uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
-					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), OBJECT_BUFFER_BINDING);
+					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), INSTANCE_BUFFER_BINDING);
 					if (pass == PASS_MAIN) {
 						if (curShader->mDescriptorBindings.count("Lights"))
 							batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[frameContextIndex], 0, data.mLightBuffers[frameContextIndex]->Size(), LIGHT_BUFFER_BINDING);

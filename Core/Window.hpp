@@ -29,6 +29,9 @@ public:
 	inline VkRect2D ClientRect() const { return mClientRect; };
 
 	inline std::string Title() const { return mTitle; }
+	ENGINE_EXPORT void Title(const std::string& title);
+
+	ENGINE_EXPORT void Icon(GLFWimage* icon);
 
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
 	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
@@ -37,6 +40,7 @@ public:
 	inline VkExtent2D BackBufferSize() const { return mSwapchainSize; }
 	inline VkSurfaceKHR Surface() const { return mSurface; }
 	inline VkSurfaceFormatKHR Format() const { return mFormat; }
+
 
 	inline bool ShouldClose() const { return mWindow ? glfwWindowShouldClose(mWindow) : false; }
 	inline ::Device* Device() const { return mDevice; }

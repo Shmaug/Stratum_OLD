@@ -148,9 +148,9 @@ Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* roo
 	return bone;
 }
 
-Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mIndexCount(0), mVertexCount(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
+Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mIndexCount(0), mVertexCount(0), mBaseVertex(0), mBaseIndex(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
 Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, float scale)
-	: mName(name), mVertexInput(nullptr), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+	: mName(name), mVertexInput(nullptr), mBaseVertex(0), mBaseIndex(0), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
 	if (!scene) {
@@ -345,8 +345,19 @@ Mesh::Mesh(const string& name, ::Instance* devices, const string& filename, floa
 
 	printf("Loaded %s / %d verts %d tris / %d bones / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mRig ? (int)mRig->size() : (int)0, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
 }
+Mesh::Mesh(const string& name, ::Instance* devices, shared_ptr<Buffer>* vertexBuffers, shared_ptr<Buffer>* indexBuffers, const AABB& bounds,
+	uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+	: mName(name), mVertexInput(vertexInput), mBaseIndex(baseIndex), mIndexCount(indexCount), mIndexType(indexType), mBaseVertex(baseVertex), mVertexCount(vertexCount), mBounds(bounds), mTopology(topology) {
+	for (uint32_t i = 0; i < devices->DeviceCount(); i++) {
+		Device* device = devices->GetDevice(i);
+		DeviceData& d = mDeviceData[device];
+		d.mVertexBuffer = vertexBuffers[i];
+		d.mIndexBuffer = indexBuffers[i];
+	}
+}
+
 Mesh::Mesh(const string& name, ::Instance* devices, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
-	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
+	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
 	
 	float3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
@@ -376,7 +387,7 @@ Mesh::Mesh(const string& name, ::Instance* devices, const void* vertices, const 
 	}
 }
 Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
-	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mTopology(topology) {
+	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
 
 	float3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {

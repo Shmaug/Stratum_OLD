@@ -475,14 +475,14 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), nullptr, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, cull);
 	if (!layout) return;
 
-	#pragma region Populate descriptor set/push constants
+#pragma region Populate descriptor set/push constants
 	Buffer* nodeBuffer = commandBuffer->Device()->GetTempBuffer(mName + " Nodes", leafNodes.size() * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	float4* bn = (float4*)nodeBuffer->MappedData();
 	for (QuadNode* n : leafNodes) {
 		*bn = float4(n->mPosition.x, 0, n->mPosition.z, n->mSize);
 		bn++;
 	}
-    
+
 	GraphicsShader* shader = mMaterial->GetShader(commandBuffer->Device());
 
 	DescriptorSet* objds = commandBuffer->Device()->GetTempDescriptorSet(mName + to_string(commandBuffer->Device()->FrameContextIndex()), shader->mDescriptorSetLayouts[PER_OBJECT]);
@@ -509,7 +509,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	commandBuffer->PushConstant(shader, "WorldToObject", &w2o);
 	commandBuffer->PushConstant(shader, "TerrainSize", &sz);
 	commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
-	#pragma endregion
+#pragma endregion
 
 	if (mIndexBuffers.count(commandBuffer->Device()) == 0) {
 		vector<uint16_t> indices;
@@ -521,7 +521,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		mIndexBuffers.emplace(commandBuffer->Device(), new Buffer(mName + " Indices", commandBuffer->Device(), indices.data(), indices.size() * sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
 	}
 
-	vkCmdBindIndexBuffer(*commandBuffer, *mIndexBuffers.at(commandBuffer->Device()), 0, VK_INDEX_TYPE_UINT16);
+	commandBuffer->BindIndexBuffer(mIndexBuffers.at(commandBuffer->Device()).get(), 0, VK_INDEX_TYPE_UINT16);
 
 	// Render terrain surface
 	uint32_t ni = 0;
@@ -542,7 +542,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	}
 
 	// Details
-	for (uint32_t i = 0; i < mDetails.size(); i++){
+	for (uint32_t i = 0; i < mDetails.size(); i++) {
 		if (pass & Main) Scene()->Environment()->SetEnvironment(camera, mDetails[i].mMaterial.get());
 		if (pass & Depth) mDetails[i].mMaterial->EnableKeyword("DEPTH_PASS");
 		else mDetails[i].mMaterial->DisableKeyword("DEPTH_PASS");
@@ -571,10 +571,8 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		commandBuffer->PushConstant(shader, "TerrainSize", &sz);
 		commandBuffer->PushConstant(shader, "TerrainHeight", &mHeight);
 
-		VkDeviceSize vboffset = 0;
-		VkBuffer vb = *mDetails[i].mMesh->VertexBuffer(commandBuffer->Device());
-		vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-		vkCmdBindIndexBuffer(*commandBuffer, *mDetails[i].mMesh->IndexBuffer(commandBuffer->Device()), 0, mDetails[i].mMesh->IndexType());
+		commandBuffer->BindVertexBuffer(mDetails[i].mMesh->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
+		commandBuffer->BindIndexBuffer(mDetails[i].mMesh->IndexBuffer(commandBuffer->Device()).get(), 0, mDetails[i].mMesh->IndexType());
 		vkCmdDrawIndexedIndirect(*commandBuffer, *mIndirectBuffers[i], 0, 1, 0);
 	}
 }
