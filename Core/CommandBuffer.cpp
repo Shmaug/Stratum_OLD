@@ -1,4 +1,5 @@
 #include <Core/CommandBuffer.hpp>
+#include <Core/Buffer.hpp>
 #include <Core/RenderPass.hpp>
 #include <Content/Material.hpp>
 #include <Content/Shader.hpp>
@@ -43,7 +44,7 @@ Semaphore::~Semaphore() {
 }
 
 CommandBuffer::CommandBuffer(::Device* device, VkCommandPool commandPool, const string& name)
-	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentMaterial(nullptr), mCurrentPipeline(VK_NULL_HANDLE), mTriangleCount(0) {
+	: mDevice(device), mCommandPool(commandPool), mCurrentRenderPass(nullptr), mCurrentMaterial(nullptr), mCurrentPipeline(VK_NULL_HANDLE), mTriangleCount(0), mCurrentIndexBuffer(nullptr) {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = mCommandPool;
@@ -84,6 +85,8 @@ void CommandBuffer::Reset(const string& name) {
 	mCurrentMaterial = nullptr;
 	mCurrentPipeline = VK_NULL_HANDLE;
 	mTriangleCount = 0;
+	mCurrentIndexBuffer = nullptr;
+	mCurrentVertexBuffers.clear();
 }
 
 void CommandBuffer::BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bufferSize, VkFramebuffer frameBuffer, VkClearValue* clearValues, uint32_t clearValueCount) {
@@ -103,6 +106,8 @@ void CommandBuffer::EndRenderPass() {
 	mCurrentRenderPass = nullptr;
 	mCurrentCamera = nullptr;
 	mCurrentMaterial = nullptr;
+	mCurrentIndexBuffer = nullptr;
+	mCurrentVertexBuffers.clear();
 	mCurrentPipeline = VK_NULL_HANDLE;
 }
 
@@ -133,6 +138,8 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass
 		}
 		mCurrentCamera = camera;
 	}
+	mCurrentIndexBuffer = nullptr;
+	mCurrentVertexBuffers.clear();
 	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
 }
@@ -147,6 +154,8 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 	if (pipeline != mCurrentPipeline) {
 		vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		mCurrentPipeline = pipeline;
+		mCurrentIndexBuffer = nullptr;
+		mCurrentVertexBuffers.clear();
 	}
 	
 	Material::VariantData* data = material->GetData(mDevice, pass);
@@ -155,4 +164,18 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 	mCurrentCamera = camera;
 	mCurrentMaterial = material;
 	return shader->mPipelineLayout;
+}
+
+void CommandBuffer::BindVertexBuffer(Buffer* buffer, uint32_t index, VkDeviceSize offset) {
+	if (mCurrentVertexBuffers[index] == buffer) return;
+
+	VkBuffer buf = *buffer;
+	vkCmdBindVertexBuffers(mCommandBuffer, index, 1, &buf, &offset);
+
+	mCurrentVertexBuffers[index] = buffer;
+}
+void CommandBuffer::BindIndexBuffer(Buffer* buffer, VkDeviceSize offset, VkIndexType indexType) {
+	if (mCurrentIndexBuffer == buffer) return;
+	vkCmdBindIndexBuffer(mCommandBuffer, *buffer, offset, indexType);
+	mCurrentIndexBuffer = buffer;
 }

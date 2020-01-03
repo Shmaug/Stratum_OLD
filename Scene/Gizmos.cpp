@@ -237,7 +237,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		gizmoBuffer->Map();
 
 		gizmoDS = new DescriptorSet("Gizmos", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, 0, gizmoBuffer->Size(), OBJECT_BUFFER_BINDING);
+		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, 0, gizmoBuffer->Size(), INSTANCE_BUFFER_BINDING);
 
 		data.mInstanceBuffers[frameContextIndex].push_back(make_pair(gizmoDS, gizmoBuffer));
 	} else {
@@ -248,7 +248,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			safe_delete(b);
 			b = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 			b->Map();
-			gizmoDS->CreateStorageBufferDescriptor(b, 0, b->Size(), OBJECT_BUFFER_BINDING);
+			gizmoDS->CreateStorageBufferDescriptor(b, 0, b->Size(), INSTANCE_BUFFER_BINDING);
 		}
 
 		gizmoBuffer = b;
@@ -279,10 +279,8 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	if (wireCubeCount + wireCircleCount > 0) {
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
 		if (layout) {
-			VkDeviceSize vboffset = 0;
-			VkBuffer vb = *data.mVertices;
-			vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-			vkCmdBindIndexBuffer(*commandBuffer, *data.mIndices, 0, VK_INDEX_TYPE_UINT16);
+			commandBuffer->BindVertexBuffer(data.mVertices, 0, 0);
+			commandBuffer->BindIndexBuffer(data.mIndices, 0, VK_INDEX_TYPE_UINT16);
 
 			VkDescriptorSet ds = *gizmoDS;
 			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
@@ -299,10 +297,8 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	if (cubeCount + billboardCount > 0){
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, &GizmoVertexInput, camera, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 		if (layout) {
-			VkDeviceSize vboffset = 0;
-			VkBuffer vb = *data.mVertices;
-			vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-			vkCmdBindIndexBuffer(*commandBuffer, *data.mIndices, 0, VK_INDEX_TYPE_UINT16);
+			commandBuffer->BindVertexBuffer(data.mVertices, 0, 0);
+			commandBuffer->BindIndexBuffer(data.mIndices, 0, VK_INDEX_TYPE_UINT16);
 
 			VkDescriptorSet ds = *gizmoDS;
 			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);

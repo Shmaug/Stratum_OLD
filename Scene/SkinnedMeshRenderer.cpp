@@ -155,13 +155,10 @@ void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, Pas
 		VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
 	}
-
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *data.mVertices[frameContextIndex];
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *m->IndexBuffer(commandBuffer->Device()), 0, m->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, 0, 0, 0);
-
+	
+	commandBuffer->BindVertexBuffer(m->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
+	commandBuffer->BindIndexBuffer(m->IndexBuffer(commandBuffer->Device()).get(), 0, m->IndexType());
+	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, m->BaseIndex(), m->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += m->IndexCount() / 3;
 }
 

@@ -169,6 +169,8 @@ void Camera::PreRender() {
 	}
 }
 void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
+	if (!mFramebuffer->Width() || !mFramebuffer->Height()) return;
+
 	mFramebuffer->ResolveColor(commandBuffer);
 	// resolve or copy render target to target window
 	if (mTargetWindow) {

@@ -23,7 +23,7 @@ struct Gizmo {
 
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
-[[vk::binding(OBJECT_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<Gizmo> Gizmos : register(t0);
+[[vk::binding(INSTANCE_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<Gizmo> Gizmos : register(t0);
 [[vk::binding(BINDING_START + 0, PER_OBJECT)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[128] : register(t1);
 

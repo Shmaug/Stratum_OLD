@@ -71,9 +71,10 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	mWindow = glfwCreateWindow(position.extent.width, position.extent.height, mTitle.c_str(), nullptr, nullptr);
 	if (mWindow == nullptr) {
 		const char* msg;
-		glfwGetError(&msg);
-		fprintf_color(Red, stderr, "Failed to create GLFW window: %s\n", msg);
-		throw;
+		if (int c = glfwGetError(&msg)) {
+			fprintf_color(Red, stderr, "Failed to create GLFW window (%d): %s\n", c, msg);
+			throw;
+		}
 	}
 
 	glfwSetWindowPos(mWindow, position.offset.x, position.offset.y);
@@ -92,9 +93,10 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 
 	if (glfwCreateWindowSurface(*instance, mWindow, nullptr, &mSurface) != VK_SUCCESS) {
 		const char* msg;
-		glfwGetError(&msg);
-		fprintf_color(Red, stderr, "Failed to create GLFW window surface: %s\n", msg);
-		throw;
+		if (int c = glfwGetError(&msg)) {
+			fprintf_color(Red, stderr, "Failed to create GLFW window surface (%d): %s\n", c, msg);
+			throw;
+		}
 	}
 
 	glfwGetWindowPos(mWindow, &mClientRect.offset.x, &mClientRect.offset.y);
@@ -214,6 +216,16 @@ Window::~Window() {
 	DestroySwapchain();
 	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
 	if (mWindow) glfwDestroyWindow(mWindow);
+}
+
+void Window::Title(const string& title) {
+	if (!mWindow) return;
+	glfwSetWindowTitle(mWindow, title.c_str());
+	mTitle = title;
+}
+void Window::Icon(GLFWimage* icon){
+	if (!mWindow) return;
+	glfwSetWindowIcon(mWindow, 1, icon);
 }
 
 VkImage Window::AcquireNextImage() {

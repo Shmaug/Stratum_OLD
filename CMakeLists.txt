@@ -47,7 +47,7 @@ add_library(Engine SHARED
 	"ThirdParty/imp.cpp"
 	"Util/Profiler.cpp" )
 add_executable(ShaderCompiler "Stratum/ShaderCompiler.cpp")
-add_executable(Stratum "Stratum/Stratum.cpp" "ThirdParty/json11.cpp")
+add_executable(Stratum "Stratum/Stratum.cpp" "ThirdParty/json11.cpp" "stratum.rc")
 
 set_target_properties(Engine Stratum ShaderCompiler PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine Stratum ShaderCompiler PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")

@@ -8,7 +8,7 @@
 #define PER_OBJECT 2
 
 #define CAMERA_BUFFER_BINDING 0
-#define OBJECT_BUFFER_BINDING 1
+#define INSTANCE_BUFFER_BINDING 1
 #define LIGHT_BUFFER_BINDING 2
 #define SHADOW_ATLAS_BINDING 3
 #define SHADOW_BUFFER_BINDING 4
@@ -18,10 +18,11 @@
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
 
-struct ObjectBuffer {
+struct InstanceBuffer {
 	float4x4 ObjectToWorld;
 	float4x4 WorldToObject;
 };
+
 struct CameraBuffer {
 	float4x4 View;
 	float4x4 Projection;

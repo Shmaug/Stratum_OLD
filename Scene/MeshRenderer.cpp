@@ -48,11 +48,9 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
-	VkDeviceSize vboffset = 0;
-	VkBuffer vb = *mesh->VertexBuffer(commandBuffer->Device());
-	vkCmdBindVertexBuffers(*commandBuffer, 0, 1, &vb, &vboffset);
-	vkCmdBindIndexBuffer(*commandBuffer, *mesh->IndexBuffer(commandBuffer->Device()), 0, mesh->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, 0, 0, 0);
+	commandBuffer->BindVertexBuffer(mesh->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
+	commandBuffer->BindIndexBuffer(mesh->IndexBuffer(commandBuffer->Device()).get(), 0, mesh->IndexType());
+	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
 }
 
