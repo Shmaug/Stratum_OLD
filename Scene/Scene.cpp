@@ -715,7 +715,7 @@ Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
 		if (n->EnabledHierarchy()) {
 			if (Collider* c = dynamic_cast<Collider*>(n.get())) {
 				if ((c->CollisionMask() & mask) != 0) {
-					float t = ray.Intersect(c->ColliderBounds()).x;
+					float t = c->Intersect(ray);
 					if (t > 0 && (t < hitT || closest == nullptr)) {
 						closest = c;
 						hitT = t;
