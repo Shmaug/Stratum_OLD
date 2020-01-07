@@ -42,11 +42,13 @@ private:
 	float mFps;
 	uint32_t mFrameCount;
 	size_t mTriangleCount;
+
+	bool mPrintPerformance;
 };
 
 ENGINE_PLUGIN(DicomVis)
 
-DicomVis::DicomVis() : mScene(nullptr), mSelected(nullptr), mFlying(false) {
+DicomVis::DicomVis() : mScene(nullptr), mSelected(nullptr), mFlying(false), mPrintPerformance(false) {
 	mEnabled = true;
 	mCameraEuler = 0;
 	mTriangleCount = 0;
@@ -246,15 +248,17 @@ void DicomVis::Update() {
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	if (mInput->KeyDownFirst(GLFW_KEY_F2))
 		mFlying = !mFlying;
+	if (mInput->KeyDownFirst(GLFW_KEY_F3))
+		mPrintPerformance = !mPrintPerformance;
 
 	if (mInput->KeyDownFirst(GLFW_KEY_F9))
 		mMainCamera->Orthographic(!mMainCamera->Orthographic());
 
 	if (mMainCamera->Orthographic()) {
-		mFpsText->TextScale(.028f * mMainCamera->OrthographicSize());
+		mFpsText->TextScale(.025f * mMainCamera->OrthographicSize());
 		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
 	} else
-		mFpsText->TextScale(.0005f * tanf(mMainCamera->FieldOfView() / 2));
+		mFpsText->TextScale(.0004f * tanf(mMainCamera->FieldOfView() / 2));
 	mFpsText->LocalRotation(mMainCamera->WorldRotation());
 	mFpsText->LocalPosition(mMainCamera->ClipToWorld(float3(-.99f, -.96f, 0.005f)));
 
@@ -265,14 +269,37 @@ void DicomVis::Update() {
 		mFps = mFrameCount / mFrameTimeAccum;
 		mFrameTimeAccum -= 1.f;
 		mFrameCount = 0;
-		char buf[256];
-		sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
+		char buf[8192];
+		memset(buf, 0, 8192);
+		size_t sz = sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
+		#ifdef PROFILER_ENABLE
+		if (mPrintPerformance)
+			Profiler::PrintLastFrame(buf + sz);
+		#endif
 		mFpsText->Text(buf);
 	}
 }
 
+void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel) {
+	double t = s->mTime.count() * 1e-6;
+	if (t >= .01){
+		for (uint32_t i = 0; i < tabLevel; i++)
+			data += sprintf(data, "   ");
+		data += sprintf(data, "%s: %.2fms\n", s->mLabel, t);
+	}
+	for (const auto& pc : s->mChildren)
+		PrintSample(data, &pc, tabLevel + 1);
+}
+void PrintLastFrame(char* buffer) {
+	PrintSample(buffer, Profiler::LastFrame(), 0);
+}
+
 void DicomVis::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	mTriangleCount = commandBuffer->mTriangleCount;
+
+	if (pass == PASS_MAIN) {
+		// TODO: pie chart
+	}
 }
 
 void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

@@ -44,13 +44,13 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 	#ifdef WINDOWS
 	HMODULE m = LoadLibraryA(filename.c_str());
 	if (m == NULL) {
-		if (errmsg) fprintf(stderr, "Failed to load library!\n");
+		if (errmsg) fprintf_color(Red, stderr, "Failed to load library!\n");
 		return NULL_PLUGIN;
 	}
 	EnginePlugin* (*fptr)(void);
 	*(void**)(&fptr) = (void*)GetProcAddress(m, "CreatePlugin");
 	if (fptr == NULL) {
-		if (errmsg) fprintf(stderr, "Failed to find CreatePlugin!\n");
+		if (errmsg) fprintf_color(Red, stderr, "Failed to find CreatePlugin!\n");
 		UnloadPlugin(m);
 		return NULL_PLUGIN;
 	}
@@ -59,15 +59,15 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 	void* handle = dlopen(filename.c_str(), RTLD_NOW);
 	if (handle == nullptr) {
 		char* err = dlerror();
-		if (errmsg) printf("Failed to load: %s\n", err);
+		if (errmsg) fprintf_color(Red, stderr, "Failed to load: %s\n", err);
 		return NULL_PLUGIN;
 	}
 	EnginePlugin* (*fptr)(void);
 	*(void**)(&fptr) = dlsym(handle, "CreatePlugin");
 	if (fptr == nullptr) {
 		char* err = dlerror();
-		if (errmsg) printf("Failed to find CreatePlugin: %s\n", err);
-		if (dlclose(handle) != 0) cerr << "Failed to free library! " << dlerror() << endl;
+		if (errmsg) fprintf_color(Red, stderr, "Failed to find CreatePlugin: %s\n", err);
+		if (dlclose(handle) != 0) fprintf_color(Red, stderr, "Failed to free library! %s\n", dlerror());
 		return NULL_PLUGIN;
 	}
 	return handle;
@@ -75,9 +75,9 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 }
 void PluginManager::UnloadPlugin(PluginHandle handle){
 	#ifdef WINDOWS
-	if (!FreeLibrary(handle)) cerr << "Failed to unload plugin module" << endl;
+	if (!FreeLibrary(handle)) printf_color(Red, stderr, "Failed to unload plugin module\n");
 	#else
-	if (dlclose(handle) != 0) cerr << "Failed to unload plugin library" << endl;
+	if (dlclose(handle) != 0) fprintf_color(Red, stderr, "Failed to unload plugin library\n");
 	#endif
 }
 
@@ -103,7 +103,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			}
 			mPluginModules.push_back(handle);
 			mPlugins.push_back(plugin);
-			printf("Loaded %s\n", p.path().string().c_str());
+			printf_color(Yellow, "Loaded %s\n", p.path().string().c_str());
 		}
 	}
 
@@ -122,7 +122,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			}
 			mPluginModules.push_back(handle);
 			mPlugins.push_back(plugin);
-			printf("Loaded %s\n", it->c_str());
+			printf_color(Yellow, "Loaded %s\n", it->c_str());
 			it = failed.erase(it);
 			c = true;
 		}
@@ -137,7 +137,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			continue;
 		}
 		// if the plugin sucsessfully loads here then WTF
-		printf("Loaded %s\n", p.c_str());
+		printf_color(Yellow, "Loaded %s\n", p.c_str());
 		mPluginModules.push_back(handle);
 		mPlugins.push_back(plugin);
 	}

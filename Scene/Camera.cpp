@@ -174,7 +174,7 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
 	mFramebuffer->ResolveColor(commandBuffer);
 	// resolve or copy render target to target window
 	if (mTargetWindow) {
-		PROFILER_BEGIN("Copy RenderTarget");
+		PROFILER_BEGIN("Copy to Window");
 		BEGIN_CMD_REGION(commandBuffer, "Copy");
 		mFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 

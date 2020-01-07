@@ -323,7 +323,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					}
 
 				} else if (*it == "fill") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					if (*it == "solid") result->mFillMode = VK_POLYGON_MODE_FILL;
 					else if (*it == "line") result->mFillMode = VK_POLYGON_MODE_LINE;
 					else if (*it == "point") result->mFillMode = VK_POLYGON_MODE_POINT;
@@ -333,7 +333,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					}
 
 				} else if (*it == "blend") {
-					if (++it == words.end()) return false;
+					if (++it == words.end()) return nullptr;
 					if (*it == "opaque")		result->mBlendMode = BLEND_MODE_OPAQUE;
 					else if (*it == "alpha")	result->mBlendMode = BLEND_MODE_ALPHA;
 					else if (*it == "add")		result->mBlendMode = BLEND_MODE_ADDITIVE;
@@ -441,7 +441,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 				v.mPass = (PassType)0;
 				v.mKeywords = keywords;
 				v.mEntryPoints[0] = k;
-				if (!CompileStage(compiler, stageOptions, source, filename, shaderc_compute_shader, k, v, *result)) return false;
+				if (!CompileStage(compiler, stageOptions, source, filename, shaderc_compute_shader, k, v, *result)) return nullptr;
 				UpdateBindings(v);
 				result->mVariants.push_back(v);
 			}
@@ -514,7 +514,7 @@ int main(int argc, char* argv[]) {
 	char* outputFile;
 
 	if (argc < 2) {
-		/*
+		//*
 		fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
 		return EXIT_FAILURE;
 		/*/
