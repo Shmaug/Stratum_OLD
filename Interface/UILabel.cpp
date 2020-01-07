@@ -33,7 +33,7 @@ uint32_t UILabel::BuildText(Device* device, Buffer*& buffer) {
 
 	if (glyphCount == 0) return 0;
 
-	PROFILER_BEGIN("Upload");
+	PROFILER_BEGIN("Upload Text");
 	if (buffer && buffer->Size() < glyphCount * sizeof(TextGlyph))
 		safe_delete(buffer);
 	if (!buffer)

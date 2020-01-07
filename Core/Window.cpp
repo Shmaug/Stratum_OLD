@@ -111,51 +111,23 @@ Window::Window(Instance* instance, VkPhysicalDevice device, uint32_t displayInde
 	VkDisplayKHR display = VK_NULL_HANDLE;
 	VkDisplayModeKHR displayMode = VK_NULL_HANDLE;
 	
-	#ifndef WINDOWS
-	{
-	using namespace x11;
-	auto vkAcquireXlibDisplayEXT = (PFN_vkAcquireXlibDisplayEXT)vkGetInstanceProcAddr(*mInstance, "vkAcquireXlibDisplayEXT");
-	auto vkGetRandROutputDisplayEXT = (PFN_vkGetRandROutputDisplayEXT)vkGetInstanceProcAddr(*mInstance, "vkGetRandROutputDisplayEXT");
-
-	mXDisplay = XOpenDisplay(nullptr);
-	if (!mXDisplay){
-		fprintf_color(Red, stderr, "Failed to open X display!\n");
-		throw;
-	}
-	auto screens = XRRGetScreenResources(mXDisplay, DefaultRootWindow(mXDisplay));
-	if (!screens){
-		fprintf_color(Red, stderr, "Failed to get xrandr screen resources!\n");
-		throw;
-	}
-
-	vkGetRandROutputDisplayEXT(device, mXDisplay, screens->outputs[0], &display);
-    for (uint32_t i = 0; i < screens->ncrtc; i++)
-        XRRFreeCrtcInfo(XRRGetCrtcInfo(mXDisplay, screens, screens->crtcs[i]));
-    XRRFreeScreenResources(screens);
+	uint32_t displayPropertyCount;
+	vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, nullptr);
+	vector<VkDisplayPropertiesKHR> displayProperties(displayPropertyCount);
+	vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, displayProperties.data());
 	
-	ThrowIfFailed(vkAcquireXlibDisplayEXT(mPhysicalDevice, mXDisplay, display), "Failed to acquire X display!");
-	}
-	#endif
+	uint32_t biggest = 0;
+	for (uint32_t i = 0; i < displayPropertyCount; i++){
+		uint32_t modeCount;
+		vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, nullptr);
+		vector<VkDisplayModePropertiesKHR> modes(modeCount);
+		vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, modes.data());
 
-	if (!display) {
-		uint32_t displayPropertyCount;
-		vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, nullptr);
-		vector<VkDisplayPropertiesKHR> displayProperties(displayPropertyCount);
-		vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, displayProperties.data());
-		
-		uint32_t biggest = 0;
-		for (uint32_t i = 0; i < displayPropertyCount; i++){
-			uint32_t modeCount;
-			vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, nullptr);
-			vector<VkDisplayModePropertiesKHR> modes(modeCount);
-			vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, modes.data());
-
-			for (uint32_t j = 0; j < modeCount; j++){
-				if (modes[j].parameters.visibleRegion.width > biggest || modes[j].parameters.visibleRegion.height > biggest){
-					biggest = max(modes[j].parameters.visibleRegion.width, modes[j].parameters.visibleRegion.height);
-					displayMode = modes[j].displayMode;
-					display = displayProperties[i].display;
-				}
+		for (uint32_t j = 0; j < modeCount; j++){
+			if (modes[j].parameters.visibleRegion.width > biggest || modes[j].parameters.visibleRegion.height > biggest){
+				biggest = max(modes[j].parameters.visibleRegion.width, modes[j].parameters.visibleRegion.height);
+				displayMode = modes[j].displayMode;
+				display = displayProperties[i].display;
 			}
 		}
 	}
@@ -171,8 +143,8 @@ Window::Window(Instance* instance, VkPhysicalDevice device, uint32_t displayInde
 
 	uint32_t planeIndex = 0;
 	for(uint32_t i = 0; i < displayPlaneCount; i++) {
-		vector<VkDisplayKHR> displays(10);
-		uint32_t displayCount = 10;
+		uint32_t displayCount = 32;
+		vector<VkDisplayKHR> displays(displayCount);
 		vkGetDisplayPlaneSupportedDisplaysKHR(device, i, &displayCount, displays.data());
 
 		// Find a display that matches the current plane
@@ -203,6 +175,7 @@ Window::Window(Instance* instance, VkPhysicalDevice device, uint32_t displayInde
 	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR)
 		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
 	info.transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	info.planeIndex = planeIndex;
 	info.planeStackIndex = displayPlanes[planeIndex].currentStackIndex;
 	info.globalAlpha = 1.f;
 	info.imageExtent = mSwapchainSize;

@@ -586,7 +586,8 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	framebuffer->BeginRenderPass(commandBuffer);
 	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
-	
+
+	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 	DescriptorSet* batchDS = nullptr;
 	Buffer* batchBuffer = nullptr;
 	InstanceBuffer* curBatch = nullptr;
@@ -602,19 +603,23 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 				if (!batchStart || batchSize + 1 >= INSTANCE_BATCH_SIZE || (batchStart->Material() != cur->Material()) || batchStart->Mesh() != cur->Mesh()) {
 					// render last batch
 					if (batchStart) {
+						PROFILER_BEGIN_RESUME("Draw Batched");
 						BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
 						batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
 						END_CMD_REGION(commandBuffer);
+						PROFILER_END;
 					}
 
 					// start a new batch
+					PROFILER_BEGIN_RESUME("Start Batch");
 					batchSize = 0;
 					batchStart = cur;
 					
 					batchBuffer = commandBuffer->Device()->GetTempBuffer("Instance Batch", sizeof(InstanceBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-					batchDS = commandBuffer->Device()->GetTempDescriptorSet("Instance Batch", curShader->mDescriptorSetLayouts[PER_OBJECT]);
 					curBatch = (InstanceBuffer*)batchBuffer->MappedData();
-					uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
+
+					batchDS = commandBuffer->Device()->GetTempDescriptorSet("Instance Batch", curShader->mDescriptorSetLayouts[PER_OBJECT]);
+
 					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), INSTANCE_BUFFER_BINDING);
 					if (pass == PASS_MAIN) {
 						if (curShader->mDescriptorBindings.count("Lights"))
@@ -624,36 +629,47 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 						if (curShader->mDescriptorBindings.count("ShadowAtlas"))
 							batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
 					}
+
 					batchDS->FlushWrites();
+					PROFILER_END;
+
 				}
 				// append to batch
+				PROFILER_BEGIN_RESUME("Append Batch");
 				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
 				curBatch[batchSize].WorldToObject = cur->WorldToObject();
 				batchSize++;
 				batched = true;
+				PROFILER_END;
 			}
 		}
 
 		if (!batched) {
 			// render last batch
 			if (batchStart) {
+				PROFILER_BEGIN_RESUME("Draw Batched");
 				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
 				batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
 				END_CMD_REGION(commandBuffer);
 				batchStart = nullptr;
+				PROFILER_END;
 			}
+			PROFILER_BEGIN_RESUME("Draw Unbatched");
 			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
 			r->Draw(commandBuffer, camera, pass);
 			END_CMD_REGION(commandBuffer);
+			PROFILER_END;
 		}
 	}
 	// render last batch
 	if (batchStart) {
+		PROFILER_BEGIN_RESUME("Draw Batched");
 		BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
 		batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
 		END_CMD_REGION(commandBuffer);
+		PROFILER_END;
 	}
-	PROFILER_END;
+
 
 	if (mDrawGizmos && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw Gizmos");
@@ -715,8 +731,8 @@ Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
 		if (n->EnabledHierarchy()) {
 			if (Collider* c = dynamic_cast<Collider*>(n.get())) {
 				if ((c->CollisionMask() & mask) != 0) {
-					float t = c->Intersect(ray);
-					if (t > 0 && (t < hitT || closest == nullptr)) {
+					float t;
+					if (c->Intersect(ray, &t) && t > 0 && (t < hitT || closest == nullptr)) {
 						closest = c;
 						hitT = t;
 					}

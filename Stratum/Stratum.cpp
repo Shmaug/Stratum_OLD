@@ -86,7 +86,7 @@ private:
 		}
 		PROFILER_END;
 
-		PROFILER_BEGIN("Scene Pre Frame");
+		PROFILER_BEGIN("Scene PreFrame");
 		for (auto& d : commandBuffers)
 			mScene->PreFrame(d.second.get());
 		PROFILER_END;

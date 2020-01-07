@@ -12,15 +12,22 @@ const std::chrono::high_resolution_clock Profiler::mTimer;
 void Profiler::BeginSample(const string& label, bool resume = false) {
 	if (resume) {
 		for (auto& c : mCurrentSample->mChildren)
-			if (c.mLabel == label) {
+			if (label == c.mLabel) {
 				mCurrentSample = &c;
 				c.mStartTime = mTimer.now();
 				return;
 			}
 	}
-	mCurrentSample->mChildren.push_back({ label, mCurrentSample, {} });
-	mCurrentSample = &mCurrentSample->mChildren.back();
-	mCurrentSample->mStartTime = mTimer.now();
+
+	mCurrentSample->mChildren.push_back({});
+	ProfilerSample* s = &mCurrentSample->mChildren.back();
+	memset(s, 0, sizeof(ProfilerSample));
+	
+	strcpy(s->mLabel, label.c_str());
+	s->mParent = mCurrentSample;
+	s->mStartTime = mTimer.now();
+
+	mCurrentSample =  s;
 }
 void Profiler::EndSample() {
 	if (!mCurrentSample->mParent) {
@@ -33,7 +40,7 @@ void Profiler::EndSample() {
 
 void Profiler::FrameStart() {
 	int i = mCurrentFrame % PROFILER_FRAME_COUNT;
-	mFrames[i].mLabel = "Frame " + to_string(mCurrentFrame);
+	sprintf(mFrames[i].mLabel, "Frame  %llu", mCurrentFrame);
 	mFrames[i].mParent = nullptr;
 	mFrames[i].mStartTime = mTimer.now();
 	mFrames[i].mTime = chrono::nanoseconds::zero();
@@ -41,17 +48,22 @@ void Profiler::FrameStart() {
 	mCurrentSample = &mFrames[i];
 }
 void Profiler::FrameEnd() {
+	int i = mCurrentFrame % PROFILER_FRAME_COUNT;
+	mFrames[i].mTime += mTimer.now() - mFrames[i].mStartTime;
 	mCurrentFrame++;
+	mCurrentSample = nullptr;
 }
 
-void PrintSample(char* data, size_t& size, ProfilerSample* s, uint32_t tabLevel) {
-	for (uint32_t i = 0; i < tabLevel; i++)
-		size -= sprintf_s(data, size, "  ");
-
-	size -= sprintf_s(data, size, "%s: %.2fms\n", s->mLabel.c_str(), (s->mTime.count() * 1e-6));
-	for (auto& pc : s->mChildren)
-		PrintSample(data, size, &pc, tabLevel + 1);
+void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel) {
+	double t = s->mTime.count() * 1e-6;
+	if (t >= .01){
+		for (uint32_t i = 0; i < tabLevel; i++)
+			data += sprintf(data, "   ");
+		data += sprintf(data, "%s: %.2fms\n", s->mLabel, t);
+	}
+	for (const auto& pc : s->mChildren)
+		PrintSample(data, &pc, tabLevel + 1);
 }
-void Profiler::PrintLastFrame(char* buffer, size_t size) {
-	PrintSample(buffer, size, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 1);
+void Profiler::PrintLastFrame(char* buffer) {
+	PrintSample(buffer, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 0);
 }

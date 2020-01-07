@@ -28,7 +28,7 @@ uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 
 	if (glyphCount == 0) return 0;
 
-	PROFILER_BEGIN("Upload");
+	PROFILER_BEGIN("Upload Text");
 	buffer = device->GetTempBuffer(mName + " Glyph Buffer", glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 	buffer->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
 	PROFILER_END;

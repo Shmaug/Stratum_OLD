@@ -3,6 +3,7 @@
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Scene/Environment.hpp>
+#include <Util/Profiler.hpp>
 
 #include <Shaders/include/shadercompat.h>
 
@@ -32,28 +33,46 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	::Mesh* mesh = Mesh();
 
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+	PROFILER_BEGIN_RESUME("Bind Material");
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, mesh->VertexInput(), camera, mesh->Topology(), cull);
+	PROFILER_END;
 	if (!layout) return;
+	PROFILER_BEGIN_RESUME("Get Shader Variant");
 	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
+	PROFILER_END;
 
+	PROFILER_BEGIN_RESUME("Push Constants");
 	for (const auto& kp : mPushConstants)
 		commandBuffer->PushConstant(shader, kp.first, &kp.second);
+	PROFILER_END;
 
+	PROFILER_BEGIN_RESUME("Push Scene Constants");
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
 	float t = Scene()->Instance()->TotalTime();
 	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
+	PROFILER_END;
+	
+	PROFILER_BEGIN_RESUME("Bind Instance DS");
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
+	PROFILER_END;
 
+	PROFILER_BEGIN_RESUME("Draw");
 	commandBuffer->BindVertexBuffer(mesh->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
 	commandBuffer->BindIndexBuffer(mesh->IndexBuffer(commandBuffer->Device()).get(), 0, mesh->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
+	PROFILER_END;
 }
 
 void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, pass);
+}
+
+bool MeshRenderer::Intersect(const Ray& ray, float* t) {
+	// TODO: ray-mesh collision
+	return false;
 }

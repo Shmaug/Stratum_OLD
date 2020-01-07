@@ -62,6 +62,7 @@ public:
 
 	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
 	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
+	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t) override;
 	inline virtual OBB ColliderBounds() override { UpdateTransform(); return mOBB; }
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 

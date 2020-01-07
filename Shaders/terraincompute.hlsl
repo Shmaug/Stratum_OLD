@@ -20,8 +20,8 @@ struct DetailTransform{
 [[vk::binding(0, 0)]] RWTexture2D<float4> Heightmap : register(u0);
 
 [[vk::binding(1, 0)]] RWStructuredBuffer<VkDrawIndexedIndirectCommand> IndirectCommands : register(u1);
-[[vk::binding(2, 0)]] RWStructuredBuffer<ObjectBuffer> DetailInstances : register(u2);
-[[vk::binding(3, 0)]] RWStructuredBuffer<ObjectBuffer> ImposterInstances : register(u1);
+[[vk::binding(2, 0)]] RWStructuredBuffer<InstanceBuffer> DetailInstances : register(u2);
+[[vk::binding(3, 0)]] RWStructuredBuffer<InstanceBuffer> ImposterInstances : register(u1);
 [[vk::binding(4, 0)]] StructuredBuffer<DetailTransform> DetailTransforms : register(t0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
