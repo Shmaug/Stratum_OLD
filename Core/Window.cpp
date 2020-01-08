@@ -9,139 +9,51 @@
 
 using namespace std;
 
+void Window::ResizeCallback() {
+	if (mDevice) CreateSwapchain(mDevice);
+}
+void Window::KeyCallback(KeyCode key, bool down) {
+	mInput->mLastWindow = this;
+	mInput->mCurrent.mKeys[key] = down;
+	if (mInput->KeyDown(KEY_ALT) && mInput->KeyDown(KEY_ENTER) && (key == KEY_ENTER || key == KEY_ALT))
+		Fullscreen(!mFullscreen);
+}
+void Window::CursorPosCallback(float x, float y) {
+	mInput->mLastWindow = this;
+	mInput->mCurrent.mCursorPos = float2((float)x, (float)y) + float2((float)mClientRect.offset.x, (float)mClientRect.offset.y);
+	mInput->mCurrent.mCursorDelta = mInput->mCurrent.mCursorPos - mInput->mLast.mCursorPos;
+
+	if (mTargetCamera) {
+		float2 uv = float2((float)x, (float)y) / float2((float)ClientRect().extent.width, (float)ClientRect().extent.height);
+		mInput->mMousePointer.mWorldRay = mTargetCamera->ScreenToWorldRay(uv);
+	}
+}
+void Window::ScrollCallback(float x, float y) {
+	mInput->mLastWindow = this;
+	mInput->mCurrent.mScrollDelta += float2((float)x, (float)y);
+}
+
 #ifdef __linux
-xcb_connection_t* XCBConnection = nullptr;
+Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen)
+#else
+static_assert(false, "Not implemented!");
 #endif
-
-void Window::WindowPosCallback(GLFWwindow* window, int x, int y) {
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	glfwGetWindowPos(window, &win->mClientRect.offset.x, &win->mClientRect.offset.y);
-	glfwGetWindowSize(window, (int*)&win->mClientRect.extent.width, (int*)&win->mClientRect.extent.height);
-}
-void Window::FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	if (width > 0 && height > 0) {
-		glfwGetWindowPos(window, &win->mClientRect.offset.x, &win->mClientRect.offset.y);
-		glfwGetWindowSize(window, (int*)&win->mClientRect.extent.width, (int*)&win->mClientRect.extent.height);
-		if (win->mDevice) win->CreateSwapchain(win->mDevice);
-	}
-}
-void Window::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-	if (action == GLFW_REPEAT) return;
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-
-	win->mInput->mLastWindow = win;
-	win->mInput->mCurrent.mKeys[key] = action;
-	if (win && win->mInput->mCurrent.mKeys[GLFW_KEY_LEFT_ALT] == GLFW_PRESS && win->mInput->mCurrent.mKeys[GLFW_KEY_ENTER] == GLFW_PRESS && (key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT_ALT))
-		win->Fullscreen(!win->Fullscreen());
-}
-void Window::CursorPosCallback(GLFWwindow* window, double x, double y) {
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mLastWindow = win;
-	win->mInput->mCurrent.mCursorPos = float2((float)x, (float)y) + float2((float)win->mClientRect.offset.x, (float)win->mClientRect.offset.y);
-	win->mInput->mCurrent.mCursorDelta = win->mInput->mCurrent.mCursorPos - win->mInput->mLast.mCursorPos;
-
-	if (win->mTargetCamera) {
-		float2 uv = float2((float)x, (float)y) / float2((float)win->ClientRect().extent.width, (float)win->ClientRect().extent.height);
-		win->mInput->mMousePointer.mWorldRay = win->mTargetCamera->ScreenToWorldRay(uv);
-	}
-}
-void Window::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mMousePointer.mAxis[(uint32_t)button] = action == GLFW_PRESS;
-	win->mInput->mLastWindow = win;
-}
-void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
-	Window* win = (Window*)glfwGetWindowUserPointer(window);
-	win->mInput->mLastWindow = win;
-	win->mInput->mCurrent.mScrollDelta += float2((float)x, (float)y);
-}
-
-Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position)
 	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
-	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mPhysicalDevice(VK_NULL_HANDLE),
-	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr)
-	#ifdef __linux
-	,mXCBScreen(nullptr),
-	mXCBWindow(0),
-	mXCBProtocols(0),
- 	mXCBDeleteWin(0)
-	#endif
-	{
-
-	if (position.extent.width == 0 || position.extent.height == 0) {
-		position.extent.width = 1600;
-		position.extent.height = 900;
-	}
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	mGLFWWindow = glfwCreateWindow(position.extent.width, position.extent.height, mTitle.c_str(), nullptr, nullptr);
-	if (mGLFWWindow == nullptr) {
-		const char* msg;
-		if (int c = glfwGetError(&msg)) {
-			fprintf_color(Red, stderr, "Failed to create GLFW window (%d): %s\n", c, msg);
-			throw;
-		}
-	}
-	glfwSetWindowUserPointer(mGLFWWindow, this);
-
-	glfwSetWindowPos(mGLFWWindow, position.offset.x, position.offset.y);
-
-	if (glfwRawMouseMotionSupported() == GLFW_TRUE)
-		glfwSetInputMode(mGLFWWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-
-	glfwSetFramebufferSizeCallback(mGLFWWindow, FramebufferResizeCallback);
-	glfwSetWindowPosCallback(mGLFWWindow, WindowPosCallback);
-	glfwSetKeyCallback(mGLFWWindow, KeyCallback);
-	glfwSetCursorPosCallback(mGLFWWindow, CursorPosCallback);
-	glfwSetScrollCallback(mGLFWWindow, ScrollCallback);
-	glfwSetMouseButtonCallback(mGLFWWindow, MouseButtonCallback);
-
-	if (glfwCreateWindowSurface(*instance, mGLFWWindow, nullptr, &mSurface) != VK_SUCCESS) {
-		const char* msg;
-		if (int c = glfwGetError(&msg)) {
-			fprintf_color(Red, stderr, "Failed to create GLFW window surface (%d): %s\n", c, msg);
-			throw;
-		}
-	}
-
-	glfwGetWindowPos(mGLFWWindow, &mClientRect.offset.x, &mClientRect.offset.y);
-	glfwGetWindowSize(mGLFWWindow, (int*)&mClientRect.extent.width, (int*)&mClientRect.extent.height);
-	mWindowedRect = mClientRect;
-}
-Window::Window(Instance* instance, const string& title, VkRect2D position, uint32_t displayIndex)
-	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(nullptr),
-	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mGLFWWindow(nullptr), 
-	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr)
-	#ifdef __linux
-	,mXCBScreen(nullptr),
-	mXCBWindow(0),
-	mXCBProtocols(0),
- 	mXCBDeleteWin(0)
-	#endif
-	{
+	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
 
 	#ifdef __linux
+	mXCBConnection = XCBConnection;
 
-	int screenp = 0;
-	if (!XCBConnection) {
-		XCBConnection = xcb_connect(nullptr, &screenp);
-		if (int err = xcb_connection_has_error(XCBConnection)) {
-			XCBConnection = nullptr;
-			fprintf_color(Red, stderr, "xcb_connect failed: %d\n", err);
-			throw;
-		}
-	}
-
-	xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(XCBConnection));
-	for (int s = screenp; s > 0; s--)
+	xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(mXCBConnection));
+	for (uint32_t i = 0; i < XScreen; i++)
 		xcb_screen_next(&iter);
 	mXCBScreen = iter.data;
-	mXCBWindow = xcb_generate_id(XCBConnection);
+	mXCBWindow = xcb_generate_id(mXCBConnection);
 
-	uint32_t valueList[] { mXCBScreen->black_pixel, 0 };
+	uint32_t valueList[] { 0 };
 	xcb_create_window(
-		XCBConnection,
+		mXCBConnection,
 		XCB_COPY_FROM_PARENT,
 		mXCBWindow,
 		mXCBScreen->root,
@@ -152,11 +64,11 @@ Window::Window(Instance* instance, const string& title, VkRect2D position, uint3
 		0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		mXCBScreen->root_visual,
-		XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK,
+		XCB_CW_EVENT_MASK,
 		valueList);
 
 	xcb_change_property(
-		XCBConnection,
+		mXCBConnection,
 		XCB_PROP_MODE_REPLACE,
 		mXCBWindow,
 		XCB_ATOM_WM_NAME,
@@ -165,42 +77,56 @@ Window::Window(Instance* instance, const string& title, VkRect2D position, uint3
 		title.length(),
 		title.c_str());
 
-	xcb_intern_atom_cookie_t wmDeleteCookie = xcb_intern_atom(XCBConnection, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW");
-	xcb_intern_atom_cookie_t wmProtocolsCookie = xcb_intern_atom(XCBConnection, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS");
-	xcb_intern_atom_reply_t *wmDeleteReply = xcb_intern_atom_reply(XCBConnection, wmDeleteCookie, NULL);
-	xcb_intern_atom_reply_t *wmProtocolsReply = xcb_intern_atom_reply(XCBConnection, wmProtocolsCookie, NULL);
+	xcb_intern_atom_cookie_t wmDeleteCookie = xcb_intern_atom(mXCBConnection, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW");
+	xcb_intern_atom_cookie_t wmProtocolsCookie = xcb_intern_atom(mXCBConnection, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS");
+	xcb_intern_atom_reply_t* wmDeleteReply = xcb_intern_atom_reply(mXCBConnection, wmDeleteCookie, NULL);
+	xcb_intern_atom_reply_t* wmProtocolsReply = xcb_intern_atom_reply(mXCBConnection, wmProtocolsCookie, NULL);
 	mXCBDeleteWin = wmDeleteReply->atom;
 	mXCBProtocols = wmProtocolsReply->atom;
-	xcb_change_property(XCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, wmProtocolsReply->atom, 4, 32, 1, &wmDeleteReply->atom);
+	xcb_change_property(mXCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, wmProtocolsReply->atom, 4, 32, 1, &wmDeleteReply->atom);
 
-	xcb_map_window(XCBConnection, mXCBWindow);
-	xcb_flush(XCBConnection);
+	xcb_map_window(mXCBConnection, mXCBWindow);
+	xcb_flush(mXCBConnection);
 
 	VkXcbSurfaceCreateInfoKHR info = {};
 	info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-	info.connection = XCBConnection;
+	info.connection = mXCBConnection;
 	info.window = mXCBWindow;
 	ThrowIfFailed(vkCreateXcbSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
+
+	#else
+
+	static_assert(false, "Not implemented!");
 
 	#endif
 }
 Window::~Window() {
 	#ifdef __linux
- 	xcb_destroy_window(XCBConnection, mXCBWindow);
+ 	xcb_destroy_window(mXCBConnection, mXCBWindow);
+	#else
+	static_assert(false, "Not implemented!");
 	#endif
 	DestroySwapchain();
 	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
-	if (mGLFWWindow) glfwDestroyWindow(mGLFWWindow);
 }
 
 void Window::Title(const string& title) {
-	if (!mGLFWWindow) return;
-	glfwSetWindowTitle(mGLFWWindow, title.c_str());
+	#ifdef __linux
+	xcb_change_property(
+		mXCBConnection,
+		XCB_PROP_MODE_REPLACE,
+		mXCBWindow,
+		XCB_ATOM_WM_NAME,
+		XCB_ATOM_STRING,
+		8,
+		title.length(),
+		title.c_str());
+	xcb_flush(mXCBConnection);
+	#else
+	static_assert(false, "Not implemented!");
+	#endif
+
 	mTitle = title;
-}
-void Window::Icon(GLFWimage* icon){
-	if (!mGLFWWindow) return;
-	glfwSetWindowIcon(mGLFWWindow, 1, icon);
 }
 
 VkImage Window::AcquireNextImage() {
@@ -231,89 +157,9 @@ void Window::Present(vector<VkSemaphore> waitSemaphores) {
 	vkQueuePresentKHR(mDevice->PresentQueue(), &presentInfo);
 }
 
-bool Window::ShouldClose() const{
-	if (mGLFWWindow)
-		return glfwWindowShouldClose(mGLFWWindow);
-	
-	#if __linux
-	if (XCBConnection) {
-		bool close = false;
-		xcb_generic_event_t* event = xcb_poll_for_event(XCBConnection);
-		if (!event) return false;
-
-		switch (event->response_type & ~0x80) {
-		case XCB_CLIENT_MESSAGE: {
-			close = ((xcb_client_message_event_t *)event)->data.data32[0] == mXCBDeleteWin;
-			break;
-		}
-		}
-		free(event);
-
-		return close;
-	}
-	#endif
-
-	return false;
-}
-
-GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
-	int nmonitors, i;
-	int wx, wy, ww, wh;
-	int mx, my, mw, mh;
-	int overlap, bestoverlap;
-	GLFWmonitor* bestmonitor;
-	GLFWmonitor** monitors;
-
-	bestoverlap = 0;
-	bestmonitor = NULL;
-
-	glfwGetWindowPos(mGLFWWindow, &wx, &wy);
-	glfwGetWindowSize(mGLFWWindow, &ww, &wh);
-	monitors = glfwGetMonitors(&nmonitors);
-
-	for (i = 0; i < nmonitors; i++) {
-		const GLFWvidmode* modei = glfwGetVideoMode(monitors[i]);
-		glfwGetMonitorPos(monitors[i], &mx, &my);
-		mw = modei->width;
-		mh = modei->height;
-
-		overlap =
-			max(0, min(wx + ww, mx + mw) - max(wx, mx)) *
-			max(0, min(wy + wh, my + mh) - max(wy, my));
-
-		if (bestoverlap < overlap) {
-			bestoverlap = overlap;
-			bestmonitor = monitors[i];
-			*mode = modei;
-		}
-	}
-
-	return bestmonitor;
-}
 
 void Window::Fullscreen(bool fs) {
-	if (!mGLFWWindow) return;
-	if (fs) {
-		mWindowedRect = mClientRect;
-
-		const GLFWvidmode* mode;
-		GLFWmonitor* monitor = GetCurrentMonitor(&mode);
-
-		glfwSetWindowAttrib(mGLFWWindow, GLFW_RED_BITS, mode->redBits);
-		glfwSetWindowAttrib(mGLFWWindow, GLFW_GREEN_BITS, mode->greenBits);
-		glfwSetWindowAttrib(mGLFWWindow, GLFW_BLUE_BITS, mode->blueBits);
-		glfwSetWindowAttrib(mGLFWWindow, GLFW_REFRESH_RATE, mode->refreshRate);
-		glfwSetWindowMonitor(mGLFWWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-
-		mFullscreen = true;
-	} else {
-		glfwSetWindowMonitor(mGLFWWindow, nullptr, 0, 0, mWindowedRect.extent.width, mWindowedRect.extent.height, GLFW_DONT_CARE);
-
-		glfwSetWindowPos(mGLFWWindow, mWindowedRect.offset.x, mWindowedRect.offset.y);
-		glfwSetWindowSize(mGLFWWindow, mWindowedRect.extent.width, mWindowedRect.extent.height);
-
-		mFullscreen = false;
-	}
+	// TODO
 }
 
 void Window::CreateSwapchain(::Device* device) {
@@ -369,14 +215,12 @@ void Window::CreateSwapchain(::Device* device) {
 
 	// find the best present mode
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	//if (!mGLFWWindow || !mFullscreen) {
-		for (const auto& availablePresentMode : presentModes)
-			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-				presentMode = availablePresentMode;
-				break;
-			} else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-				presentMode = availablePresentMode;
-	//}
+	for (const auto& availablePresentMode : presentModes)
+		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+			presentMode = availablePresentMode;
+			break;
+		} else if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
+			presentMode = availablePresentMode;
 
 	// find the preferrable number of back buffers
 	mImageCount = capabilities.minImageCount + 1;

@@ -116,7 +116,7 @@ bool TerrainSystem::Init(Scene* scene) {
 void TerrainSystem::Update() {
 	float tod = mScene->Environment()->TimeOfDay();
 	tod += mScene->Instance()->DeltaTime() * .000555555555f; // 30min days
-	if (mInput->KeyDown(GLFW_KEY_T)) {
+	if (mInput->KeyDown(KEY_T)) {
 		tod += mScene->Instance()->DeltaTime() * .075f; // zoooom
 		if (tod > 1) tod -= 1;
 	}
@@ -132,7 +132,7 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 	Gizmos* gizmos = mScene->Gizmos();
 
-	bool change = mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
+	bool change = mInput->KeyDownFirst(MOUSE_LEFT);
 
 	// manipulate selection
 	Light* selectedLight = nullptr;
@@ -157,7 +157,7 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		}
 
 		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+		if (mInput->KeyDown(KEY_SHIFT)) {
 			quaternion r = mSelected->WorldRotation();
 			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);

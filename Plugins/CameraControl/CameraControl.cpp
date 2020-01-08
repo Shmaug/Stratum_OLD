@@ -53,7 +53,7 @@ bool CameraControl::Init(Scene* scene) {
 }
 
 void CameraControl::Update() {
-	if (mInput->KeyDownFirst(GLFW_KEY_F1))
+	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	
 	Camera* c = mCameras[0];
@@ -68,18 +68,18 @@ void CameraControl::Update() {
 		mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
 	}
 
-	if (mInput->KeyDownFirst(GLFW_KEY_O))
+	if (mInput->KeyDownFirst(KEY_O))
 		c->Orthographic(!c->Orthographic());
 
-	if (mInput->MouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
+	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+		if (mInput->KeyDown(KEY_SHIFT)) {
 			md.x = -md.x;
 			md = md * .0005f * mCameraDistance;
 		} else
 			md = float3(md.y, md.x, 0) * .005f;
 
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
+		if (mInput->KeyDown(KEY_SHIFT))
 			// translate camera
 			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
 		else {

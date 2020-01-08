@@ -1,9 +1,8 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
-
 #ifdef __linux
 #include <xcb/xcb.h>
+#include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xcb.h>
 #endif
 
@@ -27,8 +26,6 @@ public:
 	inline std::string Title() const { return mTitle; }
 	ENGINE_EXPORT void Title(const std::string& title);
 
-	ENGINE_EXPORT void Icon(GLFWimage* icon);
-
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
 	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
 	inline VkImageView BackBufferView(uint32_t i) const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[i].mSwapchainImageView; }
@@ -37,29 +34,26 @@ public:
 	inline VkSurfaceKHR Surface() const { return mSurface; }
 	inline VkSurfaceFormatKHR Format() const { return mFormat; }
 
-
-	ENGINE_EXPORT bool ShouldClose() const;
 	inline ::Device* Device() const { return mDevice; }
-
-	inline operator GLFWwindow*() { return mGLFWWindow; }
 
 private:
 	friend class Camera;
 	friend class Stratum;
 	friend class Instance;
-	/// Uses GLFW to create a window
-	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position);
-	/// Uses XCB to create a window
-	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, uint32_t displayIndex);
+
+	#ifdef __linux
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen);
+	#else
+	static_assert(false, "Not implemented!");
+	#endif
+
 	ENGINE_EXPORT VkImage AcquireNextImage();
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
-	ENGINE_EXPORT static void WindowPosCallback(GLFWwindow* window, int x, int y);
-	ENGINE_EXPORT static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
-	ENGINE_EXPORT static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-	ENGINE_EXPORT static void CursorPosCallback(GLFWwindow* window, double x, double y);
-	ENGINE_EXPORT static void ScrollCallback(GLFWwindow* window, double x, double y);
-	ENGINE_EXPORT static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+	ENGINE_EXPORT void ResizeCallback();
+	ENGINE_EXPORT void KeyCallback(KeyCode key, bool down);
+	ENGINE_EXPORT void CursorPosCallback(float x, float y);
+	ENGINE_EXPORT void ScrollCallback(float x, float y);
 
 	MouseKeyboardInput* mInput;
 
@@ -73,13 +67,13 @@ private:
 	VkPhysicalDevice mPhysicalDevice;
 
 	#ifdef __linux
+	xcb_connection_t* mXCBConnection;
 	xcb_screen_t* mXCBScreen;
 	xcb_window_t mXCBWindow;
 	xcb_atom_t mXCBProtocols;
 	xcb_atom_t mXCBDeleteWin;
 	#endif
 
-	GLFWwindow* mGLFWWindow;
 	VkSurfaceKHR mSurface;
 	VkSwapchainKHR mSwapchain;
 
@@ -103,6 +97,4 @@ private:
 
 	ENGINE_EXPORT void CreateSwapchain(::Device* device);
 	ENGINE_EXPORT void DestroySwapchain();
-
-	ENGINE_EXPORT GLFWmonitor* GetCurrentMonitor(const GLFWvidmode** mode) const;
 };

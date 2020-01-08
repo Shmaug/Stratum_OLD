@@ -1,5 +1,11 @@
 #pragma once
 
+#ifdef __linux
+#include <xcb/xcb.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_xcb.h>
+#endif
+
 #include <Util/Util.hpp>
 
 class Window;
@@ -9,10 +15,9 @@ class Instance {
 public:
 	struct DisplayCreateInfo {
 		int mDevice;
-
 		VkRect2D mWindowPosition;
-		
-		int mDirectDisplay;
+		std::string mXDisplay;
+		int mXScreen;
 	};
 
 	ENGINE_EXPORT ~Instance();
@@ -39,9 +44,8 @@ public:
 
 private:
 	friend class Stratum;
-	ENGINE_EXPORT Instance(bool supportDirectDisplay, bool useGLFW);
+	ENGINE_EXPORT Instance();
 
-	// Asks GLFW if any windows should be closed, and polls GLFW events. Also computes DeltaTime and TotalTime
 	ENGINE_EXPORT bool PollEvents();
 	ENGINE_EXPORT void AdvanceFrame();
 
@@ -57,4 +61,8 @@ private:
 	std::chrono::high_resolution_clock::time_point mLastFrame;
 	float mTotalTime;
 	float mDeltaTime;
+
+	#ifdef __linux
+	std::unordered_map<std::string, xcb_connection_t*> mXCBConnections;
+	#endif
 };
