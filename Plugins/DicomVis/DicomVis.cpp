@@ -66,16 +66,6 @@ bool DicomVis::Init(Scene* scene) {
 	mScene = scene;
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
-	// set window icon
-	int comp;
-	GLFWimage icon;
-	icon.pixels = stbi_load("Assets/DicomVis.png", &icon.width, &icon.height, &comp, 4);
-	for (uint32_t i = 0; i < mScene->Instance()->WindowCount(); i++) {
-		mScene->Instance()->GetWindow(i)->Icon(&icon);
-		mScene->Instance()->GetWindow(i)->Title("DicomVis");
-	}
-	stbi_image_free(icon.pixels);
-
 	shared_ptr<Object> player = make_shared<Object>("Player");
 	mScene->AddObject(player);
 	mPlayer = player.get();
@@ -210,15 +200,15 @@ void DicomVis::Update() {
 
 	#pragma region apply movement force
 	float3 move = 0;
-	if (mInput->KeyDown(GLFW_KEY_W)) move.z += 1;
-	if (mInput->KeyDown(GLFW_KEY_S)) move.z -= 1;
-	if (mInput->KeyDown(GLFW_KEY_D)) move.x += 1;
-	if (mInput->KeyDown(GLFW_KEY_A)) move.x -= 1;
+	if (mInput->KeyDown(KEY_W)) move.z += 1;
+	if (mInput->KeyDown(KEY_S)) move.z -= 1;
+	if (mInput->KeyDown(KEY_D)) move.x += 1;
+	if (mInput->KeyDown(KEY_A)) move.x -= 1;
 	move = (mFlying ? mMainCamera->WorldRotation() : mPlayer->WorldRotation()) * move;
 	if (dot(move, move) > .001f) {
 		move = normalize(move);
 		move *= 2.5f;
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT))
+		if (mInput->KeyDown(KEY_SHIFT))
 			move *= 2.5f;
 	}
 	float3 mf = 5 * (move - mPlayerVelocity) * mScene->Instance()->DeltaTime();
@@ -235,23 +225,23 @@ void DicomVis::Update() {
 		p.y = .5f;
 		mPlayerVelocity.y = 0;
 
-		if (!mFlying && mInput->KeyDown(GLFW_KEY_SPACE))
+		if (!mFlying && mInput->KeyDown(KEY_SPACE))
 			mPlayerVelocity.y += 4.f;
 
 	}
 	mPlayer->LocalPosition(p);
 	#pragma endregion
 
-	if (mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_RIGHT))
+	if (mInput->KeyDownFirst(MOUSE_RIGHT))
 		mInput->LockMouse(!mInput->LockMouse());
-	if (mInput->KeyDownFirst(GLFW_KEY_F1))
+	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
-	if (mInput->KeyDownFirst(GLFW_KEY_F2))
+	if (mInput->KeyDownFirst(KEY_F2))
 		mFlying = !mFlying;
-	if (mInput->KeyDownFirst(GLFW_KEY_F3))
+	if (mInput->KeyDownFirst(KEY_F3))
 		mPrintPerformance = !mPrintPerformance;
 
-	if (mInput->KeyDownFirst(GLFW_KEY_F9))
+	if (mInput->KeyDownFirst(KEY_F9))
 		mMainCamera->Orthographic(!mMainCamera->Orthographic());
 
 	if (mMainCamera->Orthographic()) {
@@ -309,7 +299,7 @@ void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 	Gizmos* gizmos = mScene->Gizmos();
 
-	bool change = mInput->MouseButtonDownFirst(GLFW_MOUSE_BUTTON_LEFT);
+	bool change = mInput->KeyDownFirst(MOUSE_LEFT);
 
 	// manipulate selection
 	Light* selectedLight = nullptr;
@@ -334,7 +324,7 @@ void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		}
 
 		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
-		if (mInput->KeyDown(GLFW_KEY_LEFT_SHIFT)) {
+		if (mInput->KeyDown(KEY_SHIFT)) {
 			quaternion r = mSelected->WorldRotation();
 			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);

@@ -53,30 +53,25 @@ set_target_properties(Engine Stratum ShaderCompiler PROPERTIES RUNTIME_OUTPUT_DI
 set_target_properties(Engine Stratum ShaderCompiler PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin/")
 set_target_properties(Engine Stratum ShaderCompiler PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib/")
 
-target_compile_definitions(Engine PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
-target_compile_definitions(ShaderCompiler PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
-target_compile_definitions(Stratum PUBLIC -DENGINE_CORE -DGLFW_INCLUDE_VULKAN)
+target_compile_definitions(Engine PUBLIC -DENGINE_CORE)
+target_compile_definitions(ShaderCompiler PUBLIC -DENGINE_CORE)
+target_compile_definitions(Stratum PUBLIC -DENGINE_CORE)
 
 target_include_directories(Stratum PUBLIC
 	"${STRATUM_HOME}"
-	"${STRATUM_HOME}/ThirdParty/assimp/include"
-	"${STRATUM_HOME}/ThirdParty/glfw/include" )
+	"${STRATUM_HOME}/ThirdParty/assimp/include" )
 target_include_directories(Engine PUBLIC
 	"${STRATUM_HOME}"
-	"${STRATUM_HOME}/ThirdParty/assimp/include"
-	"${STRATUM_HOME}/ThirdParty/glfw/include" )
+	"${STRATUM_HOME}/ThirdParty/assimp/include" )
 target_include_directories(ShaderCompiler PUBLIC
 	"${STRATUM_HOME}"
 	"${STRATUM_HOME}/ThirdParty/shaderc/include"
 	"${STRATUM_HOME}/ThirdParty/shaderc/third_party/spirv-cross/include")
 
 if(WIN32)
-	target_include_directories(Stratum PUBLIC
-		"$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/assimp/include" "${STRATUM_HOME}/ThirdParty/glfw/include" )
-	target_include_directories(Engine PUBLIC 
-		"$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/assimp/include" "${STRATUM_HOME}/ThirdParty/glfw/include" )
-	target_include_directories(ShaderCompiler PUBLIC 
-		"$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/SPIRV-Cross/include")
+	target_include_directories(Stratum PUBLIC "$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/assimp/include")
+	target_include_directories(Engine PUBLIC "$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/assimp/include")
+	target_include_directories(ShaderCompiler PUBLIC "$ENV{VULKAN_SDK}/include" "${STRATUM_HOME}/ThirdParty/SPIRV-Cross/include")
 
 	target_compile_definitions(Stratum PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
 	target_compile_definitions(Engine PUBLIC -DWINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS)
@@ -91,7 +86,6 @@ if(WIN32)
 	target_link_libraries(Engine
 		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"${STRATUM_HOME}/ThirdParty/glfw/lib/glfw3.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
 
@@ -99,7 +93,6 @@ if(WIN32)
 		"Ws2_32.lib"
 		"${PROJECT_BINARY_DIR}/lib/Engine.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"${STRATUM_HOME}/ThirdParty/glfw/lib/glfw3.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -131,7 +124,6 @@ else()
 		"libvulkan.so.1"
 		"libX11.so"
 		"libXrandr.so"
-		"${STRATUM_HOME}/ThirdParty/glfw/lib64/libglfw3.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libassimp.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
@@ -147,10 +139,6 @@ if (${ENABLE_DEBUG_LAYERS})
 	target_compile_definitions(Stratum PUBLIC -DENABLE_DEBUG_LAYERS)
 	target_compile_definitions(Engine PUBLIC -DENABLE_DEBUG_LAYERS)
 endif()
-
-# GLFW defines
-target_compile_definitions(Engine PUBLIC -DGLFW_INCLUDE_VULKAN)
-target_compile_definitions(Stratum PUBLIC -DGLFW_INCLUDE_VULKAN)
 
 # Copy config file
 configure_file("config.json" "${PROJECT_BINARY_DIR}/bin/config.json" COPYONLY)

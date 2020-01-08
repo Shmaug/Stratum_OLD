@@ -17,10 +17,3 @@ For Assimp, enable `ASSIMP_BUILD_ZLIB` unless  zlib is already installed. Also m
 library suffixes (namely for Assimp).
 Builduing any testing, examples, and any binary tools for the dependencies is not required and disabling them
 might reduce compilation time for the dependencies.
-
-## TODO
-
-- Proper scene BVH
-- Fix multi-gpu swapchain creation on Linux
-- Linearly Transformed Cosine based area lights
-- Faster unordered_map?

@@ -112,16 +112,8 @@ public:
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
 	{
-		bool useglfw = false;
-		bool directMode = false;
-		for (auto& d : config->mDisplays)
-			if (d.mDirectDisplay >= 0)
-				directMode = true;
-			else
-				useglfw = true;
-
 		printf("Initializing...\n");
-		mInstance = new Instance(directMode, useglfw);
+		mInstance = new Instance();
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
 		mAssetManager = new AssetManager(mInstance);
@@ -236,11 +228,13 @@ bool ReadConfig(const string& file, Configuration& config) {
 		for (const auto& d : displays.array_items()) {
 			auto& device = d["device"];
 			auto& rect = d["window_rect"];
-			auto& direct = d["direct_display"];
+			auto& disp = d["x_display"];
+			auto& scrn = d["x_screen"];
 
 			Instance::DisplayCreateInfo info = {};
 			info.mDevice = device.is_number() ? device.int_value() : -1;
-			info.mDirectDisplay = direct.is_number() ? direct.int_value() : -1;
+			info.mXDisplay = disp.is_string() ? disp.string_value() : "";
+			info.mXScreen = disp.is_number() ? disp.int_value() : -1;
 			if (rect.is_array() && rect.array_items().size() == 4 &&
 				rect.array_items()[0].is_number() &&
 				rect.array_items()[1].is_number() &&
@@ -276,7 +270,6 @@ int main(int argc, char* argv[]) {
 			config.mDisplays.push_back({});
 			config.mDisplays[0].mDevice = 0;
 			config.mDisplays[0].mWindowPosition = { { 160, 90 }, { 1600, 900 } };
-			config.mDisplays[0].mDirectDisplay = -1;
 		}
 		if (argc > 2)
 			config.mDebugMessenger = strcmp(argv[2], "-nodebug") != 0;

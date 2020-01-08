@@ -5,41 +5,17 @@
 
 using namespace std;
 
-Instance::Instance(bool supportDirectDisplay, bool useGLFW) : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {
-	if (useGLFW) {
-		if (glfwInit() == GLFW_FALSE) {
-			const char* msg;
-			glfwGetError(&msg);
-			fprintf_color(BoldRed, stderr, "Failed to initialize GLFW: %s\n", msg);
-			throw;
-		}
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		printf("Initialized glfw.\n");
-	}
-
+Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {
 	set<string> instanceExtensions;
 	#ifdef ENABLE_DEBUG_LAYERS
 	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	#endif
 
-	if (useGLFW) {
-		// request GLFW extensions
-		uint32_t glfwExtensionCount = 0;
-		printf("Requesting glfw extensions... ");
-		const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-		printf("Done.\n");
-		for (uint32_t i = 0; i < glfwExtensionCount; i++)
-			instanceExtensions.insert(glfwExtensions[i]);
-	}
-	
 	instanceExtensions.insert(VK_KHR_SURFACE_EXTENSION_NAME);
-	if (supportDirectDisplay) {
-		instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
-		instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
-		#ifdef __linux
-		instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-		#endif
-	}
+	instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
+	#ifdef __linux
+	instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+	#endif
 
 	vector<const char*> validationLayers;
 	#ifdef ENABLE_DEBUG_LAYERS
@@ -92,7 +68,10 @@ Instance::Instance(bool supportDirectDisplay, bool useGLFW) : mInstance(VK_NULL_
 	printf("Done.\n");
 }
 Instance::~Instance() {
-	glfwTerminate();
+	#ifdef __linux
+	for (auto& c : mXCBConnections)
+		xcb_disconnect(c.second);
+	#endif
 
 	for (Window* w : mWindows)
 		safe_delete(w);
@@ -154,7 +133,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	mMaxFramesInFlight = 0xFFFF;
 
 	// create windows
-	for (const auto& it : displays) {
+	for (auto& it : displays) {
 		uint32_t deviceIndex = it.mDevice;
 		VkPhysicalDevice physicalDevice = GetPhysicalDevice(deviceIndex, deviceExtensions);
 		while (physicalDevice == VK_NULL_HANDLE) {
@@ -169,13 +148,24 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 		if (physicalDevice == VK_NULL_HANDLE) continue; // could not find any suitable devices...
 
 		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
-		
-		Window* w;
-		if (it.mDirectDisplay >= 0)
-			w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mDirectDisplay);
-		else
-			w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition);
-		
+
+		#ifdef __linux
+		int screenp = 0;
+		xcb_connection_t* conn = nullptr;
+		if (!mXCBConnections.count(it.mXDisplay)) {
+			conn = xcb_connect(it.mXDisplay.data(), &screenp);
+			mXCBConnections.emplace(it.mXDisplay, conn);
+			if (int err = xcb_connection_has_error(conn)) {
+				mXCBConnections.erase(it.mXDisplay);
+				fprintf_color(Red, stderr, "xcb_connect failed: %d\n", err);
+				throw;
+			}
+		}
+		Window* w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition, conn, it.mXScreen >= 0 ? it.mXScreen : screenp);
+		#else
+		static_assert(false, "Not implemented!");
+		#endif
+
 		if (!mDevices[deviceIndex]) {
 			uint32_t gq, pq;
 			Device::FindQueueFamilies(physicalDevice, w->Surface(), gq, pq);
@@ -204,10 +194,28 @@ bool Instance::PollEvents() {
 	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
 	mLastFrame = t1;
 
-	for (const auto& w : mWindows)
-		if (w->ShouldClose())
-			return false;
-	glfwPollEvents();
+	#if __linux
+	for (auto& c : mXCBConnections) {
+		xcb_generic_event_t* event = xcb_poll_for_event(c.second);
+		if (!event) return true;
+
+		xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
+
+		switch (event->response_type & ~0x80) {
+		case XCB_CLIENT_MESSAGE: {
+			for (const auto& w : mWindows)
+				if (w->mXCBConnection == c.second && cm->data.data32[0] == w->mXCBDeleteWin)
+					return false;
+			break;
+		}
+		}
+
+		free(event);
+	}
+	#else
+	static_assert(false, "Not implemented!");
+	#endif
+
 	return true;
 }
 

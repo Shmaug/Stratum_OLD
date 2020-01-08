@@ -10,10 +10,7 @@ MouseKeyboardInput::MouseKeyboardInput(){
 void MouseKeyboardInput::LockMouse(bool l) {
 	mLockMouse = l;
 
-	if (mLockMouse)
-		glfwSetInputMode(*mLastWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	else
-		glfwSetInputMode(*mLastWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	// TODO: lock mouse
 }
 
 void MouseKeyboardInput::NextFrame() {
