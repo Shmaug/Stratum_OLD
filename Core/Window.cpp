@@ -9,6 +9,10 @@
 
 using namespace std;
 
+#ifdef __linux
+xcb_connection_t* XCBConnection = nullptr;
+#endif
+
 void Window::WindowPosCallback(GLFWwindow* window, int x, int y) {
 	Window* win = (Window*)glfwGetWindowUserPointer(window);
 	glfwGetWindowPos(window, &win->mClientRect.offset.x, &win->mClientRect.offset.y);
@@ -57,8 +61,11 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mPhysicalDevice(VK_NULL_HANDLE),
 	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr)
-	#ifndef WINDOWS
-	, mXDisplay(nullptr)
+	#ifdef __linux
+	,mXCBScreen(nullptr),
+	mXCBWindow(0),
+	mXCBProtocols(0),
+ 	mXCBDeleteWin(0)
 	#endif
 	{
 
@@ -68,30 +75,29 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	mWindow = glfwCreateWindow(position.extent.width, position.extent.height, mTitle.c_str(), nullptr, nullptr);
-	if (mWindow == nullptr) {
+	mGLFWWindow = glfwCreateWindow(position.extent.width, position.extent.height, mTitle.c_str(), nullptr, nullptr);
+	if (mGLFWWindow == nullptr) {
 		const char* msg;
 		if (int c = glfwGetError(&msg)) {
 			fprintf_color(Red, stderr, "Failed to create GLFW window (%d): %s\n", c, msg);
 			throw;
 		}
 	}
+	glfwSetWindowUserPointer(mGLFWWindow, this);
 
-	glfwSetWindowPos(mWindow, position.offset.x, position.offset.y);
-
-	glfwSetWindowUserPointer(mWindow, this);
+	glfwSetWindowPos(mGLFWWindow, position.offset.x, position.offset.y);
 
 	if (glfwRawMouseMotionSupported() == GLFW_TRUE)
-		glfwSetInputMode(mWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+		glfwSetInputMode(mGLFWWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 
-	glfwSetFramebufferSizeCallback(mWindow, FramebufferResizeCallback);
-	glfwSetWindowPosCallback(mWindow, WindowPosCallback);
-	glfwSetKeyCallback(mWindow, KeyCallback);
-	glfwSetCursorPosCallback(mWindow, CursorPosCallback);
-	glfwSetScrollCallback(mWindow, ScrollCallback);
-	glfwSetMouseButtonCallback(mWindow, MouseButtonCallback);
+	glfwSetFramebufferSizeCallback(mGLFWWindow, FramebufferResizeCallback);
+	glfwSetWindowPosCallback(mGLFWWindow, WindowPosCallback);
+	glfwSetKeyCallback(mGLFWWindow, KeyCallback);
+	glfwSetCursorPosCallback(mGLFWWindow, CursorPosCallback);
+	glfwSetScrollCallback(mGLFWWindow, ScrollCallback);
+	glfwSetMouseButtonCallback(mGLFWWindow, MouseButtonCallback);
 
-	if (glfwCreateWindowSurface(*instance, mWindow, nullptr, &mSurface) != VK_SUCCESS) {
+	if (glfwCreateWindowSurface(*instance, mGLFWWindow, nullptr, &mSurface) != VK_SUCCESS) {
 		const char* msg;
 		if (int c = glfwGetError(&msg)) {
 			fprintf_color(Red, stderr, "Failed to create GLFW window surface (%d): %s\n", c, msg);
@@ -99,106 +105,102 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 		}
 	}
 
-	glfwGetWindowPos(mWindow, &mClientRect.offset.x, &mClientRect.offset.y);
-	glfwGetWindowSize(mWindow, (int*)&mClientRect.extent.width, (int*)&mClientRect.extent.height);
+	glfwGetWindowPos(mGLFWWindow, &mClientRect.offset.x, &mClientRect.offset.y);
+	glfwGetWindowSize(mGLFWWindow, (int*)&mClientRect.extent.width, (int*)&mClientRect.extent.height);
 	mWindowedRect = mClientRect;
 }
-Window::Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex)
-	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(""), mSwapchainSize({}), mFullscreen(true), mClientRect({}), mWindowedRect({}), mInput(nullptr),
-	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mWindow(nullptr), mPhysicalDevice(device),
-	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
-	
-	VkDisplayKHR display = VK_NULL_HANDLE;
-	VkDisplayModeKHR displayMode = VK_NULL_HANDLE;
-	
-	uint32_t displayPropertyCount;
-	vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, nullptr);
-	vector<VkDisplayPropertiesKHR> displayProperties(displayPropertyCount);
-	vkGetPhysicalDeviceDisplayPropertiesKHR(device, &displayPropertyCount, displayProperties.data());
-	
-	uint32_t biggest = 0;
-	for (uint32_t i = 0; i < displayPropertyCount; i++){
-		uint32_t modeCount;
-		vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, nullptr);
-		vector<VkDisplayModePropertiesKHR> modes(modeCount);
-		vkGetDisplayModePropertiesKHR(device, displayProperties[i].display, &modeCount, modes.data());
+Window::Window(Instance* instance, const string& title, VkRect2D position, uint32_t displayIndex)
+	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(nullptr),
+	mSwapchain(VK_NULL_HANDLE), mImageCount(0), mFormat({}), mGLFWWindow(nullptr), 
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr)
+	#ifdef __linux
+	,mXCBScreen(nullptr),
+	mXCBWindow(0),
+	mXCBProtocols(0),
+ 	mXCBDeleteWin(0)
+	#endif
+	{
 
-		for (uint32_t j = 0; j < modeCount; j++){
-			if (modes[j].parameters.visibleRegion.width > biggest || modes[j].parameters.visibleRegion.height > biggest){
-				biggest = max(modes[j].parameters.visibleRegion.width, modes[j].parameters.visibleRegion.height);
-				displayMode = modes[j].displayMode;
-				display = displayProperties[i].display;
-			}
+	#ifdef __linux
+
+	int screenp = 0;
+	if (!XCBConnection) {
+		XCBConnection = xcb_connect(nullptr, &screenp);
+		if (int err = xcb_connection_has_error(XCBConnection)) {
+			XCBConnection = nullptr;
+			fprintf_color(Red, stderr, "xcb_connect failed: %d\n", err);
+			throw;
 		}
 	}
-	if (display == VK_NULL_HANDLE){
-		fprintf_color(Red, stderr, "Failed to find a display.\n");
-		throw;
-	}
 
-	uint32_t displayPlaneCount;
-	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(device, &displayPlaneCount, nullptr);
-	vector<VkDisplayPlanePropertiesKHR> displayPlanes(displayPlaneCount);
-	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(device, &displayPlaneCount, displayPlanes.data());
+	xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(XCBConnection));
+	for (int s = screenp; s > 0; s--)
+		xcb_screen_next(&iter);
+	mXCBScreen = iter.data;
+	mXCBWindow = xcb_generate_id(XCBConnection);
 
-	uint32_t planeIndex = 0;
-	for(uint32_t i = 0; i < displayPlaneCount; i++) {
-		uint32_t displayCount = 32;
-		vector<VkDisplayKHR> displays(displayCount);
-		vkGetDisplayPlaneSupportedDisplaysKHR(device, i, &displayCount, displays.data());
+	uint32_t valueList[] { mXCBScreen->black_pixel, 0 };
+	xcb_create_window(
+		XCBConnection,
+		XCB_COPY_FROM_PARENT,
+		mXCBWindow,
+		mXCBScreen->root,
+		position.offset.x,
+		position.offset.y,
+		position.extent.width,
+		position.extent.height,
+		0,
+		XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		mXCBScreen->root_visual,
+		XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK,
+		valueList);
 
-		// Find a display that matches the current plane
-		planeIndex = UINT32_MAX;
-		for (uint32_t j = 0; j < displayCount; j++) {
-			if(display == displays[j]) {
-				planeIndex = i;
-				break;
-			}
-		}
-		if (planeIndex != UINT32_MAX)
-			break;
-	}
+	xcb_change_property(
+		XCBConnection,
+		XCB_PROP_MODE_REPLACE,
+		mXCBWindow,
+		XCB_ATOM_WM_NAME,
+		XCB_ATOM_STRING,
+		8,
+		title.length(),
+		title.c_str());
 
-	VkDisplayPlaneCapabilitiesKHR planeCapabilities;
-	vkGetDisplayPlaneCapabilitiesKHR(device, displayMode, planeIndex, &planeCapabilities);
+	xcb_intern_atom_cookie_t wmDeleteCookie = xcb_intern_atom(XCBConnection, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW");
+	xcb_intern_atom_cookie_t wmProtocolsCookie = xcb_intern_atom(XCBConnection, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS");
+	xcb_intern_atom_reply_t *wmDeleteReply = xcb_intern_atom_reply(XCBConnection, wmDeleteCookie, NULL);
+	xcb_intern_atom_reply_t *wmProtocolsReply = xcb_intern_atom_reply(XCBConnection, wmProtocolsCookie, NULL);
+	mXCBDeleteWin = wmDeleteReply->atom;
+	mXCBProtocols = wmProtocolsReply->atom;
+	xcb_change_property(XCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, wmProtocolsReply->atom, 4, 32, 1, &wmDeleteReply->atom);
 
-	mSwapchainSize = planeCapabilities.maxDstExtent;
+	xcb_map_window(XCBConnection, mXCBWindow);
+	xcb_flush(XCBConnection);
 
-	VkDisplaySurfaceCreateInfoKHR info = {};
-	info.sType = VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR;
-	if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR)
-		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR;
-	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR)
-		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
-	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR)
-		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR;
-	else if (planeCapabilities.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR)
-		info.alphaMode = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
-	info.transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-	info.planeIndex = planeIndex;
-	info.planeStackIndex = displayPlanes[planeIndex].currentStackIndex;
-	info.globalAlpha = 1.f;
-	info.imageExtent = mSwapchainSize;
-	info.displayMode = displayMode;
-	ThrowIfFailed(vkCreateDisplayPlaneSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateDisplayPlaneSurfaceKHR failed!");
+	VkXcbSurfaceCreateInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+	info.connection = XCBConnection;
+	info.window = mXCBWindow;
+	ThrowIfFailed(vkCreateXcbSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
+
+	#endif
 }
 Window::~Window() {
-	#ifndef WINDOWS
-	if (mXDisplay) x11::XCloseDisplay(mXDisplay);
+	#ifdef __linux
+ 	xcb_destroy_window(XCBConnection, mXCBWindow);
 	#endif
 	DestroySwapchain();
 	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
-	if (mWindow) glfwDestroyWindow(mWindow);
+	if (mGLFWWindow) glfwDestroyWindow(mGLFWWindow);
 }
 
 void Window::Title(const string& title) {
-	if (!mWindow) return;
-	glfwSetWindowTitle(mWindow, title.c_str());
+	if (!mGLFWWindow) return;
+	glfwSetWindowTitle(mGLFWWindow, title.c_str());
 	mTitle = title;
 }
 void Window::Icon(GLFWimage* icon){
-	if (!mWindow) return;
-	glfwSetWindowIcon(mWindow, 1, icon);
+	if (!mGLFWWindow) return;
+	glfwSetWindowIcon(mGLFWWindow, 1, icon);
 }
 
 VkImage Window::AcquireNextImage() {
@@ -229,6 +231,31 @@ void Window::Present(vector<VkSemaphore> waitSemaphores) {
 	vkQueuePresentKHR(mDevice->PresentQueue(), &presentInfo);
 }
 
+bool Window::ShouldClose() const{
+	if (mGLFWWindow)
+		return glfwWindowShouldClose(mGLFWWindow);
+	
+	#if __linux
+	if (XCBConnection) {
+		bool close = false;
+		xcb_generic_event_t* event = xcb_poll_for_event(XCBConnection);
+		if (!event) return false;
+
+		switch (event->response_type & ~0x80) {
+		case XCB_CLIENT_MESSAGE: {
+			close = ((xcb_client_message_event_t *)event)->data.data32[0] == mXCBDeleteWin;
+			break;
+		}
+		}
+		free(event);
+
+		return close;
+	}
+	#endif
+
+	return false;
+}
+
 GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
 	int nmonitors, i;
 	int wx, wy, ww, wh;
@@ -240,8 +267,8 @@ GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
 	bestoverlap = 0;
 	bestmonitor = NULL;
 
-	glfwGetWindowPos(mWindow, &wx, &wy);
-	glfwGetWindowSize(mWindow, &ww, &wh);
+	glfwGetWindowPos(mGLFWWindow, &wx, &wy);
+	glfwGetWindowSize(mGLFWWindow, &ww, &wh);
 	monitors = glfwGetMonitors(&nmonitors);
 
 	for (i = 0; i < nmonitors; i++) {
@@ -265,25 +292,25 @@ GLFWmonitor* Window::GetCurrentMonitor(const GLFWvidmode** mode) const {
 }
 
 void Window::Fullscreen(bool fs) {
-	if (!mWindow) return;
+	if (!mGLFWWindow) return;
 	if (fs) {
 		mWindowedRect = mClientRect;
 
 		const GLFWvidmode* mode;
 		GLFWmonitor* monitor = GetCurrentMonitor(&mode);
 
-		glfwSetWindowAttrib(mWindow, GLFW_RED_BITS, mode->redBits);
-		glfwSetWindowAttrib(mWindow, GLFW_GREEN_BITS, mode->greenBits);
-		glfwSetWindowAttrib(mWindow, GLFW_BLUE_BITS, mode->blueBits);
-		glfwSetWindowAttrib(mWindow, GLFW_REFRESH_RATE, mode->refreshRate);
-		glfwSetWindowMonitor(mWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+		glfwSetWindowAttrib(mGLFWWindow, GLFW_RED_BITS, mode->redBits);
+		glfwSetWindowAttrib(mGLFWWindow, GLFW_GREEN_BITS, mode->greenBits);
+		glfwSetWindowAttrib(mGLFWWindow, GLFW_BLUE_BITS, mode->blueBits);
+		glfwSetWindowAttrib(mGLFWWindow, GLFW_REFRESH_RATE, mode->refreshRate);
+		glfwSetWindowMonitor(mGLFWWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
 
 		mFullscreen = true;
 	} else {
-		glfwSetWindowMonitor(mWindow, nullptr, 0, 0, mWindowedRect.extent.width, mWindowedRect.extent.height, GLFW_DONT_CARE);
+		glfwSetWindowMonitor(mGLFWWindow, nullptr, 0, 0, mWindowedRect.extent.width, mWindowedRect.extent.height, GLFW_DONT_CARE);
 
-		glfwSetWindowPos(mWindow, mWindowedRect.offset.x, mWindowedRect.offset.y);
-		glfwSetWindowSize(mWindow, mWindowedRect.extent.width, mWindowedRect.extent.height);
+		glfwSetWindowPos(mGLFWWindow, mWindowedRect.offset.x, mWindowedRect.offset.y);
+		glfwSetWindowSize(mGLFWWindow, mWindowedRect.extent.width, mWindowedRect.extent.height);
 
 		mFullscreen = false;
 	}
@@ -329,8 +356,7 @@ void Window::CreateSwapchain(::Device* device) {
 		mSwapchainSize.height = std::clamp(mClientRect.extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 	}
 
-	if (mSwapchainSize.width == numeric_limits<uint32_t>::max() || mSwapchainSize.height == numeric_limits<uint32_t>::max() ||
-		mSwapchainSize.width == 0 || mSwapchainSize.height == 0)
+	if (mSwapchainSize.width == numeric_limits<uint32_t>::max() || mSwapchainSize.height == numeric_limits<uint32_t>::max() || mSwapchainSize.width == 0 || mSwapchainSize.height == 0)
 		return;
 
 	// find a preferrable surface format 
@@ -343,7 +369,7 @@ void Window::CreateSwapchain(::Device* device) {
 
 	// find the best present mode
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-	//if (!mWindow || !mFullscreen) {
+	//if (!mGLFWWindow || !mFullscreen) {
 		for (const auto& availablePresentMode : presentModes)
 			if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
 				presentMode = availablePresentMode;

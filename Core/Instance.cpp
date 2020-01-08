@@ -5,9 +5,8 @@
 
 using namespace std;
 
-Instance::Instance(bool supportDirectDisplay, bool useGLFW)
-	 : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {
-	if (useGLFW){
+Instance::Instance(bool supportDirectDisplay, bool useGLFW) : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {
+	if (useGLFW) {
 		if (glfwInit() == GLFW_FALSE) {
 			const char* msg;
 			glfwGetError(&msg);
@@ -37,8 +36,8 @@ Instance::Instance(bool supportDirectDisplay, bool useGLFW)
 	if (supportDirectDisplay) {
 		instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
 		instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
-		#ifndef WINDOWS
-		instanceExtensions.insert("VK_EXT_acquire_xlib_display");
+		#ifdef __linux
+		instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 		#endif
 	}
 
@@ -173,7 +172,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 		
 		Window* w;
 		if (it.mDirectDisplay >= 0)
-			w = new Window(this, physicalDevice, it.mDirectDisplay);
+			w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition, it.mDirectDisplay);
 		else
 			w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition);
 		

@@ -2,13 +2,9 @@
 
 #include <GLFW/glfw3.h>
 
-#ifndef WINDOWS
-namespace x11 {
-	#include <X11/Xlib.h>
-	#include <X11/extensions/Xrandr.h>
-	#include <vulkan/vulkan_xlib.h>
-	#include <vulkan/vulkan_xlib_xrandr.h>
-}
+#ifdef __linux
+#include <xcb/xcb.h>
+#include <vulkan/vulkan_xcb.h>
 #endif
 
 #include <Core/Device.hpp>
@@ -42,17 +38,19 @@ public:
 	inline VkSurfaceFormatKHR Format() const { return mFormat; }
 
 
-	inline bool ShouldClose() const { return mWindow ? glfwWindowShouldClose(mWindow) : false; }
+	ENGINE_EXPORT bool ShouldClose() const;
 	inline ::Device* Device() const { return mDevice; }
 
-	inline operator GLFWwindow*() { return mWindow; }
+	inline operator GLFWwindow*() { return mGLFWWindow; }
 
 private:
 	friend class Camera;
 	friend class Stratum;
 	friend class Instance;
+	/// Uses GLFW to create a window
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position);
-	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice device, uint32_t displayIndex);
+	/// Uses XCB to create a window
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, uint32_t displayIndex);
 	ENGINE_EXPORT VkImage AcquireNextImage();
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
@@ -74,11 +72,14 @@ private:
 	::Device* mDevice;
 	VkPhysicalDevice mPhysicalDevice;
 
-	#ifndef WINDOWS
-	x11::Display* mXDisplay;
+	#ifdef __linux
+	xcb_screen_t* mXCBScreen;
+	xcb_window_t mXCBWindow;
+	xcb_atom_t mXCBProtocols;
+	xcb_atom_t mXCBDeleteWin;
 	#endif
 
-	GLFWwindow* mWindow;
+	GLFWwindow* mGLFWWindow;
 	VkSurfaceKHR mSurface;
 	VkSwapchainKHR mSwapchain;
 
