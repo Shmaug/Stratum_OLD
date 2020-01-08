@@ -159,7 +159,7 @@ void fsmain(v2f i,
 	#else
 	material.emission = 0;
 	#endif
-	
+
 	float3 eval = EvaluateLighting(material, i.worldPos.xyz, normal, view, i.worldPos.w);
 
 	#ifdef ENABLE_SCATTERING
