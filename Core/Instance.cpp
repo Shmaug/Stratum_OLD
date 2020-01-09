@@ -1,3 +1,12 @@
+#ifdef __linux
+#include <vulkan/vulkan.h>
+namespace x11{
+#include <xcb/xcb.h>
+#include <vulkan/vulkan_xlib.h>
+#include <vulkan/vulkan_xlib_xrandr.h>
+};
+#endif
+
 #include <Core/Instance.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
@@ -14,7 +23,8 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 	instanceExtensions.insert(VK_KHR_SURFACE_EXTENSION_NAME);
 	instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
 	#ifdef __linux
-	instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+	instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
+	instanceExtensions.insert(VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME);
 	#endif
 
 	vector<const char*> validationLayers;
@@ -22,7 +32,6 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
 	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
 	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
-	//validationLayers.push_back("VK_LAYER_RENDERDOC_Capture");
 	#endif
 	if (validationLayers.size()) {
 		uint32_t layerCount;
@@ -82,40 +91,6 @@ Instance::~Instance() {
 	vkDestroyInstance(mInstance, nullptr);
 }
 
-VkPhysicalDevice Instance::GetPhysicalDevice(uint32_t index, const vector<const char*>& extensions) const {
-	uint32_t deviceCount = 0;
-	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
-	if (deviceCount == 0) return VK_NULL_HANDLE;
-	vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
-
-	if (index >= deviceCount) return VK_NULL_HANDLE;
-
-	// 'index' represents the index of the SUITABLE devices, count the suitable devices
-	uint32_t i = 0;
-	for (const auto& device : devices) {
-		uint32_t extensionCount;
-		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-		vector<VkExtensionProperties> availableExtensions(extensionCount);
-		if (extensionCount == 0) continue;
-		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-		set<string> availableExtensionSet;
-		for (const VkExtensionProperties& e : availableExtensions)
-			availableExtensionSet.insert(e.extensionName);
-		bool hasExtensions = true;
-		for (auto& e : extensions)
-			if (availableExtensionSet.count(e) == 0) {
-				hasExtensions = false;
-				break;
-			}
-		if (hasExtensions) {
-			if (i == index) return device;
-			i++;
-		}
-	}
-	return VK_NULL_HANDLE;
-}
-
 void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays) {
 	vector<const char*> deviceExtensions {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -132,56 +107,48 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 
 	mMaxFramesInFlight = 0xFFFF;
 
+	uint32_t deviceCount;
+	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
+	vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
+	
 	// create windows
 	for (auto& it : displays) {
-		uint32_t deviceIndex = it.mDevice;
-		VkPhysicalDevice physicalDevice = GetPhysicalDevice(deviceIndex, deviceExtensions);
-		while (physicalDevice == VK_NULL_HANDLE) {
-			// requested device index does not exist or is not suitable, fallback to previous device if it exists
-			if (deviceIndex == 0) {
-				fprintf_color(BoldRed, stderr, "Failed to find suitable device!\n");
-				throw;
-			}
-			deviceIndex--;
-			physicalDevice = GetPhysicalDevice(deviceIndex, deviceExtensions);
+		if (devices.size() <= it.mDevice){
+			fprintf_color(Red, stderr, "Device index out of bounds: %d\n", it.mDevice);
+			throw;
 		}
-		if (physicalDevice == VK_NULL_HANDLE) continue; // could not find any suitable devices...
-
-		if ((uint32_t)mDevices.size() <= deviceIndex) mDevices.resize((size_t)deviceIndex + 1);
-
+		VkPhysicalDevice physicalDevice = devices[it.mDevice];
+		if (mDevices.size() <= it.mDevice) mDevices.resize(it.mDevice + 1);
+		
 		#ifdef __linux
-		int screenp = 0;
-		xcb_connection_t* conn = nullptr;
-		if (!mXCBConnections.count(it.mXDisplay)) {
-			conn = xcb_connect(it.mXDisplay.data(), &screenp);
-			mXCBConnections.emplace(it.mXDisplay, conn);
-			if (int err = xcb_connection_has_error(conn)) {
-				mXCBConnections.erase(it.mXDisplay);
-				fprintf_color(Red, stderr, "xcb_connect failed: %d\n", err);
-				throw;
-			}
-		}
-		Window* w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition, conn, it.mXScreen >= 0 ? it.mXScreen : screenp);
+
+		// TODO: acquire xlib displays
+
+		Window* w = new Window(this, "Stratum " + to_string(mWindows.size()), windowInput, it.mWindowPosition, conn, screenp);
 		#else
 		static_assert(false, "Not implemented!");
 		#endif
 
-		if (!mDevices[deviceIndex]) {
+		if (!mDevices[it.mDevice]) {
 			uint32_t gq, pq;
 			Device::FindQueueFamilies(physicalDevice, w->Surface(), gq, pq);
-			mDevices[deviceIndex] = new Device(this, physicalDevice, deviceIndex, gq, pq, deviceExtensions, validationLayers);
+			mDevices[it.mDevice] = new Device(this, physicalDevice, it.mDevice, gq, pq, deviceExtensions, validationLayers);
 		}
-		mDevices[deviceIndex]->mWindowCount++;
+		mDevices[it.mDevice]->mWindowCount++;
 		
-		w->CreateSwapchain(mDevices[deviceIndex]);
+		w->CreateSwapchain(mDevices[it.mDevice]);
 		mWindows.push_back(w);
 		mMaxFramesInFlight = min(mMaxFramesInFlight, w->mImageCount);
 	}
 
-	for (Device* d : mDevices){
-		d->mFrameContexts.resize(mMaxFramesInFlight);
+	// remove null devices and setup frame contexts
+	for (auto d = mDevices.begin(); d != mDevices.end();) {
+		if (!*d) { d = mDevices.erase(d); continue; }
+		(*d)->mFrameContexts.resize(mMaxFramesInFlight);
 		for (uint32_t i = 0; i < mMaxFramesInFlight; i++)
-			d->mFrameContexts[i].mSemaphores.resize(d->mWindowCount);
+			(*d)->mFrameContexts[i].mSemaphores.resize((*d)->mWindowCount);
+		d++;
 	}
 
 	mStartTime = mClock.now();

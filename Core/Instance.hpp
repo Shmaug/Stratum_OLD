@@ -1,11 +1,5 @@
 #pragma once
 
-#ifdef __linux
-#include <xcb/xcb.h>
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_xcb.h>
-#endif
-
 #include <Util/Util.hpp>
 
 class Window;
@@ -17,7 +11,6 @@ public:
 		int mDevice;
 		VkRect2D mWindowPosition;
 		std::string mXDisplay;
-		int mXScreen;
 	};
 
 	ENGINE_EXPORT ~Instance();
@@ -25,11 +18,9 @@ public:
 	// Initializes devices and windows according to the DisplayCreateInfos passed in
 	ENGINE_EXPORT void CreateDevicesAndWindows(const std::vector<DisplayCreateInfo>& displays);
 
-	// Get a physical device
-	// Here, index represents the index of all SUITABLE devices
-	ENGINE_EXPORT VkPhysicalDevice GetPhysicalDevice(uint32_t index, const std::vector<const char*>& extensions) const;
-
 	inline uint32_t DeviceCount() const { return (uint32_t)mDevices.size(); }
+	/// Get a specific device. The index here does NOT correspond to the physical device index.
+	/// To get the physical device index, call Device.PhysicalDeviceIndex()
 	inline Device* GetDevice(uint32_t index) const { return mDevices[index]; }
 
 	inline uint32_t WindowCount() const { return (uint32_t)mWindows.size(); }
