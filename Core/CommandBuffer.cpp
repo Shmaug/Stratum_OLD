@@ -18,9 +18,10 @@ Fence::Fence(Device* device) : mDevice(device) {
 	ThrowIfFailed(vkCreateFence(*mDevice, &fenceInfo, nullptr, &mFence), "vkCreateFence failed");
 }
 Fence::~Fence() {
+	Wait();
 	vkDestroyFence(*mDevice, mFence, nullptr);
 }
-void Fence::Wait(){
+void Fence::Wait() {
 	ThrowIfFailed(vkWaitForFences(*mDevice, 1, &mFence, true, numeric_limits<uint64_t>::max()), "vkWaitForFences failed");
 }
 bool Fence::Signaled() {

@@ -229,12 +229,10 @@ bool ReadConfig(const string& file, Configuration& config) {
 			auto& device = d["device"];
 			auto& rect = d["window_rect"];
 			auto& disp = d["x_display"];
-			auto& scrn = d["x_screen"];
 
 			Instance::DisplayCreateInfo info = {};
 			info.mDevice = device.is_number() ? device.int_value() : -1;
 			info.mXDisplay = disp.is_string() ? disp.string_value() : "";
-			info.mXScreen = disp.is_number() ? disp.int_value() : -1;
 			if (rect.is_array() && rect.array_items().size() == 4 &&
 				rect.array_items()[0].is_number() &&
 				rect.array_items()[1].is_number() &&
