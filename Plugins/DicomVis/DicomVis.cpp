@@ -246,7 +246,7 @@ void DicomVis::Update() {
 
 	if (mMainCamera->Orthographic()) {
 		mFpsText->TextScale(.025f * mMainCamera->OrthographicSize());
-		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
+		mMainCamera->OrthographicSize(mMainCamera->OrthographicSize() * (1 - mInput->ScrollDelta() * .06f));
 	} else
 		mFpsText->TextScale(.0004f * tanf(mMainCamera->FieldOfView() / 2));
 	mFpsText->LocalRotation(mMainCamera->WorldRotation());

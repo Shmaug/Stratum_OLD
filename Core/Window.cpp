@@ -2,41 +2,28 @@
 #include <Core/Window.hpp>
 #include <Core/Device.hpp>
 #include <Core/Instance.hpp>
-#include <Input/MouseKeyboardInput.hpp>
 #include <Scene/Camera.hpp>
 #include <Util/Profiler.hpp>
 #include <Util/Util.hpp>
 
 using namespace std;
 
-void Window::ResizeCallback() {
+void Window::ResizeSwapchain() {
+	#ifdef WINDOWS
+	RECT cr;
+	GetClientRect(mHwnd, &cr);
+	mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
+	mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+	#else
+	static_assert(false, "Not implemented!");
+	#endif
 	if (mDevice) CreateSwapchain(mDevice);
-}
-void Window::KeyCallback(KeyCode key, bool down) {
-	mInput->mLastWindow = this;
-	mInput->mCurrent.mKeys[key] = down;
-	if (mInput->KeyDown(KEY_ALT) && mInput->KeyDown(KEY_ENTER) && (key == KEY_ENTER || key == KEY_ALT))
-		Fullscreen(!mFullscreen);
-}
-void Window::CursorPosCallback(float x, float y) {
-	mInput->mLastWindow = this;
-	mInput->mCurrent.mCursorPos = float2((float)x, (float)y) + float2((float)mClientRect.offset.x, (float)mClientRect.offset.y);
-	mInput->mCurrent.mCursorDelta = mInput->mCurrent.mCursorPos - mInput->mLast.mCursorPos;
-
-	if (mTargetCamera) {
-		float2 uv = float2((float)x, (float)y) / float2((float)ClientRect().extent.width, (float)ClientRect().extent.height);
-		mInput->mMousePointer.mWorldRay = mTargetCamera->ScreenToWorldRay(uv);
-	}
-}
-void Window::ScrollCallback(float x, float y) {
-	mInput->mLastWindow = this;
-	mInput->mCurrent.mScrollDelta += float2((float)x, (float)y);
 }
 
 #ifdef __linux
 Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen)
 #else
-static_assert(false, "Not implemented!");
+Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, HINSTANCE hInstance)
 #endif
 	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
@@ -96,18 +83,47 @@ static_assert(false, "Not implemented!");
 
 	#else
 
-	static_assert(false, "Not implemented!");
+	mHwnd = ::CreateWindowExA(
+		NULL,
+		"Stratum",
+		title.c_str(),
+		WS_OVERLAPPEDWINDOW,
+		position.offset.x,
+		position.offset.y,
+		position.extent.width,
+		position.extent.height,
+		NULL,
+		NULL,
+		hInstance,
+		nullptr
+	);
+	if (!mHwnd) {
+		fprintf_color(Red, stderr, "Failed to create window\n");
+		throw;
+	}
 
+	ShowWindow(mHwnd, SW_SHOW);
+
+	VkWin32SurfaceCreateInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	info.hinstance = hInstance;
+	info.hwnd = mHwnd;
+	ThrowIfFailed(vkCreateWin32SurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
+
+	RECT cr;
+	GetClientRect(mHwnd, &cr);
+	mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
+	mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
 	#endif
 }
 Window::~Window() {
+	DestroySwapchain();
+	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
 	#ifdef __linux
  	xcb_destroy_window(mXCBConnection, mXCBWindow);
 	#else
-	static_assert(false, "Not implemented!");
+	DestroyWindow(mHwnd);
 	#endif
-	DestroySwapchain();
-	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
 }
 
 void Window::Title(const string& title) {
@@ -123,7 +139,7 @@ void Window::Title(const string& title) {
 		title.c_str());
 	xcb_flush(mXCBConnection);
 	#else
-	static_assert(false, "Not implemented!");
+	SetWindowTextA(mHwnd, title.c_str());
 	#endif
 
 	mTitle = title;
@@ -156,7 +172,6 @@ void Window::Present(vector<VkSemaphore> waitSemaphores) {
 	presentInfo.pImageIndices = &mCurrentBackBufferIndex;
 	vkQueuePresentKHR(mDevice->PresentQueue(), &presentInfo);
 }
-
 
 void Window::Fullscreen(bool fs) {
 	// TODO
@@ -198,8 +213,8 @@ void Window::CreateSwapchain(::Device* device) {
 	if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max() && capabilities.currentExtent.width != 0)
 		mSwapchainSize = capabilities.currentExtent;
 	else {
-		mSwapchainSize.width = std::clamp(mClientRect.extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-		mSwapchainSize.height = std::clamp(mClientRect.extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+		mSwapchainSize.width = clamp(mClientRect.extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		mSwapchainSize.height = clamp(mClientRect.extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 	}
 
 	if (mSwapchainSize.width == numeric_limits<uint32_t>::max() || mSwapchainSize.height == numeric_limits<uint32_t>::max() || mSwapchainSize.width == 0 || mSwapchainSize.height == 0)

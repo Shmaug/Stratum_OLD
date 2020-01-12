@@ -38,8 +38,8 @@ public:
 	inline static const ProfilerSample* LastFrame() { return &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT]; }
 
 private:
-	static const std::chrono::high_resolution_clock mTimer;
-	static ProfilerSample mFrames[PROFILER_FRAME_COUNT];
-	static ProfilerSample* mCurrentSample;
-	static uint64_t mCurrentFrame;
+	ENGINE_EXPORT static const std::chrono::high_resolution_clock mTimer;
+	ENGINE_EXPORT static ProfilerSample mFrames[PROFILER_FRAME_COUNT];
+	ENGINE_EXPORT static ProfilerSample* mCurrentSample;
+	ENGINE_EXPORT static uint64_t mCurrentFrame;
 };

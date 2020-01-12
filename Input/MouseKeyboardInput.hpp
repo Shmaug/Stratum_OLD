@@ -1,6 +1,6 @@
 #pragma once
 
-#include <unordered_map>
+#include <vector>
 #include <Input/InputDevice.hpp>
 
 class Window;
@@ -55,7 +55,7 @@ enum KeyCode {
 	KEY_DOWN 		= 0x28,
 	KEY_SELECT 		= 0x29,
 	KEY_PRINT 		= 0x2A,
-	KEY_EXECUTE 	= 0x2B,
+	//KEY_EXECUTE 	= 0x2B,
 	KEY_PRINTSCREEN = 0x2c,
 	KEY_INSERT 		= 0X2d,
 	KEY_DELETE 		= 0X2e,
@@ -206,8 +206,8 @@ enum KeyCode {
 	KEY_PLAY = 0xfa, 
 	KEY_ZOOM = 0xfb,
 	// 0xfc is reserved
-	KEY_PA1 = 0xfd,
-	//KEY_CLEAR = 0xfe,
+	KEY_PA1 = 0xfd
+	//KEY_CLEAR = 0xfe
 };
 
 class MouseKeyboardInput : public InputDevice {
@@ -222,7 +222,7 @@ public:
 	inline bool KeyDown(KeyCode key) { return mCurrent.mKeys[key]; }
 	inline bool KeyUp(KeyCode key) { return !mCurrent.mKeys[key]; }
 
-	inline float2 ScrollDelta() const { return mCurrent.mScrollDelta; }
+	inline float ScrollDelta() const { return mCurrent.mScrollDelta; }
 	inline float2 CursorPos() const { return mCurrent.mCursorPos; }
 	inline float2 CursorDelta() const { return mCurrent.mCursorDelta; }
 
@@ -232,11 +232,12 @@ public:
 
 private:
 	friend class Window;
+	friend class Instance;
 	struct State {
 		float2 mCursorPos;
 		float2 mCursorDelta;
-		float2 mScrollDelta;
-		std::unordered_map<KeyCode, bool> mKeys;
+		float mScrollDelta;
+		std::vector<bool> mKeys;
 	};
 	Window* mLastWindow;
 	InputPointer mMousePointer;

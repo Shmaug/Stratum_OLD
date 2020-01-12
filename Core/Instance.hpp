@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Input/MouseKeyboardInput.hpp>
 #include <Util/Util.hpp>
 
 class Window;
@@ -40,6 +41,8 @@ private:
 	ENGINE_EXPORT bool PollEvents();
 	ENGINE_EXPORT void AdvanceFrame();
 
+	MouseKeyboardInput* mWindowInput;
+
 	std::vector<Device*> mDevices;
 	std::vector<Window*> mWindows;
 	uint32_t mMaxFramesInFlight;
@@ -55,5 +58,7 @@ private:
 
 	#ifdef __linux
 	std::unordered_map<std::string, xcb_connection_t*> mXCBConnections;
+	#else
+	static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 	#endif
 };
