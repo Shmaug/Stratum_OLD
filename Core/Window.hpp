@@ -4,6 +4,9 @@
 #include <xcb/xcb.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_xcb.h>
+#else
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
 #endif
 
 #include <Core/Device.hpp>
@@ -44,16 +47,13 @@ private:
 	#ifdef __linux
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen);
 	#else
-	static_assert(false, "Not implemented!");
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, HINSTANCE hInst);
 	#endif
 
 	ENGINE_EXPORT VkImage AcquireNextImage();
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
-	ENGINE_EXPORT void ResizeCallback();
-	ENGINE_EXPORT void KeyCallback(KeyCode key, bool down);
-	ENGINE_EXPORT void CursorPosCallback(float x, float y);
-	ENGINE_EXPORT void ScrollCallback(float x, float y);
+	ENGINE_EXPORT void ResizeSwapchain();
 
 	MouseKeyboardInput* mInput;
 
@@ -72,6 +72,8 @@ private:
 	xcb_window_t mXCBWindow;
 	xcb_atom_t mXCBProtocols;
 	xcb_atom_t mXCBDeleteWin;
+	#else
+	HWND mHwnd;
 	#endif
 
 	VkSurfaceKHR mSurface;
