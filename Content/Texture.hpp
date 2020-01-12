@@ -58,6 +58,8 @@ private:
 	VkImageUsageFlags mUsage;
 	VkMemoryPropertyFlags mMemoryProperties;
 
+	VkDeviceSize mMemorySize;
+
 	struct DeviceData {
 		VkImage mImage;
 		VkImageView mView;

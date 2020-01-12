@@ -4,14 +4,6 @@
 #include <Scene/Scene.hpp>
 #include <Util/Profiler.hpp>
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 using namespace std;
 
 class Raytracing : public EnginePlugin {

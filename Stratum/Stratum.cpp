@@ -4,14 +4,6 @@
 #include <thread>
 #include <unordered_map>
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 #include <Core/Instance.hpp>
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
@@ -28,12 +20,12 @@ using namespace std;
 #ifdef ENABLE_DEBUG_LAYERS
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-		fprintf_color(BoldRed, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+		fprintf_color(COLOR_RED_BOLD, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 		throw;
 	} else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
 		if (strcmp("UNASSIGNED-CoreValidation-Shader-OutputNotConsumed", pCallbackData->pMessageIdName) == 0) return VK_FALSE;
 		if (strcmp("UNASSIGNED-CoreValidation-DrawState-ClearCmdBeforeDraw", pCallbackData->pMessageIdName) == 0) return VK_FALSE;
-		fprintf_color(BoldYellow, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
+		fprintf_color(COLOR_YELLOW_BOLD, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 	} else
 		printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
 
@@ -175,10 +167,6 @@ public:
 			PROFILER_BEGIN("Present");
 			mInstance->AdvanceFrame();
 			PROFILER_END;
-
-			// for testing: disable asynchronous frames
-			for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
-				mInstance->GetDevice(i)->FlushFrames();
 
 			#ifdef PROFILER_ENABLE
 			Profiler::FrameEnd();

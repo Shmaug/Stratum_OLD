@@ -3,14 +3,6 @@
 #include <sstream>
 #include <unordered_map>
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 #include "ShaderCompiler.hpp"
 #include <shaderc/shaderc.hpp>
 #include <../spirv_cross.hpp>
@@ -68,7 +60,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
 	
 	string error = result.GetErrorMessage();
-	if (error.size()) fprintf_color(Red, stderr, "%s\n", error.c_str());
+	if (error.size()) fprintf_color(COLOR_RED, stderr, "%s\n", error.c_str());
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:
 		// store SPIRV module
@@ -204,7 +196,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 	string source;
 	if (!ReadFile(filename, source)) {
-		fprintf_color(Red, stderr, "Failed to read %s!\n", filename.c_str());
+		fprintf_color(COLOR_RED, stderr, "Failed to read %s!\n", filename.c_str());
 		return nullptr;
 	}
 
@@ -260,7 +252,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					PassType pass = PASS_MAIN;
 					if (++it != words.end()) pass = atopass(*it);
 					if (passes.count(pass) && passes[pass].first != "") {
-						fprintf_color(Red, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
+						fprintf_color(COLOR_RED, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
 						return nullptr;
 					}
 					passes[pass].first = ep;
@@ -271,7 +263,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					PassType pass = PASS_MAIN;
 					if (++it != words.end()) pass = atopass(*it);
 					if (passes.count(pass) && passes[pass].second != "") {
-						fprintf_color(Red, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
+						fprintf_color(COLOR_RED, stderr, "Duplicate vertex shader for pass %s!\n", it->c_str());
 						return nullptr;
 					}
 					passes[pass].second = ep;
@@ -293,7 +285,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					if (*it == "true") result->mDepthStencilState.depthWriteEnable = VK_TRUE;
 					else if (*it == "false") result->mDepthStencilState.depthWriteEnable = VK_FALSE;
 					else {
-						fprintf_color(Red, stderr, "zwrite must be true or false.\n");
+						fprintf_color(COLOR_RED, stderr, "zwrite must be true or false.\n");
 						return nullptr;
 					}
 
@@ -304,7 +296,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					else if (*it == "false")
 						result->mDepthStencilState.depthTestEnable = VK_FALSE;
 					else{
-						fprintf_color(Red, stderr, "ztest must be true or false.\n");
+						fprintf_color(COLOR_RED, stderr, "ztest must be true or false.\n");
 						return nullptr;
 					}
 
@@ -318,7 +310,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					else if (*it == "back") result->mCullMode = VK_CULL_MODE_BACK_BIT;
 					else if (*it == "false") result->mCullMode = VK_CULL_MODE_NONE;
 					else {
-						fprintf_color(Red, stderr, "Unknown cull mode: %s\n", it->c_str());
+						fprintf_color(COLOR_RED, stderr, "Unknown cull mode: %s\n", it->c_str());
 						return nullptr;
 					}
 
@@ -328,7 +320,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					else if (*it == "line") result->mFillMode = VK_POLYGON_MODE_LINE;
 					else if (*it == "point") result->mFillMode = VK_POLYGON_MODE_POINT;
 					else {
-						fprintf_color(Red, stderr, "Unknown fill mode: %s\n", it->c_str());
+						fprintf_color(COLOR_RED, stderr, "Unknown fill mode: %s\n", it->c_str());
 						return nullptr;
 					}
 
@@ -339,7 +331,7 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 					else if (*it == "add")		result->mBlendMode = BLEND_MODE_ADDITIVE;
 					else if (*it == "multiply")	result->mBlendMode = BLEND_MODE_MULTIPLY;
 					else {
-						fprintf_color(Red, stderr, "Unknown blend mode: %s\n", it->c_str());
+						fprintf_color(COLOR_RED, stderr, "Unknown blend mode: %s\n", it->c_str());
 						return nullptr;
 					}
 
@@ -470,12 +462,12 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 
 				if (vs == "" && passes.count(PASS_MAIN)) vs = passes.at(PASS_MAIN).first;
 				if (vs == "") {
-					fprintf_color(Red, stderr, "No vertex shader entry point found for fragment shader entry point: \n", fs.c_str());
+					fprintf_color(COLOR_RED, stderr, "No vertex shader entry point found for fragment shader entry point: \n", fs.c_str());
 					return nullptr;
 				}
 				if (fs == "" && passes.count(PASS_MAIN)) fs = passes.at(PASS_MAIN).second;
 				if (fs == "") {
-					fprintf_color(Red, stderr, "No fragment shader entry point found for vertex shader entry point: \n", vs.c_str());
+					fprintf_color(COLOR_RED, stderr, "No fragment shader entry point found for vertex shader entry point: \n", vs.c_str());
 					return nullptr;
 				}
 

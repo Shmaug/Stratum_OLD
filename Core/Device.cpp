@@ -177,6 +177,7 @@ VkSampleCountFlagBits Device::GetMaxUsableSampleCount() {
 }
 
 void Device::FlushFrames() {
+	vkDeviceWaitIdle(mDevice);
 	lock_guard lock(mCommandPoolMutex);
 	for (auto& p : mCommandBuffers) {
 		while (p.second.size()) {
@@ -207,14 +208,14 @@ uint32_t Device::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags prope
 		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
 
-	fprintf_color(BoldRed, stderr, "Failed to find suitable memory type!");
+	fprintf_color(COLOR_RED, stderr, "Failed to find suitable memory type!");
 	throw;
 }
 
 shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
+	// get a commandpool for the current thread
 	lock_guard lock(mCommandPoolMutex);
 	VkCommandPool& commandPool = mCommandPools[this_thread::get_id()];
-
 	if (!commandPool) {
 		VkCommandPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -224,17 +225,18 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 		SetObjectName(commandPool, name + " Graphics Command Pool", VK_OBJECT_TYPE_COMMAND_POOL);
 	}
 
-	auto& commandBuffers = mCommandBuffers[commandPool];
+	auto& commandBufferQueue = mCommandBuffers[commandPool];
 
 	shared_ptr<CommandBuffer> commandBuffer;
 	// see if the command buffer at the front of the queue is done
-	if (commandBuffers.size() > 0) {
-		commandBuffer = commandBuffers.front();
+	if (commandBufferQueue.size()) {
+		commandBuffer = commandBufferQueue.front();
 		if (commandBuffer->mSignalFence->Signaled()) {
 			// reset and reuse the command buffer at the front of the queue
-			commandBuffers.pop();
+			commandBufferQueue.pop();
 			commandBuffer->Reset(name);
-		}
+		} else
+			commandBuffer.reset();
 	}
 	
 	if (!commandBuffer) commandBuffer = shared_ptr<CommandBuffer>(new CommandBuffer(this, commandPool, name));
@@ -261,6 +263,7 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 		for (uint32_t i = 0; i < CurrentFrameContext()->mSemaphores.size(); i++) {
 			if (!commandBuffer->mSignalSemaphores[i]) commandBuffer->mSignalSemaphores[i] = make_shared<Semaphore>(this);
 			SetObjectName(*commandBuffer->mSignalSemaphores[i], "CommandBuffer Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
+			
 			semaphores.push_back(*commandBuffer->mSignalSemaphores[i]);
 			waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 

@@ -234,15 +234,13 @@ void DicomVis::Update() {
 
 	if (mInput->KeyDownFirst(MOUSE_RIGHT))
 		mInput->LockMouse(!mInput->LockMouse());
+
 	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	if (mInput->KeyDownFirst(KEY_F2))
 		mFlying = !mFlying;
 	if (mInput->KeyDownFirst(KEY_F3))
 		mPrintPerformance = !mPrintPerformance;
-
-	if (mInput->KeyDownFirst(KEY_F9))
-		mMainCamera->Orthographic(!mMainCamera->Orthographic());
 
 	if (mMainCamera->Orthographic()) {
 		mFpsText->TextScale(.025f * mMainCamera->OrthographicSize());

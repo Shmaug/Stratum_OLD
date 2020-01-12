@@ -9,73 +9,30 @@
 
 using namespace std;
 
-uint8_t* load(const string& filename, bool srgb, bool& stbifree, uint32_t& size, int32_t& x, int32_t& y, int32_t& channels, VkFormat& format) {
+uint8_t* load(const string& filename, bool srgb, uint32_t& pixelSize, int32_t& x, int32_t& y, int32_t& channels, VkFormat& format) {
 	uint8_t* pixels = nullptr;
-	size = 0;
+	pixelSize = 0;
 	x, y, channels;
 	stbi_info(filename.c_str(), &x, &y, &channels);
+
 	int desiredChannels = 4;
-	stbifree = false;
-	//if (channels == 3) desiredChannels = 4;
-
-	size_t h = 0;
-	hash_combine(h, filename);
-	hash_combine(h, srgb);
-	hash_combine(h, x);
-	hash_combine(h, y);
-	string hfilename = "Cache/" + to_string(h);
-
-	std::ifstream cachef(hfilename, std::ios::binary);
-	if (cachef.is_open()) {
-		int32_t cx, cy, cchannels;
-		bool csrgb;
-
-		cachef.read(reinterpret_cast<char*>(&cx), sizeof(int32_t));
-		cachef.read(reinterpret_cast<char*>(&cy), sizeof(int32_t));
-		cachef.read(reinterpret_cast<char*>(&cchannels), sizeof(int32_t));
-		cachef.read(reinterpret_cast<char*>(&csrgb), sizeof(bool));
-		
-		if (x == cx && y == cy && channels == cchannels && srgb == csrgb) {
-			cachef.read(reinterpret_cast<char*>(&size), sizeof(uint32_t));
-			uint64_t imgsize;
-			cachef.read(reinterpret_cast<char*>(&imgsize), sizeof(uint64_t));
-			pixels = new uint8_t[imgsize];
-			cachef.read(reinterpret_cast<char*>(pixels), imgsize);
-		}
-
-		cachef.close();
+	if (stbi_is_16_bit(filename.c_str())) {
+		pixels = (uint8_t*)stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
+		pixelSize = sizeof(uint16_t);
+		srgb = false;
+	} else if (stbi_is_hdr(filename.c_str())) {
+		pixels = (uint8_t*)stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
+		pixelSize = sizeof(uint32_t);
+		srgb = false;
+	} else {
+		pixels = (uint8_t*)stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
+		pixelSize = sizeof(uint8_t);
 	}
-
 	if (!pixels) {
-		if (!srgb && stbi_is_16_bit(filename.c_str())) {
-			pixels = (uint8_t*)stbi_load_16(filename.c_str(), &x, &y, &channels, desiredChannels);
-			size = 2;
-		} else if (!srgb && stbi_is_hdr(filename.c_str())) {
-			pixels = (uint8_t*)stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
-			size = 4;
-		} else {
-			pixels = (uint8_t*)stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);
-			size = 1;
-		}
-		if (!pixels) {
-			fprintf_color(BoldRed, stderr, "Failed to load image: %s\n", filename.c_str());
-			throw;
-		}
-		if (desiredChannels > 0) channels = desiredChannels;
-
-		stbifree = true;
-
-		uint64_t imgsize = x * y * size * channels;
-
-		ofstream cachew(hfilename, ios::binary);
-		cachew.write(reinterpret_cast<const char*>(&x), sizeof(int32_t));
-		cachew.write(reinterpret_cast<const char*>(&y), sizeof(int32_t));
-		cachew.write(reinterpret_cast<const char*>(&channels), sizeof(int32_t));
-		cachew.write(reinterpret_cast<const char*>(&srgb), sizeof(bool));
-		cachew.write(reinterpret_cast<const char*>(&size), sizeof(uint32_t));
-		cachew.write(reinterpret_cast<const char*>(&imgsize), sizeof(uint64_t));
-		cachew.write((const char*)pixels, imgsize);
+		fprintf_color(COLOR_RED_BOLD, stderr, "Failed to load image: %s\n", filename.c_str());
+		throw;
 	}
+	if (desiredChannels > 0) channels = desiredChannels;
 
 	if (srgb) {
 		const VkFormat formatMap[4] {
@@ -89,17 +46,16 @@ uint8_t* load(const string& filename, bool srgb, bool& stbifree, uint32_t& size,
 			{ VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT, VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT },
 			{ VK_FORMAT_R32_SFLOAT, VK_FORMAT_R32G32_SFLOAT, VK_FORMAT_R32G32B32_SFLOAT, VK_FORMAT_R32G32B32A32_SFLOAT },
 		};
-		format = formatMap[size - 1][channels - 1];
+		format = formatMap[pixelSize - 1][channels - 1];
 	}
 
 	return pixels;
 }
 
 Texture::Texture(const string& name, ::Instance* devices, const string& filename, bool srgb) : mName(name) {
-	bool stbifree = false;
 	int32_t x, y, channels;
 	uint32_t size;
-	uint8_t* pixels = load(filename, srgb, stbifree, size, x, y, channels, mFormat);
+	uint8_t* pixels = load(filename, srgb, size, x, y, channels, mFormat);
 	
 	mWidth = x;
 	mHeight = y;
@@ -146,25 +102,21 @@ Texture::Texture(const string& name, ::Instance* devices, const string& filename
 	for (auto& f : fences)
 		f->Wait();
 
-	if (stbifree)
-		stbi_image_free(pixels);
-	else
-		safe_delete_array(pixels);
+	stbi_image_free(pixels);
 
-	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), dataSize / 1000.f);
+	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), mMemorySize / 1000.f);
 }
 Texture::Texture(const string& name, Instance* devices, const string& px, const string& nx, const string& py, const string& ny, const string& pz, const string& nz, bool srgb) {
-	bool stbifree[6]{ false, false, false, false, false, false };
 	int32_t x, y, channels;
 	uint32_t size;
 	
 	uint8_t* pixels[6]{
-		load(px, srgb, stbifree[0], size, x, y, channels, mFormat),
-		load(nx, srgb, stbifree[1], size, x, y, channels, mFormat),
-		load(py, srgb, stbifree[2], size, x, y, channels, mFormat),
-		load(ny, srgb, stbifree[3], size, x, y, channels, mFormat),
-		load(pz, srgb, stbifree[4], size, x, y, channels, mFormat),
-		load(nz, srgb, stbifree[5], size, x, y, channels, mFormat)
+		load(px, srgb, size, x, y, channels, mFormat),
+		load(nx, srgb, size, x, y, channels, mFormat),
+		load(py, srgb, size, x, y, channels, mFormat),
+		load(ny, srgb, size, x, y, channels, mFormat),
+		load(pz, srgb, size, x, y, channels, mFormat),
+		load(nz, srgb, size, x, y, channels, mFormat)
 	};
 
 	mWidth = x;
@@ -218,10 +170,7 @@ Texture::Texture(const string& name, Instance* devices, const string& px, const 
 		f->Wait();
 
 	for (uint32_t i = 0; i < 6; i++)
-		if (stbifree[i])
-			stbi_image_free(pixels[i]);
-		else
-			safe_delete_array(pixels[i]);
+		stbi_image_free(pixels[i]);
 
 	printf("Loaded Cubemap %s: %dx%d %s (%.1fkb)\n", nx.c_str(), mWidth, mHeight, FormatToString(mFormat), mArrayLayers * dataSize / 1000.f);
 }
@@ -471,6 +420,8 @@ void Texture::CreateImage() {
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memRequirements.size;
 		allocInfo.memoryTypeIndex = d.first->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
+
+		mMemorySize = memRequirements.size;
 
 		ThrowIfFailed(vkAllocateMemory(*d.first, &allocInfo, nullptr, &d.second.mImageMemory), "vkAllocateMemory failed for " + mName);
 		d.first->SetObjectName(d.second.mImageMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);

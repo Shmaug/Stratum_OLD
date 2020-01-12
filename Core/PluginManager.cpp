@@ -1,13 +1,5 @@
 #include <Core/PluginManager.hpp>
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 using namespace std;
 
 #ifdef WINDOWS
@@ -44,13 +36,13 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 	#ifdef WINDOWS
 	HMODULE m = LoadLibraryA(filename.c_str());
 	if (m == NULL) {
-		if (errmsg) fprintf_color(Red, stderr, "Failed to load library!\n");
+		if (errmsg) fprintf_color(COLOR_RED, stderr, "Failed to load library!\n");
 		return NULL_PLUGIN;
 	}
 	EnginePlugin* (*fptr)(void);
 	*(void**)(&fptr) = (void*)GetProcAddress(m, "CreatePlugin");
 	if (fptr == NULL) {
-		if (errmsg) fprintf_color(Red, stderr, "Failed to find CreatePlugin!\n");
+		if (errmsg) fprintf_color(COLOR_RED, stderr, "Failed to find CreatePlugin!\n");
 		UnloadPlugin(m);
 		return NULL_PLUGIN;
 	}
@@ -59,15 +51,15 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 	void* handle = dlopen(filename.c_str(), RTLD_NOW);
 	if (handle == nullptr) {
 		char* err = dlerror();
-		if (errmsg) fprintf_color(Red, stderr, "Failed to load: %s\n", err);
+		if (errmsg) fprintf_color(COLOR_RED, stderr, "Failed to load: %s\n", err);
 		return NULL_PLUGIN;
 	}
 	EnginePlugin* (*fptr)(void);
 	*(void**)(&fptr) = dlsym(handle, "CreatePlugin");
 	if (fptr == nullptr) {
 		char* err = dlerror();
-		if (errmsg) fprintf_color(Red, stderr, "Failed to find CreatePlugin: %s\n", err);
-		if (dlclose(handle) != 0) fprintf_color(Red, stderr, "Failed to free library! %s\n", dlerror());
+		if (errmsg) fprintf_color(COLOR_RED, stderr, "Failed to find CreatePlugin: %s\n", err);
+		if (dlclose(handle) != 0) fprintf_color(COLOR_RED, stderr, "Failed to free library! %s\n", dlerror());
 		return NULL_PLUGIN;
 	}
 	return handle;
@@ -75,9 +67,9 @@ PluginManager::PluginHandle PluginManager::LoadPlugin(const string& filename, bo
 }
 void PluginManager::UnloadPlugin(PluginHandle handle){
 	#ifdef WINDOWS
-	if (!FreeLibrary(handle)) fprintf_color(Red, stderr, "Failed to unload plugin module\n");
+	if (!FreeLibrary(handle)) fprintf_color(COLOR_RED, stderr, "Failed to unload plugin module\n");
 	#else
-	if (dlclose(handle) != 0) fprintf_color(Red, stderr, "Failed to unload plugin library\n");
+	if (dlclose(handle) != 0) fprintf_color(COLOR_RED, stderr, "Failed to unload plugin library\n");
 	#endif
 }
 
@@ -103,7 +95,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			}
 			mPluginModules.push_back(handle);
 			mPlugins.push_back(plugin);
-			printf_color(Yellow, "Loaded %s\n", p.path().string().c_str());
+			printf_color(COLOR_YELLOW, "Loaded %s\n", p.path().string().c_str());
 		}
 	}
 
@@ -122,7 +114,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			}
 			mPluginModules.push_back(handle);
 			mPlugins.push_back(plugin);
-			printf_color(Yellow, "Loaded %s\n", it->c_str());
+			printf_color(COLOR_YELLOW, "Loaded %s\n", it->c_str());
 			it = failed.erase(it);
 			c = true;
 		}
@@ -137,7 +129,7 @@ void PluginManager::LoadPlugins(Scene* scene) {
 			continue;
 		}
 		// if the plugin sucsessfully loads here then WTF
-		printf_color(Yellow, "Loaded %s\n", p.c_str());
+		printf_color(COLOR_YELLOW, "Loaded %s\n", p.c_str());
 		mPluginModules.push_back(handle);
 		mPlugins.push_back(plugin);
 	}

@@ -33,6 +33,14 @@
 
 #include <Math/Geometry.hpp>
 
+#ifdef __GNUC__
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#include <filesystem>
+namespace fs = std::filesystem;
+#endif
+
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)
@@ -71,19 +79,19 @@ enum PassType {
 };
 
 enum ConsoleColor {
-	Red,
-	Green,
-	Blue,
-	Yellow,
-	Cyan,
-	Magenta,
+	COLOR_RED,
+	COLOR_GREEN,
+	COLOR_BLUE,
+	COLOR_YELLOW,
+	COLOR_CYAN,
+	COLOR_MAGENTA,
 
-	BoldRed,
-	BoldGreen,
-	BoldBlue,
-	BoldYellow,
-	BoldCyan,
-	BoldMagenta
+	COLOR_RED_BOLD,
+	COLOR_GREEN_BOLD,
+	COLOR_BLUE_BOLD,
+	COLOR_YELLOW_BOLD,
+	COLOR_CYAN_BOLD,
+	COLOR_MAGENTA_BOLD
 };
 
 template<typename... Args>
@@ -91,28 +99,28 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	#ifdef WINDOWS
 	int c = 0;
 	switch(color) {
-		case Red:
-		case BoldRed:
+		case COLOR_RED:
+		case COLOR_RED_BOLD:
 		c = FOREGROUND_RED;
 		break;
-		case Green:
-		case BoldGreen:
+		case COLOR_GREEN:
+		case COLOR_GREEN_BOLD:
 		c = FOREGROUND_GREEN;
 		break;
-		case Blue:
-		case BoldBlue:
+		case COLOR_BLUE:
+		case COLOR_BLUE_BOLD:
 		c = FOREGROUND_BLUE;
 		break;
-		case Yellow:
-		case BoldYellow:
+		case COLOR_YELLOW:
+		case COLOR_YELLOW_BOLD:
 		c = FOREGROUND_RED | FOREGROUND_GREEN;
 		break;
-		case Cyan:
-		case BoldCyan:
+		case COLOR_CYAN:
+		case COLOR_CYAN_BOLD:
 		c = FOREGROUND_BLUE | FOREGROUND_GREEN;
 		break;
-		case Magenta:
-		case BoldMagenta:
+		case COLOR_MAGENTA:
+		case COLOR_MAGENTA_BOLD:
 		c = FOREGROUND_RED | FOREGROUND_BLUE;
 		break;
 	}
@@ -120,41 +128,41 @@ inline void printf_color(ConsoleColor color, Args&&... a) {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), c);
 	#else
 	switch(color) {
-		case Red:
+		case COLOR_RED:
 		printf("\x1B[0;31m");
 		break;
-		case Green:
+		case COLOR_GREEN:
 		printf("\x1B[0;32m");
 		break;
-		case Blue:
+		case COLOR_BLUE:
 		printf("\x1B[0;34m");
 		break;
-		case Yellow:
+		case COLOR_YELLOW:
 		printf("\x1B[0;33m");
 		break;
-		case Cyan:
+		case COLOR_CYAN:
 		printf("\x1B[0;36m");
 		break;
-		case Magenta:
+		case COLOR_MAGENTA:
 		printf("\x1B[0;35m");
 		break;
 
-		case BoldRed:
+		case COLOR_RED_BOLD:
 		printf("\x1B[1;31m");
 		break;
-		case BoldGreen:
+		case COLOR_GREEN_BOLD:
 		printf("\x1B[1;32m");
 		break;
-		case BoldBlue:
+		case COLOR_BLUE_BOLD:
 		printf("\x1B[1;34m");
 		break;
-		case BoldYellow:
+		case COLOR_YELLOW_BOLD:
 		printf("\x1B[1;33m");
 		break;
-		case BoldCyan:
+		case COLOR_CYAN_BOLD:
 		printf("\x1B[1;36m");
 		break;
-		case BoldMagenta:
+		case COLOR_MAGENTA_BOLD:
 		printf("\x1B[1;35m");
 		break;
 	}
@@ -177,28 +185,28 @@ inline void fprintf_color(ConsoleColor color, _IO_FILE* str, Args&&... a) {
 	#ifdef WINDOWS
 	int c = 0;
 	switch(color) {
-		case Red:
-		case BoldRed:
+		case COLOR_RED:
+		case COLOR_RED_BOLD:
 		c = FOREGROUND_RED;
 		break;
-		case Green:
-		case BoldGreen:
+		case COLOR_GREEN:
+		case COLOR_GREEN_BOLD:
 		c = FOREGROUND_GREEN;
 		break;
-		case Blue:
-		case BoldBlue:
+		case COLOR_BLUE:
+		case COLOR_BLUE_BOLD:
 		c = FOREGROUND_BLUE;
 		break;
-		case Yellow:
-		case BoldYellow:
+		case COLOR_YELLOW:
+		case COLOR_YELLOW_BOLD:
 		c = FOREGROUND_RED | FOREGROUND_GREEN;
 		break;
-		case Cyan:
-		case BoldCyan:
+		case COLOR_CYAN:
+		case COLOR_CYAN_BOLD:
 		c = FOREGROUND_BLUE | FOREGROUND_GREEN;
 		break;
-		case Magenta:
-		case BoldMagenta:
+		case COLOR_MAGENTA:
+		case COLOR_MAGENTA_BOLD:
 		c = FOREGROUND_RED | FOREGROUND_BLUE;
 		break;
 	}
@@ -206,41 +214,41 @@ inline void fprintf_color(ConsoleColor color, _IO_FILE* str, Args&&... a) {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), c);
 	#else
 	switch(color) {
-		case Red:
+		case COLOR_RED:
 		fprintf(str, "\x1B[0;31m");
 		break;
-		case Green:
+		case COLOR_GREEN:
 		fprintf(str, "\x1B[0;32m");
 		break;
-		case Blue:
+		case COLOR_BLUE:
 		fprintf(str, "\x1B[0;34m");
 		break;
-		case Yellow:
+		case COLOR_YELLOW:
 		fprintf(str, "\x1B[0;33m");
 		break;
-		case Cyan:
+		case COLOR_CYAN:
 		fprintf(str, "\x1B[0;36m");
 		break;
-		case Magenta:
+		case COLOR_MAGENTA:
 		fprintf(str, "\x1B[0;35m");
 		break;
 
-		case BoldRed:
+		case COLOR_RED_BOLD:
 		fprintf(str, "\x1B[1;31m");
 		break;
-		case BoldGreen:
+		case COLOR_GREEN_BOLD:
 		fprintf(str, "\x1B[1;32m");
 		break;
-		case BoldBlue:
+		case COLOR_BLUE_BOLD:
 		fprintf(str, "\x1B[1;34m");
 		break;
-		case BoldYellow:
+		case COLOR_YELLOW_BOLD:
 		fprintf(str, "\x1B[1;33m");
 		break;
-		case BoldCyan:
+		case COLOR_CYAN_BOLD:
 		fprintf(str, "\x1B[1;36m");
 		break;
-		case BoldMagenta:
+		case COLOR_MAGENTA_BOLD:
 		fprintf(str, "\x1B[1;35m");
 		break;
 	}
@@ -420,7 +428,7 @@ inline void ThrowIfFailed(VkResult result, const std::string& message){
 			case VK_ERROR_FRAGMENTATION_EXT: code = "VK_ERROR_FRAGMENTATION_EXT"; break;
 			case VK_ERROR_NOT_PERMITTED_EXT: code = "VK_ERROR_NOT_PERMITTED_EXT"; break;
 		}
-		fprintf_color(Red, stderr, "%s: %s\n", message.c_str(), code);
+		fprintf_color(COLOR_RED, stderr, "%s: %s\n", message.c_str(), code);
 		throw;
 	}
 }
