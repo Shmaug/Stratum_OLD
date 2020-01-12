@@ -35,7 +35,7 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 }
 #endif
 
-Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0) {
+Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0), mWindowInput(nullptr) {
 	set<string> instanceExtensions;
 	#ifdef ENABLE_DEBUG_LAYERS
 	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -115,7 +115,7 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 	rID[1].dwFlags = 0;
 	rID[1].hwndTarget = NULL;
 	if (RegisterRawInputDevices(rID, 2, sizeof(RAWINPUTDEVICE)) == FALSE)
-		fprintf_color(Red, stderr, "Failed to register raw input device(s)\n");
+		fprintf_color(COLOR_RED, stderr, "Failed to register raw input device(s)\n");
 	#endif
 }
 Instance::~Instance() {
@@ -152,7 +152,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	windowClass.hIconSm = ::LoadIcon(hInstance, NULL); //  MAKEINTRESOURCE(APPLICATION_ICON));
 	HRESULT hr = ::RegisterClassExA(&windowClass);
 	if (FAILED(hr)) {
-		fprintf_color(Red, stderr, "Failed to register window class\n");
+		fprintf_color(COLOR_RED, stderr, "Failed to register window class\n");
 		throw;
 	}
 	#endif
@@ -180,7 +180,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	// create windows
 	for (auto& it : displays) {
 		if (devices.size() <= it.mDevice){
-			fprintf_color(Red, stderr, "Device index out of bounds: %d\n", it.mDevice);
+			fprintf_color(COLOR_RED, stderr, "Device index out of bounds: %d\n", it.mDevice);
 			throw;
 		}
 		VkPhysicalDevice physicalDevice = devices[it.mDevice];
@@ -246,21 +246,29 @@ bool Instance::PollEvents() {
 	MSG msg = {};
 	while (GetMessageA(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		DispatchMessageA(&msg);
 
 		switch (msg.message) {
 		case WM_QUIT: return false;
+		case WM_MOVE:
+			for (Window* w : mWindows)
+				if (w->mHwnd == msg.hwnd) {
+					RECT cr;
+					GetClientRect(w->mHwnd, &cr);
+					w->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
+					w->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+				}
 		case WM_SIZE:
 			for (Window* w : mWindows)
 				if (w->mHwnd == msg.hwnd)
 					w->ResizeSwapchain();
 			break;
 		case WM_INPUT: {
-			UINT dwSize;
+			uint32_t dwSize = 0;
 			GetRawInputData((HRAWINPUT)msg.lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
 			uint8_t* lpb = new uint8_t[dwSize];
 			if (GetRawInputData((HRAWINPUT)msg.lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER)) != dwSize)
-				fprintf_color(Yellow, stderr, "Incorrect GetRawInputData size\n");
+				fprintf_color(COLOR_YELLOW, stderr, "Incorrect GetRawInputData size\n");
 			RAWINPUT* raw = (RAWINPUT*)lpb;
 
 			if (raw->header.dwType == RIM_TYPEMOUSE) {
@@ -306,7 +314,7 @@ bool Instance::PollEvents() {
 		}
 		}
 
-		if (msg.message == WM_PAINT) break; // break and allow a frame to be drawn
+		if (msg.message == WM_PAINT) break; // break and allow a frame to execute
 	}
 
 	POINT pt;

@@ -51,6 +51,7 @@ private:
 	#endif
 
 	ENGINE_EXPORT VkImage AcquireNextImage();
+	/// Waits on all semaphores in waitSemaphores
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
 	ENGINE_EXPORT void ResizeSwapchain();
@@ -58,7 +59,6 @@ private:
 	MouseKeyboardInput* mInput;
 
 	bool mFullscreen;
-	VkRect2D mWindowedRect;
 	VkRect2D mClientRect;
 	std::string mTitle;
 
@@ -74,6 +74,7 @@ private:
 	xcb_atom_t mXCBDeleteWin;
 	#else
 	HWND mHwnd;
+	RECT mWindowedRect;
 	#endif
 
 	VkSurfaceKHR mSurface;
@@ -91,7 +92,7 @@ private:
 	};
 	FrameData* mFrameData;
 
-	// semaphores for detecting when a swapchain image becomes available
+	/// semaphores that signal when an image is available (via vkAcquireNextImageKHR)
 	std::vector<std::shared_ptr<Semaphore>> mImageAvailableSemaphores;
 	uint32_t mImageAvailableSemaphoreIndex;
 

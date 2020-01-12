@@ -56,7 +56,7 @@ public:
 		case Sun:
 			return AABB(float3(), float3(1e20f));
 		}
-		fprintf_color(BoldRed, stderr, "Invalid light type!");
+		fprintf_color(COLOR_RED_BOLD, stderr, "Invalid light type!");
 		throw;
 	}
 

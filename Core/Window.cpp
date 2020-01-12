@@ -83,7 +83,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 
 	#else
 
-	mHwnd = ::CreateWindowExA(
+	mHwnd = CreateWindowExA(
 		NULL,
 		"Stratum",
 		title.c_str(),
@@ -98,7 +98,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 		nullptr
 	);
 	if (!mHwnd) {
-		fprintf_color(Red, stderr, "Failed to create window\n");
+		fprintf_color(COLOR_RED, stderr, "Failed to create window\n");
 		throw;
 	}
 
@@ -153,8 +153,8 @@ VkImage Window::AcquireNextImage() {
 	if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
 		CreateSwapchain(mDevice);
 
+	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain failed to create (happens when window is minimized)
 	if (mFrameData == nullptr) return VK_NULL_HANDLE;
-	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain was destroyed during CreateSwapchain (happens when window is minimized)
 	return mFrameData[mCurrentBackBufferIndex].mSwapchainImage;
 }
 
@@ -174,7 +174,43 @@ void Window::Present(vector<VkSemaphore> waitSemaphores) {
 }
 
 void Window::Fullscreen(bool fs) {
-	// TODO
+	#ifdef WINDOWS
+	if (fs && !mFullscreen) {
+		GetWindowRect(mHwnd, &mWindowedRect);
+
+		UINT windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+		SetWindowLongW(mHwnd, GWL_STYLE, windowStyle);
+
+		HMONITOR hMonitor = MonitorFromWindow(mHwnd, MONITOR_DEFAULTTONEAREST);
+		MONITORINFOEX monitorInfo = {};
+		monitorInfo.cbSize = sizeof(MONITORINFOEX);
+		GetMonitorInfoA(hMonitor, &monitorInfo);
+
+		SetWindowPos(mHwnd, HWND_TOPMOST,
+			monitorInfo.rcMonitor.left,
+			monitorInfo.rcMonitor.top,
+			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+			SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+		ShowWindow(mHwnd, SW_MAXIMIZE);
+
+		mFullscreen = true;
+	} else if (!fs && mFullscreen) {
+		SetWindowLongA(mHwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+		SetWindowPos(mHwnd, HWND_NOTOPMOST,
+			mWindowedRect.left,
+			mWindowedRect.top,
+			mWindowedRect.right  - mWindowedRect.left,
+			mWindowedRect.bottom - mWindowedRect.top,
+			SWP_FRAMECHANGED | SWP_NOACTIVATE);
+		ShowWindow(mHwnd, SW_NORMAL);
+
+		mFullscreen = false;
+	}
+	#else
+		static_assert(false, "Not implemented!");
+	#endif
 }
 
 void Window::CreateSwapchain(::Device* device) {
@@ -204,7 +240,7 @@ void Window::CreateSwapchain(::Device* device) {
 	}
 	uint32_t graphicsFamily, presentFamily;
 	if (!Device::FindQueueFamilies(mPhysicalDevice, mSurface, graphicsFamily, presentFamily)) {
-		fprintf_color(Red, stderr, "Failed to find queue families");
+		fprintf_color(COLOR_RED, stderr, "Failed to find queue families");
 		throw;
 	}
 	uint32_t queueFamilyIndices[] = { graphicsFamily, presentFamily };
@@ -277,7 +313,7 @@ void Window::CreateSwapchain(::Device* device) {
 	VkBool32 sfcSupport;
 	vkGetPhysicalDeviceSurfaceSupportKHR(mPhysicalDevice, presentFamily, mSurface, &sfcSupport);
 	if (!sfcSupport) {
-		fprintf_color(Red, stderr, "Surface not supported by device!");
+		fprintf_color(COLOR_RED, stderr, "Surface not supported by device!");
 		throw;
 	}
 
@@ -349,6 +385,7 @@ void Window::CreateSwapchain(::Device* device) {
 
 void Window::DestroySwapchain() {
 	mDevice->FlushFrames();
+
 	for (uint32_t i = 0; i < mImageCount; i++) {
 		if (mFrameData[i].mSwapchainImageView != VK_NULL_HANDLE)
 			vkDestroyImageView(*mDevice, mFrameData[i].mSwapchainImageView, nullptr);

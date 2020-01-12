@@ -206,6 +206,13 @@ void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& co
 void Gizmos::PreFrame(Device* device) {
 	DeviceData& data = mDeviceData.at(device);
 	data.mBufferIndex[device->FrameContextIndex()] = 0;
+
+	mTriDrawList.clear();
+	mLineDrawList.clear();
+	mTextures.clear();
+	mTextureMap.clear();
+	mTextures.push_back(mWhiteTexture);
+	mTextureMap.emplace(mWhiteTexture, 0);
 }
 void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	uint32_t instanceOffset = 0;
@@ -311,11 +318,4 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			instanceOffset += cubeCount;
 		}
 	}
-
-	mTriDrawList.clear();
-	mLineDrawList.clear();
-	mTextures.clear();
-	mTextureMap.clear();
-	mTextures.push_back(mWhiteTexture);
-	mTextureMap.emplace(mWhiteTexture, 0);
 }

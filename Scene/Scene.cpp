@@ -53,7 +53,7 @@ Object* Scene::LoadModelScene(const string& filename,
 	float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity) {
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded | aiProcess_SortByPType);
 	if (!scene) {
-		fprintf_color(Red, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
+		fprintf_color(COLOR_RED, stderr, "Failed to open %s: %s\n", filename.c_str(), aiGetErrorString());
 		throw;
 	}
 

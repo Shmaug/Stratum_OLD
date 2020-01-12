@@ -236,7 +236,7 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Varia
 }
 VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
 	if (!commandBuffer->CurrentRenderPass()) {
-		fprintf_color(BoldRed, stderr, "Attempting to bind material outside of a RenderPass!");
+		fprintf_color(COLOR_RED_BOLD, stderr, "Attempting to bind material outside of a RenderPass!");
 		throw;
 	}
 

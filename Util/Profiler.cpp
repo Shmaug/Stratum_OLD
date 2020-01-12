@@ -31,7 +31,7 @@ void Profiler::BeginSample(const string& label, bool resume = false) {
 }
 void Profiler::EndSample() {
 	if (!mCurrentSample->mParent) {
-		fprintf_color(Red, stderr, "Error: Attempt to end nonexistant Profiler sample!");
+		fprintf_color(COLOR_RED, stderr, "Error: Attempt to end nonexistant Profiler sample!");
 		throw;
 	}
 	mCurrentSample->mTime += mTimer.now() - mCurrentSample->mStartTime;

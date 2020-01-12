@@ -3,14 +3,6 @@
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dctk.h>
 
-#ifdef __GNUC__
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
-
 using namespace std;
 
 struct Slice {
