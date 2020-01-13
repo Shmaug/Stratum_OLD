@@ -15,6 +15,7 @@ namespace x11{
 using namespace std;
 
 #ifdef WINDOWS
+std::vector<Instance*> Instance::sInstances;
 LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 	case WM_PAINT:
@@ -23,10 +24,12 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 	case WM_SYSKEYUP:
 	case WM_SYSCHAR:
 		break;
-	case WM_SIZE:
-		break;
 	case WM_DESTROY:
-		PostQuitMessage(0);
+	case WM_QUIT:
+	case WM_MOVE:
+	case WM_SIZE:
+		for (Instance* i : sInstances)
+			i->HandleMessage(hwnd, message, wParam, lParam);
 		break;
 	default:
 		return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -101,7 +104,6 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 
 
 	#ifdef WINDOWS
-
 	// register raw input devices
 	RAWINPUTDEVICE rID[2];
 	// Mouse
@@ -116,6 +118,8 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 	rID[1].hwndTarget = NULL;
 	if (RegisterRawInputDevices(rID, 2, sizeof(RAWINPUTDEVICE)) == FALSE)
 		fprintf_color(COLOR_RED, stderr, "Failed to register raw input device(s)\n");
+	sInstances.push_back(this);
+	mDestroyPending = false;
 	#endif
 }
 Instance::~Instance() {
@@ -125,6 +129,12 @@ Instance::~Instance() {
 	#ifdef __linux
 	for (auto& c : mXCBConnections)
 		xcb_disconnect(c.second);
+	#else
+	for (auto it = sInstances.begin(); it != sInstances.end();)
+		if (*it == this)
+			it = sInstances.erase(it);
+		else
+			it++;
 	#endif
 
 	for (Device* d : mDevices)
@@ -218,6 +228,21 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	mLastFrame = mClock.now();
 }
 
+void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+	switch (message){
+	case WM_DESTROY:
+	case WM_QUIT:
+		mDestroyPending = true;
+		break;
+	case WM_SIZE:
+	case WM_MOVE:
+		for (Window* w : mWindows)
+			if (w->mHwnd == hwnd)
+				w->OnResize();
+		break;
+	}
+}
+
 bool Instance::PollEvents() {
     auto t1 = mClock.now();
 	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
@@ -243,26 +268,16 @@ bool Instance::PollEvents() {
 		free(event);
 	}
 	#else
-	MSG msg = {};
-	while (GetMessageA(&msg, NULL, 0, 0)) {
+	while (true) {
+		if (mDestroyPending) return false;
+		MSG msg = {};
+		if (!GetMessageA(&msg, NULL, 0, 0)) return false;
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
 
+		if (mDestroyPending) return false;
+
 		switch (msg.message) {
-		case WM_QUIT: return false;
-		case WM_MOVE:
-			for (Window* w : mWindows)
-				if (w->mHwnd == msg.hwnd) {
-					RECT cr;
-					GetClientRect(w->mHwnd, &cr);
-					w->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
-					w->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
-				}
-		case WM_SIZE:
-			for (Window* w : mWindows)
-				if (w->mHwnd == msg.hwnd)
-					w->ResizeSwapchain();
-			break;
 		case WM_INPUT: {
 			uint32_t dwSize = 0;
 			GetRawInputData((HRAWINPUT)msg.lParam, RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER));
@@ -304,11 +319,19 @@ bool Instance::PollEvents() {
 					mWindowInput->mCurrent.mKeys[MOUSE_X2] = false;
 
 				if (raw->data.mouse.usButtonFlags & RI_MOUSE_WHEEL)
-					mWindowInput->mCurrent.mScrollDelta += (short)raw->data.mouse.usButtonData / (float)WHEEL_DELTA;
+					mWindowInput->mCurrent.mScrollDelta += (short)(raw->data.mouse.usButtonData) / (float)WHEEL_DELTA;
 			}
-			if (raw->header.dwType == RIM_TYPEKEYBOARD)
+			if (raw->header.dwType == RIM_TYPEKEYBOARD) {
 				mWindowInput->mCurrent.mKeys[(KeyCode)raw->data.keyboard.VKey] = (raw->data.keyboard.Flags & RI_KEY_BREAK) == 0;
 
+				if ((raw->data.keyboard.Flags & RI_KEY_BREAK) == 0 &&
+					((KeyCode)raw->data.keyboard.VKey == KEY_ALT || (KeyCode)raw->data.keyboard.VKey == KEY_ENTER) &&
+					mWindowInput->KeyDown(KEY_ALT) && mWindowInput->KeyDown(KEY_ENTER)) {
+					for (Window* w : mWindows)
+						if (w->mHwnd == msg.hwnd)
+							w->Fullscreen(!w->Fullscreen());
+				}
+			}
 			delete[] lpb;
 			break;
 		}

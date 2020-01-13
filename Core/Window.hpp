@@ -27,7 +27,6 @@ public:
 	inline VkRect2D ClientRect() const { return mClientRect; };
 
 	inline std::string Title() const { return mTitle; }
-	ENGINE_EXPORT void Title(const std::string& title);
 
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
 	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
@@ -54,7 +53,7 @@ private:
 	/// Waits on all semaphores in waitSemaphores
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
-	ENGINE_EXPORT void ResizeSwapchain();
+	ENGINE_EXPORT void OnResize();
 
 	MouseKeyboardInput* mInput;
 

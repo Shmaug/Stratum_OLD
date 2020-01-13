@@ -110,7 +110,7 @@ void fsmain(
 
 	float3 ray = normalize(viewRay);
 
-#ifdef ENABLE_SCATTER
+#ifdef ENABLE_SCATTERING
 	float3 rayStart = Camera.Position;
 
 	float3 planetCenter = float3(0, -_PlanetRadius, 0);

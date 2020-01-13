@@ -7,6 +7,7 @@
 #pragma multi_compile ALPHA_CLIP
 #pragma multi_compile TWO_SIDED
 #pragma multi_compile TEXTURED
+#pragma multi_compile EMISSION
 
 #pragma render_queue 1000
 
@@ -46,6 +47,8 @@
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	uint TextureIndex;
+	float4 TextureST;
+
 	float4 Color;
 	float Metallic;
 	float Roughness;
@@ -101,7 +104,7 @@ v2f vsmain(
 	
 	#ifdef TEXTURED
 	o.tangent = mul(tangent, Instances[instance].WorldToObject).xyz * tangent.w;
-	o.texcoord = texcoord;
+	o.texcoord = texcoord * TextureST.xy + TextureST.zw;
 	#endif
 
 	return o;
@@ -155,7 +158,10 @@ void fsmain(v2f i,
 	material.occlusion = mask.r;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
 	#ifdef EMISSION
-	material.emission = Emission * EmissionTextures[TextureIndex].Sample(Sampler, i.texcoord).rgb;
+	material.emission = Emission;
+	#ifdef TEXTURED
+	material.emission *= EmissionTextures[TextureIndex].Sample(Sampler, i.texcoord).rgb;
+	#endif
 	#else
 	material.emission = 0;
 	#endif

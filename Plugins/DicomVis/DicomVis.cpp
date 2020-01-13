@@ -268,20 +268,6 @@ void DicomVis::Update() {
 	}
 }
 
-void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel) {
-	double t = s->mTime.count() * 1e-6;
-	if (t >= .01){
-		for (uint32_t i = 0; i < tabLevel; i++)
-			data += sprintf(data, "   ");
-		data += sprintf(data, "%s: %.2fms\n", s->mLabel, t);
-	}
-	for (const auto& pc : s->mChildren)
-		PrintSample(data, &pc, tabLevel + 1);
-}
-void PrintLastFrame(char* buffer) {
-	PrintSample(buffer, Profiler::LastFrame(), 0);
-}
-
 void DicomVis::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	mTriangleCount = commandBuffer->mTriangleCount;
 
