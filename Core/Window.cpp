@@ -8,7 +8,7 @@
 
 using namespace std;
 
-void Window::ResizeSwapchain() {
+void Window::OnResize() {
 	#ifdef WINDOWS
 	RECT cr;
 	GetClientRect(mHwnd, &cr);
@@ -17,7 +17,6 @@ void Window::ResizeSwapchain() {
 	#else
 	static_assert(false, "Not implemented!");
 	#endif
-	if (mDevice) CreateSwapchain(mDevice);
 }
 
 #ifdef __linux
@@ -126,34 +125,17 @@ Window::~Window() {
 	#endif
 }
 
-void Window::Title(const string& title) {
-	#ifdef __linux
-	xcb_change_property(
-		mXCBConnection,
-		XCB_PROP_MODE_REPLACE,
-		mXCBWindow,
-		XCB_ATOM_WM_NAME,
-		XCB_ATOM_STRING,
-		8,
-		title.length(),
-		title.c_str());
-	xcb_flush(mXCBConnection);
-	#else
-	SetWindowTextA(mHwnd, title.c_str());
-	#endif
-
-	mTitle = title;
-}
-
 VkImage Window::AcquireNextImage() {
 	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
 	mImageAvailableSemaphoreIndex = (mImageAvailableSemaphoreIndex + 1) % (uint32_t)mImageAvailableSemaphores.size();
 	VkResult err = vkAcquireNextImageKHR(*mDevice, mSwapchain, numeric_limits<uint64_t>::max(), *mImageAvailableSemaphores[mImageAvailableSemaphoreIndex], VK_NULL_HANDLE, &mCurrentBackBufferIndex);
-	if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
+	if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
 		CreateSwapchain(mDevice);
+		if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE;// swapchain failed to create (happens when window is minimized, etc)
+		err = vkAcquireNextImageKHR(*mDevice, mSwapchain, numeric_limits<uint64_t>::max(), *mImageAvailableSemaphores[mImageAvailableSemaphoreIndex], VK_NULL_HANDLE, &mCurrentBackBufferIndex);
+	}
 
-	if (mSwapchain == VK_NULL_HANDLE) return VK_NULL_HANDLE; // swapchain failed to create (happens when window is minimized)
 	if (mFrameData == nullptr) return VK_NULL_HANDLE;
 	return mFrameData[mCurrentBackBufferIndex].mSwapchainImage;
 }
@@ -369,6 +351,7 @@ void Window::CreateSwapchain(::Device* device) {
 		createInfo.subresourceRange.layerCount = 1;
 		ThrowIfFailed(vkCreateImageView(*mDevice, &createInfo, nullptr, &mFrameData[i].mSwapchainImageView), "vkCreateImageView failed for swapchain");
 		mDevice->SetObjectName(mFrameData[i].mSwapchainImageView, mTitle + " Image View " + to_string(i), VK_OBJECT_TYPE_IMAGE_VIEW);
+		
 		mImageAvailableSemaphores[i] = make_shared<Semaphore>(mDevice);
 		mDevice->SetObjectName(mImageAvailableSemaphores[i]->operator VkSemaphore(), mTitle + " Image Avaiable Semaphore " + to_string(i), VK_OBJECT_TYPE_SEMAPHORE);
 	}

@@ -8,7 +8,8 @@ using namespace std;
 ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
-	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)), mFps(0), mFrameTimeAccum(0), mFrameCount(0), mTriangleCount(0) {
+	: mScene(nullptr), mCameraPivot(nullptr), mFpsText(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)),
+	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mTriangleCount(0), mPrintPerformance(false) {
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
@@ -20,6 +21,7 @@ CameraControl::~CameraControl() {
 
 bool CameraControl::Init(Scene* scene) {
 	mScene = scene;
+	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	shared_ptr<Object> cameraPivot = make_shared<Object>("CameraPivot");
 	mScene->AddObject(cameraPivot);
@@ -29,25 +31,19 @@ bool CameraControl::Init(Scene* scene) {
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
 	mScene->AddObject(camera);
 	camera->Near(.01f);
-	camera->Far(8192.f);
+	camera->Far(2048.f);
 	camera->FieldOfView(radians(65.f));
 	camera->LocalPosition(0, 0, -mCameraDistance);
 	mCameras.push_back(camera.get());
 	mCameraPivot->AddChild(camera.get());
 
-	Shader* fontshader = mScene->AssetManager()->LoadShader("Shaders/font.stm");
-	Font* font = mScene->AssetManager()->LoadFont("Assets/OpenSans-Regular.ttf", 36);
-
 	shared_ptr<TextRenderer> fpsText = make_shared<TextRenderer>("Fps Text");
 	mScene->AddObject(fpsText);
-	fpsText->Font(font);
+	fpsText->Font(mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 36));
 	fpsText->Text("");
 	fpsText->VerticalAnchor(Maximum);
 	fpsText->HorizontalAnchor(Minimum);
 	mFpsText = fpsText.get();
-	camera->AddChild(mFpsText);
-
-	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
 	return true;
 }
@@ -55,21 +51,8 @@ bool CameraControl::Init(Scene* scene) {
 void CameraControl::Update() {
 	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
-	
-	Camera* c = mCameras[0];
-	float3 lp = (c->WorldToObject() * float4(c->ClipToWorld(float3(-.99f, -.96f, 0)), 1)).xyz;
-	lp.z = c->Near() + .00001f;
-	mFpsText->LocalPosition(lp);
-	if (c->Orthographic()) {
-		mFpsText->TextScale(.028f * c->OrthographicSize());
-		c->OrthographicSize(c->OrthographicSize() * (1 - mInput->ScrollDelta().y * .06f));
-	} else {
-		mFpsText->TextScale(.0005f * tanf(c->FieldOfView() / 2));
-		mCameraDistance = fmaxf(mCameraDistance * (1 - mInput->ScrollDelta().y * .06f), .025f);
-	}
-
-	if (mInput->KeyDownFirst(KEY_O))
-		c->Orthographic(!c->Orthographic());
+	if (mInput->KeyDownFirst(KEY_F3))
+		mPrintPerformance = !mPrintPerformance;
 
 	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
@@ -90,17 +73,36 @@ void CameraControl::Update() {
 		mCameraPivot->LocalRotation(quaternion(mCameraEuler));
 	}
 
+	mCameraDistance *= 1.0f - .2f * mInput->ScrollDelta();
+	mCameraDistance = max(.01f, mCameraDistance);
+
 	for (uint32_t i = 0; i < mCameras.size(); i++)
 		mCameras[i]->LocalPosition(0, 0, -mCameraDistance);
 
+	// print performance
+	Camera* mainCamera = mCameras[0];
+	if (mainCamera->Orthographic()) {
+		mFpsText->TextScale(.025f * mainCamera->OrthographicSize());
+		mainCamera->OrthographicSize(mainCamera->OrthographicSize() * (1 - mInput->ScrollDelta() * .06f));
+	} else
+		mFpsText->TextScale(.0004f * tanf(mainCamera->FieldOfView() / 2));
+	mFpsText->LocalRotation(mainCamera->WorldRotation());
+	mFpsText->LocalPosition(mainCamera->ClipToWorld(float3(-.99f, -.96f, 0.005f)));
+
+	// count fps
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
 	mFrameCount++;
 	if (mFrameTimeAccum > 1.f) {
 		mFps = mFrameCount / mFrameTimeAccum;
 		mFrameTimeAccum -= 1.f;
 		mFrameCount = 0;
-		char buf[256];
-		sprintf(buf, "%.2f fps | %d tris\n", mFps, mTriangleCount);
+		char buf[8192];
+		memset(buf, 0, 8192);
+		size_t sz = sprintf(buf, "%.2f fps | %llu tris\n", mFps, mTriangleCount);
+		#ifdef PROFILER_ENABLE
+		if (mPrintPerformance)
+			Profiler::PrintLastFrame(buf + sz);
+		#endif
 		mFpsText->Text(buf);
 	}
 }

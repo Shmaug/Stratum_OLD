@@ -59,6 +59,9 @@ private:
 	#ifdef __linux
 	std::unordered_map<std::string, xcb_connection_t*> mXCBConnections;
 	#else
+	void HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+	bool mDestroyPending;
+	static std::vector<Instance*> sInstances;
 	#endif
 };

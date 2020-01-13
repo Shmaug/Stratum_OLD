@@ -30,8 +30,10 @@ private:
 	Object* mCameraPivot;
 	std::vector<Camera*> mCameras;
 
+	bool mPrintPerformance;
+
 	float mFrameTimeAccum;
 	float mFps;
 	uint32_t mFrameCount;
-	uint32_t mTriangleCount;
+	uint64_t mTriangleCount;
 };
