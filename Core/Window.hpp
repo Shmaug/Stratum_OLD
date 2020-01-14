@@ -1,9 +1,15 @@
 #pragma once
 
+
 #ifdef __linux
-#include <xcb/xcb.h>
 #include <vulkan/vulkan.h>
+#include <xcb/xcb.h>
 #include <vulkan/vulkan_xcb.h>
+namespace x11{
+#include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+#include <vulkan/vulkan_xlib_xrandr.h>
+};
 #else
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
@@ -36,6 +42,10 @@ public:
 	inline VkSurfaceKHR Surface() const { return mSurface; }
 	inline VkSurfaceFormatKHR Format() const { return mFormat; }
 
+	#ifdef WINDOWS
+	inline HWND Hwnd() const { return mHwnd; }
+	#endif
+
 	inline ::Device* Device() const { return mDevice; }
 
 private:
@@ -43,8 +53,9 @@ private:
 	friend class Stratum;
 	friend class Instance;
 
+	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice physicalDevice, VkDisplayKHR directDisplay);
 	#ifdef __linux
-	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen);
+	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, xcb_screen_t* XCBScreen);
 	#else
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, HINSTANCE hInst);
 	#endif
@@ -53,13 +64,13 @@ private:
 	/// Waits on all semaphores in waitSemaphores
 	ENGINE_EXPORT void Present(std::vector<VkSemaphore> waitSemaphores);
 
-	ENGINE_EXPORT void OnResize();
-
 	MouseKeyboardInput* mInput;
 
 	bool mFullscreen;
 	VkRect2D mClientRect;
 	std::string mTitle;
+
+	VkDisplayKHR mDirectDisplay;
 
 	Instance* mInstance;
 	::Device* mDevice;

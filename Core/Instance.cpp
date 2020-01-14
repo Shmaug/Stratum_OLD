@@ -1,12 +1,3 @@
-#ifdef __linux
-#include <vulkan/vulkan.h>
-namespace x11{
-#include <xcb/xcb.h>
-#include <vulkan/vulkan_xlib.h>
-#include <vulkan/vulkan_xlib_xrandr.h>
-};
-#endif
-
 #include <Core/Instance.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
@@ -39,6 +30,10 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 #endif
 
 Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0), mWindowInput(nullptr) {
+	#ifdef __linux
+	mDestroyPending = false;
+	#endif
+
 	set<string> instanceExtensions;
 	#ifdef ENABLE_DEBUG_LAYERS
 	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -46,6 +41,7 @@ Instance::Instance() : mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFl
 
 	instanceExtensions.insert(VK_KHR_SURFACE_EXTENSION_NAME);
 	#ifdef __linux
+	instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 	instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
 	instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
 	instanceExtensions.insert(VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME);
@@ -127,8 +123,12 @@ Instance::~Instance() {
 		safe_delete(w);
 
 	#ifdef __linux
-	for (auto& c : mXCBConnections)
-		xcb_disconnect(c.second);
+	for (auto& kp : mXCBConnections){
+		xcb_key_symbols_free(kp.second.mKeySymbols);
+		xcb_disconnect(kp.second.mConnection);
+	}
+	for (auto& c : mXDisplays)
+		x11::XCloseDisplay(c.second);
 	#else
 	for (auto it = sInstances.begin(); it != sInstances.end();)
 		if (*it == this)
@@ -186,31 +186,102 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
 	vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
+
+	std::unordered_map<VkPhysicalDevice, uint32_t> deviceMap;
 	
 	// create windows
 	for (auto& it : displays) {
-		if (devices.size() <= it.mDevice){
-			fprintf_color(COLOR_RED, stderr, "Device index out of bounds: %d\n", it.mDevice);
+		if (it.mDeviceIndex >= devices.size()){
+			fprintf_color(COLOR_RED, stderr, "Device index out of bounds: %u\n", it.mDeviceIndex);
 			throw;
 		}
-		VkPhysicalDevice physicalDevice = devices[it.mDevice];
-		if (mDevices.size() <= it.mDevice) mDevices.resize(it.mDevice + 1);
+		VkPhysicalDevice physicalDevice = devices[it.mDeviceIndex];
 		
+		Window* w = nullptr;
+
 		#ifdef __linux
-		// TODO: acquire xlib displays
-		Window* w = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, conn, screenp);
+		if (it.mXDirectDisplay) {
+			x11::Display* dpy;
+			if (mXDisplays.count(it.mXDisplay))
+				dpy = mXDisplays.at(it.mXDisplay);
+			else {
+				dpy = x11::XOpenDisplay(it.mXDisplay.c_str());
+				if (!dpy) {
+					fprintf_color(COLOR_RED, stderr, "Failed to open X display: %s\n", it.mXDisplay.c_str());
+					throw;
+				}
+				mXDisplays.emplace(it.mXDisplay, dpy);
+			}
+
+			x11::PFN_vkGetRandROutputDisplayEXT vkGetRandROutputDisplay = (x11::PFN_vkGetRandROutputDisplayEXT)vkGetInstanceProcAddr(mInstance, "vkGetRandROutputDisplayEXT");
+			x11::PFN_vkAcquireXlibDisplayEXT vkAcquireXlibDisplay = (x11::PFN_vkAcquireXlibDisplayEXT)vkGetInstanceProcAddr(mInstance, "vkAcquireXlibDisplayEXT");
+
+			x11::XRRScreenResources* scr     = x11::XRRGetScreenResources(dpy, x11::XDefaultRootWindow(dpy));
+
+			VkDisplayKHR display = VK_NULL_HANDLE;
+			for(int b = 0; b < scr->noutput; b++) {
+				if (vkGetRandROutputDisplay(physicalDevice, dpy, scr->outputs[b], &display) == VK_SUCCESS && display != VK_NULL_HANDLE)
+					break;
+			}
+			if (physicalDevice == VK_NULL_HANDLE || display == VK_NULL_HANDLE) {
+				fprintf_color(COLOR_RED, stderr, "Failed to find a suitable physical device/display\n");
+				throw;
+			}
+			ThrowIfFailed(vkAcquireXlibDisplay(physicalDevice, dpy, display), "Failed to acquire Xlib display");
+
+			x11::XRRFreeScreenResources(scr);
+
+			w = new Window(this, physicalDevice, display);
+		}else{
+			// create xcb connection
+			xcb_connection_t* conn = nullptr;
+			if (!mXCBConnections.count(it.mXDisplay)) {
+				conn = xcb_connect(it.mXDisplay.data(), nullptr);
+				mXCBConnections.emplace(it.mXDisplay, XCBConnection(conn, nullptr));
+				if (int err = xcb_connection_has_error(conn)) {
+					mXCBConnections.erase(it.mXDisplay);
+					fprintf_color(COLOR_RED, stderr, "Failed to connect to display %s: %d\n", it.mXDisplay.c_str(), err);
+					throw;
+				}
+				mXCBConnections[it.mXDisplay].mKeySymbols = xcb_key_symbols_alloc(conn);
+			} else
+				conn = mXCBConnections.at(it.mXDisplay).mConnection;
+
+			// find xcb screen
+			for (xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(conn)); iter.rem; xcb_screen_next(&iter)) {
+				xcb_screen_t* screen = iter.data;
+
+				// find suitable physical device
+				uint32_t queueFamilyCount;
+				vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+				vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
+				vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
+				
+				for (uint32_t q = 0; q < queueFamilyCount; q++){
+					if (vkGetPhysicalDeviceXcbPresentationSupportKHR(physicalDevice, q, conn, screen->root_visual)){
+						w = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, conn, screen);
+						break;
+					}
+				}
+				if (w) break;
+			}
+		}
 		#else
-		Window* w = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, hInstance);
+		w = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, hInstance);
 		#endif
 
-		if (!mDevices[it.mDevice]) {
-			uint32_t gq, pq;
-			Device::FindQueueFamilies(physicalDevice, w->Surface(), gq, pq);
-			mDevices[it.mDevice] = new Device(this, physicalDevice, it.mDevice, gq, pq, deviceExtensions, validationLayers);
+
+		if (!deviceMap.count(physicalDevice)) {
+			uint32_t graphicsQueue, presentQueue;
+			Device::FindQueueFamilies(physicalDevice, w->Surface(), graphicsQueue, presentQueue);
+			Device* d = new Device(this, physicalDevice, mDevices.size(), graphicsQueue, presentQueue, deviceExtensions, validationLayers);
+			deviceMap.emplace(physicalDevice, mDevices.size());
+			mDevices.push_back(d);
 		}
-		mDevices[it.mDevice]->mWindowCount++;
 		
-		w->CreateSwapchain(mDevices[it.mDevice]);
+		Device* device = mDevices[deviceMap.at(physicalDevice)];
+		device->mWindowCount++;
+		w->CreateSwapchain(device);
 		mWindows.push_back(w);
 		mMaxFramesInFlight = min(mMaxFramesInFlight, w->mImageCount);
 	}
@@ -228,6 +299,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	mLastFrame = mClock.now();
 }
 
+#ifdef WINDOWS
 void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message){
 	case WM_DESTROY:
@@ -237,11 +309,90 @@ void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 	case WM_SIZE:
 	case WM_MOVE:
 		for (Window* w : mWindows)
-			if (w->mHwnd == hwnd)
-				w->OnResize();
+			if (w->mHwnd == hwnd){
+				RECT cr;
+				GetClientRect(mHwnd, &cr);
+				w->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
+				w->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+			}
 		break;
 	}
 }
+#elif defined(__linux)
+void Instance::ProcessEvent(Instance::XCBConnection* connection, xcb_generic_event_t* event) {
+	xcb_motion_notify_event_t* mn = (xcb_motion_notify_event_t*)event;
+	xcb_resize_request_event_t* rr = (xcb_resize_request_event_t*)event;
+	xcb_button_press_event_t* bp = (xcb_button_press_event_t*)event;
+	xcb_key_press_event_t* kp = (xcb_key_press_event_t*)event;
+	xcb_key_release_event_t* kr = (xcb_key_release_event_t*)event;
+	xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
+
+	switch (event->response_type & ~0x80) {
+	case XCB_MOTION_NOTIFY:
+		mWindowInput->mCurrent.mCursorPos = float2((float)mn->root_x, (float)mn->root_y);
+		break;
+
+	case XCB_KEY_PRESS:
+		mWindowInput->mCurrent.mKeys[(KeyCode)xcb_key_press_lookup_keysym(connection->mKeySymbols, kp, 0)] = true;
+		break;
+	case XCB_KEY_RELEASE:
+		mWindowInput->mCurrent.mKeys[(KeyCode)xcb_key_release_lookup_keysym(connection->mKeySymbols, kp, 0)] = false;
+		break;
+
+	case XCB_BUTTON_PRESS:
+		if (bp->detail == 4){
+			mWindowInput->mCurrent.mScrollDelta += 1.0f;
+			break;
+		}
+		if (bp->detail == 5){
+			mWindowInput->mCurrent.mScrollDelta =- 1.0f;
+			break;
+		}
+	case XCB_BUTTON_RELEASE:
+		switch (bp->detail){
+		case 1:
+			mWindowInput->mCurrent.mKeys[MOUSE_LEFT] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			break;
+		case 2:
+			mWindowInput->mCurrent.mKeys[MOUSE_MIDDLE] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			break;
+		case 3:
+			mWindowInput->mCurrent.mKeys[MOUSE_RIGHT] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			break;
+		}
+		break;
+
+	case XCB_CLIENT_MESSAGE:
+		for (const auto& w : mWindows)
+			if (w->mXCBConnection == connection->mConnection && cm->data.data32[0] == w->mXCBDeleteWin)
+				mDestroyPending = true;
+		break;
+	}
+}
+xcb_generic_event_t* Instance::PollEvent(Instance::XCBConnection* connection) {
+    xcb_generic_event_t* cur = xcb_poll_for_event(connection->mConnection);
+	xcb_generic_event_t* nxt = xcb_poll_for_event(connection->mConnection);
+
+	if (cur && (cur->response_type & ~0x80) == XCB_KEY_RELEASE &&
+		nxt && (nxt->response_type & ~0x80) == XCB_KEY_PRESS) {
+
+		xcb_key_press_event_t* kp = (xcb_key_press_event_t*)cur;
+		xcb_key_press_event_t* nkp = (xcb_key_press_event_t*)nxt;
+
+		if (nkp->time == kp->time && nkp->detail == kp->detail) {
+			free(cur);
+			free(nxt);
+			return PollEvent(connection); // ignore repeat key press events
+		}
+	}
+
+	if (cur) {
+		ProcessEvent(connection, cur);
+		free(cur);
+	}
+	return nxt;
+}
+#endif
 
 bool Instance::PollEvents() {
     auto t1 = mClock.now();
@@ -249,25 +400,31 @@ bool Instance::PollEvents() {
 	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
 	mLastFrame = t1;
 
-	#if __linux
+	#ifdef __linux
 	for (auto& c : mXCBConnections) {
-		xcb_generic_event_t* event = xcb_poll_for_event(c.second);
-		if (!event) return true;
-
-		xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
-
-		switch (event->response_type & ~0x80) {
-		case XCB_CLIENT_MESSAGE: {
-			for (const auto& w : mWindows)
-				if (w->mXCBConnection == c.second && cm->data.data32[0] == w->mXCBDeleteWin)
-					return false;
-			break;
+		xcb_generic_event_t* event;
+		while (event = PollEvent(&c.second)){
+			if (!event) break;
+			ProcessEvent(&c.second, event);
+			free(event);
 		}
-		}
-
-		free(event);
 	}
-	#else
+
+	for (const auto& w : mWindows) {
+		xcb_get_geometry_cookie_t cookie = xcb_get_geometry(w->mXCBConnection, w->mXCBWindow);
+		if (xcb_get_geometry_reply_t* reply = xcb_get_geometry_reply(w->mXCBConnection, cookie, NULL)) {
+			w->mClientRect.offset.x = reply->x;
+			w->mClientRect.offset.y = reply->y;
+			w->mClientRect.extent.width = reply->width;
+			w->mClientRect.extent.height = reply->height;
+			free(reply);
+		}
+	}
+
+	mWindowInput->mCurrent.mCursorDelta = mWindowInput->mCurrent.mCursorPos - mWindowInput->mLast.mCursorPos;
+	return !mDestroyPending;
+
+	#elif defined(WINDOWS)
 	while (true) {
 		if (mDestroyPending) return false;
 		MSG msg = {};
@@ -343,9 +500,8 @@ bool Instance::PollEvents() {
 	POINT pt;
 	GetCursorPos(&pt);
 	mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
-	#endif
-
 	return true;
+	#endif
 }
 
 void Instance::AdvanceFrame() {

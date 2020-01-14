@@ -214,13 +214,15 @@ bool ReadConfig(const string& file, Configuration& config) {
 	auto& displays = json["displays"];
 	if (displays.is_array()) {
 		for (const auto& d : displays.array_items()) {
-			auto& device = d["device"];
-			auto& rect = d["window_rect"];
+			auto& devc = d["device"];
 			auto& disp = d["x_display"];
+			auto& dir = d["x_direct_display"];
+			auto& rect = d["window_rect"];
 
 			Instance::DisplayCreateInfo info = {};
-			info.mDevice = device.is_number() ? device.int_value() : -1;
+			info.mDeviceIndex = devc.is_number() ? devc.int_value() : 0;
 			info.mXDisplay = disp.is_string() ? disp.string_value() : "";
+			info.mXDirectDisplay = dir.is_bool() ? dir.bool_value() : false;
 			if (rect.is_array() && rect.array_items().size() == 4 &&
 				rect.array_items()[0].is_number() &&
 				rect.array_items()[1].is_number() &&
@@ -254,7 +256,6 @@ int main(int argc, char* argv[]) {
 		Configuration config = {};
 		if (!ReadConfig(file, config)){
 			config.mDisplays.push_back({});
-			config.mDisplays[0].mDevice = 0;
 			config.mDisplays[0].mWindowPosition = { { 160, 90 }, { 1600, 900 } };
 		}
 		if (argc > 2)
