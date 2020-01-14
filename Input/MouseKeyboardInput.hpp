@@ -5,47 +5,25 @@
 
 class Window;
 
+#ifdef WINDOWS
 enum KeyCode {
 	KEY_NONE 	= 0x00,
+
 	MOUSE_LEFT 	= 0x01,
 	MOUSE_RIGHT = 0x02,
 	KEY_CANCEL 	= 0x03,
 	MOUSE_MIDDLE = 0x04,
 	MOUSE_X1 = 0x05,
 	MOUSE_X2 = 0x06,
-	// 0x07 is undefined
+
 	KEY_BACKSPACE = 0x08,
 	KEY_TAB = 0x09,
-	// 0x0A-0B are reserved
-	KEY_CLEAR = 0x0c,
 	KEY_ENTER = 0x0d,
-	// 0x0E-0F are undefined
-	KEY_SHIFT 		= 0x10,
-	KEY_CONTROL 	= 0x11,
-	KEY_ALT 		= 0x12,
-	KEY_PAUSE 		= 0x13,
 	KEY_LOCK_CAPS 	= 0x14,
-	/*
-	KanaMode = 0x15,
-	HangulMode = 0x15,
-	// 0x16 is undefined
-	JunjaMode = 0x17,
-	FinalMode = 0x18,
-	HanjaMode = 0x19,
-	KanjiMode = 0x19,
-	*/
-	// 0x1A is undefined
 	KEY_ESCAPE = 0x1b,
 
-	KEY_IME_CONVERT = 0x1c,
-	KEY_IMI_NOCONVERT = 0x1d,
-	KEY_IME_ACCEPT = 0x1e,
-	KEY_IMI_MODECHANGE = 0x1f,
-
 	KEY_SPACE 		= 0x20,
-	KEY_PRIOR 		= 0x21,
 	KEY_PAGEUP 		= 0x21,
-	KEY_NEXT 		= 0x22,
 	KEY_PAGEDOWN 	= 0x22,
 	KEY_END 		= 0x23,
 	KEY_HOME 		= 0x24,
@@ -53,14 +31,9 @@ enum KeyCode {
 	KEY_UP 			= 0x26,
 	KEY_RIGHT 		= 0x27,
 	KEY_DOWN 		= 0x28,
-	KEY_SELECT 		= 0x29,
-	KEY_PRINT 		= 0x2A,
-	//KEY_EXECUTE 	= 0x2B,
 	KEY_PRINTSCREEN = 0x2c,
 	KEY_INSERT 		= 0X2d,
 	KEY_DELETE 		= 0X2e,
-	KEY_HELP 		= 0X2F,
-	
 	KEY_D0 = 0x30,
 	KEY_D1 = 0x31,
 	KEY_D2 = 0x32,
@@ -71,7 +44,6 @@ enum KeyCode {
 	KEY_D7 = 0x37,
 	KEY_D8 = 0x38,
 	KEY_D9 = 0x39,
-	// 0x3A - 40 are undefined
 	KEY_A = 0x41,
 	KEY_B = 0x42,
 	KEY_C = 0x43,
@@ -98,11 +70,6 @@ enum KeyCode {
 	KEY_X = 0x58,
 	KEY_Y = 0x59,
 	KEY_Z = 0x5a,
-	KEY_LWIN = 0x5b,
-	KEY_RWIN = 0x5c,
-	KEY_APPS = 0x5d,
-	// 0x5E is reserved
-	KEY_SLEEP= 0x5f,
 	KEY_NUMPAD0 = 0x60,
 	KEY_NUMPAD1 = 0x61,
 	KEY_NUMPAD2 = 0x62,
@@ -143,38 +110,15 @@ enum KeyCode {
 	KEY_F22 = 0x85,
 	KEY_F23 = 0x86,
 	KEY_F24 = 0x87,
-	// 0x88 - 0x8f are unassigned
 	KEY_NUM_LOCK = 0x90,
 	KEY_SCROLL_LOCK = 0x91,
-	// 0x92 - 96 are OEM specific
-	// 0x97 - 9f are unassigned
 	KEY_LSHIFT = 0xa0,
 	KEY_RSHIFT = 0xa1,
 	KEY_LCONTROL = 0xa2,
 	KEY_RCONTROL = 0xa3,
 	KEY_LALT = 0xa4,
 	KEY_RALT = 0xa5,
-	KEY_BROWSER_BACK = 0xa6,
-	KEY_BROWSER_FORWARD = 0xa7,
-	KEY_BROWSER_REFRESH = 0xa8,
-	KEY_BROWSER_STOP = 0xa9,
-	KEY_BROWSER_SEARCH = 0xaa,
-	KEY_BROWSER_FAVORITES = 0xab,
-	KEY_BROWSER_HOME = 0xac,
-	KEY_VOLUME_MUTE = 0xad,
-	KEY_VOLUME_DOWN = 0xae,
-	KEY_VOLUME_UP = 0xaf,
 
-	KEY_MEDIA_NEXT = 0xb0,
-	KEY_MEDIA_PREVIOUS = 0xb1,
-	KEY_MEDIA_STOP = 0xb2,
-	KEY_MEDIA_PLAY_PAUSE = 0xb3,
-
-	KEY_LAUNCH_MAIL = 0xb4,
-	KEY_SELECT_MEDIA = 0xb5,
-	KEY_LAUNCH_APPLICATION_0 = 0xb6,
-	KEY_LAUNCH_APPLICATION_1 = 0xb7,
-	// 0xB8 - B9 are reserved
 	KEY_OEM_SEMICOLON = 0xba, // Used for miscellaneous characters; it can vary by keyboard.  For the US standard keyboard, the ';:' key
 	KEY_OEM_PLUS = 0xbb, // For any country/region, the '+' key
 	KEY_OEM_COMMA = 0xbc, // For any country/region, the ',' key
@@ -182,33 +126,141 @@ enum KeyCode {
 	KEY_OEM_PERIOD = 0xbe, // For any country/region, the '.' key
 	KEY_OEM_QUESTION = 0xbf, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the '/?' key
 	KEY_OEM_TILDE = 0xc0, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the '`~' key
-	// 0xC1 - D7 are reserved
-	// 0xD8 - DA are unassigned
 	KEY_OEM_BRACKET_OPEN = 0xdb, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the '[{' key
 	KEY_OEM_PIPE = 0xdc, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the '\|' key
 	KEY_OEM_BRACKET_CLOSE = 0xdd, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the ']}' key
 	KEY_OEM_QUOTE = 0xde, // Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the 'single-quote/double-quote' key
-	KEY_OEM8 = 0xdf, // Used for miscellaneous characters; it can vary by keyboard.
-	// 0xE0 is reserved
-	// 0xE1 is OEM specific
 	KEY_BACKSLASH = 0xe2, // Either the angle bracket key or the backslash key on the RT 102-key keyboard
-	KEY_OEM102 = 0xe2, // Either the angle bracket key or the backslash key on the RT 102-key keyboard
-	// 0xE3 - E4 OEM specific
-	KEY_PROCESS = 0xe5,
-	// 0xE6 is OEM specific
-	KEY_UTF_PACKET = 0xe7, // Used to pass Unicode characters as if they were keystrokes. The Packet key value is the low word of a 32-bit virtual-key value used for non-keyboard input methods.
-	// 0xE8 is unassigned
-	// 0xE9 - F5 OEM specific
-	KEY_ATTN = 0xf6,
-	KEY_CRSEL = 0xf7,
-	KEY_EXSEL = 0xf8,
-	KEY_ERASE_EOF = 0xf9,
-	KEY_PLAY = 0xfa, 
-	KEY_ZOOM = 0xfb,
-	// 0xfc is reserved
-	KEY_PA1 = 0xfd
-	//KEY_CLEAR = 0xfe
 };
+#elif defined(__linux)
+#include <X11/keysym.h>
+enum KeyCode{
+	KEY_NONE 	= 0x0000,
+
+	MOUSE_LEFT 	= 0x001,
+	MOUSE_RIGHT = 0x002,
+	KEY_CANCEL 	= 0x003,
+	MOUSE_MIDDLE = 0x004,
+	MOUSE_X1 = 0x005,
+	MOUSE_X2 = 0x006,
+
+	KEY_BACKSPACE = XK_BackSpace,
+	KEY_TAB = XK_Tab,
+	KEY_ENTER = XK_ISO_Enter,
+	KEY_LOCK_CAPS 	= XK_Caps_Lock,
+	KEY_ESCAPE = XK_Escape,
+
+	KEY_SPACE 		= XK_space,
+	KEY_PAGEUP 		= XK_Page_Up,
+	KEY_PAGEDOWN 	= XK_Page_Down,
+	KEY_END 		= XK_End,
+	KEY_HOME 		= XK_Home,
+	KEY_LEFT 		= XK_Left,
+	KEY_UP 			= XK_Up,
+	KEY_RIGHT 		= XK_Right,
+	KEY_DOWN 		= XK_Down,
+	KEY_PRINTSCREEN = XK_Print,
+	KEY_INSERT 		= XK_Insert,
+	KEY_DELETE 		= XK_Home,
+	KEY_D0 = XK_0,
+	KEY_D1 = XK_1,
+	KEY_D2 = XK_2,
+	KEY_D3 = XK_3,
+	KEY_D4 = XK_4,
+	KEY_D5 = XK_5,
+	KEY_D6 = XK_6,
+	KEY_D7 = XK_7,
+	KEY_D8 = XK_8,
+	KEY_D9 = XK_9,
+	KEY_A = XK_a,
+	KEY_B = XK_b,
+	KEY_C = XK_c,
+	KEY_D = XK_d,
+	KEY_E = XK_e,
+	KEY_F = XK_f,
+	KEY_G = XK_g,
+	KEY_H = XK_h,
+	KEY_I = XK_i,
+	KEY_J = XK_j,
+	KEY_K = XK_k,
+	KEY_L = XK_l,
+	KEY_M = XK_m,
+	KEY_N = XK_n,
+	KEY_O = XK_o,
+	KEY_P = XK_p,
+	KEY_Q = XK_q,
+	KEY_R = XK_r,
+	KEY_S = XK_s,
+	KEY_T = XK_t,
+	KEY_U = XK_u,
+	KEY_V = XK_v,
+	KEY_W = XK_w,
+	KEY_X = XK_x,
+	KEY_Y = XK_y,
+	KEY_Z = XK_z,
+	KEY_NUMPAD0 = XK_KP_0,
+	KEY_NUMPAD1 = XK_KP_1,
+	KEY_NUMPAD2 = XK_KP_2,
+	KEY_NUMPAD3 = XK_KP_3,
+	KEY_NUMPAD4 = XK_KP_4,
+	KEY_NUMPAD5 = XK_KP_5,
+	KEY_NUMPAD6 = XK_KP_6,
+	KEY_NUMPAD7 = XK_KP_7,
+	KEY_NUMPAD8 = XK_KP_8,
+	KEY_NUMPAD9 = XK_KP_9,
+	KEY_MULTIPLY = XK_KP_Multiply,
+	KEY_ADD = XK_KP_Add,
+	KEY_SEPARATOR = XK_KP_Enter,
+	KEY_SUBTRACT = XK_KP_Subtract,
+	KEY_DECIMAL = XK_KP_Decimal,
+	KEY_DIVIDE = XK_KP_Divide,
+	KEY_F1  = XK_F1,
+	KEY_F2  = XK_F2,
+	KEY_F3  = XK_F3,
+	KEY_F4  = XK_F4,
+	KEY_F5  = XK_F5,
+	KEY_F6  = XK_F6,
+	KEY_F7  = XK_F7,
+	KEY_F8  = XK_F8,
+	KEY_F9  = XK_F9,
+	KEY_F10 = XK_F10,
+	KEY_F11 = XK_F11,
+	KEY_F12 = XK_F12,
+	KEY_F13 = XK_F13,
+	KEY_F14 = XK_F14,
+	KEY_F15 = XK_F15,
+	KEY_F16 = XK_F16,
+	KEY_F17 = XK_F17,
+	KEY_F18 = XK_F18,
+	KEY_F19 = XK_F19,
+	KEY_F20 = XK_F20,
+	KEY_F21 = XK_F21,
+	KEY_F22 = XK_F23,
+	KEY_F23 = XK_F24,
+	KEY_F24 = XK_F25,
+	KEY_NUM_LOCK = XK_Num_Lock,
+	KEY_SCROLL_LOCK = XK_Scroll_Lock,
+	KEY_LSHIFT = XK_Shift_L,
+	KEY_RSHIFT = XK_Shift_R,
+	KEY_LCONTROL = XK_Control_L,
+	KEY_RCONTROL = XK_Control_R,
+	KEY_LALT = XK_Alt_L,
+	KEY_RALT = XK_Alt_R,
+
+	KEY_OEM_SEMICOLON = XK_semicolon,
+	KEY_OEM_PLUS = XK_plus,
+	KEY_OEM_COMMA = XK_comma,
+	KEY_OEM_MINUS = XK_minus,
+	KEY_OEM_PERIOD = XK_period,
+	KEY_OEM_QUESTION = XK_question,
+	KEY_OEM_TILDE = XK_grave,
+	KEY_OEM_BRACKET_OPEN = XK_bracketleft,
+	KEY_OEM_PIPE = XK_backslash,
+	KEY_OEM_BRACKET_CLOSE = XK_bracketright,
+	KEY_OEM_QUOTE = XK_quotedbl,
+	KEY_BACKSLASH = XK_backslash,
+};
+#endif
 
 class MouseKeyboardInput : public InputDevice {
 public:
@@ -237,7 +289,7 @@ private:
 		float2 mCursorPos;
 		float2 mCursorDelta;
 		float mScrollDelta;
-		std::vector<bool> mKeys;
+		bool mKeys[0xff];
 	};
 	Window* mLastWindow;
 	InputPointer mMousePointer;

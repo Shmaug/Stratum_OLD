@@ -1,5 +1,17 @@
 #pragma once
 
+#ifdef __linux
+#include <vulkan/vulkan.h>
+#include <xcb/xcb.h>
+#include <xcb/xcb_keysyms.h>
+#include <vulkan/vulkan_xcb.h>
+namespace x11{
+#include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+#include <vulkan/vulkan_xlib_xrandr.h>
+};
+#endif
+
 #include <Input/MouseKeyboardInput.hpp>
 #include <Util/Util.hpp>
 
@@ -9,9 +21,10 @@ class Device;
 class Instance {
 public:
 	struct DisplayCreateInfo {
-		int mDevice;
+		uint32_t mDeviceIndex;
 		VkRect2D mWindowPosition;
 		std::string mXDisplay;
+		bool mXDirectDisplay;
 	};
 
 	ENGINE_EXPORT ~Instance();
@@ -57,7 +70,20 @@ private:
 	float mDeltaTime;
 
 	#ifdef __linux
-	std::unordered_map<std::string, xcb_connection_t*> mXCBConnections;
+	struct XCBConnection {
+		xcb_connection_t* mConnection;
+		xcb_key_symbols_t* mKeySymbols;
+
+		inline XCBConnection() : mConnection(nullptr), mKeySymbols(nullptr) {}
+		inline XCBConnection(xcb_connection_t* conn, xcb_key_symbols_t* symbols) : mConnection(conn), mKeySymbols(symbols) {}
+
+	};
+	ENGINE_EXPORT void ProcessEvent(XCBConnection* connection, xcb_generic_event_t* event);
+	ENGINE_EXPORT xcb_generic_event_t* PollEvent(XCBConnection* conn);
+
+	bool mDestroyPending;
+	std::unordered_map<std::string, x11::Display*> mXDisplays;
+	std::unordered_map<std::string, XCBConnection> mXCBConnections;
 	#else
 	void HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);

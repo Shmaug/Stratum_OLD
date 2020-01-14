@@ -8,36 +8,116 @@
 
 using namespace std;
 
-void Window::OnResize() {
-	#ifdef WINDOWS
-	RECT cr;
-	GetClientRect(mHwnd, &cr);
-	mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
-	mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
-	#else
-	static_assert(false, "Not implemented!");
-	#endif
-}
+Window::Window(Instance* instance, VkPhysicalDevice physicalDevice, VkDisplayKHR display)
+	: mInstance(instance), mDirectDisplay(display), mTargetCamera(nullptr), mDevice(nullptr), mTitle(""), mSwapchainSize({}), mFullscreen(false), mClientRect({}), mInput(nullptr),
+	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(physicalDevice), mImageCount(0), mFormat({}),
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
+	
 
+	uint32_t displayPropertyCount;
+	vkGetPhysicalDeviceDisplayPropertiesKHR(physicalDevice, &displayPropertyCount, NULL);
+	vector<VkDisplayPropertiesKHR> displayProperties(displayPropertyCount);
+	vkGetPhysicalDeviceDisplayPropertiesKHR(physicalDevice, &displayPropertyCount, displayProperties.data());
+
+	uint32_t planePropertyCount;
+	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(physicalDevice, &planePropertyCount, NULL);
+	vector<VkDisplayPlanePropertiesKHR> planeProperties(planePropertyCount);
+	vkGetPhysicalDeviceDisplayPlanePropertiesKHR(physicalDevice, &planePropertyCount, planeProperties.data());
+
+	VkExtent2D size = {};
+	VkDisplayModeKHR displayMode;
+	bool foundMode = false;
+
+	for(uint32_t i = 0; i < displayPropertyCount; i++) {
+		if (displayProperties[i].display != mDirectDisplay) continue;
+
+		uint32_t modeCount;
+		vkGetDisplayModePropertiesKHR(mPhysicalDevice, display, &modeCount, NULL);
+		vector<VkDisplayModePropertiesKHR> modeProperties(modeCount);
+		vkGetDisplayModePropertiesKHR(mPhysicalDevice, display, &modeCount, modeProperties.data());
+
+		for (uint32_t j = 0; j < modeCount; j++) {
+			if (modeProperties[j].parameters.visibleRegion.width > size.width && modeProperties[j].parameters.visibleRegion.height > size.height) {
+				size = modeProperties[j].parameters.visibleRegion;
+				displayMode = modeProperties[j].displayMode;
+				foundMode = true;
+				break;
+			}
+		}
+		if (foundMode) {
+			break;
+		}
+	}
+	if(!foundMode) {
+		fprintf_color(COLOR_RED, stderr, "Can't find a display and a display mode!\n");\
+		throw;
+	}
+
+	uint32_t bestPlaneIndex = UINT32_MAX;
+	for(uint32_t i = 0; i < planePropertyCount; i++) {
+		uint32_t displayCount;
+		vkGetDisplayPlaneSupportedDisplaysKHR(mPhysicalDevice, i, &displayCount, NULL);
+		vector<VkDisplayKHR> displays(displayCount);
+		vkGetDisplayPlaneSupportedDisplaysKHR(mPhysicalDevice, i, &displayCount, displays.data());
+
+		bestPlaneIndex = UINT32_MAX;
+		for(uint32_t j = 0; j < displayCount; j++) {
+			if(displays[j] == mDirectDisplay) {
+				bestPlaneIndex = i;
+				break;
+			}
+		}
+		if(bestPlaneIndex != UINT32_MAX)
+			break;
+	}
+	if(bestPlaneIndex == UINT32_MAX) {
+		fprintf_color(COLOR_RED, stderr, "Can't find a plane for displaying!\n");
+		return;
+	}
+
+	VkDisplayPlaneCapabilitiesKHR planeCap;
+	vkGetDisplayPlaneCapabilitiesKHR(physicalDevice, displayMode, bestPlaneIndex, &planeCap);
+	VkDisplayPlaneAlphaFlagBitsKHR alphaMode = (VkDisplayPlaneAlphaFlagBitsKHR)0;
+
+	if (planeCap.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR)
+		alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_PREMULTIPLIED_BIT_KHR;
+	else if (planeCap.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR)
+		alphaMode = VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR;
+	else if (planeCap.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR)
+		alphaMode = VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR;
+	else if (planeCap.supportedAlpha & VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR)
+		alphaMode = VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR;
+
+	VkDisplaySurfaceCreateInfoKHR info = {};
+	info.sType = VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR;
+	info.displayMode = displayMode;
+	info.planeIndex = bestPlaneIndex;
+	info.planeStackIndex = planeProperties[bestPlaneIndex].currentStackIndex;
+	info.transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	info.globalAlpha = 1.f;
+	info.alphaMode = alphaMode;
+	info.imageExtent.width = size.width;
+	info.imageExtent.height = size.height;
+	vkCreateDisplayPlaneSurfaceKHR(*mInstance, &info, nullptr, &mSurface);
+}
 #ifdef __linux
-Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, int XScreen)
+Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, xcb_screen_t* XCBScreen)
 #else
 Window::Window(Instance* instance, const string& title, MouseKeyboardInput* input, VkRect2D position, HINSTANCE hInstance)
 #endif
-	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mWindowedRect({}), mInput(input),
+	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
 	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
 
 	#ifdef __linux
 	mXCBConnection = XCBConnection;
-
-	xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(mXCBConnection));
-	for (uint32_t i = 0; i < XScreen; i++)
-		xcb_screen_next(&iter);
-	mXCBScreen = iter.data;
+	mXCBScreen = XCBScreen;
 	mXCBWindow = xcb_generate_id(mXCBConnection);
 
-	uint32_t valueList[] { 0 };
+	uint32_t valueList[] {
+		XCB_EVENT_MASK_BUTTON_PRESS		| XCB_EVENT_MASK_BUTTON_RELEASE |
+		XCB_EVENT_MASK_KEY_PRESS   		| XCB_EVENT_MASK_KEY_RELEASE |
+		XCB_EVENT_MASK_POINTER_MOTION	| XCB_EVENT_MASK_BUTTON_MOTION };
 	xcb_create_window(
 		mXCBConnection,
 		XCB_COPY_FROM_PARENT,
@@ -50,8 +130,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 		0,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		mXCBScreen->root_visual,
-		XCB_CW_EVENT_MASK,
-		valueList);
+		XCB_CW_EVENT_MASK, valueList);
 
 	xcb_change_property(
 		mXCBConnection,
@@ -81,7 +160,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	ThrowIfFailed(vkCreateXcbSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
 
 	#else
-
+	mWindowedRect = {};
 	mHwnd = CreateWindowExA(
 		NULL,
 		"Stratum",
@@ -118,9 +197,16 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 Window::~Window() {
 	DestroySwapchain();
 	vkDestroySurfaceKHR(*mInstance, mSurface, nullptr);
+
+	if (mDirectDisplay){
+		PFN_vkReleaseDisplayEXT vkReleaseDisplay = (PFN_vkReleaseDisplayEXT)vkGetInstanceProcAddr(*mInstance, "vkReleaseDisplayEXT");
+		vkReleaseDisplay(mPhysicalDevice, mDirectDisplay);
+	}
+	
 	#ifdef __linux
- 	xcb_destroy_window(mXCBConnection, mXCBWindow);
-	#else
+	if (mXCBConnection && mXCBWindow)
+ 		xcb_destroy_window(mXCBConnection, mXCBWindow);
+ 	#else
 	DestroyWindow(mHwnd);
 	#endif
 }
@@ -191,7 +277,40 @@ void Window::Fullscreen(bool fs) {
 		mFullscreen = false;
 	}
 	#else
-		static_assert(false, "Not implemented!");
+	enum {
+		MWM_HINTS_FUNCTIONS = (1L << 0),
+		MWM_HINTS_DECORATIONS =  (1L << 1),
+
+		MWM_FUNC_ALL = (1L << 0),
+		MWM_FUNC_RESIZE = (1L << 1),
+		MWM_FUNC_MOVE = (1L << 2),
+		MWM_FUNC_MINIMIZE = (1L << 3),
+		MWM_FUNC_MAXIMIZE = (1L << 4),
+		MWM_FUNC_CLOSE = (1L << 5)
+	};
+	enum {
+		OB_MWM_DECOR_ALL      = 1 << 0,
+		OB_MWM_DECOR_BORDER   = 1 << 1,
+		OB_MWM_DECOR_HANDLE   = 1 << 2,
+		OB_MWM_DECOR_TITLE    = 1 << 3,
+		#if 0
+		OB_MWM_DECOR_MENU     = 1 << 4,
+		#endif
+		OB_MWM_DECOR_ICONIFY  = 1 << 5,
+		OB_MWM_DECOR_MAXIMIZE = 1 << 6 
+	};
+	struct MwmHints {
+		unsigned long flags;
+		unsigned long functions;
+		unsigned long decorations;
+		long input_mode;
+		unsigned long status;
+	};
+	if (fs && !mFullscreen) {
+
+	} else if (!fs && mFullscreen){
+		
+	}
 	#endif
 }
 
@@ -222,19 +341,13 @@ void Window::CreateSwapchain(::Device* device) {
 	}
 	uint32_t graphicsFamily, presentFamily;
 	if (!Device::FindQueueFamilies(mPhysicalDevice, mSurface, graphicsFamily, presentFamily)) {
-		fprintf_color(COLOR_RED, stderr, "Failed to find queue families");
+		fprintf_color(COLOR_RED, stderr, "Failed to find queue families\n");
 		throw;
 	}
 	uint32_t queueFamilyIndices[] = { graphicsFamily, presentFamily };
 
-	// find the size of the swapchain
-	if (capabilities.currentExtent.width != numeric_limits<uint32_t>::max() && capabilities.currentExtent.width != 0)
-		mSwapchainSize = capabilities.currentExtent;
-	else {
-		mSwapchainSize.width = clamp(mClientRect.extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-		mSwapchainSize.height = clamp(mClientRect.extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-	}
-
+	// get the size of the swapchain
+	mSwapchainSize = capabilities.currentExtent;
 	if (mSwapchainSize.width == numeric_limits<uint32_t>::max() || mSwapchainSize.height == numeric_limits<uint32_t>::max() || mSwapchainSize.width == 0 || mSwapchainSize.height == 0)
 		return;
 

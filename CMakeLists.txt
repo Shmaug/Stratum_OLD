@@ -120,12 +120,14 @@ else()
 	target_link_libraries(Engine
 		stdc++fs
 		pthread
-		X11
 		"libvulkan.so.1"
 		"libX11.so"
 		"libXrandr.so"
+		"libX11-xcb.so"
+		"libxcb-keysyms.so"
+		"libxcb-randr.so"
+		"libz.so"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libassimp.a"
-		"${STRATUM_HOME}/ThirdParty/assimp/lib/libzlibstatic.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
 
 	if (${LINK_PERFTOOLS_PROFILER})

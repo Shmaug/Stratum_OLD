@@ -56,13 +56,13 @@ void CameraControl::Update() {
 
 	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
-		if (mInput->KeyDown(KEY_SHIFT)) {
+		if (mInput->KeyDown(KEY_LSHIFT)) {
 			md.x = -md.x;
 			md = md * .0005f * mCameraDistance;
 		} else
 			md = float3(md.y, md.x, 0) * .005f;
 
-		if (mInput->KeyDown(KEY_SHIFT))
+		if (mInput->KeyDown(KEY_LSHIFT))
 			// translate camera
 			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
 		else {
@@ -72,7 +72,6 @@ void CameraControl::Update() {
 		}
 		mCameraPivot->LocalRotation(quaternion(mCameraEuler));
 	}
-
 	mCameraDistance *= 1.0f - .2f * mInput->ScrollDelta();
 	mCameraDistance = max(.01f, mCameraDistance);
 

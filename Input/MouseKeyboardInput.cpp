@@ -5,10 +5,8 @@ MouseKeyboardInput::MouseKeyboardInput(){
 	mLastWindow = nullptr;
 	mMousePointer.mDevice = this;
 	mLockMouse = false;
-	mCurrent.mKeys.resize(0xff);
-	mLast.mKeys.resize(0xff);
-	memset(&mCurrent.mKeys[0], 0, sizeof(bool) * 0xff);
-	memset(&mLast.mKeys[0], 0, sizeof(bool) * 0xff);
+	memset(mCurrent.mKeys, 0, sizeof(bool) * 0xff);
+	memset(mLast.mKeys, 0, sizeof(bool) * 0xff);
 }
 
 void MouseKeyboardInput::LockMouse(bool l) {
@@ -18,7 +16,7 @@ void MouseKeyboardInput::LockMouse(bool l) {
 	else if (!mLockMouse && l)
 		ShowCursor(FALSE);
 	#else
-	static_assert(false, "Not implemented!");
+	// TODO
 	#endif
 
 	mLockMouse = l;
