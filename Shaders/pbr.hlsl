@@ -11,10 +11,10 @@
 
 #pragma render_queue 1000
 
-#pragma array MainTextures 64
-#pragma array NormalTextures 64
-#pragma array MaskTextures 64
-#pragma array EmissionTextures 64
+#pragma array MainTextures 8
+#pragma array NormalTextures 8
+#pragma array MaskTextures 8
+#pragma array EmissionTextures 8
 
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
@@ -30,16 +30,16 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTextures[64]		: register(t4);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTextures[64]	: register(t68);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTextures[64]		: register(t132); // rgba ->ao, rough, metallic (glTF spec.)
-[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTextures[64]	: register(t196);
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTextures[8]		: register(t4);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTextures[8]	: register(t12);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTextures[8]		: register(t20); // rgba ->ao, rough, metallic (glTF spec.)
+[[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture2D<float4> EmissionTextures[8]	: register(t28);
 
-[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t197);
-[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t198);
-[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT		: register(t199);
+[[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t29);
+[[vk::binding(BINDING_START + 5, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t30);
+[[vk::binding(BINDING_START + 6, PER_MATERIAL)]] Texture2D<float>  LightShaftLUT		: register(t31);
 
-[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture	: register(t200);
+[[vk::binding(BINDING_START + 7, PER_MATERIAL)]] Texture2D<float4> EnvironmentTexture	: register(t32);
 
 [[vk::binding(BINDING_START + 8 , PER_MATERIAL)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 9 , PER_MATERIAL)]] SamplerComparisonState ShadowSampler : register(s1);

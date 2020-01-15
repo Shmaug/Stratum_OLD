@@ -1,6 +1,7 @@
 #include <Core/Instance.hpp>
 #include <Core/Device.hpp>
 #include <Core/Window.hpp>
+#include <Scene/Camera.hpp>
 #include <Util/Profiler.hpp>
 
 using namespace std;
@@ -188,7 +189,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
 
 	std::unordered_map<VkPhysicalDevice, uint32_t> deviceMap;
-	
+
 	// create windows
 	for (auto& it : displays) {
 		if (it.mDeviceIndex >= devices.size()){
@@ -196,7 +197,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 			throw;
 		}
 		VkPhysicalDevice physicalDevice = devices[it.mDeviceIndex];
-		
+
 		Window* w = nullptr;
 
 		#ifdef __linux
@@ -256,7 +257,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 				vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 				vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
 				vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
-				
+
 				for (uint32_t q = 0; q < queueFamilyCount; q++){
 					if (vkGetPhysicalDeviceXcbPresentationSupportKHR(physicalDevice, q, conn, screen->root_visual)){
 						w = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, conn, screen);
@@ -278,7 +279,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 			deviceMap.emplace(physicalDevice, mDevices.size());
 			mDevices.push_back(d);
 		}
-		
+
 		Device* device = mDevices[deviceMap.at(physicalDevice)];
 		device->mWindowCount++;
 		w->CreateSwapchain(device);
@@ -327,16 +328,32 @@ void Instance::ProcessEvent(Instance::XCBConnection* connection, xcb_generic_eve
 	xcb_key_release_event_t* kr = (xcb_key_release_event_t*)event;
 	xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
 
+	KeyCode kc;
+
 	switch (event->response_type & ~0x80) {
 	case XCB_MOTION_NOTIFY:
-		mWindowInput->mCurrent.mCursorPos = float2((float)mn->root_x, (float)mn->root_y);
+		if (mn->same_screen){
+			mWindowInput->mCurrent.mCursorPos = float2((float)mn->event_x, (float)mn->event_y);
+			for (Window* w : mWindows)
+				if (w->mXCBConnection == connection->mConnection && w->mXCBWindow == mn->event){
+					if (w->mTargetCamera){
+						float2 uv = mWindowInput->mCurrent.mCursorPos / float2((float)w->mClientRect.extent.width, (float)w->mClientRect.extent.height);
+						mWindowInput->mMousePointer.mWorldRay = w->mTargetCamera->ScreenToWorldRay(uv);
+					}
+				}
+		}
 		break;
 
 	case XCB_KEY_PRESS:
-		mWindowInput->mCurrent.mKeys[(KeyCode)xcb_key_press_lookup_keysym(connection->mKeySymbols, kp, 0)] = true;
+		kc = (KeyCode)xcb_key_press_lookup_keysym(connection->mKeySymbols, kp, 0);
+		mWindowInput->mCurrent.mKeys[kc] = true;
+		if ((kc == KEY_LALT || kc == KEY_ENTER) && mWindowInput->KeyDown(KEY_ENTER) && mWindowInput->KeyDown(KEY_LALT))
+			for (const auto& w : mWindows)
+				w->Fullscreen(!w->Fullscreen());
 		break;
 	case XCB_KEY_RELEASE:
-		mWindowInput->mCurrent.mKeys[(KeyCode)xcb_key_release_lookup_keysym(connection->mKeySymbols, kp, 0)] = false;
+		kc = (KeyCode)xcb_key_release_lookup_keysym(connection->mKeySymbols, kp, 0);
+		mWindowInput->mCurrent.mKeys[kc] = false;
 		break;
 
 	case XCB_BUTTON_PRESS:
@@ -352,12 +369,15 @@ void Instance::ProcessEvent(Instance::XCBConnection* connection, xcb_generic_eve
 		switch (bp->detail){
 		case 1:
 			mWindowInput->mCurrent.mKeys[MOUSE_LEFT] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			mWindowInput->mMousePointer.mAxis[0] = ((event->response_type & ~0x80) == XCB_BUTTON_PRESS) ? 1.f : 0.f;
 			break;
 		case 2:
 			mWindowInput->mCurrent.mKeys[MOUSE_MIDDLE] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			mWindowInput->mMousePointer.mAxis[2] = ((event->response_type & ~0x80) == XCB_BUTTON_PRESS) ? 1.f : 0.f;
 			break;
 		case 3:
 			mWindowInput->mCurrent.mKeys[MOUSE_RIGHT] = (event->response_type & ~0x80) == XCB_BUTTON_PRESS;
+			mWindowInput->mMousePointer.mAxis[1] = ((event->response_type & ~0x80) == XCB_BUTTON_PRESS) ? 1.f : 0.f;
 			break;
 		}
 		break;
@@ -500,6 +520,7 @@ bool Instance::PollEvents() {
 	POINT pt;
 	GetCursorPos(&pt);
 	mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
+	// TODO: mouse ray
 	return true;
 	#endif
 }

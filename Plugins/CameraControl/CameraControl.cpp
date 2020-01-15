@@ -53,7 +53,6 @@ void CameraControl::Update() {
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	if (mInput->KeyDownFirst(KEY_F3))
 		mPrintPerformance = !mPrintPerformance;
-
 	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
 		if (mInput->KeyDown(KEY_LSHIFT)) {
@@ -106,6 +105,6 @@ void CameraControl::Update() {
 	}
 }
 
-void CameraControl::PostRender(CommandBuffer* commandBuffer, Camera* camera) {
+void CameraControl::PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	mTriangleCount = commandBuffer->mTriangleCount;
 }

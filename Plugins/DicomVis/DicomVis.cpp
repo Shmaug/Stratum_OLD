@@ -308,7 +308,7 @@ void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		}
 
 		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
-		if (mInput->KeyDown(KEY_SHIFT)) {
+		if (mInput->KeyDown(KEY_LSHIFT)) {
 			quaternion r = mSelected->WorldRotation();
 			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);

@@ -45,6 +45,7 @@ add_library(Engine SHARED
 	"Scene/SkinnedMeshRenderer.cpp"
 	"Scene/TextRenderer.cpp"
 	"ThirdParty/imp.cpp"
+	"Util/Tokenizer.cpp"
 	"Util/Profiler.cpp" )
 add_executable(ShaderCompiler "Stratum/ShaderCompiler.cpp")
 add_executable(Stratum "Stratum/Stratum.cpp" "ThirdParty/json11.cpp" "stratum.rc")

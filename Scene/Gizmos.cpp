@@ -264,6 +264,8 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	VkDescriptorSetLayoutBinding b = shader->mDescriptorBindings.at("MainTexture").second;
 	for (uint32_t i = 0; i < mTextures.size(); i++)
 		gizmoDS->CreateSampledTextureDescriptor(mTextures[i], i, b.binding);
+	for (uint32_t i = mTextures.size(); i < b.descriptorCount; i++)
+		gizmoDS->CreateSampledTextureDescriptor(mTextures[0], i, b.binding);
 	gizmoDS->FlushWrites();
 
 	data.mBufferIndex[frameContextIndex]++;

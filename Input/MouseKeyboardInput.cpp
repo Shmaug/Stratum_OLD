@@ -2,11 +2,16 @@
 #include <Core/Window.hpp>
 
 MouseKeyboardInput::MouseKeyboardInput(){
-	mLastWindow = nullptr;
 	mMousePointer.mDevice = this;
+	mMousePointer.mAxis.emplace(0, 0.f);
+	mMousePointer.mAxis.emplace(1, 0.f);
+	mMousePointer.mAxis.emplace(2, 0.f);
 	mLockMouse = false;
-	memset(mCurrent.mKeys, 0, sizeof(bool) * 0xff);
-	memset(mLast.mKeys, 0, sizeof(bool) * 0xff);
+	mCurrent.mCursorPos = mLast.mCursorPos = 0;
+	mCurrent.mCursorDelta = mLast.mCursorDelta = 0;
+	mCurrent.mCursorDelta = mLast.mScrollDelta = 0;
+	mCurrent.mKeys = {};
+	mLast.mKeys = {};
 }
 
 void MouseKeyboardInput::LockMouse(bool l) {
@@ -16,7 +21,7 @@ void MouseKeyboardInput::LockMouse(bool l) {
 	else if (!mLockMouse && l)
 		ShowCursor(FALSE);
 	#else
-	// TODO
+	// TODO: hide cursor on linux
 	#endif
 
 	mLockMouse = l;
