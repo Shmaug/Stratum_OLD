@@ -6,10 +6,32 @@
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <ThirdParty/stb_image.h>
-
 using namespace std;
+
+class SkeletonJoint : public Object {
+public:
+	float3 mMin;
+	float3 mMax;
+
+	float3 mRotMin;
+	float3 mRotMax;
+	float3 mPose;
+
+	inline SkeletonJoint(const std::string& name) : Object(name), mRotMin(-1e10f), mRotMax(1e10f), mPose(0) {};
+
+	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override {
+		MouseKeyboardInput* input = Scene()->InputManager()->GetFirst<MouseKeyboardInput>();
+
+		quaternion r = WorldRotation();
+		if (Scene()->Gizmos()->RotationHandle(input->GetPointer(0), WorldPosition(), r, .1f)) {
+			quaternion lr = Parent() ? inverse(Parent()->WorldRotation()) * r : r;
+			LocalRotation(lr);
+		}
+
+		float3 center = (ObjectToWorld() * float4((mMin + mMax) * .5f, 1.f)).xyz;
+		Scene()->Gizmos()->DrawWireCube(center, (mMax - mMin) * .5f, WorldRotation(), 1.f);
+	}
+};
 
 class MeshView : public EnginePlugin {
 public:
@@ -25,8 +47,9 @@ private:
 	vector<Object*> mObjects;
 	Object* mSelected;
 
-	Object* LoadSkel(const fs::path& file);
-	Object* Load(const fs::path& file);
+	SkeletonJoint* ReadJoint(Tokenizer& t, const string& name, float scale = 1.f);
+	SkeletonJoint* LoadSkel(const fs::path& file, float scale = 1.f);
+	Object* Load(const fs::path& file, float scale = 1.f);
 
 	MouseKeyboardInput* mInput;
 };
@@ -41,44 +64,41 @@ MeshView::~MeshView() {
 		mScene->RemoveObject(obj);
 }
 
-struct Joint {
-	string mName;
-	float3 mOffset;
-	float3 mMin;
-	float3 mMax;
-	float3 mRotMin;
-	float3 mRotMax;
-	float3 mPose;
-	Joint* mParent;
-	vector<Joint*> mChildren;
-	inline Joint(const string& name) : mName(name), mOffset(0), mMin(-.1f), mMax(.1f), mRotMin(-1e10f), mRotMax(1e10f), mPose(0), mParent(nullptr), mChildren({}) {};
-};
-
 #define THROW_INVALID_SKEL { fprintf_color(COLOR_RED, stderr, "Invalid SKEL file\n"); throw; }
 
-Joint* ReadJoint(Tokenizer& t, const string &name) {
-	Joint* j = new Joint(name);
+SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale) {
+	shared_ptr<SkeletonJoint> j = make_shared<SkeletonJoint>(name);
+	mScene->AddObject(j);
+	mObjects.push_back(j.get());
 
 	string token;
 	if (!t.Next(token) || token != "{") THROW_INVALID_SKEL
 
 	while (t.Next(token)) {
 		if (token == "offset") {
-			if (!t.Next(j->mOffset.x)) THROW_INVALID_SKEL
-			if (!t.Next(j->mOffset.y)) THROW_INVALID_SKEL
-			if (!t.Next(j->mOffset.z)) THROW_INVALID_SKEL
+			float3 offset;
+			if (!t.Next(offset.x)) THROW_INVALID_SKEL
+			if (!t.Next(offset.y)) THROW_INVALID_SKEL
+			if (!t.Next(offset.z)) THROW_INVALID_SKEL
+			offset *=scale;
+			offset.z = -offset.z;
+			j->LocalPosition(offset);
 			continue;
 		}
 		if (token == "boxmin") {
 			if (!t.Next(j->mMin.x)) THROW_INVALID_SKEL
 			if (!t.Next(j->mMin.y)) THROW_INVALID_SKEL
 			if (!t.Next(j->mMin.z)) THROW_INVALID_SKEL
+			j->mMin *= scale;
+			j->mMin.z = -j->mMin.z;
 			continue;
 		}
 		if (token == "boxmax") {
 			if (!t.Next(j->mMax.x)) THROW_INVALID_SKEL
 			if (!t.Next(j->mMax.y)) THROW_INVALID_SKEL
 			if (!t.Next(j->mMax.z)) THROW_INVALID_SKEL
+			j->mMax *= scale;
+			j->mMax.z = -j->mMax.z;
 			continue;
 		}
 		if (token == "rotxlimit") {
@@ -94,29 +114,33 @@ Joint* ReadJoint(Tokenizer& t, const string &name) {
 		if (token == "rotzlimit") {
 			if (!t.Next(j->mRotMin.z)) THROW_INVALID_SKEL
 			if (!t.Next(j->mRotMax.z)) THROW_INVALID_SKEL
+			j->mRotMin.z = -j->mRotMin.z;
+			j->mRotMax.z = -j->mRotMax.z;
 			continue;
 		}
 		if (token == "pose") {
-			if (!t.Next(j->mPose.x)) THROW_INVALID_SKEL
-			if (!t.Next(j->mPose.y)) THROW_INVALID_SKEL
-			if (!t.Next(j->mPose.z)) THROW_INVALID_SKEL
+			float3 pose;
+			if (!t.Next(pose.x)) THROW_INVALID_SKEL
+			if (!t.Next(pose.y)) THROW_INVALID_SKEL
+			if (!t.Next(pose.z)) THROW_INVALID_SKEL
+			quaternion r(pose);
+			r.xyzw = float4(r.z, r.y, r.x, -r.w);
+
 			continue;
 		}
 		if (token == "balljoint") {
 			if (!t.Next(token)) THROW_INVALID_SKEL
-			Joint* c = ReadJoint(t, token);
-			c->mParent = j;
-			j->mChildren.push_back(c);
+			j->AddChild(ReadJoint(t, token, scale));
 			continue;
 		}
 
 		if (token == "}") break;
 	}
 
-	return j;
+	return j.get();
 }
 
-Object* MeshView::LoadSkel(const fs::path& filepath) {
+SkeletonJoint* MeshView::LoadSkel(const fs::path& filepath, float scale) {
 	ifstream file(filepath.string());
 	
 	Tokenizer t(file, { ' ', '\n', '\r', '\t' });
@@ -124,7 +148,8 @@ Object* MeshView::LoadSkel(const fs::path& filepath) {
 	string token;
 	if (!t.Next(token) || token != "balljoint") THROW_INVALID_SKEL
 	if (!t.Next(token)) THROW_INVALID_SKEL
-	Joint* rootJoint = ReadJoint(t, token);
+	
+	SkeletonJoint* root = ReadJoint(t, token, scale);
 
 	if (t.Next(token)) {
 		if (token == "balljoint"){
@@ -134,25 +159,15 @@ Object* MeshView::LoadSkel(const fs::path& filepath) {
 		THROW_INVALID_SKEL
 	}
 
-	uint32_t jc = 0;
-	queue<Joint*> joints;
-	joints.push(rootJoint);
-	while (!joints.empty()){
-		jc++;
-		Joint* j = joints.front();
-		joints.pop();
-		for (Joint* c : j->mChildren) joints.push(c);
-	}
+	printf("Loaded %s\n", filepath.string().c_str());
 
-	printf("Loaded %s (%u joints)\n", filepath.string().c_str(), jc);
-
-	return nullptr;
+	return root;
 }
 
-Object* MeshView::Load(const fs::path& filepath) {
+Object* MeshView::Load(const fs::path& filepath, float scale) {
 	string ext = filepath.has_extension() ? filepath.extension().string() : "";
 	if (ext == ".skel")
-		return LoadSkel(filepath);
+		return LoadSkel(filepath, scale);
 	// load with Assimp
 	return nullptr;
 }
@@ -161,41 +176,27 @@ bool MeshView::Init(Scene* scene) {
 	mScene = scene;
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
-	mScene->Environment()->EnableCelestials(true);
-	mScene->Environment()->EnableScattering(true);
+	mScene->Environment()->EnableCelestials(false);
+	mScene->Environment()->EnableScattering(false);
+	mScene->Environment()->AmbientLight(.1f);
 
-	shared_ptr<Material> pbrMat = make_shared<Material>("Floor", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
-	pbrMat->EnableKeyword("TEXTURED");
-	pbrMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/grid.png"));
-	pbrMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/bump.png"));
-	pbrMat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/mask.png"));
-	pbrMat->SetParameter("TextureST", float4(2048, 2048, 0, 0));
-	pbrMat->SetParameter("TextureIndex", 0);
-	pbrMat->SetParameter("Color", float4(1, 1, 1, 1));
-	pbrMat->SetParameter("Metallic", 0.f);
-	pbrMat->SetParameter("Roughness", .5f);
+	shared_ptr<Light> sun = make_shared<Light>("Light");
+	mScene->AddObject(sun);
+	mObjects.push_back(sun.get());
+	sun->CastShadows(false);
+	sun->Color(1);
+	sun->LocalPosition(0, 5.f, 0);
+	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
+	sun->Type(Sun);
 
-	shared_ptr<MeshRenderer> floor = make_shared<MeshRenderer>("Floor");
-	floor->Material(pbrMat);
-	floor->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Floor", mScene->Instance(), 2048)));
-	floor->LocalRotation(quaternion(float3(-PI*.5f, 0, 0)));
-	mScene->AddObject(floor);
-	mObjects.push_back(floor.get());
-
-	Load("Assets/Models/dragon.skel");
-	Load("Assets/Models/wasp.skel");
+	Load("Assets/Models/dragon.skel", .5f)->LocalPosition(3, 0, 0);
+	Load("Assets/Models/wasp.skel", 1.f)->LocalPosition(-3, 0, 0);
 
 	return true;
 }
 
 void MeshView::Update() {
-	float tod = mScene->Environment()->TimeOfDay();
-	tod += mScene->Instance()->DeltaTime() * .000555555555f; // 30min days
-	if (mInput->KeyDown(KEY_T)) {
-		tod += mScene->Instance()->DeltaTime() * .075f; // zoooom
-		if (tod > 1) tod -= 1;
-	}
-	mScene->Environment()->TimeOfDay(tod);
+
 }
 void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	const Ray& ray = mInput->GetPointer(0)->mWorldRay;
@@ -204,7 +205,17 @@ void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 
 	Gizmos* gizmos = mScene->Gizmos();
 
-	bool change = mInput->KeyDownFirst(MOUSE_LEFT);
+	// grid
+	int size = 100;
+	gizmos->DrawLine(float3(-size, 0, 0), float3(size, 0, 0), float4(1, 0, 0, .2f));
+	gizmos->DrawLine(float3(0, -size, 0), float3(0, size, 0), float4(0, 1, 0, .2f));
+	gizmos->DrawLine(float3(0, 0, -size), float3(0, 0, size), float4(0, 0, 1, .2f));
+	for (int x = -size; x <= size; x++)
+		if (x != 0) gizmos->DrawLine(float3(x, 0, -size), float3(x, 0, size), float4(1, 1, 1, x % 10 == 0 ? .1f : .025f));
+	for (int z = -size; z <= size; z++)
+		if (z != 0) gizmos->DrawLine(float3(-size, 0, z), float3(size, 0, z), float4(1, 1, 1, z % 10 == 0 ? .1f : .025f));
+
+	bool change = mInput->GetPointer(0)->mAxis.at(0) > .5f;
 
 	// manipulate selection
 	Light* selectedLight = nullptr;
