@@ -312,7 +312,7 @@ void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 		for (Window* w : mWindows)
 			if (w->mHwnd == hwnd){
 				RECT cr;
-				GetClientRect(mHwnd, &cr);
+				GetClientRect(w->mHwnd, &cr);
 				w->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
 				w->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
 			}
@@ -474,18 +474,30 @@ bool Instance::PollEvents() {
 					SetCursorPos((rect.right + rect.left) / 2, (rect.bottom + rect.top) / 2);
 				}
 
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_1_DOWN)
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_1_DOWN) {
 					mWindowInput->mCurrent.mKeys[MOUSE_LEFT] = true;
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_1_UP)
+					mWindowInput->mMousePointer.mAxis[0] = 1.f;
+				}
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_1_UP){
 					mWindowInput->mCurrent.mKeys[MOUSE_LEFT] = false;
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_2_DOWN)
+					mWindowInput->mMousePointer.mAxis[0] = 0.f;
+				}
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_2_DOWN){
 					mWindowInput->mCurrent.mKeys[MOUSE_RIGHT] = true;
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_2_UP)
+					mWindowInput->mMousePointer.mAxis[1] = 1.f;
+				}
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_2_UP){
 					mWindowInput->mCurrent.mKeys[MOUSE_RIGHT] = false;
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_3_DOWN)
+					mWindowInput->mMousePointer.mAxis[1] = 0.f;
+				}
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_3_DOWN){
 					mWindowInput->mCurrent.mKeys[MOUSE_MIDDLE] = true;
-				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_3_UP)
+					mWindowInput->mMousePointer.mAxis[2] = 1.f;
+				}
+				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_3_UP){
 					mWindowInput->mCurrent.mKeys[MOUSE_MIDDLE] = false;
+					mWindowInput->mMousePointer.mAxis[2] = 0.f;
+				}
 				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_DOWN)
 					mWindowInput->mCurrent.mKeys[MOUSE_X1] = true;
 				if (raw->data.mouse.usButtonFlags & RI_MOUSE_BUTTON_4_UP)
@@ -499,11 +511,15 @@ bool Instance::PollEvents() {
 					mWindowInput->mCurrent.mScrollDelta += (short)(raw->data.mouse.usButtonData) / (float)WHEEL_DELTA;
 			}
 			if (raw->header.dwType == RIM_TYPEKEYBOARD) {
-				mWindowInput->mCurrent.mKeys[(KeyCode)raw->data.keyboard.VKey] = (raw->data.keyboard.Flags & RI_KEY_BREAK) == 0;
+				USHORT key = raw->data.keyboard.VKey;
+				if (key == VK_SHIFT) key = VK_LSHIFT;
+				if (key == VK_MENU) key = VK_LMENU;
+				if (key == VK_CONTROL) key = VK_LCONTROL;
+				mWindowInput->mCurrent.mKeys[(KeyCode)key] = (raw->data.keyboard.Flags & RI_KEY_BREAK) == 0;
 
 				if ((raw->data.keyboard.Flags & RI_KEY_BREAK) == 0 &&
-					((KeyCode)raw->data.keyboard.VKey == KEY_ALT || (KeyCode)raw->data.keyboard.VKey == KEY_ENTER) &&
-					mWindowInput->KeyDown(KEY_ALT) && mWindowInput->KeyDown(KEY_ENTER)) {
+					((KeyCode)raw->data.keyboard.VKey == KEY_LALT || (KeyCode)raw->data.keyboard.VKey == KEY_ENTER) &&
+					mWindowInput->KeyDown(KEY_LALT) && mWindowInput->KeyDown(KEY_ENTER)) {
 					for (Window* w : mWindows)
 						if (w->mHwnd == msg.hwnd)
 							w->Fullscreen(!w->Fullscreen());
@@ -519,8 +535,19 @@ bool Instance::PollEvents() {
 
 	POINT pt;
 	GetCursorPos(&pt);
-	mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
-	// TODO: mouse ray
+	for (Window* w : mWindows) {
+		RECT r;
+		GetWindowRect(w->mHwnd, &r);
+		if (!PtInRect(&r, pt)) continue;
+		ScreenToClient(w->mHwnd, &pt);
+		mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
+		if (w->mTargetCamera) {
+			float2 uv = mWindowInput->mCurrent.mCursorPos / float2((float)w->mSwapchainSize.width, (float)w->mSwapchainSize.height);
+			mWindowInput->mMousePointer.mWorldRay = w->mTargetCamera->ScreenToWorldRay(uv);
+		}
+		break;
+	}
+
 	return true;
 	#endif
 }
