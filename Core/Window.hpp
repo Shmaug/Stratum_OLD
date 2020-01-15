@@ -82,6 +82,7 @@ private:
 	xcb_window_t mXCBWindow;
 	xcb_atom_t mXCBProtocols;
 	xcb_atom_t mXCBDeleteWin;
+	VkRect2D mWindowedRect;
 	#else
 	HWND mHwnd;
 	RECT mWindowedRect;

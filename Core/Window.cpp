@@ -107,7 +107,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 #endif
 	: mInstance(instance), mTargetCamera(nullptr), mDevice(nullptr), mTitle(title), mSwapchainSize({}), mFullscreen(false), mClientRect(position), mInput(input),
 	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
-	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr) {
+	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr), mDirectDisplay(VK_NULL_HANDLE) {
 
 	#ifdef __linux
 	mXCBConnection = XCBConnection;
@@ -277,39 +277,92 @@ void Window::Fullscreen(bool fs) {
 		mFullscreen = false;
 	}
 	#else
-	enum {
-		MWM_HINTS_FUNCTIONS = (1L << 0),
-		MWM_HINTS_DECORATIONS =  (1L << 1),
+	enum Hints {
+		MWM_HINTS_FUNCTIONS = 1,
+		MWM_HINTS_DECORATIONS =  2,
 
-		MWM_FUNC_ALL = (1L << 0),
-		MWM_FUNC_RESIZE = (1L << 1),
-		MWM_FUNC_MOVE = (1L << 2),
-		MWM_FUNC_MINIMIZE = (1L << 3),
-		MWM_FUNC_MAXIMIZE = (1L << 4),
-		MWM_FUNC_CLOSE = (1L << 5)
+		MWM_FUNC_ALL = 1,
+		MWM_FUNC_RESIZE = 2,
+		MWM_FUNC_MOVE = 4,
+		MWM_FUNC_MINIMIZE = 8,
+		MWM_FUNC_MAXIMIZE = 16,
+		MWM_FUNC_CLOSE = 32
 	};
-	enum {
-		OB_MWM_DECOR_ALL      = 1 << 0,
-		OB_MWM_DECOR_BORDER   = 1 << 1,
-		OB_MWM_DECOR_HANDLE   = 1 << 2,
-		OB_MWM_DECOR_TITLE    = 1 << 3,
-		#if 0
-		OB_MWM_DECOR_MENU     = 1 << 4,
-		#endif
-		OB_MWM_DECOR_ICONIFY  = 1 << 5,
-		OB_MWM_DECOR_MAXIMIZE = 1 << 6 
+	enum DecorationFlags {
+		OB_MWM_DECOR_ALL      = 1,
+		OB_MWM_DECOR_BORDER   = 2,
+		OB_MWM_DECOR_HANDLE   = 4,
+		OB_MWM_DECOR_TITLE    = 8,
+		//OB_MWM_DECOR_MENU   = 16,
+		OB_MWM_DECOR_ICONIFY  = 32,
+		OB_MWM_DECOR_MAXIMIZE = 64
 	};
-	struct MwmHints {
-		unsigned long flags;
-		unsigned long functions;
-		unsigned long decorations;
-		long input_mode;
-		unsigned long status;
+	struct MotifHints {
+		uint32_t   flags;
+		uint32_t   functions;
+		uint32_t   decorations;
+		int32_t    input_mode;
+		uint32_t   status;
 	};
 	if (fs && !mFullscreen) {
+		// add window border
+		xcb_intern_atom_reply_t* wmHints = xcb_intern_atom_reply(mXCBConnection, xcb_intern_atom(mXCBConnection, 0, strlen("_MOTIF_WM_HINTS"), "_MOTIF_WM_HINTS"), nullptr);
+		MotifHints hints = {};
+		hints.flags = MWM_HINTS_DECORATIONS;
+		hints.functions = 0;
+		hints.decorations = OB_MWM_DECOR_ALL;
+		hints.input_mode = 0;
+		hints.status = 0;
+		xcb_change_property(mXCBConnection,
+			XCB_PROP_MODE_REPLACE,
+			mXCBWindow,
+			wmHints->atom, wmHints->atom,
+			32, 5, &hints );
+		free(wmHints);
 
+		uint32_t values[] {
+			(uint32_t)mWindowedRect.offset.x,
+			(uint32_t)mWindowedRect.offset.y,
+			mWindowedRect.extent.width,
+			mWindowedRect.extent.height
+		};
+		xcb_configure_window(mXCBConnection, mXCBWindow, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
+	
 	} else if (!fs && mFullscreen){
-		
+		xcb_get_geometry_reply_t* geom = xcb_get_geometry_reply(mXCBConnection, xcb_get_geometry(mXCBConnection, mXCBWindow), NULL);
+		mWindowedRect.offset.x = geom->x;
+		mWindowedRect.offset.y = geom->y;
+		mWindowedRect.extent.width = geom->width;
+		mWindowedRect.extent.height = geom->height;
+		free(geom);
+
+		// remove window border
+		xcb_intern_atom_reply_t* wmHints = xcb_intern_atom_reply(mXCBConnection, xcb_intern_atom(mXCBConnection, 0, strlen("_MOTIF_WM_HINTS"), "_MOTIF_WM_HINTS"), nullptr);
+		MotifHints hints = {};
+		hints.flags = MWM_HINTS_DECORATIONS;
+		hints.functions = 0;
+		hints.decorations = 0;
+		hints.input_mode = 0;
+		hints.status = 0;
+		xcb_change_property(mXCBConnection,
+			XCB_PROP_MODE_REPLACE,
+			mXCBWindow,
+			wmHints->atom, wmHints->atom,
+			32, 5, &hints );
+
+		xcb_intern_atom_reply_t* wmState = xcb_intern_atom_reply(mXCBConnection, xcb_intern_atom(mXCBConnection, 0, strlen("_NET_WM_STATE"), "_NET_WM_STATE"), nullptr);
+		xcb_intern_atom_reply_t* maxH = xcb_intern_atom_reply(mXCBConnection, xcb_intern_atom(mXCBConnection, 0, strlen("_NET_WM_STATE_MAXIMIZED_HORZ"), "_NET_WM_STATE_MAXIMIZED_HORZ"), nullptr);
+		xcb_intern_atom_reply_t* maxV = xcb_intern_atom_reply(mXCBConnection, xcb_intern_atom(mXCBConnection, 0, strlen("_NET_WM_STATE_MAXIMIZED_VERT"), "_NET_WM_STATE_MAXIMIZED_VERT"), nullptr);
+
+		xcb_atom_t states[2];
+		states[0] = maxH->atom;
+		states[1] = maxV->atom;
+    	xcb_change_property(mXCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, wmState->atom, XCB_ATOM_ATOM, 32, 2, states);
+
+		free(wmHints);
+		free(wmState);
+		free(maxH);
+		free(maxV);
 	}
 	#endif
 }
