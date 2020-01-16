@@ -2055,6 +2055,19 @@ struct quaternion {
 	inline float3 forward() const {
 		return 2 * z * xyz + float3(0, 0, w * w - dot(xyz, xyz)) + 2 * w * float3(y, -x, 0);
 	}
+	inline float3 toEuler() const {
+		float4 sq = xyzw * xyzw;
+		float unit = sq.x + sq.y + sq.z + sq.w;
+		float test = x * y + z * w;
+		if (test > 0.499 * unit) 
+			return float3(0, 2 * atan2f(x, w), PI * .5f);
+		if (test < -0.499 * unit) 
+			return float3(0, -2 * atan2f(x, w), -PI * .5f);
+		return float3(
+			atan2f(2 * x * w - 2 * y * z, -sq.x + sq.y - sq.z + sq.w),
+			atan2f(2 * y * w - 2 * x * z, sq.x - sq.y - sq.z + sq.w),
+			asinf(2 * test / unit) );
+	}
 
 	inline quaternion operator =(const quaternion& q) {
 		rpt4(i) v[i] = q.v[i];
