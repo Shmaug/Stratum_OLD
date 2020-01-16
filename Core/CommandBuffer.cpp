@@ -6,6 +6,7 @@
 #include <Core/Device.hpp>
 #include <Scene/Camera.hpp>
 #include <Util/Util.hpp>
+#include <Util/Profiler.hpp>
 #include <cstring>
 
 #include <Shaders/include/shadercompat.h>
@@ -152,18 +153,34 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 	if (cullMode == VK_CULL_MODE_FLAG_BITS_MAX_ENUM) cullMode = material->CullMode();
 
 	VkPipeline pipeline = shader->GetPipeline(mCurrentRenderPass, input, topology, cullMode, blendMode, polyMode);
+
+	if (pipeline != mCurrentPipeline && mCurrentCamera == camera && mCurrentMaterial == material) return shader->mPipelineLayout;
+
+	PROFILER_BEGIN_RESUME("Bind Material");
+
+	Material::VariantData* data = material->GetData(mDevice, pass);
+
 	if (pipeline != mCurrentPipeline) {
+		PROFILER_BEGIN_RESUME("Bind Pipeline");
 		vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		mCurrentPipeline = pipeline;
 		mCurrentIndexBuffer = nullptr;
 		mCurrentVertexBuffers.clear();
+		mCurrentCamera = nullptr;
+		mCurrentMaterial = nullptr;
+		PROFILER_END;
+	}
+
+	if (mCurrentCamera != camera || mCurrentMaterial != material) {
+		material->SetDescriptorParameters(this, camera, data);
+		mCurrentCamera = camera;
+		mCurrentMaterial = material;
 	}
 	
-	Material::VariantData* data = material->GetData(mDevice, pass);
-	material->SetParameters(this, camera, data);
+	material->SetPushConstantParameters(this, camera, data);
 
-	mCurrentCamera = camera;
-	mCurrentMaterial = material;
+	PROFILER_END;
+
 	return shader->mPipelineLayout;
 }
 

@@ -3,11 +3,11 @@
 #include <Content/Material.hpp>
 #include <Content/Mesh.hpp>
 #include <Core/DescriptorSet.hpp>
-#include <Scene/Collider.hpp>
+#include <Scene/RaycastReceiver.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
-class MeshRenderer : public Renderer, public Collider {
+class MeshRenderer : public Renderer, public RaycastReceiver {
 public:
 	union PushConstantValue {
 		int32_t intValue;
@@ -60,20 +60,19 @@ public:
 	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass);
 	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass);
 
-	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
-	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
+	inline virtual void RayMask(uint32_t m) { mRayMask = m; }
+	inline virtual uint32_t RayMask() override { return mRayMask; }
 	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t) override;
-	inline virtual OBB ColliderBounds() override { UpdateTransform(); return mOBB; }
+	inline virtual AABB RaycastBounds() override { UpdateTransform(); return mAABB; }
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 private:
-	uint32_t mCollisionMask;
+	uint32_t mRayMask;
 
 protected:
 	std::shared_ptr<::Material> mMaterial;
 	std::unordered_map<std::string, PushConstantValue> mPushConstants;
 
-	OBB mOBB;
 	AABB mAABB;
 	std::variant<::Mesh*, std::shared_ptr<::Mesh>> mMesh;
 	ENGINE_EXPORT virtual bool UpdateTransform() override;

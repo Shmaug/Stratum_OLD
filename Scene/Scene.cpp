@@ -11,11 +11,11 @@
 
 using namespace std;
 
-#define INSTANCE_BATCH_SIZE 4096
+#define INSTANCE_BATCH_SIZE 1024
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 8192
-#define SHADOW_RESOLUTION 4096
+#define SHADOW_ATLAS_RESOLUTION 4096
+#define SHADOW_RESOLUTION 1024
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
@@ -91,7 +91,6 @@ Object* Scene::LoadModelScene(const string& filename,
 		const aiMesh* mesh = scene->mMeshes[m];
 		VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-		float3 mn, mx;
 
 		uint32_t baseVertex = (uint32_t)vertices.size();
 		uint32_t baseIndex  = (uint32_t)indices.size();
@@ -111,22 +110,23 @@ Object* Scene::LoadModelScene(const string& filename,
 			vertex.position *= scale;
 			vertices.push_back(vertex);
 
-			if (i == 0)
-				mn = mx = vertex.position;
-			else {
-				mn = min(vertex.position, mn);
-				mx = max(vertex.position, mx);
-			}
 		}
 
+		float3 mn = vertices[0].position, mx = vertices[0].position;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
-			indices.push_back((uint32_t)f.mIndices[0]);
+			indices.push_back(f.mIndices[0]);
+			mn = min(vertices[f.mIndices[0]].position, mn);
+			mx = max(vertices[f.mIndices[0]].position, mx);
 			if (f.mNumIndices > 1) {
-				indices.push_back((uint32_t)f.mIndices[1]);
-				if (f.mNumIndices > 2)
-					indices.push_back((uint32_t)f.mIndices[2]);
-				else
+				indices.push_back(f.mIndices[1]);
+				mn = min(vertices[f.mIndices[1]].position, mn);
+				mx = max(vertices[f.mIndices[1]].position, mx);
+				if (f.mNumIndices > 2) {
+					indices.push_back(f.mIndices[2]);
+					mn = min(vertices[f.mIndices[2]].position, mn);
+					mx = max(vertices[f.mIndices[2]].position, mx);
+				} else
 					topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 			} else
 				topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
@@ -382,6 +382,20 @@ void Scene::AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool or
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
+	// sort the renderers so that consequent sorts are a little faster
+	PROFILER_BEGIN("Sort Renderers");
+	sort(mRenderers.begin(), mRenderers.end(), [](Renderer* a, Renderer* b) {
+		if (a->RenderQueue() == b->RenderQueue())
+			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
+				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
+					if (ma->Material() == mb->Material())
+						return ma->Mesh() < mb->Mesh();
+					else
+						return ma->Material() < mb->Material();
+		return a->RenderQueue() < b->RenderQueue();
+		});
+	PROFILER_END;
+
 	Camera* mainCamera = nullptr;
 	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
 		return a->RenderPriority() > b->RenderPriority();
@@ -413,7 +427,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 	PROFILER_BEGIN("Lighting");
 	uint32_t si = 0;
-
+	data.mShadowCount = 0;
 	mActiveLights.clear();
 	if (mLights.size()) {
 		PROFILER_BEGIN("Gather Lights");
@@ -458,9 +472,9 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case Sun: {
 					float4 cascadeSplits = 0;
 					float cf = min(l->ShadowDistance(), mainCamera->Far());
-					cascadeSplits[0] = .10f * cf;
-					cascadeSplits[1] = .30f * cf;
-					cascadeSplits[2] = .60f * cf;
+					cascadeSplits[0] = .07f * cf;
+					cascadeSplits[1] = .18f * cf;
+					cascadeSplits[2] = .40f * cf;
 					cascadeSplits[3] = cf;
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
@@ -520,6 +534,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		for (uint32_t i = 0; i < si; i++) {
 			data.mShadowCameras[i]->mEnabled = true;
 			Render(commandBuffer, data.mShadowCameras[i], data.mShadowAtlasFramebuffer, PASS_DEPTH, i == 0);
+			data.mShadowCount++;
 		}
 		for (uint32_t i = si; i < data.mShadowCameras.size(); i++)
 			data.mShadowCameras[i]->mEnabled = false;
@@ -540,7 +555,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
 	DeviceData& data = mDeviceData.at(commandBuffer->Device());
 	
-	PROFILER_BEGIN("Pre Render");
+	PROFILER_BEGIN("PreRender");
 	camera->PreRender();
 	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0) {
 		PROFILER_END;
@@ -560,32 +575,33 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		if (p->mEnabled)
 			p->PreRender(commandBuffer, camera, pass);
 	PROFILER_END;
+
 	
-	PROFILER_BEGIN("Gather/Sort Renderers");
+	PROFILER_BEGIN("Gather Renderers");
 	mRenderList.clear();
 	for (Renderer* r : mRenderers)
-		if (r->Visible() && camera->IntersectFrustum(r->Bounds()) && (r->PassMask() & pass))
+		if (r->Visible() && (r->PassMask() & pass) && camera->IntersectFrustum(r->Bounds()))
 			mRenderList.push_back(r);
-	// combine MeshRenderers that have the same material and mesh
-	sort(mRenderList.begin(), mRenderList.end(), [](Renderer* a, Renderer* b) {
-		if (a->RenderQueue() == b->RenderQueue())
-			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
-				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
-					if (ma->Material() == mb->Material())
-						return ma->Mesh() < mb->Mesh();
-					else
-						return ma->Material() < mb->Material();
-		return a->RenderQueue() < b->RenderQueue();
-	});
 	PROFILER_END;
+
+	PROFILER_BEGIN("Renderer PreRender");
 	for (Renderer* r : mRenderList)
 		r->PreRender(commandBuffer, camera, pass);
+	PROFILER_END;
 
-	PROFILER_BEGIN("Draw");
-	BEGIN_CMD_REGION(commandBuffer, "Draw Scene");
+
+	PROFILER_BEGIN("Draw Renderers");
+	BEGIN_CMD_REGION(commandBuffer, "Draw Renderers");
 	framebuffer->BeginRenderPass(commandBuffer);
 	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
+
+
+	PROFILER_BEGIN("PreRenderScene");
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled) p->PreRenderScene(commandBuffer, camera, pass);
+	PROFILER_END;
+
 
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 	DescriptorSet* batchDS = nullptr;
@@ -594,21 +610,23 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	MeshRenderer* batchStart = nullptr;
 	uint32_t batchSize = 0;
 
+	auto DrawLastBatch = [&](){
+		if (batchStart) {
+			PROFILER_BEGIN_RESUME("Draw Batched");
+			batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
+			batchStart = nullptr;
+			PROFILER_END;
+		}
+	};
+
 	for (Renderer* r : mRenderList) {
 		bool batched = false;
-		MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r);
-		if (cur) {
+		if (MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r)) {
 			GraphicsShader* curShader = cur->Material()->GetShader(commandBuffer->Device(), pass);
 			if (curShader->mDescriptorBindings.count("Instances")) {
 				if (!batchStart || batchSize + 1 >= INSTANCE_BATCH_SIZE || (batchStart->Material() != cur->Material()) || batchStart->Mesh() != cur->Mesh()) {
 					// render last batch
-					if (batchStart) {
-						PROFILER_BEGIN_RESUME("Draw Batched");
-						BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-						batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
-						END_CMD_REGION(commandBuffer);
-						PROFILER_END;
-					}
+					DrawLastBatch();
 
 					// start a new batch
 					PROFILER_BEGIN_RESUME("Start Batch");
@@ -619,60 +637,45 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					curBatch = (InstanceBuffer*)batchBuffer->MappedData();
 
 					batchDS = commandBuffer->Device()->GetTempDescriptorSet("Instance Batch", curShader->mDescriptorSetLayouts[PER_OBJECT]);
-
 					batchDS->CreateStorageBufferDescriptor(batchBuffer, 0, batchBuffer->Size(), INSTANCE_BUFFER_BINDING);
-					if (pass == PASS_MAIN) {
+					if (pass == PASS_MAIN && mActiveLights.size()) {
 						if (curShader->mDescriptorBindings.count("Lights"))
 							batchDS->CreateStorageBufferDescriptor(data.mLightBuffers[frameContextIndex], 0, data.mLightBuffers[frameContextIndex]->Size(), LIGHT_BUFFER_BINDING);
-						if (curShader->mDescriptorBindings.count("Shadows"))
-							batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[frameContextIndex], 0, data.mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
-						if (curShader->mDescriptorBindings.count("ShadowAtlas"))
-							batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
+						if (data.mShadowCount) {
+							if (curShader->mDescriptorBindings.count("Shadows"))
+								batchDS->CreateStorageBufferDescriptor(data.mShadowBuffers[frameContextIndex], 0, data.mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
+							if (curShader->mDescriptorBindings.count("ShadowAtlas"))
+								batchDS->CreateSampledTextureDescriptor(data.mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
+						}
 					}
 
 					batchDS->FlushWrites();
 					PROFILER_END;
-
 				}
+
 				// append to batch
-				PROFILER_BEGIN_RESUME("Append Batch");
 				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
 				curBatch[batchSize].WorldToObject = cur->WorldToObject();
 				batchSize++;
 				batched = true;
-				PROFILER_END;
 			}
 		}
 
 		if (!batched) {
 			// render last batch
-			if (batchStart) {
-				PROFILER_BEGIN_RESUME("Draw Batched");
-				BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-				batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
-				END_CMD_REGION(commandBuffer);
-				batchStart = nullptr;
-				PROFILER_END;
-			}
+			DrawLastBatch();
+
 			PROFILER_BEGIN_RESUME("Draw Unbatched");
-			BEGIN_CMD_REGION(commandBuffer, "Draw " + r->mName);
 			r->Draw(commandBuffer, camera, pass);
-			END_CMD_REGION(commandBuffer);
 			PROFILER_END;
 		}
 	}
 	// render last batch
-	if (batchStart) {
-		PROFILER_BEGIN_RESUME("Draw Batched");
-		BEGIN_CMD_REGION(commandBuffer, "Draw " + batchStart->mName);
-		batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
-		END_CMD_REGION(commandBuffer);
-		PROFILER_END;
-	}
-
+	DrawLastBatch();
 
 	if (mDrawGizmos && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw Gizmos");
+		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		/*
 		for (Camera* c : data.mShadowCameras)
 			if (camera != c) {
@@ -705,38 +708,43 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
 				p->DrawGizmos(commandBuffer, camera);
-		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
 		mGizmos->Draw(commandBuffer, pass, camera);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
-	
+
+	PROFILER_BEGIN("PostRenderScene");
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled) p->PostRenderScene(commandBuffer, camera, pass);
+	PROFILER_END;
+
 	vkCmdEndRenderPass(*commandBuffer);
 
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
 
-	// Post Render
-	PROFILER_BEGIN("Post Render");
+	PROFILER_BEGIN("PostRender");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
 	PROFILER_END;
 }
 
-Collider* Scene::Raycast(const Ray& ray, float& hitT, uint32_t mask) {
-	Collider* closest = nullptr;
+RaycastReceiver* Scene::Raycast(const Ray& worldRay, float& hitT, uint32_t mask, float tMin, float tMax) {
+	RaycastReceiver* closest = nullptr;
 	hitT = -1.f;
 
 	for (const shared_ptr<Object>& n : mObjects) {
-		if (n->EnabledHierarchy()) {
-			if (Collider* c = dynamic_cast<Collider*>(n.get())) {
-				if ((c->CollisionMask() & mask) != 0) {
-					float t;
-					if (c->Intersect(ray, &t) && t > 0 && (t < hitT || closest == nullptr)) {
-						closest = c;
-						hitT = t;
-					}
-				}
+		if (!n->EnabledHierarchy()) continue;
+		if (RaycastReceiver* c = dynamic_cast<RaycastReceiver*>(n.get())) {
+			if ((c->RayMask() & mask) == 0) continue;
+
+			float2 tm = worldRay.Intersect(c->RaycastBounds());
+			if (tm.y < tMin || tm.x > tMax) continue;
+
+			float t;
+			if (c->Intersect(worldRay, &t) && t > tMin && t < tMax && (t < hitT || closest == nullptr)) {
+				closest = c;
+				hitT = t;
 			}
 		}
 	}

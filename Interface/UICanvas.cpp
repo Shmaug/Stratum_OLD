@@ -7,7 +7,7 @@
 using namespace std;
 
 UICanvas::UICanvas(const string& name, const float2& extent)
-	: Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000), mCollisionMask(0x02) {};
+	: Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000), mRayMask(0) {};
 UICanvas::~UICanvas() {}
 
 void UICanvas::RemoveElement(UIElement* element) {
@@ -40,8 +40,14 @@ void UICanvas::Dirty() {
 		e->Dirty();
 }
 
+bool UICanvas::Intersect(const Ray& worldRay, float* t) {
+	float ht = worldRay.Intersect(mOBB).x;
+	if (t < 0) return false;
+	*t = ht;
+	return true;
+}
 UIElement* UICanvas::Raycast(const Ray& worldRay) {
-	float t = worldRay.Intersect(ColliderBounds()).x;
+	float t = worldRay.Intersect(mOBB).x;
 	if (t < 0) return nullptr;
 	float3 wp = worldRay.mOrigin + worldRay.mDirection * t;
 	float3 cp = (WorldToObject() * float4(wp, 1)).xyz;

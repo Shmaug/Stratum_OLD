@@ -24,7 +24,7 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 			i->HandleMessage(hwnd, message, wParam, lParam);
 		break;
 	default:
-		return DefWindowProcW(hwnd, message, wParam, lParam);
+		return DefWindowProcA(hwnd, message, wParam, lParam);
 	}
 	return 0;
 }
@@ -149,7 +149,7 @@ void Instance::CreateDevicesAndWindows(const vector<DisplayCreateInfo>& displays
 	HINSTANCE hInstance = GetModuleHandleA(NULL);
 
 	WNDCLASSEXA windowClass = {};
-	windowClass.cbSize = sizeof(WNDCLASSEXW);
+	windowClass.cbSize = sizeof(WNDCLASSEXA);
 	windowClass.style = CS_HREDRAW | CS_VREDRAW;
 	windowClass.lpfnWndProc = &WndProc;
 	windowClass.cbClsExtra = 0;
@@ -565,10 +565,8 @@ void Instance::AdvanceFrame() {
 
 	mFrameCount++;
 
-	PROFILER_BEGIN("Wait for GPU");
 	for (uint32_t i = 0; i < mDevices.size(); i++) {
 		mDevices[i]->mFrameContextIndex = mFrameCount % mMaxFramesInFlight;
 		mDevices[i]->CurrentFrameContext()->Reset();
 	}
-	PROFILER_END;
 }

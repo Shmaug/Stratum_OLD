@@ -10,14 +10,13 @@
 using namespace std;
 
 MeshRenderer::MeshRenderer(const string& name)
-	: Object(name), mVisible(true), mMesh(nullptr), mCollisionMask(0x01) {}
+	: Object(name), mVisible(true), mMesh(nullptr), mRayMask(0) {}
 MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
 	AABB mb = Mesh()->Bounds();
-	mOBB = OBB((ObjectToWorld() * float4(mb.mCenter, 1)).xyz, mb.mExtents * WorldScale(), WorldRotation());
-	mAABB = mOBB;
+	mAABB = OBB((ObjectToWorld() * float4(mb.mCenter, 1)).xyz, mb.mExtents * WorldScale(), WorldRotation());
 	return true;
 }
 
@@ -30,37 +29,27 @@ void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassT
 }
 
 void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
+	PROFILER_BEGIN_RESUME("Draw MeshRenderer");
 	::Mesh* mesh = Mesh();
 
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	PROFILER_BEGIN_RESUME("Bind Material");
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, mesh->VertexInput(), camera, mesh->Topology(), cull);
-	PROFILER_END;
 	if (!layout) return;
-	PROFILER_BEGIN_RESUME("Get Shader Variant");
 	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
-	PROFILER_END;
 
-	PROFILER_BEGIN_RESUME("Push Constants");
 	for (const auto& kp : mPushConstants)
 		commandBuffer->PushConstant(shader, kp.first, &kp.second);
-	PROFILER_END;
 
-	PROFILER_BEGIN_RESUME("Push Scene Constants");
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
 	float t = Scene()->Instance()->TotalTime();
 	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
-	PROFILER_END;
 	
-	PROFILER_BEGIN_RESUME("Bind Instance DS");
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
-	PROFILER_END;
 
-	PROFILER_BEGIN_RESUME("Draw");
 	commandBuffer->BindVertexBuffer(mesh->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
 	commandBuffer->BindIndexBuffer(mesh->IndexBuffer(commandBuffer->Device()).get(), 0, mesh->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);

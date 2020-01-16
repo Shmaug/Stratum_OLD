@@ -161,10 +161,11 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 
 	#else
 	mWindowedRect = {};
+
 	mHwnd = CreateWindowExA(
 		NULL,
 		"Stratum",
-		title.c_str(),
+		mTitle.c_str(),
 		WS_OVERLAPPEDWINDOW,
 		position.offset.x,
 		position.offset.y,
@@ -173,8 +174,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 		NULL,
 		NULL,
 		hInstance,
-		nullptr
-	);
+		nullptr );
 	if (!mHwnd) {
 		fprintf_color(COLOR_RED, stderr, "Failed to create window\n");
 		throw;
@@ -186,7 +186,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	info.hinstance = hInstance;
 	info.hwnd = mHwnd;
-	ThrowIfFailed(vkCreateWin32SurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
+	ThrowIfFailed(vkCreateWin32SurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateWin32SurfaceKHR Failed");
 
 	RECT cr;
 	GetClientRect(mHwnd, &cr);

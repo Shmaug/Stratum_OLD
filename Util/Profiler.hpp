@@ -21,6 +21,7 @@
 struct ProfilerSample {
 	char mLabel[PROFILER_LABEL_SIZE];
 	ProfilerSample* mParent;
+	uint32_t mCalls;
 	std::chrono::high_resolution_clock::time_point mStartTime;
 	std::chrono::nanoseconds mTime;
 	std::vector<ProfilerSample> mChildren;

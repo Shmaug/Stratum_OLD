@@ -7,7 +7,8 @@
 #pragma blend alpha
 
 #pragma static_sampler Sampler
-#pragma multi_compile CANVAS_BOUNDS
+
+#pragma multi_compile CANVAS_BOUNDS SCREEN_SPACE
 
 #include "include/shadercompat.h"
 
@@ -36,6 +37,10 @@ struct Glyph {
 #include "include/util.hlsli"
 
 struct v2f {
+#ifdef SCREEN_SPACE
+	float4 position : SV_Position;
+	float2 texcoord : TEXCOORD0;
+#else
 	float4 position : SV_Position;
 	float4 worldPos : TEXCOORD0;
 	#ifdef CANVAS_BOUNDS
@@ -43,6 +48,7 @@ struct v2f {
 	#else
 	float2 texcoord : TEXCOORD1;
 	#endif
+#endif
 };
 
 v2f vsmain(uint id : SV_VertexId) {
@@ -60,6 +66,13 @@ v2f vsmain(uint id : SV_VertexId) {
 		float2(0,1)
 	};
 
+
+#ifdef SCREEN_SPACE
+	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
+	o.position = float4((p / Bounds) * 2 - 1, .01, 1);
+	o.position.y = -o.position.y;
+	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
+#else
 	float2 p = Glyphs[g].position + Glyphs[g].size * offsets[c] + Offset;
 	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
 	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(p, 0, 1));
@@ -70,10 +83,18 @@ v2f vsmain(uint id : SV_VertexId) {
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
-
+#endif
 	return o;
 }
 
+#ifdef SCREEN_SPACE
+void fsmain(v2f i,
+	out float4 color : SV_Target0,
+	out float4 depthNormal : SV_Target1) {
+	depthNormal = 0;
+	color = MainTexture.SampleLevel(Sampler, i.texcoord, 0) * Color;
+};
+#else
 float4 SampleFont(float2 uv){
 	float2 dx = ddx(uv.xy);
 	float2 dy = ddy(uv.xy);
@@ -86,14 +107,13 @@ float4 SampleFont(float2 uv){
 	col += MainTexture.SampleBias(Sampler, uv - oyx.zw + oyx.xy, -1);
 	return col * 0.25;
 }
-
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
 	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
-
 	#ifdef CANVAS_BOUNDS
-	clip(any(Bounds - i.texcoord.zw));
+	color.a = !any(Bounds - i.texcoord.zw);
 	#endif
 	color = SampleFont(i.texcoord.xy) * Color;
 }
+#endif

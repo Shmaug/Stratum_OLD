@@ -1,5 +1,8 @@
 #pragma once
 
+#include <list>
+#include <utility>
+
 #include <Core/DescriptorSet.hpp>
 #include <Core/CommandBuffer.hpp>
 #include <Core/Instance.hpp>
@@ -16,8 +19,8 @@ public:
 		std::vector<std::vector<std::shared_ptr<Semaphore>>> mSemaphores; // semaphores that signal when this frame is 'done'
 		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
 		
-		std::vector<Buffer*> mTempBuffers;
-		std::unordered_map<VkDescriptorSetLayout, std::queue<DescriptorSet*>> mTempDescriptorSets;
+		std::list<std::pair<Buffer*, uint32_t>> mTempBuffers;
+		std::unordered_map<VkDescriptorSetLayout, std::list<std::pair<DescriptorSet*, uint32_t>>> mTempDescriptorSets;
 
 		std::vector<Buffer*> mTempBuffersInUse;
 		std::vector<DescriptorSet*> mTempDescriptorSetsInUse;

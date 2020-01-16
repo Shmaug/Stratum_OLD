@@ -83,7 +83,7 @@ float SampleShadowCascadePCF(uint index, float3 cameraPos, float3 worldPos, floa
 	ShadowData s = Shadows[index];
 
 	float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + (cameraPos - s.CameraPosition), 1));
-	float z = shadowPos.z - .0001;
+	float z = shadowPos.z - .0003;
 
 	float2 shadowUV = saturate(shadowPos.xy / shadowPos.w * .5 + .5);
 

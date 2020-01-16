@@ -244,12 +244,20 @@ void Environment::SetEnvironment(Camera* camera, Material* mat) {
 		mat->SetParameter("AmbientLight", mAmbientLight);
 		mat->EnableKeyword("ENABLE_SCATTERING");
 		mat->DisableKeyword("ENVIRONMENT_TEXTURE");
+		mat->DisableKeyword("ENVIRONMENT_TEXTURE_HDR");
 	} else if (mEnvironmentTexture) {
-		mat->EnableKeyword("ENVIRONMENT_TEXTURE");
+		if (mEnvironmentTexture->Format() == VK_FORMAT_R32G32B32A32_SFLOAT || mEnvironmentTexture->Format() == VK_FORMAT_R16G16B16A16_SFLOAT) {
+			mat->DisableKeyword("ENVIRONMENT_TEXTURE");
+			mat->EnableKeyword("ENVIRONMENT_TEXTURE_HDR");
+		} else {
+			mat->EnableKeyword("ENVIRONMENT_TEXTURE");
+			mat->DisableKeyword("ENVIRONMENT_TEXTURE_HDR");
+		}
 		mat->DisableKeyword("ENABLE_SCATTERING");
 		mat->SetParameter("EnvironmentTexture", mEnvironmentTexture);
 	}else{
 		mat->DisableKeyword("ENVIRONMENT_TEXTURE");
+		mat->DisableKeyword("ENVIRONMENT_TEXTURE_HDR");
 		mat->DisableKeyword("ENABLE_SCATTERING");
 	}
 	mat->SetParameter("AmbientLight", mAmbientLight);

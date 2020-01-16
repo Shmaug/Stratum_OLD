@@ -11,7 +11,7 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 	PLUGIN_EXPORT void Update() override;
-	PLUGIN_EXPORT void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
+	PLUGIN_EXPORT void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 
 	inline void CameraDistance(float d) { mCameraDistance = d; }
 	inline float CameraDistance() const { return mCameraDistance; }
@@ -26,7 +26,6 @@ private:
 
 	MouseKeyboardInput* mInput;
 
-	TextRenderer* mFpsText;
 	Object* mCameraPivot;
 	std::vector<Camera*> mCameras;
 
@@ -35,5 +34,4 @@ private:
 	float mFrameTimeAccum;
 	float mFps;
 	uint32_t mFrameCount;
-	uint64_t mTriangleCount;
 };

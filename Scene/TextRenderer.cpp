@@ -21,7 +21,7 @@ uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
-	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
+	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, &mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
 	mAABB = AABB(mTextAABB, ObjectToWorld());
 	mTextAABB.mExtents.z = .001f;
 	PROFILER_END;
