@@ -200,7 +200,7 @@ struct Ray {
 		float3 t2 = -n + k;
 		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
 		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
-		if (tN > tF || tF < 0) return float2(-1);
+		if (tN > tF || tF < 0) return -1.f;
 		return float2(tN, tF);
 	}
 	inline float2 Intersect(const OBB& obb) const {
@@ -212,7 +212,7 @@ struct Ray {
 		float3 t2 = -n + k;
 		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
 		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
-		if (tN > tF || tF < 0) return float2(-1);
+		if (tN > tF || tF < 0) return -1.f;
 		return float2(tN, tF);
 	}
 	inline float2 Intersect(const Sphere& sphere) const {
@@ -221,7 +221,7 @@ struct Ray {
 		float b = 2 * dot(pq, mDirection);
 		float c = dot(pq, pq) - sphere.mRadius * sphere.mRadius;
 		float d = b * b - 4 * a * c;
-		if (d < 0.f) return float2(-1);
+		if (d < 0.f) return -1.f;
 		d = sqrt(d);
 		return -.5f * float2(b + d, b - d) / a;
 	}

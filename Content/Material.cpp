@@ -3,6 +3,7 @@
 #include <Scene/Camera.hpp>
 #include <Scene/Scene.hpp>
 #include <Content/AssetManager.hpp>
+#include <Util/Profiler.hpp>
 
 using namespace std;
 
@@ -22,16 +23,18 @@ Material::~Material() {
 	}
 }
 
-void Material::DisableKeyword(const string& kw) {
-	mShaderKeywords.erase(kw);
+void Material::EnableKeyword(const string& kw) {
+	if (mShaderKeywords.count(kw)) return;
+	mShaderKeywords.insert(kw);
 	for (auto& dkp : mVariantData)
 		for (auto& d : dkp.second) {
 			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
 			d.second->mShaderVariant = nullptr;
 		}
 }
-void Material::EnableKeyword(const string& kw) {
-	mShaderKeywords.insert(kw);
+void Material::DisableKeyword(const string& kw) {
+	if (!mShaderKeywords.count(kw)) return;
+	mShaderKeywords.erase(kw);
 	for (auto& dkp : mVariantData)
 		for (auto& d : dkp.second) {
 			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
@@ -92,11 +95,10 @@ GraphicsShader* Material::GetShader(Device* device, PassType pass) {
 	return GetData(device, pass)->mShaderVariant;
 }
 
-void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
+void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
 	GraphicsShader* shader = data->mShaderVariant;
-	if (shader->mDescriptorSetLayouts.size() > PER_MATERIAL && shader->mDescriptorBindings.size()) {
+	if (shader->mDescriptorSetLayouts.size() > PER_MATERIAL&& shader->mDescriptorBindings.size()) {
 		uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
-
 		DescriptorSet*& ds = data->mDescriptorSets[frameContextIndex];
 		if (!ds || (ds->Layout() != shader->mDescriptorSetLayouts[PER_MATERIAL])) {
 			safe_delete(ds);
@@ -106,6 +108,7 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Varia
 
 		// set descriptor parameters
 		if (data->mDirty[frameContextIndex]) {
+			PROFILER_BEGIN_RESUME("Write Descriptor Sets");
 			for (auto& m : mParameters) {
 				if (m.second.index() > 4) continue;
 				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
@@ -130,42 +133,38 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Varia
 				}
 			}
 
-			vector<bool> tmpArray;
 			for (auto& m : mArrayParameters) {
 				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
 				auto& bindings = shader->mDescriptorBindings.at(m.first);
 				if (bindings.first != PER_MATERIAL) continue;
-				auto binding = bindings.second;
 
-				tmpArray.assign(binding.descriptorCount, false);
 				for (auto& p : m.second) {
-					if (p.first >= binding.descriptorCount) continue;
+					if (p.first >= bindings.second.descriptorCount) continue;
 					Texture* t = p.second.index() == 0 ? get<shared_ptr<Texture>>(p.second).get() : get<Texture*>(p.second);
-					ds->CreateSampledTextureDescriptor(t, p.first, binding.binding);
-					tmpArray[p.first] = true;
+					ds->CreateSampledTextureDescriptor(t, p.first, bindings.second.binding);
 				}
-				// fill any unassigned descriptors with a white texture
-				for (uint32_t i = 0; i < binding.descriptorCount; i++)
-					if (!tmpArray[i])
-						ds->CreateSampledTextureDescriptor(camera->Scene()->AssetManager()->LoadTexture("Assets/Textures/white.png", false), i, binding.binding);
 
 			}
 
 			ds->FlushWrites();
 			data->mDirty[frameContextIndex] = false;
+			PROFILER_END;
 		}
 
 		VkDescriptorSet matds = *ds;
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 	}
 
-	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA && shader->mDescriptorBindings.size() && shader->mDescriptorBindings.count("Camera")) {
+	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA&& shader->mDescriptorBindings.size() && shader->mDescriptorBindings.count("Camera")) {
 		auto binding = shader->mDescriptorBindings.at("Camera");
 		VkDescriptorSet camds = *camera->DescriptorSet(binding.second.stageFlags);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
 	}
 
+}
+void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
 	// set push constant parameters
+	GraphicsShader* shader = data->mShaderVariant;
 	for (auto& m : mParameters) {
 		if (m.second.index() < 4) continue;
 		if (shader->mPushConstants.count(m.first) == 0) continue;
@@ -233,21 +232,4 @@ void Material::SetParameters(CommandBuffer* commandBuffer, Camera* camera, Varia
 
 		vkCmdPushConstants(*commandBuffer, shader->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
-}
-VkPipelineLayout Material::Bind(CommandBuffer* commandBuffer, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology) {
-	if (!commandBuffer->CurrentRenderPass()) {
-		fprintf_color(COLOR_RED_BOLD, stderr, "Attempting to bind material outside of a RenderPass!");
-		throw;
-	}
-
-	VariantData* data = GetData(commandBuffer->Device(), pass);
-	if (!data) return VK_NULL_HANDLE;
-	GraphicsShader* shader = data->mShaderVariant;
-
-	VkPipeline pipeline = shader->GetPipeline(commandBuffer->CurrentRenderPass(), input, topology, mCullMode, mBlendMode);
-	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-	SetParameters(commandBuffer, camera, data);
-	
-	return shader->mPipelineLayout;
 }

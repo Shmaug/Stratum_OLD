@@ -28,7 +28,7 @@ uint32_t UILabel::BuildText(Device* device, Buffer*& buffer) {
 	PROFILER_BEGIN("Build Text");
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
-	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
+	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, &mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
 	PROFILER_END;
 
 	if (glyphCount == 0) return 0;
@@ -106,22 +106,17 @@ void UILabel::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) 
 	}
 
 	
-	float4x4 mt = Canvas()->ObjectToWorld() * float4x4::Translate(-camera->WorldPosition()) * camera->ViewProjection();
+	float4x4 mt = Canvas()->ObjectToWorld();
 	float2 bounds = Canvas()->Extent();
 	float3 normal = Canvas()->WorldRotation().forward();
 
-	VkPushConstantRange wvp = shader->mPushConstants.at("WorldViewProjection");
-	VkPushConstantRange nrm = shader->mPushConstants.at("WorldNormal");
-	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
-	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
-	VkPushConstantRange boundsRange = shader->mPushConstants.at("Bounds");
+	commandBuffer->PushConstant(shader, "ObjectToWorld", &mt);
+	commandBuffer->PushConstant(shader, "WorldNormal", &normal);
+	commandBuffer->PushConstant(shader, "Color", &mColor);
+	commandBuffer->PushConstant(shader, "Offset", &offset);
+	commandBuffer->PushConstant(shader, "Bounds", &bounds);
 
 	VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-	vkCmdPushConstants(*commandBuffer, layout, nrm.stageFlags, nrm.offset, nrm.size, &mt);
-	vkCmdPushConstants(*commandBuffer, layout, nrm.stageFlags, nrm.offset, nrm.size, &normal);
-	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
-	vkCmdPushConstants(*commandBuffer, layout, boundsRange.stageFlags, boundsRange.offset, boundsRange.size, &bounds);
 	vkCmdDraw(*commandBuffer, data.mGlyphCount * 6, 1, 0, 0);
 }

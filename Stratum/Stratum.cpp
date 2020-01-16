@@ -63,15 +63,8 @@ private:
 	#endif
 
 	void Render() {
-		PROFILER_BEGIN("Sort Cameras");
-		// sort cameras so that RenderDepth of 0 is last
-		sort(mScene->mCameras.begin(), mScene->mCameras.end(), [](const auto& a, const auto& b) {
-			return a->RenderPriority() > b->RenderPriority();
-		});
-		PROFILER_END;
-
 		PROFILER_BEGIN("Get CommandBuffers");
-		std::unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
+		unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
 		for (uint32_t i = 0; i < mScene->Instance()->DeviceCount(); i++) {
 			shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->GetDevice(i)->GetCommandBuffer();
 			commandBuffers.emplace(commandBuffer->Device(), commandBuffer);
@@ -85,9 +78,13 @@ private:
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras())
-			if (camera->EnabledHierarchy()){
+			if (camera->EnabledHierarchy()) {
 				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
 				mScene->Render(cb, camera, camera->Framebuffer(), PASS_MAIN);
+			}
+		for (const auto& camera : mScene->Cameras())
+			if (camera->EnabledHierarchy()) {
+				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
 				camera->ResolveWindow(cb);
 			}
 		PROFILER_END;
@@ -155,7 +152,7 @@ public:
 			}
 			PROFILER_END;
 
-			PROFILER_BEGIN("Acquire Swapchain Images");
+			PROFILER_BEGIN("Acquire Image");
 			for (uint32_t i = 0; i < mInstance->WindowCount(); i++)
 				mInstance->GetWindow(i)->AcquireNextImage();
 			PROFILER_END;

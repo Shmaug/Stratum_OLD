@@ -8,7 +8,7 @@
 
 #pragma static_sampler Sampler maxAnisotropy=0 addressMode=clamp_edge
 
-#pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
+#pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE ENVIRONMENT_TEXTURE_HDR
 
 #include "include/shadercompat.h"
 
@@ -156,11 +156,14 @@ void fsmain(
 	lightInscatter += star * (1 - saturate(_StarFade * dot(lightInscatter, lightInscatter)));
 
 	color = float4(lightInscatter, 1);
-#elif defined(ENVIRONMENT_TEXTURE)
+#elif defined(ENVIRONMENT_TEXTURE) || defined(ENVIRONMENT_TEXTURE_HDR)
 	uint texWidth, texHeight, numMips;
 	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
 	float2 envuv = float2(atan2(ray.z, ray.x) * INV_PI * .5 + .5, acos(ray.y) * INV_PI);
 	color = float4(EnvironmentTexture.SampleLevel(Sampler, envuv, 0).rgb, 1);
+#ifdef ENVIRONMENT_TEXTURE_HDR
+	color = pow(color, 1 / 2.2);
+#endif
 #else
 	color = float4(AmbientLight, 1);
 #endif

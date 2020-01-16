@@ -22,7 +22,7 @@ uint8_t* load(const string& filename, bool srgb, uint32_t& pixelSize, int32_t& x
 		srgb = false;
 	} else if (stbi_is_hdr(filename.c_str())) {
 		pixels = (uint8_t*)stbi_loadf(filename.c_str(), &x, &y, &channels, desiredChannels);
-		pixelSize = sizeof(uint32_t);
+		pixelSize = sizeof(float);
 		srgb = false;
 	} else {
 		pixels = (uint8_t*)stbi_load(filename.c_str(), &x, &y, &channels, desiredChannels);

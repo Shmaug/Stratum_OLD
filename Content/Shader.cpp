@@ -369,7 +369,7 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 						kw = k.first;
 						break;
 					}
-		printf_color(COLOR_GREEN, "%s [%s]: Generating graphics pipeline %s %s %s\n", mShader->mName.c_str(), kw.c_str(), blendstr, cullstr, TopologyToString(topology));
+		printf_color(COLOR_CYAN, "%s [%s]: Generating graphics pipeline %s %s %s\n", mShader->mName.c_str(), kw.c_str(), blendstr, cullstr, TopologyToString(topology));
 		#pragma endregion
 
 		VkPipeline p;

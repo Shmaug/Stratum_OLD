@@ -3,34 +3,48 @@
 #include <Core/Instance.hpp>
 #include <Core/CommandBuffer.hpp>
 #include <Core/Window.hpp>
+#include <Util/Profiler.hpp>
 #include <Util/Util.hpp>
 
 using namespace std;
 
 void Device::FrameContext::Reset() {
+	PROFILER_BEGIN_RESUME("Wait for GPU");
 	for (auto f : mFences)
 		f->Wait();
+	PROFILER_END;
 	mFences.clear();
 
 	for (uint32_t i = 0; i < mSemaphores.size(); i++)
 		mSemaphores[i].clear();
 
+	for (auto it = mTempBuffers.begin(); it != mTempBuffers.end();) {
+		if (it->second == 1) {
+			safe_delete(it->first);
+			it = mTempBuffers.erase(it);
+		}
+
+		it->second--;
+		it++;
+	}
+
 	for (Buffer* b : mTempBuffersInUse)
-		mTempBuffers.push_back(b);
+		mTempBuffers.push_back(make_pair(b, 8));
 	for (DescriptorSet* ds : mTempDescriptorSetsInUse)
-		mTempDescriptorSets[ds->Layout()].push(ds);
+		mTempDescriptorSets[ds->Layout()].push_back(make_pair(ds, 8));
 
 	mTempBuffersInUse.clear();
 	mTempDescriptorSetsInUse.clear();
 }
 Device::FrameContext::~FrameContext() {
 	Reset();
-	for (Buffer* b : mTempBuffers)
-		safe_delete(b);
+	for (auto b : mTempBuffers)
+		safe_delete(b.first);
 	for (auto kp : mTempDescriptorSets)
 		while (kp.second.size()) {
-			safe_delete(kp.second.front());
-			kp.second.pop();
+			auto front = kp.second.begin();
+			safe_delete(front->first);
+			kp.second.erase(front);
 		}
 }
 
@@ -145,7 +159,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	poolInfo.poolSizeCount = 5;
 	poolInfo.pPoolSizes = type_count;
-	poolInfo.maxSets = 10000;
+	poolInfo.maxSets = 65535;
 
 	ThrowIfFailed(vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mDescriptorPool), "vkCreateDescriptorPool failed");
 	SetObjectName(mDescriptorPool, name, VK_OBJECT_TYPE_DESCRIPTOR_POOL);
@@ -289,18 +303,18 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
 	FrameContext* frame = CurrentFrameContext();
 
-	vector<Buffer*>::iterator closest = frame->mTempBuffers.end();
+	auto closest = frame->mTempBuffers.end();
 	for (auto it = frame->mTempBuffers.begin(); it != frame->mTempBuffers.end(); it++) {
-		if ((((*it)->Usage() & usage) == usage) && (((*it)->MemoryProperties() & properties) == properties) && (*it)->Size() >= size) {
-			if (closest == frame->mTempBuffers.end() || (*it)->Size() < (*closest)->Size())
+		if (((it->first->Usage() & usage) == usage) && ((it->first->MemoryProperties() & properties) == properties) && it->first->Size() >= size) {
+			if (closest == frame->mTempBuffers.end() || it->first->Size() < it->first->Size())
 				closest = it;
-			if ((*closest)->Size() == size) break;
+			if (it->first->Size() == size) break;
 		}
 	}
 
 	Buffer* b;
 	if (closest != frame->mTempBuffers.end()) {
-		b = *closest;
+		b = closest->first;
 		frame->mTempBuffers.erase(closest);
 	} else {
 		b = new Buffer(name, this, size, usage, properties);
@@ -312,12 +326,13 @@ Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBuff
 DescriptorSet* Device::GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout) {
 	FrameContext* frame = CurrentFrameContext();
 
-	queue<DescriptorSet*>& sets = frame->mTempDescriptorSets[layout];
+	auto& sets = frame->mTempDescriptorSets[layout];
 
 	DescriptorSet* ds;
 	if (sets.size()) {
-		ds = sets.front();
-		sets.pop();
+		auto front = sets.begin();
+		ds = front->first;
+		sets.erase(front);
 	} else
 		ds = new DescriptorSet(name, this, layout);
 

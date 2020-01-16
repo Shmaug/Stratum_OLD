@@ -5,6 +5,8 @@
 #include <Util/Util.hpp>
 #include <Math/Geometry.hpp>
 
+class Camera;
+
 struct FontGlyph {
 	char mCharacter;
 	float mAdvance;
@@ -38,7 +40,9 @@ public:
 	ENGINE_EXPORT const FontGlyph* Glyph(uint32_t c) const;
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
-	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB& aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
+	/// Draws str relative to the screen
+	ENGINE_EXPORT void Font::Draw(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
 
 	inline float PixelSize() const { return mPixelSize; };
 	inline float LineSpacing() const { return mLineSpace; };

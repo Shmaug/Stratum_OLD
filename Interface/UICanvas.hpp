@@ -1,13 +1,13 @@
 #pragma once
 
 #include <Scene/Renderer.hpp>
-#include <Scene/Collider.hpp>
+#include <Scene/RaycastReceiver.hpp>
 
 class UIElement;
 
 // Scene object that holds UIElements
 // Acts as a graph of UIElements
-class UICanvas : public Renderer, public Collider {
+class UICanvas : public Renderer, public RaycastReceiver {
 public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();
@@ -27,13 +27,14 @@ public:
 	inline void Extent(const float2& size) { mExtent = size; Dirty(); }
 	inline float2 Extent() const { return mExtent; }
 
-	inline virtual void CollisionMask(uint32_t m) { mCollisionMask = m; }
-	inline virtual uint32_t CollisionMask() override { return mCollisionMask; }
-
 	inline virtual AABB Bounds() { UpdateTransform(); return mAABB; }
-	inline virtual OBB ColliderBounds() { UpdateTransform(); return mOBB; }
+	inline virtual AABB RaycastBounds() { UpdateTransform(); return mAABB; }
 
 	ENGINE_EXPORT virtual UIElement* Raycast(const Ray& worldRay);
+	ENGINE_EXPORT virtual bool Intersect(const Ray& worldRay, float* t);
+
+	inline virtual void RayMask(uint32_t m) { mRayMask = m; }
+	inline virtual uint32_t RayMask() override { return mRayMask; }
 
 	inline void Visible(bool v) { mVisible = v; };
 	inline virtual bool Visible() override { return mVisible && EnabledHierarchy(); };
@@ -44,8 +45,8 @@ public:
 private:
 	friend class UIElement;
 	uint32_t mRenderQueue;
+	uint32_t mRayMask;
 	bool mVisible;
-	uint32_t mCollisionMask;
 	OBB mOBB;
 	AABB mAABB;
 	float2 mExtent;

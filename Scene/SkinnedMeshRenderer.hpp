@@ -19,8 +19,6 @@ public:
 	
 	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 
-	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t) override;
-	
 protected:
 	struct DeviceData {
 		Buffer** mPoseBuffers;

@@ -171,8 +171,3 @@ void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camer
 		}
 	}
 }
-
-bool SkinnedMeshRenderer::Intersect(const Ray& ray, float* t) {
-	// TODO: ray-skinned mesh collision
-	return false;
-}

@@ -51,8 +51,8 @@ public:
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, Texture* param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, std::shared_ptr<Texture> param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
-	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
 	ENGINE_EXPORT void EnableKeyword(const std::string& kw);
+	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
 
 private:
 	struct VariantData {
@@ -63,8 +63,8 @@ private:
 	};
 
 	friend class CommandBuffer;
-	ENGINE_EXPORT VkPipelineLayout Bind(CommandBuffer* commandBuffer, PassType pass, const VertexInput* input, Camera* camera = nullptr, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	ENGINE_EXPORT void SetParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
+	ENGINE_EXPORT void SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
+	ENGINE_EXPORT void SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
 
 	inline ::Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
 

@@ -11,7 +11,7 @@
 #include <Scene/Environment.hpp>
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
-#include <Scene/Collider.hpp>
+#include <Scene/RaycastReceiver.hpp>
 #include <Util/Util.hpp>
 
 #include <functional>
@@ -41,7 +41,7 @@ public:
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PASS_MAIN, bool clear = true);
 
-	ENGINE_EXPORT Collider* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF);
+	ENGINE_EXPORT RaycastReceiver* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF, float tMin = 0.f, float tMax = 1e10f);
 
 	inline Buffer* LightBuffer(Device* device) const { return mDeviceData.at(device).mLightBuffers[device->FrameContextIndex()]; }
 	inline Buffer* ShadowBuffer(Device* device) const { return mDeviceData.at(device).mShadowBuffers[device->FrameContextIndex()]; }
@@ -68,6 +68,8 @@ private:
 	float2 mShadowTexelSize;
 
 	struct DeviceData {
+		uint32_t mShadowCount;
+
 		Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete
 		Buffer** mShadowBuffers; // resource maintained by the Device, don't need to delete
 		std::vector<Camera*> mShadowCameras;

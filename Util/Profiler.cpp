@@ -15,6 +15,7 @@ void Profiler::BeginSample(const string& label, bool resume = false) {
 			if (label == c.mLabel) {
 				mCurrentSample = &c;
 				c.mStartTime = mTimer.now();
+				c.mCalls++;
 				return;
 			}
 	}
@@ -26,6 +27,8 @@ void Profiler::BeginSample(const string& label, bool resume = false) {
 	strcpy(s->mLabel, label.c_str());
 	s->mParent = mCurrentSample;
 	s->mStartTime = mTimer.now();
+	s->mCalls = 1;
+	s->mChildren = {};
 
 	mCurrentSample =  s;
 }
@@ -56,11 +59,9 @@ void Profiler::FrameEnd() {
 
 void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel) {
 	double t = s->mTime.count() * 1e-6;
-	if (t >= .01){
-		for (uint32_t i = 0; i < tabLevel; i++)
-			data += sprintf(data, "   ");
-		data += sprintf(data, "%s: %.2fms\n", s->mLabel, t);
-	}
+	for (uint32_t i = 0; i < tabLevel; i++)
+		data += sprintf(data, "    ");
+	data += sprintf(data, "%s (%u): %.2fms\n", s->mLabel, s->mCalls, t);
 	for (const auto& pc : s->mChildren)
 		PrintSample(data, &pc, tabLevel + 1);
 }

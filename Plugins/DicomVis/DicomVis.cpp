@@ -5,9 +5,6 @@
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <ThirdParty/stb_image.h>
-
 using namespace std;
 
 class DicomVis : public EnginePlugin {

@@ -18,11 +18,18 @@ public:
 	inline virtual void Update	  () {}
 	inline virtual void PostUpdate() {}
 	
-	inline virtual void PreRender (CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	/// Called before a camera starts rendering, before BeginRenderPass
+	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	/// Called before a camera starts rendering the scene, after BeginRenderPass
+	inline virtual void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	/// Called after a camera finishes rendering the scene, before EndRenderPass
+	inline virtual void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	/// Called after a camera finishes rendering, after EndRenderPass
 	inline virtual void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+
 	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
 	
-	// Higher priority plugins get called first
+	/// Higher priority plugins get called first
 	inline virtual int Priority() { return 50; }
 };
 
