@@ -126,7 +126,7 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 	r *= quaternion(float3(PI/2, 0, 0));
 	DrawWireCircle(center, radius, r, float4(.2f,1,.2f,.5f));
 
-	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
+	if (input->mAxis.at(0) < .25f || t < 0 || lt < 0) return false;
 
 	float3 p = input->mWorldRay.mOrigin - center + input->mWorldRay.mDirection * t;
 	float3 lp = input->mLastWorldRay.mOrigin - center + input->mLastWorldRay.mDirection * lt;
@@ -134,7 +134,7 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 	float3 rotAxis = cross(normalize(lp), normalize(p));
 	float angle = length(rotAxis);
 	if (fabsf(angle) > .0001f)
-		rotation = quaternion(asinf(angle), rotAxis / angle) * rotation;
+		rotation = quaternion(asinf(angle) * .5f, rotAxis / angle) * rotation;
 
 	return true;
 }

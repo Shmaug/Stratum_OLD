@@ -10,14 +10,12 @@ using namespace std;
 
 class SkeletonJoint : public Object {
 public:
-	float3 mMin;
-	float3 mMax;
+	AABB mBox;
 
 	float3 mRotMin;
 	float3 mRotMax;
-	float3 mPose;
 
-	inline SkeletonJoint(const std::string& name) : Object(name), mRotMin(-1e10f), mRotMax(1e10f), mPose(0) {};
+	inline SkeletonJoint(const std::string& name) : Object(name), mRotMin(-1e10f), mRotMax(1e10f) {};
 
 	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override {
 		MouseKeyboardInput* input = Scene()->InputManager()->GetFirst<MouseKeyboardInput>();
@@ -25,11 +23,16 @@ public:
 		quaternion r = WorldRotation();
 		if (Scene()->Gizmos()->RotationHandle(input->GetPointer(0), WorldPosition(), r, .1f)) {
 			quaternion lr = Parent() ? inverse(Parent()->WorldRotation()) * r : r;
+			lr.x = -lr.x;
+			lr.y = -lr.y;
+			lr = quaternion(clamp(lr.toEuler(), mRotMin, mRotMax));
+			lr.x = -lr.x;
+			lr.y = -lr.y;
 			LocalRotation(lr);
 		}
 
-		float3 center = (ObjectToWorld() * float4((mMin + mMax) * .5f, 1.f)).xyz;
-		Scene()->Gizmos()->DrawWireCube(center, (mMax - mMin) * .5f, WorldRotation(), 1.f);
+		float3 center = (ObjectToWorld() * float4(mBox.mCenter, 1.f)).xyz;
+		Scene()->Gizmos()->DrawWireCube(center, mBox.mExtents, WorldRotation(), 1.f);
 	}
 };
 
@@ -74,6 +77,8 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 	string token;
 	if (!t.Next(token) || token != "{") THROW_INVALID_SKEL
 
+	float3 mn, mx;
+
 	while (t.Next(token)) {
 		if (token == "offset") {
 			float3 offset;
@@ -86,19 +91,19 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 			continue;
 		}
 		if (token == "boxmin") {
-			if (!t.Next(j->mMin.x)) THROW_INVALID_SKEL
-			if (!t.Next(j->mMin.y)) THROW_INVALID_SKEL
-			if (!t.Next(j->mMin.z)) THROW_INVALID_SKEL
-			j->mMin *= scale;
-			j->mMin.z = -j->mMin.z;
+			if (!t.Next(mn.x)) THROW_INVALID_SKEL
+			if (!t.Next(mn.y)) THROW_INVALID_SKEL
+			if (!t.Next(mn.z)) THROW_INVALID_SKEL
+			mn *= scale;
+			mn.z = -mn.z;
 			continue;
 		}
 		if (token == "boxmax") {
-			if (!t.Next(j->mMax.x)) THROW_INVALID_SKEL
-			if (!t.Next(j->mMax.y)) THROW_INVALID_SKEL
-			if (!t.Next(j->mMax.z)) THROW_INVALID_SKEL
-			j->mMax *= scale;
-			j->mMax.z = -j->mMax.z;
+			if (!t.Next(mx.x)) THROW_INVALID_SKEL
+			if (!t.Next(mx.y)) THROW_INVALID_SKEL
+			if (!t.Next(mx.z)) THROW_INVALID_SKEL
+			mx *= scale;
+			mx.z = -mx.z;
 			continue;
 		}
 		if (token == "rotxlimit") {
@@ -114,8 +119,6 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 		if (token == "rotzlimit") {
 			if (!t.Next(j->mRotMin.z)) THROW_INVALID_SKEL
 			if (!t.Next(j->mRotMax.z)) THROW_INVALID_SKEL
-			j->mRotMin.z = -j->mRotMin.z;
-			j->mRotMax.z = -j->mRotMax.z;
 			continue;
 		}
 		if (token == "pose") {
@@ -124,7 +127,9 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 			if (!t.Next(pose.y)) THROW_INVALID_SKEL
 			if (!t.Next(pose.z)) THROW_INVALID_SKEL
 			quaternion r(pose);
-			r.xyzw = float4(r.z, r.y, r.x, -r.w);
+			r.x = -r.x;
+			r.y = -r.y;
+			j->LocalRotation(r);
 
 			continue;
 		}
@@ -136,6 +141,8 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 
 		if (token == "}") break;
 	}
+
+	j->mBox = AABB((mx + mn) * .5f, (mx - mn) * .5f);
 
 	return j.get();
 }
@@ -189,8 +196,22 @@ bool MeshView::Init(Scene* scene) {
 	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
 	sun->Type(Sun);
 
-	Load("Assets/Models/dragon.skel", .5f)->LocalPosition(3, 0, 0);
-	Load("Assets/Models/wasp.skel", 1.f)->LocalPosition(-3, 0, 0);
+	float s = 10;
+	uint32_t i = 0;
+	float3 positions[]{
+		float3( 0, 0,  0),
+		float3( s, 0,  0),
+		float3(-s, 0,  0),
+		float3( 0, 0,  s),
+		float3( 0, 0, -s),
+		float3( s, 0, -s),
+		float3(-s, 0, -s),
+		float3( s, 0,  0),
+		float3(-s, 0,  0),
+	};
+	for (const auto& p : fs::directory_iterator("Assets/Models"))
+		if (p.path().extension().string() == ".skel")
+			Load(p.path().string(), 1)->LocalPosition(positions[i++]);
 
 	return true;
 }
@@ -201,7 +222,7 @@ void MeshView::Update() {
 void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	const Ray& ray = mInput->GetPointer(0)->mWorldRay;
 	float hitT;
-	Collider* hit = mScene->Raycast(ray, hitT);
+	RaycastReceiver* hit = mScene->Raycast(ray, hitT);
 
 	Gizmos* gizmos = mScene->Gizmos();
 
