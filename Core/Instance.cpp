@@ -193,7 +193,7 @@ Instance::Instance(const DisplayCreateInfo& display)
 		if (mWindow) break;
 	}
 	#else
-	mWindow = new Window(this, "Stratum " + to_string(mWindows.size()), mWindowInput, it.mWindowPosition, hInstance);
+	mWindow = new ::Window(this, "Stratum", mWindowInput, display.mWindowPosition, hInstance);
 	#endif
 	#pragma endregion
 
@@ -237,13 +237,12 @@ void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 		break;
 	case WM_SIZE:
 	case WM_MOVE:
-		for (Window* w : mWindows)
-			if (w->mHwnd == hwnd){
-				RECT cr;
-				GetClientRect(w->mHwnd, &cr);
-				w->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
-				w->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
-			}
+		if (mWindow && mWindow->mHwnd == hwnd){
+			RECT cr;
+			GetClientRect(mWindow->mHwnd, &cr);
+			mWindow->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
+			mWindow->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+		}
 		break;
 	}
 }
@@ -455,17 +454,11 @@ bool Instance::PollEvents() {
 
 	POINT pt;
 	GetCursorPos(&pt);
-	for (Window* w : mWindows) {
-		RECT r;
-		GetWindowRect(w->mHwnd, &r);
-		if (!PtInRect(&r, pt)) continue;
-		ScreenToClient(w->mHwnd, &pt);
-		mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
-		if (w->mTargetCamera) {
-			float2 uv = mWindowInput->mCurrent.mCursorPos / float2((float)w->mSwapchainSize.width, (float)w->mSwapchainSize.height);
-			mWindowInput->mMousePointer.mWorldRay = w->mTargetCamera->ScreenToWorldRay(uv);
-		}
-		break;
+	ScreenToClient(mWindow->mHwnd, &pt);
+	mWindowInput->mCurrent.mCursorPos = float2((float)pt.x, (float)pt.y);
+	if (mWindow->mTargetCamera) {
+		float2 uv = mWindowInput->mCurrent.mCursorPos / float2((float)mWindow->mSwapchainSize.width, (float)mWindow->mSwapchainSize.height);
+		mWindowInput->mMousePointer.mWorldRay = mWindow->mTargetCamera->ScreenToWorldRay(uv);
 	}
 
 	return true;
