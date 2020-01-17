@@ -8,38 +8,34 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader)
-	: mName(name), mShader(shader), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
 Material::~Material() {
-	for (auto& dkp : mVariantData) {
-		for (auto& kp : dkp.second) {
-			for (uint32_t i = 0; i < dkp.first->MaxFramesInFlight(); i++)
-				safe_delete(kp.second->mDescriptorSets[i]);
-			safe_delete_array(kp.second->mDescriptorSets);
-			safe_delete_array(kp.second->mDirty);
-			safe_delete(kp.second);
-		}
+	for (auto& kp : mVariantData) {
+		for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
+			safe_delete(kp.second->mDescriptorSets[i]);
+		safe_delete_array(kp.second->mDescriptorSets);
+		safe_delete_array(kp.second->mDirty);
+		safe_delete(kp.second);
 	}
 }
 
 void Material::EnableKeyword(const string& kw) {
 	if (mShaderKeywords.count(kw)) return;
 	mShaderKeywords.insert(kw);
-	for (auto& dkp : mVariantData)
-		for (auto& d : dkp.second) {
-			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
-			d.second->mShaderVariant = nullptr;
-		}
+	for (auto& d : mVariantData) {
+		memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+		d.second->mShaderVariant = nullptr;
+	}
 }
 void Material::DisableKeyword(const string& kw) {
 	if (!mShaderKeywords.count(kw)) return;
 	mShaderKeywords.erase(kw);
-	for (auto& dkp : mVariantData)
-		for (auto& d : dkp.second) {
-			memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
-			d.second->mShaderVariant = nullptr;
-		}
+	for (auto& d : mVariantData) {
+		memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+		d.second->mShaderVariant = nullptr;
+	}
 }
 
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
@@ -47,52 +43,48 @@ void Material::SetParameter(const string& name, const MaterialParameter& param) 
 	if (p != param) {
 		p = param;
 		if (param.index() < 4) // push constants dont make descriptors dirty
-			for (auto& dkp : mVariantData)
-				for (auto& d : dkp.second)
-					memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+			for (auto& d : mVariantData)
+				memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 	}
 }
 void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
 	auto& p = mArrayParameters[name][index];
 	if (p.index() != 1 || get<Texture*>(p) != param) {
 		p = param;
-		for (auto& dkp : mVariantData)
-			for (auto& d : dkp.second)
-				memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+		for (auto& d : mVariantData)
+			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 	}
 }
 void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
 	auto& p = mArrayParameters[name][index];
 	if (p.index() != 0 || get<shared_ptr<Texture>>(p) != param) {
 		p = param;
-		for (auto& dkp : mVariantData)
-			for (auto& d : dkp.second)
-				memset(d.second->mDirty, true, sizeof(bool) * dkp.first->MaxFramesInFlight());
+		for (auto& d : mVariantData)
+			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 	}
 }
 
-Material::VariantData* Material::GetData(Device* device, PassType pass) {
-	auto& d = mVariantData[device];
-	if (d.count(pass) == 0) {
-		GraphicsShader* shader = Shader()->GetGraphics(device, pass, mShaderKeywords);
+Material::VariantData* Material::GetData(PassType pass) {
+	if (mVariantData.count(pass) == 0) {
+		GraphicsShader* shader = Shader()->GetGraphics(pass, mShaderKeywords);
 		if (!shader) return nullptr;
 
 		VariantData* data = new VariantData();
-		data->mDescriptorSets = new DescriptorSet*[device->MaxFramesInFlight()];
-		data->mDirty = new bool[device->MaxFramesInFlight()];
-		memset(data->mDescriptorSets, 0, sizeof(DescriptorSet*) * device->MaxFramesInFlight());
-		memset(data->mDirty, true, sizeof(bool) * device->MaxFramesInFlight());
+		data->mDescriptorSets = new DescriptorSet*[mDevice->MaxFramesInFlight()];
+		data->mDirty = new bool[mDevice->MaxFramesInFlight()];
+		memset(data->mDescriptorSets, 0, sizeof(DescriptorSet*) * mDevice->MaxFramesInFlight());
+		memset(data->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 		data->mShaderVariant  = shader;
-		d.emplace(pass, data);
+		mVariantData.emplace(pass, data);
 		return data;
 	}
 
-	auto& data = d.at(pass);
-	if (!data->mShaderVariant) data->mShaderVariant = Shader()->GetGraphics(device, pass, mShaderKeywords);
+	auto& data = mVariantData.at(pass);
+	if (!data->mShaderVariant) data->mShaderVariant = Shader()->GetGraphics(pass, mShaderKeywords);
 	return data;
 }
-GraphicsShader* Material::GetShader(Device* device, PassType pass) {
-	return GetData(device, pass)->mShaderVariant;
+GraphicsShader* Material::GetShader(PassType pass) {
+	return GetData(pass)->mShaderVariant;
 }
 
 void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {

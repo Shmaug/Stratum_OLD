@@ -90,7 +90,7 @@ private:
 	VkCommandBuffer mCommandBuffer;
 	VkCommandPool mCommandPool;
 	std::shared_ptr<Fence> mSignalFence;
-	std::vector<std::shared_ptr<Semaphore>> mSignalSemaphores;
+	std::shared_ptr<Semaphore> mSignalSemaphore;
 
 	std::unordered_map<uint32_t, Buffer*> mCurrentVertexBuffers;
 	Buffer* mCurrentIndexBuffer;

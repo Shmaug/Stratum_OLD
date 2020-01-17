@@ -9,19 +9,12 @@ class Texture : public Asset {
 public:
 	const std::string mName;
 
-	ENGINE_EXPORT Texture(const std::string& name, Instance* instance,
-		void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels,
-		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
-		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	ENGINE_EXPORT Texture(const std::string& name, Instance* instance,
+	ENGINE_EXPORT Texture(const std::string& name, Device* device,
 		uint32_t width, uint32_t height, uint32_t depth, VkFormat format,
 		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	ENGINE_EXPORT Texture(const std::string& name, Device* instance,
-		uint32_t width, uint32_t height, uint32_t depth, VkFormat format,
-		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
-		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	ENGINE_EXPORT Texture(const std::string& name, Device* instance,
+		
+	ENGINE_EXPORT Texture(const std::string& name, Device* device,
 		void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels,
 		VkSampleCountFlagBits numSamples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL,
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT, VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -35,17 +28,19 @@ public:
 	inline VkSampleCountFlagBits SampleCount() const { return mSampleCount; }
 	inline VkImageUsageFlags Usage() const { return mUsage; }
 
-	inline VkImage Image(Device* device) const { return mDeviceData.at(device).mImage; }
-	inline VkImageView View(Device* device) const { return mDeviceData.at(device).mView; }
+	inline VkImage Image() const { return mImage; }
+	inline VkImageView View() const { return mView; }
 
 	ENGINE_EXPORT static void TransitionImageLayout(VkImage image, VkFormat format, uint32_t mipLevels, VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 
 private:
 	friend class AssetManager;
-	ENGINE_EXPORT Texture(const std::string& name, Instance* instance, const std::string& filename, bool srgb = true);
-	ENGINE_EXPORT Texture(const std::string& name, Instance* instance, const std::string& px, const std::string& nx, const std::string& py, const std::string& ny, const std::string& pz, const std::string& nz, bool srgb = true);
+	ENGINE_EXPORT Texture(const std::string& name, Device* device, const std::string& filename, bool srgb = true);
+	ENGINE_EXPORT Texture(const std::string& name, Device* device, const std::string& px, const std::string& nx, const std::string& py, const std::string& ny, const std::string& pz, const std::string& nz, bool srgb = true);
 
+	Device* mDevice;
+	
 	uint32_t mWidth;
 	uint32_t mHeight;
 	uint32_t mDepth;
@@ -60,13 +55,9 @@ private:
 
 	VkDeviceSize mMemorySize;
 
-	struct DeviceData {
-		VkImage mImage;
-		VkImageView mView;
-		VkDeviceMemory mImageMemory;
-		inline DeviceData() : mImage(VK_NULL_HANDLE), mView(VK_NULL_HANDLE), mImageMemory(VK_NULL_HANDLE) {}
-	};
-	std::unordered_map<Device*, DeviceData> mDeviceData;
+	VkImage mImage;
+	VkImageView mView;
+	VkDeviceMemory mImageMemory;
 
 	ENGINE_EXPORT void GenerateMipMaps(CommandBuffer* commandBuffer);
 

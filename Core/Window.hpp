@@ -53,7 +53,6 @@ private:
 	friend class Stratum;
 	friend class Instance;
 
-	ENGINE_EXPORT Window(Instance* instance, VkPhysicalDevice physicalDevice, VkDisplayKHR directDisplay);
 	#ifdef __linux
 	ENGINE_EXPORT Window(Instance* instance, const std::string& title, MouseKeyboardInput* input, VkRect2D position, xcb_connection_t* XCBConnection, xcb_screen_t* XCBScreen);
 	#else

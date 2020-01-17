@@ -29,17 +29,16 @@ public:
 
 private:
 	friend class Scene;
-	ENGINE_EXPORT void PreFrame(Device* device);
+	ENGINE_EXPORT void PreFrame();
 	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera);
 
-	struct DeviceData {
-		Buffer* mVertices;
-		Buffer* mIndices;
+	Device* mDevice;
 
-		uint32_t* mBufferIndex;
-		std::vector<std::pair<DescriptorSet*, Buffer*>>* mInstanceBuffers;
-	};
-	std::unordered_map<Device*, DeviceData> mDeviceData;
+	Buffer* mVertices;
+	Buffer* mIndices;
+
+	uint32_t* mBufferIndex;
+	std::vector<std::pair<DescriptorSet*, Buffer*>>* mInstanceBuffers;
 
 	Texture* mWhiteTexture;
 

@@ -93,7 +93,7 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t bi
 		mImageInfoPool.pop();
 	}
 	info->imageLayout = layout;
-	info->imageView = texture->View(mDevice);
+	info->imageView = texture->View();
 	info->sampler = VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet write = {};
@@ -116,7 +116,7 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t in
 		mImageInfoPool.pop();
 	}
 	info->imageLayout = layout;
-	info->imageView = texture->View(mDevice);
+	info->imageView = texture->View();
 	info->sampler = VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet write = {};
@@ -139,7 +139,7 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t bi
 		mImageInfoPool.pop();
 	}
 	info->imageLayout = layout;
-	info->imageView = texture->View(mDevice);
+	info->imageView = texture->View();
 	info->sampler = VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet write = {};
@@ -162,7 +162,7 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t in
 		mImageInfoPool.pop();
 	}
 	info->imageLayout = layout;
-	info->imageView = texture->View(mDevice);
+	info->imageView = texture->View();
 	info->sampler = VK_NULL_HANDLE;
 
 	VkWriteDescriptorSet write = {};

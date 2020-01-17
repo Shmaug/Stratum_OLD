@@ -15,8 +15,7 @@ void Device::FrameContext::Reset() {
 	PROFILER_END;
 	mFences.clear();
 
-	for (uint32_t i = 0; i < mSemaphores.size(); i++)
-		mSemaphores[i].clear();
+	mSemaphores.clear();
 
 	for (auto it = mTempBuffers.begin(); it != mTempBuffers.end();) {
 		if (it->second == 1) {
@@ -79,7 +78,7 @@ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, ui
 }
 
 Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, vector<const char*> deviceExtensions, vector<const char*> validationLayers)
-	: mInstance(instance), mWindowCount(0), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
+	: mInstance(instance), mFrameContexts(nullptr), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(*instance, "vkSetDebugUtilsObjectNameEXT");
@@ -110,6 +109,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.fillModeNonSolid = VK_TRUE;
 	deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
+	deviceFeatures.sparseBinding = VK_TRUE;
 
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT indexingFeatures = {};
 	indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
@@ -167,7 +167,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 }
 Device::~Device() {
 	FlushFrames();
-	mFrameContexts.clear();
+	safe_delete_array(mFrameContexts);
 	vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
 	vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
 	for (auto& p : mCommandBuffers)
@@ -199,8 +199,8 @@ void Device::FlushFrames() {
 			p.second.pop();
 		}
 	}
-	for (FrameContext& frame : mFrameContexts)
-		frame.Reset();
+	for (uint32_t i = 0; i < MaxFramesInFlight(); i++)
+		mFrameContexts[i].Reset();
 }
 
 void Device::SetObjectName(void* object, const string& name, VkObjectType type) const {
@@ -268,28 +268,26 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 	lock_guard lock(mCommandPoolMutex);
 	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer), "vkEndCommandBuffer failed");
 
-	vector<VkSemaphore> semaphores;
-	vector<VkPipelineStageFlags> waitStages;
+	VkSemaphore semaphore = VK_NULL_HANDLE;
+	VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 	if (frameContext) {		
 		CurrentFrameContext()->mFences.push_back(commandBuffer->mSignalFence);
 
-		commandBuffer->mSignalSemaphores.resize(CurrentFrameContext()->mSemaphores.size());
-		for (uint32_t i = 0; i < CurrentFrameContext()->mSemaphores.size(); i++) {
-			if (!commandBuffer->mSignalSemaphores[i]) commandBuffer->mSignalSemaphores[i] = make_shared<Semaphore>(this);
-			SetObjectName(*commandBuffer->mSignalSemaphores[i], "CommandBuffer Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
-			
-			semaphores.push_back(*commandBuffer->mSignalSemaphores[i]);
-			waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
-			CurrentFrameContext()->mSemaphores[i].push_back(commandBuffer->mSignalSemaphores[i]);
+		if (!commandBuffer->mSignalSemaphore) {
+			commandBuffer->mSignalSemaphore = make_shared<Semaphore>(this);
+			SetObjectName(*commandBuffer->mSignalSemaphore, "CommandBuffer Semaphore", VK_OBJECT_TYPE_SEMAPHORE);
 		}
+		
+		semaphore = *commandBuffer->mSignalSemaphore;
+
+		CurrentFrameContext()->mSemaphores.push_back(commandBuffer->mSignalSemaphore);
 	}
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.pWaitDstStageMask = waitStages.data();
-	submitInfo.signalSemaphoreCount = (uint32_t)semaphores.size();
-	submitInfo.pSignalSemaphores = semaphores.data();
+	submitInfo.pWaitDstStageMask = semaphore ? &waitStage : nullptr;
+	submitInfo.signalSemaphoreCount = semaphore ? 1 : 0;
+	submitInfo.pSignalSemaphores = semaphore ? &semaphore : nullptr;
 	submitInfo.waitSemaphoreCount = 0;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer->mCommandBuffer;

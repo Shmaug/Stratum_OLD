@@ -1,9 +1,0 @@
-{
-  "displays": [
-    {
-      "device": 0,
-      "x_display": ":0",
-      "window_rect": [ 0, 0, 1600, 900 ]
-    }
-  ]
-}

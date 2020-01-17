@@ -78,17 +78,20 @@ public:
 	ENGINE_EXPORT ~Shader() override;
 
 	/// Returns a shader variant for a specific pass and set of keywords, or nullptr if none exists
-	ENGINE_EXPORT GraphicsShader* GetGraphics(Device* device, PassType pass, const std::set<std::string>& keywords) const;
+	ENGINE_EXPORT GraphicsShader* GetGraphics(PassType pass, const std::set<std::string>& keywords) const;
 	/// Returns a shader variant for a specific kernel and set of keywords, or nullptr if none exists
-	ENGINE_EXPORT ComputeShader* GetCompute(Device* device, const std::string& kernel, const std::set<std::string>& keywords) const;
+	ENGINE_EXPORT ComputeShader* GetCompute(const std::string& kernel, const std::set<std::string>& keywords) const;
 
+	inline ::Device* Device() const { return mDevice; }
 	inline PassType PassMask() const { return mPassMask; }
 	inline uint32_t RenderQueue() const { return mRenderQueue; }
 
 private:
 	friend class GraphicsShader;
 	friend class AssetManager;
-	ENGINE_EXPORT Shader(const std::string& name, Instance* devices, const std::string& filename);
+	ENGINE_EXPORT Shader(const std::string& name, ::Device* device, const std::string& filename);
+
+	::Device* mDevice;
 
 	friend class GraphicsShader;
 	std::set<std::string> mKeywords;
@@ -103,11 +106,7 @@ private:
 	VkPipelineDynamicStateCreateInfo mDynamicState;
 	std::vector<VkDynamicState> mDynamicStates;
 
-	struct DeviceData {
-		std::unordered_map<std::string, std::unordered_map<std::string, ComputeShader*>> mComputeVariants;
-		std::unordered_map<PassType, std::unordered_map<std::string, GraphicsShader*>> mGraphicsVariants;
-		std::vector<Sampler*> mStaticSamplers;
-	};
-
-	std::unordered_map<Device*, DeviceData> mDeviceData;
+	std::unordered_map<std::string, std::unordered_map<std::string, ComputeShader*>> mComputeVariants;
+	std::unordered_map<PassType, std::unordered_map<std::string, GraphicsShader*>> mGraphicsVariants;
+	std::vector<Sampler*> mStaticSamplers;
 };

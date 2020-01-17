@@ -45,11 +45,6 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 #endif
 
-struct Configuration {
-	vector<Instance::DisplayCreateInfo> mDisplays;
-	bool mDebugMessenger;
-};
-
 class Stratum {
 private:
 	Instance* mInstance;
@@ -64,51 +59,41 @@ private:
 
 	void Render() {
 		PROFILER_BEGIN("Get CommandBuffers");
-		unordered_map<Device*, shared_ptr<CommandBuffer>> commandBuffers;
-		for (uint32_t i = 0; i < mScene->Instance()->DeviceCount(); i++) {
-			shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->GetDevice(i)->GetCommandBuffer();
-			commandBuffers.emplace(commandBuffer->Device(), commandBuffer);
-		}
+		shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->Device()->GetCommandBuffer();
 		PROFILER_END;
 
 		PROFILER_BEGIN("Scene PreFrame");
-		for (auto& d : commandBuffers)
-			mScene->PreFrame(d.second.get());
+		mScene->PreFrame(commandBuffer.get());
 		PROFILER_END;
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras())
-			if (camera->EnabledHierarchy()) {
-				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
-				mScene->Render(cb, camera, camera->Framebuffer(), PASS_MAIN);
-			}
+			if (camera->EnabledHierarchy())
+				mScene->Render(commandBuffer.get(), camera, camera->Framebuffer(), PASS_MAIN);
 		for (const auto& camera : mScene->Cameras())
-			if (camera->EnabledHierarchy()) {
-				CommandBuffer* cb = commandBuffers.at(camera->Device()).get();
-				camera->ResolveWindow(cb);
-			}
+			if (camera->EnabledHierarchy()) 
+				camera->ResolveWindow(commandBuffer.get());
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffers");
-		for (auto& d : commandBuffers)
-			d.first->Execute(d.second);
+		mInstance->Device()->Execute(commandBuffer);
 		PROFILER_END;
 	}
 
 public:
-	Stratum(const Configuration* config) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
+	Stratum(const Instance::DisplayCreateInfo& display, bool debugMessenger) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
 #ifdef ENABLE_DEBUG_LAYERS
 		, mDebugMessenger(VK_NULL_HANDLE)
 #endif
 	{
 		printf("Initializing...\n");
-		mInstance = new Instance();
+		mInstance = new Instance(display);
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
-		mAssetManager = new AssetManager(mInstance);
+		mAssetManager = new AssetManager(mInstance->Device());
 		
 		#ifdef ENABLE_DEBUG_LAYERS
-		if (config->mDebugMessenger) {
+		if (debugMessenger) {
 			VkDebugUtilsMessengerCreateInfoEXT msgr = {};
 			msgr.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 			msgr.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -117,22 +102,18 @@ public:
 			printf("Creating debug messenger... ");
 			VkResult result = CreateDebugUtilsMessengerEXT(*mInstance, &msgr, nullptr, &mDebugMessenger);
 			if (result == VK_SUCCESS)
-				printf("Success.\n");
+				fprintf_color(COLOR_GREEN, stdout, "Success.\n");
 			else {
-				printf("Failed.\n");
+				fprintf_color(COLOR_RED, stderr, "Failed.\n");
 				mDebugMessenger = VK_NULL_HANDLE;
 			}
 		}
 		#endif
 		
-		// initialize device, create windows and logical devices
-		printf("Creating devices and displays... ");
-		mInstance->CreateDevicesAndWindows(config->mDisplays);
-		printf("Done.\n");
+		printf("Initialized.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
-		for (uint32_t i = 0; i < mInstance->WindowCount(); i++)
-			mInputManager->RegisterInputDevice(mInstance->GetWindow(i)->mInput);
+		mInputManager->RegisterInputDevice(mInstance->Window()->mInput);
 	}
 
 	Stratum* Loop() {
@@ -153,8 +134,7 @@ public:
 			PROFILER_END;
 
 			PROFILER_BEGIN("Acquire Image");
-			for (uint32_t i = 0; i < mInstance->WindowCount(); i++)
-				mInstance->GetWindow(i)->AcquireNextImage();
+			mInstance->Window()->AcquireNextImage();
 			PROFILER_END;
 
 			mScene->Update();
@@ -170,8 +150,7 @@ public:
 			#endif
 		}
 
-		for (uint32_t i = 0; i < mInstance->DeviceCount(); i++)
-			mInstance->GetDevice(i)->FlushFrames();
+		mInstance->Device()->FlushFrames();
 
 		mPluginManager->UnloadPlugins();
 
@@ -191,53 +170,6 @@ public:
 	}
 };
 
-bool ReadConfig(const string& file, Configuration& config) {
-	ifstream stream(file);
-	if (!stream.is_open()) {
-		printf("Failed to open %s\n", file.c_str());
-		return false;
-	}
-	stringstream buffer;
-	buffer << stream.rdbuf();
-
-	string err;
-	auto json = json11::Json::parse(buffer.str(), err);
-
-	if (json.is_null()) {
-		printf("Failed to read %s: %s\n", file.c_str(), err.c_str());
-		return false;
-	}
-
-	auto& displays = json["displays"];
-	if (displays.is_array()) {
-		for (const auto& d : displays.array_items()) {
-			auto& devc = d["device"];
-			auto& disp = d["x_display"];
-			auto& dir = d["x_direct_display"];
-			auto& rect = d["window_rect"];
-
-			Instance::DisplayCreateInfo info = {};
-			info.mDeviceIndex = devc.is_number() ? devc.int_value() : 0;
-			info.mXDisplay = disp.is_string() ? disp.string_value() : "";
-			info.mXDirectDisplay = dir.is_bool() ? dir.bool_value() : false;
-			if (rect.is_array() && rect.array_items().size() == 4 &&
-				rect.array_items()[0].is_number() &&
-				rect.array_items()[1].is_number() &&
-				rect.array_items()[2].is_number() &&
-				rect.array_items()[3].is_number()) {
-				info.mWindowPosition.offset.x = (int)rect.array_items()[0].number_value();
-				info.mWindowPosition.offset.y = (int)rect.array_items()[1].number_value();
-				info.mWindowPosition.extent.width = (int)rect.array_items()[2].number_value();
-				info.mWindowPosition.extent.height = (int)rect.array_items()[3].number_value();
-			} else
-				info.mWindowPosition = { { 160, 90 }, { 1600, 900 } };
-
-			config.mDisplays.push_back(info);
-		}
-	}
-	return true;
-}
-
 int main(int argc, char* argv[]) {
 	{ 
 		#ifdef WINDOWS
@@ -246,22 +178,18 @@ int main(int argc, char* argv[]) {
 			cerr << "WSAStartup failed" << endl;
 		#endif
 
-		const char* file = "config.json";
-
-		if (argc > 1) file = argv[1];
-
-		Configuration config = {};
-		if (!ReadConfig(file, config)){
-			config.mDisplays.push_back({});
-			config.mDisplays[0].mWindowPosition = { { 160, 90 }, { 1600, 900 } };
+		Instance::DisplayCreateInfo display = {};
+		display.mDeviceIndex = 0;
+		display.mWindowPosition = { { 160, 90 }, { 1600, 900 }};
+		display.mXDisplay = "";
+		bool debugMessenger = true;
+		
+		for (int i = 1; i < argc; i++){
+			if (strcmp(argv[i], "-nodebug") == 0) debugMessenger = false;
 		}
-		if (argc > 2)
-			config.mDebugMessenger = strcmp(argv[2], "-nodebug") != 0;
-		else
-			config.mDebugMessenger = true;
 
 		// create, run, and delete the engine all in one line :)
-		delete (new Stratum(&config))->Loop();
+		delete (new Stratum(display, debugMessenger))->Loop();
 
 		#ifdef WINDOWS
 		WSACleanup();
