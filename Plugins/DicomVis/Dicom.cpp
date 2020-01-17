@@ -39,7 +39,7 @@ void ReadDicomImages(uint16_t* data, vector<Slice>& images, uint32_t j, uint32_t
 		memcpy(data + i * w * h, pixels, w*h*sizeof(uint16_t));
 	}
 }
-Texture* LoadDicomStack(const string& folder, Instance* instance, float3* size) {
+Texture* LoadDicomStack(const string& folder, Device* device, float3* size) {
 	vector<Slice> images;
 
 	// Get information
@@ -76,7 +76,7 @@ Texture* LoadDicomStack(const string& folder, Instance* instance, float3* size) 
 
 	ReadDicomImages(data, images, 0, (int)images.size(), w, h);
 
-	Texture* tex = new Texture(folder, instance, w, h, d,
+	Texture* tex = new Texture(folder, device, w, h, d,
 		VK_FORMAT_R16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
 	delete[] data;
 

@@ -205,7 +205,7 @@ void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
 		region.srcSubresource.layerCount = 1;
 		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		vkCmdCopyImage(*commandBuffer,
-			mFramebuffer->ColorBuffer(0)->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mFramebuffer->ColorBuffer(0)->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 		swap(barrier.oldLayout, barrier.newLayout);

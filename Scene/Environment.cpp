@@ -31,7 +31,7 @@ Environment::Environment(Scene* scene) :
 	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.stm"));
 	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
 	skybox->LocalScale(1e23f);
-	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->Instance())));
+	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->Instance()->Device())));
 	skybox->Material(skyboxMat);
 	mSkybox = skybox.get();
 	mScene->AddObject(skybox);
@@ -60,13 +60,14 @@ Environment::Environment(Scene* scene) :
 		r[4 * i + 2] = rand() % 0xFF;
 		r[4 * i + 3] = 0;
 	}
-	Texture* randTex = new Texture("Random Vectors", mScene->Instance(), r, 256 * 4, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, 1,
+	Texture* randTex = new Texture("Random Vectors", mScene->Instance()->Device(), r, 256 * 4, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, 1,
 		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
 
 	printf("Precomputing scattering LUTs... ");
 
-	for (uint32_t i = 0; i < mScene->Instance()->DeviceCount(); i++) {
-		Device* device = mScene->Instance()->GetDevice(i);
+	Device* device = mScene->Instance()->Device();
+
+	{
 		auto commandBuffer = device->GetCommandBuffer();
 
 		DevLUT dlut = {};
@@ -80,7 +81,7 @@ Environment::Environment(Scene* scene) :
 		dlut.mSkyboxLUTR->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
 		dlut.mSkyboxLUTM->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
 
-		ComputeShader* particleDensity = mShader->GetCompute(commandBuffer->Device(), "ParticleDensityLUT", {});
+		ComputeShader* particleDensity = mShader->GetCompute("ParticleDensityLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipeline);
 
 		DescriptorSet* ds = new DescriptorSet("Particle Density", device, particleDensity->mDescriptorSetLayouts[0]);
@@ -96,7 +97,7 @@ Environment::Environment(Scene* scene) :
 		dlut.mParticleDensityLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 		// compute skybox LUT
-		ComputeShader* skyboxc = mShader->GetCompute(commandBuffer->Device(), "SkyboxLUT", {});
+		ComputeShader* skyboxc = mShader->GetCompute("SkyboxLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skyboxc->mPipeline);
 
 		DescriptorSet* ds2 = new DescriptorSet("Scatter LUT", device, skyboxc->mDescriptorSetLayouts[0]);
@@ -129,15 +130,14 @@ Environment::Environment(Scene* scene) :
 		delete ds;
 		delete ds2;
 	}
-
 	{
-		Device* device = mScene->Instance()->GetDevice(0);
+
 		auto commandBuffer = device->GetCommandBuffer();
 
 		Buffer ambientBuffer("Ambient", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		Buffer dirBuffer("Direct", device, 128 * sizeof(float4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		ComputeShader* ambient = mShader->GetCompute(commandBuffer->Device(), "AmbientLightLUT", {});
+		ComputeShader* ambient = mShader->GetCompute("AmbientLightLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipeline);
 
 		DescriptorSet* ds = new DescriptorSet("Ambient LUT", device, ambient->mDescriptorSetLayouts[0]);
@@ -161,7 +161,7 @@ Environment::Environment(Scene* scene) :
 		vkCmdDispatch(*commandBuffer, 2, 1, 1);
 
 
-		ComputeShader* direct = mShader->GetCompute(commandBuffer->Device(), "DirectLightLUT", {});
+		ComputeShader* direct = mShader->GetCompute("DirectLightLUT", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipeline);
 
 		DescriptorSet* ds2 = new DescriptorSet("Ambient LUT", device, direct->mDescriptorSetLayouts[0]);
@@ -335,7 +335,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		float4 incoming = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
 
 		#pragma region Precompute scattering
-		ComputeShader* scatter = mShader->GetCompute(commandBuffer->Device(), "InscatteringLUT", {});
+		ComputeShader* scatter = mShader->GetCompute("InscatteringLUT", {});
 
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipeline);
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Scatter LUT", scatter->mDescriptorSetLayouts[0]);

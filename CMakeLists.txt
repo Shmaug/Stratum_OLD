@@ -143,9 +143,6 @@ if (${ENABLE_DEBUG_LAYERS})
 	target_compile_definitions(Engine PUBLIC -DENABLE_DEBUG_LAYERS)
 endif()
 
-# Copy config file
-configure_file("config.json" "${PROJECT_BINARY_DIR}/bin/config.json" COPYONLY)
-
 # Create symbolic link to Assets folder so the executable can find assets
 add_custom_command(
 	TARGET Stratum POST_BUILD

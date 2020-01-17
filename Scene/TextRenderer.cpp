@@ -49,7 +49,7 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	if (!glyphCount) return;
 
 	if (!mShader) mShader = Scene()->AssetManager()->LoadShader("Shaders/font.stm");
-	GraphicsShader* shader = mShader->GetGraphics(commandBuffer->Device(), pass, {});
+	GraphicsShader* shader = mShader->GetGraphics(pass, {});
 	if (!shader) return;
 
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr, camera);
@@ -60,21 +60,20 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
 	descriptorSet->FlushWrites();
 
-	float4x4 mt = ObjectToWorld();
+	float4x4 o2w = ObjectToWorld();
 	float3 normal = WorldRotation().forward();
 	float2 offset(0);
 
-	VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
 	VkPushConstantRange nrm = shader->mPushConstants.at("WorldNormal");
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 
 	VkDescriptorSet objds = *descriptorSet;
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-	vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
-	vkCmdPushConstants(*commandBuffer, layout, nrm.stageFlags, nrm.offset, nrm.size, &normal);
-	vkCmdPushConstants(*commandBuffer, layout, offsetRange.stageFlags, offsetRange.offset, offsetRange.size, &offset);
-	vkCmdPushConstants(*commandBuffer, layout, colorRange.stageFlags, colorRange.offset, colorRange.size, &mColor);
+	commandBuffer->PushConstant(shader, "ObjectToWorld", &o2w);
+	commandBuffer->PushConstant(shader, "WorldNormal", &normal);
+	commandBuffer->PushConstant(shader, "Offset", &offset);
+	commandBuffer->PushConstant(shader, "Color", &mColor);
 	vkCmdDraw(*commandBuffer, glyphCount * 6, 1, 0, 0);
 	commandBuffer->mTriangleCount += glyphCount * 2;
 }

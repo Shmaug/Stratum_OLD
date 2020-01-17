@@ -30,10 +30,6 @@ public:
 	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 
 private:
-	struct DeviceData {
-		DescriptorSet** mDescriptorSets;
-	};
-
 	Shader* mShader;
 	bool mOutline;
 	float4 mOutlineColor;
@@ -41,5 +37,4 @@ private:
 	std::variant<std::shared_ptr<::Texture>, ::Texture*> mTexture;
 
 	AABB mAABB;
-	std::unordered_map<Device*, DeviceData> mDeviceData;
 };

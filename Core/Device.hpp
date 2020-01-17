@@ -14,9 +14,8 @@ class Window;
 
 class Device {
 public:
-	class FrameContext {
-	public:
-		std::vector<std::vector<std::shared_ptr<Semaphore>>> mSemaphores; // semaphores that signal when this frame is 'done'
+	struct FrameContext {
+		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is 'done'
 		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
 		
 		std::list<std::pair<Buffer*, uint32_t>> mTempBuffers;
@@ -25,7 +24,7 @@ public:
 		std::vector<Buffer*> mTempBuffersInUse;
 		std::vector<DescriptorSet*> mTempDescriptorSetsInUse;
 
-		inline FrameContext() : mFences({}), mSemaphores({}) {};
+		inline FrameContext() : mFences({}), mSemaphores({}), mTempBuffers({}), mTempDescriptorSets({}), mTempBuffersInUse({}), mTempDescriptorSetsInUse({}) {};
 		ENGINE_EXPORT ~FrameContext();
 		ENGINE_EXPORT void Reset();
 	};
@@ -72,8 +71,7 @@ private:
 
 	::Instance* mInstance;
 	uint32_t mFrameContextIndex; // assigned by mInstance
-	std::vector<FrameContext> mFrameContexts;
-	uint32_t mWindowCount;
+	FrameContext* mFrameContexts;
 
 	VkPhysicalDeviceLimits mLimits;
 

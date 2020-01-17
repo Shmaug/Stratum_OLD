@@ -35,10 +35,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
 	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, mesh->VertexInput(), camera, mesh->Topology(), cull);
 	if (!layout) return;
-	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
-
-	for (const auto& kp : mPushConstants)
-		commandBuffer->PushConstant(shader, kp.first, &kp.second);
+	auto shader = mMaterial->GetShader(pass);
 
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
@@ -46,12 +43,14 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
+	for (const auto& kp : mPushConstants)
+		commandBuffer->PushConstant(shader, kp.first, &kp.second);
 	
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
 
-	commandBuffer->BindVertexBuffer(mesh->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
-	commandBuffer->BindIndexBuffer(mesh->IndexBuffer(commandBuffer->Device()).get(), 0, mesh->IndexType());
+	commandBuffer->BindVertexBuffer(mesh->VertexBuffer().get(), 0, 0);
+	commandBuffer->BindIndexBuffer(mesh->IndexBuffer().get(), 0, mesh->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
 	PROFILER_END;

@@ -27,7 +27,7 @@ bool CameraControl::Init(Scene* scene) {
 	mCameraPivot = cameraPivot.get();
 	mCameraPivot->LocalPosition(0, .5f, 0);
 
-	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->GetWindow(0));
+	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->Window());
 	mScene->AddObject(camera);
 	camera->Near(.01f);
 	camera->Far(1024.f);

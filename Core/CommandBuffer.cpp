@@ -140,13 +140,11 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass
 		}
 		mCurrentCamera = camera;
 	}
-	mCurrentIndexBuffer = nullptr;
-	mCurrentVertexBuffers.clear();
 	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
 }
 VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, const VertexInput* input, Camera* camera, VkPrimitiveTopology topology, VkCullModeFlags cullMode, BlendMode blendMode, VkPolygonMode polyMode) {
-	GraphicsShader* shader = material->GetShader(mDevice, pass);
+	GraphicsShader* shader = material->GetShader(pass);
 	if (!shader) return VK_NULL_HANDLE;
 
 	if (blendMode == BLEND_MODE_MAX_ENUM) blendMode = material->BlendMode();
@@ -158,14 +156,12 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 
 	PROFILER_BEGIN_RESUME("Bind Material");
 
-	Material::VariantData* data = material->GetData(mDevice, pass);
+	Material::VariantData* data = material->GetData(pass);
 
 	if (pipeline != mCurrentPipeline) {
 		PROFILER_BEGIN_RESUME("Bind Pipeline");
 		vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		mCurrentPipeline = pipeline;
-		mCurrentIndexBuffer = nullptr;
-		mCurrentVertexBuffers.clear();
 		mCurrentCamera = nullptr;
 		mCurrentMaterial = nullptr;
 		PROFILER_END;

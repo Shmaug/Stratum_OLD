@@ -2,4 +2,4 @@
 
 #include <Content/Texture.hpp>
 
-Texture* LoadDicomStack(const std::string& folder, Instance* instance, float3* size);
+Texture* LoadDicomStack(const std::string& folder, Device* device, float3* size);

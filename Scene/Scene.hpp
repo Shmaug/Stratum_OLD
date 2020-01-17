@@ -43,9 +43,9 @@ public:
 
 	ENGINE_EXPORT RaycastReceiver* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF, float tMin = 0.f, float tMax = 1e10f);
 
-	inline Buffer* LightBuffer(Device* device) const { return mDeviceData.at(device).mLightBuffers[device->FrameContextIndex()]; }
-	inline Buffer* ShadowBuffer(Device* device) const { return mDeviceData.at(device).mShadowBuffers[device->FrameContextIndex()]; }
-	inline Texture* ShadowAtlas(Device* device) const { return mDeviceData.at(device).mShadowAtlasFramebuffer->DepthBuffer(); }
+	inline Buffer* LightBuffer() const { return mLightBuffers[mInstance->Device()->FrameContextIndex()]; }
+	inline Buffer* ShadowBuffer() const { return mShadowBuffers[mInstance->Device()->FrameContextIndex()]; }
+	inline Texture* ShadowAtlas() const { return mShadowAtlasFramebuffer->DepthBuffer(); }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
@@ -67,15 +67,12 @@ private:
 
 	float2 mShadowTexelSize;
 
-	struct DeviceData {
-		uint32_t mShadowCount;
+	uint32_t mShadowCount;
 
-		Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete
-		Buffer** mShadowBuffers; // resource maintained by the Device, don't need to delete
-		std::vector<Camera*> mShadowCameras;
-		Framebuffer* mShadowAtlasFramebuffer;
-	};
-	std::unordered_map<Device*, DeviceData> mDeviceData;
+	Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete
+	Buffer** mShadowBuffers; // resource maintained by the Device, don't need to delete
+	std::vector<Camera*> mShadowCameras;
+	Framebuffer* mShadowAtlasFramebuffer;
 
 	std::vector<Light*> mActiveLights;
 
@@ -92,5 +89,5 @@ private:
 	std::vector<Renderer*> mRenderList;
 	bool mDrawGizmos;
 
-	void AddShadowCamera(DeviceData* dd, uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
+	void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
 };

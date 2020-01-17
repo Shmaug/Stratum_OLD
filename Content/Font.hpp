@@ -41,7 +41,7 @@ public:
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
 	/// Draws str relative to the screen
-	ENGINE_EXPORT void Font::Draw(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
 	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
 
 	inline float PixelSize() const { return mPixelSize; };
@@ -51,7 +51,7 @@ public:
 
 private:
 	friend class AssetManager;
-	ENGINE_EXPORT Font(const std::string& name, Instance* deviceManager, const std::string& filename, float pixelSize, float scale);
+	ENGINE_EXPORT Font(const std::string& name, Device* device, const std::string& filename, float pixelSize, float scale);
 
 	float mPixelSize;
 	float mAscender;

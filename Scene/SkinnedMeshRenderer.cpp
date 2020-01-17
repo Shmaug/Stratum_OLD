@@ -1,5 +1,6 @@
 #include <Scene/SkinnedMeshRenderer.hpp>
 #include <Scene/Scene.hpp>
+#include <Util/Profiler.hpp>
 
 using namespace std;
 
@@ -7,18 +8,6 @@ SkinnedMeshRenderer::SkinnedMeshRenderer(const string& name) : MeshRenderer(name
 SkinnedMeshRenderer::~SkinnedMeshRenderer() {
     for (Bone* b : mRig)
         safe_delete(b);
-
-	for (auto& d : mDeviceData) {
-		for (uint32_t i = 0; i < d.first->MaxFramesInFlight(); i++) {
-			safe_delete(d.second.mDescriptorSets[i]);
-			safe_delete(d.second.mPoseBuffers[i]);
-			safe_delete(d.second.mVertices[i]);
-		}
-		safe_delete_array(d.second.mPoseBuffers);
-		safe_delete_array(d.second.mVertices);
-		safe_delete_array(d.second.mDescriptorSets);
-		safe_delete_array(d.second.mBoundLightBuffers);
-	}
 }
 
 Bone* SkinnedMeshRenderer::GetBone(const string& boneName) const {
@@ -70,96 +59,55 @@ void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
 	mMesh = mesh;
 }
 
-void SkinnedMeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	if (!mDeviceData.count(commandBuffer->Device())) {
-		DeviceData& d = mDeviceData[commandBuffer->Device()];
-		uint32_t c = commandBuffer->Device()->MaxFramesInFlight();
-		d.mDescriptorSets = new DescriptorSet*[c];
-		d.mBoundLightBuffers = new Buffer*[c];
-		d.mPoseBuffers = new Buffer*[c];
-		d.mVertices = new Buffer*[c];
-        d.mMesh = nullptr;
-		memset(d.mDescriptorSets, 0, sizeof(DescriptorSet*) * c);
-		memset(d.mBoundLightBuffers, 0, sizeof(Buffer*) * c);
-		memset(d.mPoseBuffers, 0, sizeof(Buffer*) * c);
-		memset(d.mVertices, 0, sizeof(Buffer*) * c);
-	}
-	DeviceData& data = mDeviceData.at(commandBuffer->Device());
-
+void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
-	::Mesh* m = Mesh();
-    if (data.mMesh != m) {
-        data.mMesh = m;
-        safe_delete(data.mVertices[frameContextIndex]);
-    }
+	::Mesh* m = MeshRenderer::Mesh();
 
-    if (!data.mPoseBuffers[frameContextIndex]){
-        data.mPoseBuffers[frameContextIndex] = new Buffer(mName + " PoseBuffer", commandBuffer->Device(), mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        data.mPoseBuffers[frameContextIndex]->Map();
-    }
-    if (!data.mVertices[frameContextIndex]){
-        data.mVertices[frameContextIndex] = new Buffer(mName + " VertexBuffer", commandBuffer->Device(), m->VertexBuffer(commandBuffer->Device())->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        VkBufferCopy region = {};
-        region.size = m->VertexBuffer(commandBuffer->Device())->Size();
-        vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(commandBuffer->Device()), *data.mVertices[frameContextIndex], 1, &region);
-    }
+	Buffer* poseBuffer = commandBuffer->Device()->GetTempBuffer(mName + " PoseBuffer", mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+	mVertexBuffer = commandBuffer->Device()->GetTempBuffer(mName + " VertexBuffer", m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	VkBufferCopy region = {};
+	region.size = m->VertexBuffer()->Size();
+	vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(), *mVertexBuffer, 1, &region);
 
     if (!mCopyRig) {
 		float4x4 rigOffset(1.f);
 		if (mRigRoot) rigOffset = mRigRoot->WorldToObject();
 
 		// pose space -> bone space
-		float4x4* skin = (float4x4*)data.mPoseBuffers[frameContextIndex]->MappedData();
+		float4x4* skin = (float4x4*)poseBuffer->MappedData();
 		for (uint32_t i = 0; i < mRig.size(); i++)
 			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
     }
-
-	if (pass == PASS_MAIN) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 }
 
-void SkinnedMeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-	::Mesh* m = Mesh();
-	if (!m) return;
+void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
+	PROFILER_BEGIN_RESUME("Draw SkinnedMeshRenderer");
+	::Mesh* mesh = MeshRenderer::Mesh();
 
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
-	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, m->VertexInput(), camera, m->Topology(), cull);
+	VkPipelineLayout layout = commandBuffer->BindMaterial(mMaterial.get(), pass, mesh->VertexInput(), camera, mesh->Topology(), cull);
 	if (!layout) return;
-	auto shader = mMaterial->GetShader(commandBuffer->Device(), pass);
+	auto shader = mMaterial->GetShader(pass);
 
-	DeviceData& data = mDeviceData.at(commandBuffer->Device());
+	for (const auto& kp : mPushConstants)
+		commandBuffer->PushConstant(shader, kp.first, &kp.second);
 
-	if (shader->mDescriptorBindings.count("Object")) {
-		VkPushConstantRange o2w = shader->mPushConstants.at("ObjectToWorld");
-		VkPushConstantRange w2o = shader->mPushConstants.at("WorldToObject");
-		float4x4 mt = ObjectToWorld();
-		vkCmdPushConstants(*commandBuffer, layout, o2w.stageFlags, o2w.offset, o2w.size, &mt);
-		mt = WorldToObject();
-		vkCmdPushConstants(*commandBuffer, layout, w2o.stageFlags, w2o.offset, w2o.size, &mt);
-	}
-
-	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
-
-	if (shader->mDescriptorBindings.count("Lights")) {
-		if (!data.mDescriptorSets[frameContextIndex])
-			data.mDescriptorSets[frameContextIndex] = new DescriptorSet(mName + " PerObject DescriptorSet", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
-
-		Buffer* lights = Scene()->LightBuffer(commandBuffer->Device());
-		if (data.mBoundLightBuffers[frameContextIndex] != lights) {
-			data.mDescriptorSets[frameContextIndex]->CreateStorageBufferDescriptor(lights, 0, lights->Size(), shader->mDescriptorBindings.at("Lights").second.binding);
-			data.mBoundLightBuffers[frameContextIndex] = lights;
-		}
-		data.mDescriptorSets[frameContextIndex]->FlushWrites();
-		uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
-		commandBuffer->PushConstant(shader, "LightCount", &lc);
-		VkDescriptorSet objds = *data.mDescriptorSets[frameContextIndex];
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
-	}
+	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
+	float2 s = Scene()->ShadowTexelSize();
+	float t = Scene()->Instance()->TotalTime();
+	commandBuffer->PushConstant(shader, "Time", &t);
+	commandBuffer->PushConstant(shader, "LightCount", &lc);
+	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
 	
-	commandBuffer->BindVertexBuffer(m->VertexBuffer(commandBuffer->Device()).get(), 0, 0);
-	commandBuffer->BindIndexBuffer(m->IndexBuffer(commandBuffer->Device()).get(), 0, m->IndexType());
-	vkCmdDrawIndexed(*commandBuffer, m->IndexCount(), 1, m->BaseIndex(), m->BaseVertex(), 0);
-	commandBuffer->mTriangleCount += m->IndexCount() / 3;
+	if (instanceDS != VK_NULL_HANDLE)
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);
+
+	commandBuffer->BindVertexBuffer(mVertexBuffer, 0, 0);
+	commandBuffer->BindIndexBuffer(mesh->IndexBuffer().get(), 0, mesh->IndexType());
+	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
+	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
+	PROFILER_END;
 }
 
 void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

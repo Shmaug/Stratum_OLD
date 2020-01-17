@@ -1,7 +1,6 @@
 #pragma once
 
-#include <unordered_map>
-
+#include <Core/Device.hpp>
 #include <Util/Util.hpp>
 #include <Content/Asset.hpp>
 
@@ -23,8 +22,8 @@ public:
 
 private:
 	friend class Stratum;
-	ENGINE_EXPORT AssetManager(Instance* instance);
+	ENGINE_EXPORT AssetManager(Device* device);
 
-	Instance* mInstance;
+	Device* mDevice;
 	std::unordered_map<std::string, Asset*> mAssets;
 };

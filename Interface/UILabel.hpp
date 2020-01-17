@@ -18,30 +18,27 @@ public:
 	inline void Color(const float4& c) { mColor = c; }
 	
 	inline std::string Text() const { return mText; }
-	ENGINE_EXPORT void Text(const std::string& text);
+	inline void Text(const std::string& text) { mText = text; mDirty.assign(mDirty.size(), true); }
 
 	inline TextAnchor HorizontalAnchor() const { return mHorizontalAnchor; }
-	inline void HorizontalAnchor(TextAnchor anchor) { mHorizontalAnchor = anchor; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
+	inline void HorizontalAnchor(TextAnchor anchor) { mHorizontalAnchor = anchor; mDirty.assign(mDirty.size(), true); }
 
 	inline TextAnchor VerticalAnchor() const { return mVerticalAnchor; }
-	inline void VerticalAnchor(TextAnchor anchor) { mVerticalAnchor = anchor; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
+	inline void VerticalAnchor(TextAnchor anchor) { mVerticalAnchor = anchor; mDirty.assign(mDirty.size(), true); }
 
 	inline ::Font* Font() const { return mFont.index() == 0 ? std::get<::Font*>(mFont) : std::get<std::shared_ptr<::Font>>(mFont).get(); }
-	inline void Font(std::shared_ptr<::Font> f) { mFont = f; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
-	inline void Font(::Font* f) { mFont = f; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
+	inline void Font(std::shared_ptr<::Font> f) { mFont = f; mDirty.assign(mDirty.size(), true); }
+	inline void Font(::Font* f) { mFont = f; mDirty.assign(mDirty.size(), true); }
 
 	inline float TextScale() const { return mTextScale; }
-	inline void TextScale(float sc) { mTextScale = sc; for (auto& d : mDeviceData) memset(d.second.mDirty, true, d.first->MaxFramesInFlight() * sizeof(bool)); }
+	inline void TextScale(float sc) { mTextScale = sc; mDirty.assign(mDirty.size(), true); }
 	
 	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 
 private:
-	struct DeviceData {
-		DescriptorSet** mDescriptorSets;
-		Buffer** mGlyphBuffers;
-		bool* mDirty;
-		uint32_t mGlyphCount;
-	};
+	std::vector<bool> mDirty;
+	uint32_t mGlyphCount;
+	std::vector<Buffer*> mGlyphBuffers;
 
 	std::vector<TextGlyph> mTempGlyphs;
 	uint32_t BuildText(Device* device, Buffer*& d);
@@ -55,6 +52,4 @@ private:
 	AABB mAABB;
 	AABB mTextAABB;
 	std::variant<::Font*, std::shared_ptr<::Font>> mFont;
-
-	std::unordered_map<Device*, DeviceData> mDeviceData;
 };

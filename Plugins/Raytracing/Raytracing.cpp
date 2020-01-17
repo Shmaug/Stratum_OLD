@@ -41,6 +41,7 @@ bool Raytracing::Init(Scene* scene) {
 	mScene->Environment()->AmbientLight(.3f);
 	mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/old_outdoor_theater_4k.hdr"));
 
+	#pragma region load glTF
 	shared_ptr<Material> opaque = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 	opaque->EnableKeyword("TEXTURED");
 	opaque->SetParameter("TextureST", float4(1, 1, 0, 0));
@@ -175,9 +176,8 @@ bool Raytracing::Init(Scene* scene) {
 		renderer->PushConstant("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
 	};
 
-	Object* room = mScene->LoadModelScene(folder + file, matfunc, objfunc, .6f, 1.f, .05f, .0015f);
 	queue<Object*> nodes;
-	nodes.push(room);
+	nodes.push(mScene->LoadModelScene(folder + file, matfunc, objfunc, .6f, 1.f, .05f, .0015f));
 	while (nodes.size()) {
 		Object* o = nodes.front();
 		nodes.pop();
@@ -185,6 +185,7 @@ bool Raytracing::Init(Scene* scene) {
 		for (uint32_t i = 0; i < o->ChildCount(); i++)
 			nodes.push(o->Child(i));
 	}
+	#pragma endregion
 
 	return true;
 }

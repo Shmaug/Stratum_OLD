@@ -105,7 +105,7 @@ bool Framebuffer::UpdateBuffers() {
 			safe_delete(mColorBuffers[frameContextIndex][i]);
 			mColorBuffers[frameContextIndex][i] = new Texture(mName + "ColorBuffer", mDevice, mWidth, mHeight, 1, mColorFormats[i],
 				mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			views[i] = mColorBuffers[frameContextIndex][i]->View(mDevice);
+			views[i] = mColorBuffers[frameContextIndex][i]->View();
 			
 			if (mResolveBuffers){
 				safe_delete(mResolveBuffers[frameContextIndex][i]);
@@ -116,7 +116,7 @@ bool Framebuffer::UpdateBuffers() {
 
 		safe_delete(mDepthBuffers[frameContextIndex]);
 		mDepthBuffers[frameContextIndex] = new Texture(mName + "DepthBuffer", mDevice, mWidth, mHeight, 1, mDepthFormat, mSampleCount, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		views[views.size() - 1] = mDepthBuffers[frameContextIndex]->View(mDevice);
+		views[views.size() - 1] = mDepthBuffers[frameContextIndex]->View();
 
 		VkFramebufferCreateInfo fb = {};
 		fb.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -188,8 +188,8 @@ void Framebuffer::ResolveColor(CommandBuffer* commandBuffer) {
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			vkCmdCopyImage(*commandBuffer,
-				mColorBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				mResolveBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+				mColorBuffers[frameContextIndex][i]->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mResolveBuffers[frameContextIndex][i]->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}else{
 			VkImageResolve region = {};
 			region.extent = { mWidth, mHeight, 1 };
@@ -198,8 +198,8 @@ void Framebuffer::ResolveColor(CommandBuffer* commandBuffer) {
 			region.srcSubresource.layerCount = 1;
 			region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			vkCmdResolveImage(*commandBuffer,
-				mColorBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				mResolveBuffers[frameContextIndex][i]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+				mColorBuffers[frameContextIndex][i]->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				mResolveBuffers[frameContextIndex][i]->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 		}
 
 		mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
@@ -230,8 +230,8 @@ void Framebuffer::ResolveDepth(CommandBuffer* commandBuffer) {
 		region.srcSubresource.layerCount = 1;
 		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		vkCmdCopyImage(*commandBuffer,
-			mDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			mResolveDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+			mDepthBuffers[frameContextIndex]->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mResolveDepthBuffers[frameContextIndex]->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}else{
 		VkImageResolve region = {};
 		region.extent = { mWidth, mHeight, 1 };
@@ -240,8 +240,8 @@ void Framebuffer::ResolveDepth(CommandBuffer* commandBuffer) {
 		region.srcSubresource.layerCount = 1;
 		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 		vkCmdResolveImage(*commandBuffer,
-			mDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			mResolveDepthBuffers[frameContextIndex]->Image(mDevice), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+			mDepthBuffers[frameContextIndex]->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			mResolveDepthBuffers[frameContextIndex]->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
 
 	mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);

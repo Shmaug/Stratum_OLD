@@ -11,7 +11,7 @@
 
 using namespace std;
 
-Font::Font(const string& name, Instance* deviceManager, const string& filename, float pixelSize, float scale)
+Font::Font(const string& name, Device* device, const string& filename, float pixelSize, float scale)
 	: mName(name), mTexture(nullptr), mPixelSize(pixelSize), mAscender(0), mDescender(0), mLineSpace(0) {
 
 	memset(mGlyphs, 0, sizeof(FontGlyph) * 0xFF);
@@ -182,7 +182,7 @@ Font::Font(const string& name, Instance* deviceManager, const string& filename, 
 			}
 	}
 
-	mTexture = new ::Texture(mName + " Texture", deviceManager, pixels, imageSize, packedSize.x, packedSize.y, 1, VK_FORMAT_R8G8B8A8_UNORM, 0);
+	mTexture = new ::Texture(mName + " Texture", device, pixels, imageSize, packedSize.x, packedSize.y, 1, VK_FORMAT_R8G8B8A8_UNORM, 0);
 
 	delete[] pixels;
 
@@ -301,7 +301,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 
 void Font::Draw(CommandBuffer* commandBuffer, Camera* camera, const string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor, TextAnchor verticalAnchor) {
 	
-	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(commandBuffer->Device(), PASS_MAIN, { "SCREEN_SPACE" });
+	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
 	if (!shader) return;
 
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr);
