@@ -6,12 +6,12 @@
 #include <Core/DescriptorSet.hpp>
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
+#include <Scene/Bvh.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Gizmos.hpp>
 #include <Scene/Environment.hpp>
 #include <Scene/Light.hpp>
 #include <Scene/Object.hpp>
-#include <Scene/RaycastReceiver.hpp>
 #include <Util/Util.hpp>
 
 #include <functional>
@@ -37,18 +37,21 @@ public:
 		std::function<void(Scene*, Object*, aiMaterial*)> objectSetupFunc,
 		float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity);
 
-	ENGINE_EXPORT void Update();
-	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass = PASS_MAIN, bool clear = true);
 
-	ENGINE_EXPORT RaycastReceiver* Raycast(const Ray& ray, float& hitT, uint32_t mask = 0xFFFFFFFF, float tMin = 0.f, float tMax = 1e10f);
+	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer = nullptr, PassType pass = PASS_MAIN, bool clear = true);
 
+	ENGINE_EXPORT Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = ~0);
+
+	/// Buffer of GPULight structs (defined in shadercompat.h)
 	inline Buffer* LightBuffer() const { return mLightBuffers[mInstance->Device()->FrameContextIndex()]; }
+	/// Buffer of ShadowData structs (defined in shadercompat.h)
 	inline Buffer* ShadowBuffer() const { return mShadowBuffers[mInstance->Device()->FrameContextIndex()]; }
+	/// Shadow atlas of multiple shadowmaps
 	inline Texture* ShadowAtlas() const { return mShadowAtlasFramebuffer->DepthBuffer(); }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
+	/// Size in UV coordinates of the size of one texel in the shadow atlas
 	inline float2 ShadowTexelSize() const { return mShadowTexelSize; }
 
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
@@ -61,16 +64,29 @@ public:
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }
 
+	ENGINE_EXPORT Bvh* BVH();
+	inline void BVH(Bvh* bvh) { safe_delete(mBvh); mBvh = bvh; mBvhDirty = true; }
+
+	inline void BvhDirty(Object* reason) { mBvhDirty = true; }
+
 private:
 	friend class Stratum;
+	ENGINE_EXPORT void Update();
+	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
+	
+	/// Used in PreFrame() to add a shadow camera to mShadowCameras
+	ENGINE_EXPORT void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
+
+	Bvh* mBvh;
+	bool mBvhDirty;
 
 	float2 mShadowTexelSize;
 
 	uint32_t mShadowCount;
 
-	Buffer** mLightBuffers; // resource maintained by the Device, don't need to delete
-	Buffer** mShadowBuffers; // resource maintained by the Device, don't need to delete
+	Buffer** mLightBuffers;
+	Buffer** mShadowBuffers;
 	std::vector<Camera*> mShadowCameras;
 	Framebuffer* mShadowAtlasFramebuffer;
 
@@ -86,8 +102,6 @@ private:
 	std::vector<Light*> mLights;
 	std::vector<Camera*> mCameras;
 	std::vector<Renderer*> mRenderers;
-	std::vector<Renderer*> mRenderList;
+	std::vector<Object*> mRenderList;
 	bool mDrawGizmos;
-
-	void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
 };

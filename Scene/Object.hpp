@@ -45,9 +45,17 @@ public:
 
 	ENGINE_EXPORT virtual AABB Bounds();
 
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
+	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
 	
 	ENGINE_EXPORT bool EnabledHierarchy();
+
+	/// Returns true when an intersection occurs, assigns t to the intersection time if t is not null
+	/// If any is true, will return the first hit, otherwise will return the closest hit
+	inline virtual bool Intersect(const Ray& ray, float* t, bool any) { return false; }
+	/// If LayerMask != 0 then the object will be included in the scene's BVH and moving the object will trigger BVH builds
+	/// Note Renderers automatically have a LayerMask != 0
+	inline virtual void LayerMask(uint32_t m) { mLayerMask = m; };
+	inline virtual uint32_t LayerMask() { return mLayerMask; };
 
 private:
 	friend class ::Scene;
@@ -62,6 +70,8 @@ private:
 	float4x4 mObjectToParent;
 	float4x4 mObjectToWorld;
 	float4x4 mWorldToObject;
+
+	uint32_t mLayerMask;
 
 	float3 mWorldPosition;
 	quaternion mWorldRotation;

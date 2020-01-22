@@ -1,10 +1,11 @@
 #include <Scene/Object.hpp>
 #include <Scene/Camera.hpp>
+#include <Scene/Scene.hpp>
 
 using namespace std;
 
 Object::Object(const string& name)
-	: mName(name), mParent(nullptr), mScene(nullptr),
+	: mName(name), mParent(nullptr), mScene(nullptr), mLayerMask(0),
 	mLocalPosition(float3()), mLocalRotation(quaternion(0, 0, 0, 1)), mLocalScale(float3(1)),
 	mWorldPosition(float3()), mWorldRotation(quaternion(0, 0, 0, 1)),
 	mObjectToWorld(float4x4(1)), mWorldToObject(float4x4(1)), mTransformDirty(true), mEnabled(true) {
@@ -35,7 +36,7 @@ bool Object::UpdateTransform() {
 	mWorldScale.x = length(mObjectToWorld[0].xyz);
 	mWorldScale.y = length(mObjectToWorld[1].xyz);
 	mWorldScale.z = length(mObjectToWorld[2].xyz);
-	mBounds = AABB(mWorldPosition, float3());
+	mBounds = AABB(mWorldPosition, mWorldPosition);
 
 	mTransformDirty = false;
 	return true;
@@ -69,6 +70,7 @@ void Object::RemoveChild(Object* c) {
 }
 
 void Object::Dirty() {
+	if (mScene && LayerMask() != 0) mScene->BvhDirty(this);
 	mTransformDirty = true;
 	queue<Object*> objs;
 	for (Object* c : mChildren) {

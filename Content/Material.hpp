@@ -37,10 +37,11 @@ public:
 
 	ENGINE_EXPORT GraphicsShader* GetShader(PassType pass);
 
-	inline PassType PassMask() { return Shader()->PassMask(); }
+	inline void PassMask(PassType p) { mPassMask = p; }
+	inline PassType PassMask() { return mPassMask == PASS_MASK_MAX_ENUM ? Shader()->PassMask() : mPassMask; }
 
-	inline void RenderQueue(uint32_t q) { mRenderQueueOverride = q; }
-	inline uint32_t RenderQueue() const { return (mRenderQueueOverride == ~0) ? Shader()->RenderQueue() : mRenderQueueOverride; }
+	inline void RenderQueue(uint32_t q) { mRenderQueue = q; }
+	inline uint32_t RenderQueue() const { return mRenderQueue == ~0 ? Shader()->RenderQueue() : mRenderQueue; }
 
 	inline void CullMode(VkCullModeFlags c) { mCullMode = c; }
 	inline VkCullModeFlags CullMode() const { return mCullMode; }
@@ -59,7 +60,6 @@ private:
 		GraphicsShader* mShaderVariant;
 		DescriptorSet** mDescriptorSets;
 		bool* mDirty;
-		inline VariantData() {};
 	};
 
 	friend class CommandBuffer;
@@ -77,7 +77,8 @@ private:
 	VkCullModeFlags mCullMode;
 	::BlendMode mBlendMode;
 
-	uint32_t mRenderQueueOverride;
+	PassType mPassMask;
+	uint32_t mRenderQueue;
 
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 	std::unordered_map<std::string, std::unordered_map<uint32_t, std::variant<std::shared_ptr<Texture>, Texture*>>> mArrayParameters;

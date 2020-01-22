@@ -35,6 +35,7 @@ add_library(Engine SHARED
 	"Interface/UIImage.cpp"
 	"Interface/UILabel.cpp"
 	"Interface/UILayout.cpp"
+	"Scene/Bvh2.cpp"
 	"Scene/Camera.cpp"
 	"Scene/Gizmos.cpp"
 	"Scene/Light.cpp"

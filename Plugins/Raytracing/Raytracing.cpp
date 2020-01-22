@@ -42,6 +42,9 @@ bool Raytracing::Init(Scene* scene) {
 	mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/old_outdoor_theater_4k.hdr"));
 
 	#pragma region load glTF
+	string folder = "D:/Projects/Vulkan/SanMiguel/";
+	string file = "SanMiguel.gltf";
+
 	shared_ptr<Material> opaque = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 	opaque->EnableKeyword("TEXTURED");
 	opaque->SetParameter("TextureST", float4(1, 1, 0, 0));
@@ -68,14 +71,11 @@ bool Raytracing::Init(Scene* scene) {
 	shared_ptr<Material> curBlend = nullptr;
 
 	uint32_t arraySize =
-		mScene->AssetManager()->LoadShader("Shaders/pbr.stm")->GetGraphics(mScene->Instance()->GetDevice(0), PASS_MAIN, { "TEXTURED" })->mDescriptorBindings.at("MainTextures").second.descriptorCount;
+		mScene->AssetManager()->LoadShader("Shaders/pbr.stm")->GetGraphics(PASS_MAIN, { "TEXTURED" })->mDescriptorBindings.at("MainTextures").second.descriptorCount;
 
 	uint32_t opaque_i = 0;
 	uint32_t clip_i = 0;
 	uint32_t blend_i = 0;
-
-	string folder = "Assets/Models/SanMiguel/";
-	string file = "SanMiguel.gltf";
 
 	auto matfunc = [&](Scene* scene, aiMaterial* aimaterial) {
 		aiString alphaMode;

@@ -1,13 +1,12 @@
 #pragma once
 
 #include <Scene/Renderer.hpp>
-#include <Scene/RaycastReceiver.hpp>
 
 class UIElement;
 
 // Scene object that holds UIElements
 // Acts as a graph of UIElements
-class UICanvas : public Renderer, public RaycastReceiver {
+class UICanvas : public Renderer {
 public:
 	ENGINE_EXPORT UICanvas(const std::string& name, const float2& extent);
 	ENGINE_EXPORT ~UICanvas();
@@ -31,10 +30,7 @@ public:
 	inline virtual AABB RaycastBounds() { UpdateTransform(); return mAABB; }
 
 	ENGINE_EXPORT virtual UIElement* Raycast(const Ray& worldRay);
-	ENGINE_EXPORT virtual bool Intersect(const Ray& worldRay, float* t);
-
-	inline virtual void RayMask(uint32_t m) { mRayMask = m; }
-	inline virtual uint32_t RayMask() override { return mRayMask; }
+	ENGINE_EXPORT virtual bool Intersect(const Ray& worldRay, float* t = nullptr, bool any = false) override;
 
 	inline void Visible(bool v) { mVisible = v; };
 	inline virtual bool Visible() override { return mVisible && EnabledHierarchy(); };
@@ -45,9 +41,7 @@ public:
 private:
 	friend class UIElement;
 	uint32_t mRenderQueue;
-	uint32_t mRayMask;
 	bool mVisible;
-	OBB mOBB;
 	AABB mAABB;
 	float2 mExtent;
 	std::vector<std::shared_ptr<UIElement>> mElements;

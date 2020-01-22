@@ -8,9 +8,9 @@
 using namespace std;
 
 Material::Material(const string& name, ::Shader* shader)
-	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueue(~0), mPassMask(PASS_MASK_MAX_ENUM) {}
 Material::Material(const string& name, shared_ptr<::Shader> shader)
-	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueueOverride(~0) {}
+	: mName(name), mShader(shader), mDevice(shader->Device()), mCullMode(VK_CULL_MODE_FLAG_BITS_MAX_ENUM), mBlendMode(BLEND_MODE_MAX_ENUM), mRenderQueue(~0), mPassMask(PASS_MASK_MAX_ENUM) {}
 Material::~Material() {
 	for (auto& kp : mVariantData) {
 		for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
