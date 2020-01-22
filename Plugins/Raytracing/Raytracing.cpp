@@ -42,8 +42,8 @@ bool Raytracing::Init(Scene* scene) {
 	mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/old_outdoor_theater_4k.hdr"));
 
 	#pragma region load glTF
-	string folder = "D:/Projects/Vulkan/SanMiguel/";
-	string file = "SanMiguel.gltf";
+	string folder = "Assets/Models/room/";
+	string file = "CrohnsProtoRoom.gltf";
 
 	shared_ptr<Material> opaque = make_shared<Material>("PBR", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 	opaque->EnableKeyword("TEXTURED");
