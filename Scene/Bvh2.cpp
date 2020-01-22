@@ -232,6 +232,5 @@ void Bvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene
         float3(1,1,1),
     };
     for (uint32_t i = 0; i < mNodes.size(); i++)
-        if (mNodes[i].mRightOffset == 0)
-            scene->Gizmos()->DrawWireCube(mNodes[i].mBounds.Center(), mNodes[i].mBounds.Extents(), quaternion(), float4(colors[i % 10], .5f));
+		scene->Gizmos()->DrawWireCube(mNodes[i].mBounds.Center(), mNodes[i].mBounds.Extents(), quaternion(), float4(colors[i % 10], .5f));
 }
