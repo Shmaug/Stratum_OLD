@@ -301,8 +301,8 @@ void Camera::Dirty() {
 bool Camera::IntersectFrustum(const AABB& aabb) {
 	UpdateMatrices();
 	for (uint32_t i = 0; i < 6; i++) {
-		float r = dot(aabb.mExtents, abs(mFrustum[i].xyz));
-		float d = dot(aabb.mCenter, mFrustum[i].xyz) - mFrustum[i].w;
+		float r = dot(aabb.Extents(), abs(mFrustum[i].xyz));
+		float d = dot(aabb.Center(), mFrustum[i].xyz) - mFrustum[i].w;
 		if (d <= -r) return false;
 	}
 	return true;

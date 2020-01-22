@@ -4,6 +4,8 @@
 #include <Core/Instance.hpp>
 #include <Util/Profiler.hpp>
 
+#include <Scene/Bvh2.hpp>
+
 #include <assimp/scene.h>
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
@@ -17,9 +19,25 @@ using namespace std;
 #define SHADOW_ATLAS_RESOLUTION 4096
 #define SHADOW_RESOLUTION 1024
 
+bool RendererCompare(Object* oa, Object* ob) {
+	Renderer* a = dynamic_cast<Renderer*>(oa);
+	Renderer* b = dynamic_cast<Renderer*>(ob);
+	if (a->RenderQueue() == b->RenderQueue()) {
+		MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a);
+		MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b);
+		if (ma && mb)
+			if (ma->Material() == mb->Material())
+				return ma->Mesh() < mb->Mesh();
+			else
+				return ma->Material() < mb->Material();
+	}
+	return a->RenderQueue() < b->RenderQueue();
+};
+
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false) {
+	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false), mBvhDirty(true) {
 	mGizmos = new ::Gizmos(this);
+	mBvh = new Bvh2();
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
 
@@ -36,6 +54,8 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	}
 }
 Scene::~Scene(){
+	safe_delete(mBvh);
+
 	while (mObjects.size())
 		RemoveObject(mObjects[0].get());
 
@@ -122,16 +142,16 @@ Object* Scene::LoadModelScene(const string& filename,
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
 			indices.push_back(f.mIndices[0]);
-			mn = min(vertices[f.mIndices[0]].position, mn);
-			mx = max(vertices[f.mIndices[0]].position, mx);
+			mn = min(vertices[baseVertex + f.mIndices[0]].position, mn);
+			mx = max(vertices[baseVertex + f.mIndices[0]].position, mx);
 			if (f.mNumIndices > 1) {
 				indices.push_back(f.mIndices[1]);
-				mn = min(vertices[f.mIndices[1]].position, mn);
-				mx = max(vertices[f.mIndices[1]].position, mx);
+				mn = min(vertices[baseVertex + f.mIndices[1]].position, mn);
+				mx = max(vertices[baseVertex + f.mIndices[1]].position, mx);
 				if (f.mNumIndices > 2) {
 					indices.push_back(f.mIndices[2]);
-					mn = min(vertices[f.mIndices[2]].position, mn);
-					mx = max(vertices[f.mIndices[2]].position, mx);
+					mn = min(vertices[baseVertex + f.mIndices[2]].position, mn);
+					mx = max(vertices[baseVertex + f.mIndices[2]].position, mx);
 				} else
 					topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 			} else
@@ -142,7 +162,7 @@ Object* Scene::LoadModelScene(const string& filename,
 		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
 
 		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
-			vertexBuffer, indexBuffer, AABB((mx + mn) * .5f, (mx - mn) * .5f), baseVertex, vertexCount, baseIndex, indexCount,
+			vertexBuffer, indexBuffer, AABB(mn, mx), baseVertex, vertexCount, baseIndex, indexCount,
 			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
 	}
 
@@ -386,19 +406,11 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
-	// sort the renderers so that consequent sorts are a little faster
-	PROFILER_BEGIN("Sort Renderers");
-	sort(mRenderers.begin(), mRenderers.end(), [](Renderer* a, Renderer* b) {
-		if (a->RenderQueue() == b->RenderQueue())
-			if (MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a))
-				if (MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b))
-					if (ma->Material() == mb->Material())
-						return ma->Mesh() < mb->Mesh();
-					else
-						return ma->Material() < mb->Material();
-		return a->RenderQueue() < b->RenderQueue();
-		});
-	PROFILER_END;
+	if (!mBvh) {
+		PROFILER_BEGIN("Sort Renderers");
+		sort(mRenderers.begin(), mRenderers.end(), RendererCompare);
+		PROFILER_END;
+	}
 
 	Camera* mainCamera = nullptr;
 	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
@@ -417,7 +429,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	uint32_t si = 0;
 	mShadowCount = 0;
 	mActiveLights.clear();
-	if (mLights.size()) {
+	if (mainCamera && mLights.size()) {
 		PROFILER_BEGIN("Gather Lights");
 		uint32_t li = 0;
 		uint32_t frameContextIndex = device->FrameContextIndex();
@@ -565,19 +577,28 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	
 	PROFILER_BEGIN("Gather Renderers");
 	mRenderList.clear();
-	for (Renderer* r : mRenderers)
-		if (r->Visible() && (r->PassMask() & pass) && camera->IntersectFrustum(r->Bounds()))
-			mRenderList.push_back(r);
+	if (mBvh) {
+		BVH()->FrustumCheck(camera, mRenderList, pass);
+		PROFILER_BEGIN("Sort Renderers");
+		sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
+		PROFILER_END;
+	} else
+		for (Renderer* r : mRenderers)
+			if (r->Visible() && (r->PassMask() & pass) && camera->IntersectFrustum(r->Bounds()))
+				mRenderList.push_back(r);
 	PROFILER_END;
 
+	if (mRenderList.size() == 0) return;
+
 	PROFILER_BEGIN("Renderer PreRender");
-	for (Renderer* r : mRenderList)
-		r->PreRender(commandBuffer, camera, pass);
+	for (Object* o : mRenderList)
+		dynamic_cast<Renderer*>(o)->PreRender(commandBuffer, camera, pass);
 	PROFILER_END;
 
 
 	PROFILER_BEGIN("Draw Renderers");
 	BEGIN_CMD_REGION(commandBuffer, "Draw Renderers");
+	if (!framebuffer) framebuffer = camera->Framebuffer();
 	framebuffer->BeginRenderPass(commandBuffer);
 	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
@@ -605,7 +626,8 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		}
 	};
 
-	for (Renderer* r : mRenderList) {
+	for (Object* o : mRenderList) {
+		Renderer* r = dynamic_cast<Renderer*>(o);
 		bool batched = false;
 		if (MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r)) {
 			GraphicsShader* curShader = cur->Material()->GetShader(pass);
@@ -687,6 +709,9 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 				mGizmos->DrawLine(f3, f7, 1);
 			}
 		*/
+
+		if (mBvh) mBvh->DrawGizmos(commandBuffer, camera, this);
+
 		for (const auto& r : mObjects)
 			if (r->EnabledHierarchy())
 				r->DrawGizmos(commandBuffer, camera);
@@ -715,22 +740,35 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	PROFILER_END;
 }
 
-RaycastReceiver* Scene::Raycast(const Ray& worldRay, float& hitT, uint32_t mask, float tMin, float tMax) {
-	RaycastReceiver* closest = nullptr;
-	hitT = -1.f;
+Bvh* Scene::BVH() {
+	if (mBvh && mBvhDirty) {
+		Object** objs = new Object*[mObjects.size()];
+		for (uint32_t i = 0; i < mObjects.size(); i++)
+			objs[i] = mObjects[i].get();
+		mBvh->Build(objs, mObjects.size());
+		delete[] objs;
+		mBvhDirty = false;
+	}
+	return mBvh;
+}
+
+Object* Scene::Raycast(const Ray& worldRay, float* t, bool any, uint32_t mask) {
+	if (mBvh) return BVH()->Intersect(worldRay, t, any, mask);
+
+	Object* closest = nullptr;
+	float hitT = -1.f;
 
 	for (const shared_ptr<Object>& n : mObjects) {
 		if (!n->EnabledHierarchy()) continue;
-		if (RaycastReceiver* c = dynamic_cast<RaycastReceiver*>(n.get())) {
-			if ((c->RayMask() & mask) == 0) continue;
+		if (Object* c = dynamic_cast<Object*>(n.get())) {
+			if ((c->LayerMask() & mask) == 0) continue;
 
-			float2 tm = worldRay.Intersect(c->RaycastBounds());
-			if (tm.y < tMin || tm.x > tMax) continue;
+			float curT = worldRay.Intersect(c->Bounds()).x;
+			if (hitT >= 0 && curT >= hitT) continue;
 
-			float t;
-			if (c->Intersect(worldRay, &t) && t > tMin && t < tMax && (t < hitT || closest == nullptr)) {
+			if (c->Intersect(worldRay, &curT, any) && curT < hitT) {
 				closest = c;
-				hitT = t;
+				hitT = curT;
 			}
 		}
 	}

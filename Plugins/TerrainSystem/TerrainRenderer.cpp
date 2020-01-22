@@ -349,7 +349,7 @@ float TerrainRenderer::Height(const float3& lp) {
 
 bool TerrainRenderer::UpdateTransform(){
     if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(float3(0, mHeight * .5f, 0), float3(mSize, mHeight, mSize) * .5f) * ObjectToWorld();
+	mAABB = AABB(-float3(mSize, 0, mSize) * .5f, float3(mSize * .5f, mHeight, mSize * .5f)) * ObjectToWorld();
     return true;
 }
 
@@ -374,7 +374,7 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 
 	vector<QuadNode*> detailNodes;
 	for (QuadNode* n : mDetailNodes)
-		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+		if (camera->IntersectFrustum(AABB(n->mPosition - float3(.x, mSize * .5f, 0, n->mSize.z * .5f), n->mPosition + float3(n->mSize * .5f, mHeight, n->mSize * .5f))))
 			detailNodes.push_back(n);
 	if (!detailNodes.size()) return;
 
@@ -466,7 +466,7 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	vector<QuadNode*> leafNodes;
 	for (QuadNode* n : mLeafNodes)
-		if (camera->IntersectFrustum(AABB(float3(n->mPosition.x, mHeight * .5f, n->mPosition.z), float3(n->mSize, mHeight, n->mSize) * .5f)))
+		if (camera->IntersectFrustum(AABB(n->mPosition - float3((n->mSize * .5f, 0, n->mSize * .5f), n->mPosition + float3(n->mSize * .5f, mHeight, n->mSize * .5f))))
 			leafNodes.push_back(n);
 
 	if (!leafNodes.size()) return;

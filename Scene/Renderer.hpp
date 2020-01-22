@@ -13,4 +13,6 @@ public:
 	inline virtual void PreFrame(CommandBuffer* commandBuffer) {};
 	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {};
 	virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) = 0;
+
+	inline virtual uint32_t LayerMask() override { return Visible() ? Object::LayerMask() | PassMask() : Object::LayerMask(); };
 };

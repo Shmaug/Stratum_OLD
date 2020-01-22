@@ -66,16 +66,19 @@ namespace fs = std::filesystem;
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
 
+/// Corresponds to a LayerMask as well (see Renderer.hpp)
+enum PassType {
+	PASS_MAIN = 1 << 24,
+	PASS_DEPTH = 1 << 25,
+	PASS_MASK_MAX_ENUM = 1 << 26
+};
+
 enum BlendMode {
 	BLEND_MODE_OPAQUE = 0,
 	BLEND_MODE_ALPHA = 1,
 	BLEND_MODE_ADDITIVE = 2,
 	BLEND_MODE_MULTIPLY = 3,
 	BLEND_MODE_MAX_ENUM = 0x7FFFFFFF
-};
-enum PassType {
-	PASS_MAIN = 1,
-	PASS_DEPTH = 2,
 };
 
 enum ConsoleColor {

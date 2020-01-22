@@ -15,8 +15,7 @@ MeshRenderer::~MeshRenderer() {}
 
 bool MeshRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	AABB mb = Mesh()->Bounds();
-	mAABB = OBB((ObjectToWorld() * float4(mb.mCenter, 1)).xyz, mb.mExtents * WorldScale(), WorldRotation());
+	mAABB = Mesh()->Bounds() * ObjectToWorld();
 	return true;
 }
 
@@ -60,7 +59,10 @@ void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	DrawInstanced(commandBuffer, camera, 1, VK_NULL_HANDLE, pass);
 }
 
-bool MeshRenderer::Intersect(const Ray& ray, float* t) {
+bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
 	// TODO: ray-mesh collision
 	return false;
 }
+
+
+void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};

@@ -142,7 +142,7 @@ SkeletonJoint* MeshView::ReadJoint(Tokenizer& t, const string &name, float scale
 		if (token == "}") break;
 	}
 
-	j->mBox = AABB((mx + mn) * .5f, (mx - mn) * .5f);
+	j->mBox = AABB(mn, mx);
 
 	return j.get();
 }

@@ -7,7 +7,7 @@
 using namespace std;
 
 UICanvas::UICanvas(const string& name, const float2& extent)
-	: Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000), mRayMask(0) {};
+	: Object(name), mVisible(true), mExtent(extent), mSortedElementsDirty(true), mRenderQueue(5000) {};
 UICanvas::~UICanvas() {}
 
 void UICanvas::RemoveElement(UIElement* element) {
@@ -30,8 +30,7 @@ void UICanvas::RemoveElement(UIElement* element) {
 
 bool UICanvas::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mOBB = OBB(WorldPosition(), float3(mExtent, .001f) * WorldScale(), WorldRotation());
-	mAABB = mOBB;
+	mAABB = AABB(-float3(mExtent, 0), float3(mExtent, 0)) * ObjectToWorld();
 	return true;
 }
 void UICanvas::Dirty() {
@@ -40,17 +39,25 @@ void UICanvas::Dirty() {
 		e->Dirty();
 }
 
-bool UICanvas::Intersect(const Ray& worldRay, float* t) {
-	float ht = worldRay.Intersect(mOBB).x;
-	if (t < 0) return false;
+bool UICanvas::Intersect(const Ray& worldRay, float* t, bool any) {
+	Ray transformedRay = Ray(
+		(WorldToObject() * float4(worldRay.mOrigin, 1)).xyz,
+		(transpose(ObjectToWorld()) * float4(worldRay.mDirection, 1)).xyz
+	);
+	float ht = transformedRay.Intersect(AABB(-float3(mExtent, 0), float3(mExtent, 0))).x;
+	if (ht < 0) return false;
 	*t = ht;
 	return true;
 }
 UIElement* UICanvas::Raycast(const Ray& worldRay) {
-	float t = worldRay.Intersect(mOBB).x;
+	Ray transformedRay = Ray(
+		(WorldToObject() * float4(worldRay.mOrigin, 1)).xyz,
+		(transpose(ObjectToWorld()) * float4(worldRay.mDirection, 1)).xyz
+	);
+	float t = transformedRay.Intersect(AABB(-float3(mExtent, 0), float3(mExtent, 0))).x;
 	if (t < 0) return nullptr;
-	float3 wp = worldRay.mOrigin + worldRay.mDirection * t;
-	float3 cp = (WorldToObject() * float4(wp, 1)).xyz;
+
+	float3 cp = transformedRay.mOrigin + transformedRay.mDirection * t;
 
 	float minDepth = 0;
 	UIElement* hit = nullptr;

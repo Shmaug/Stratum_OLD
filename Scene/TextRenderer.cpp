@@ -13,7 +13,7 @@ TextRenderer::~TextRenderer() {}
 
 bool TextRenderer::UpdateTransform() {
 	if (!Object::UpdateTransform()) return false;
-	mAABB = AABB(mTextAABB, ObjectToWorld());
+	mAABB = mTextAABB * ObjectToWorld();
 	return true;
 }
 
@@ -22,8 +22,7 @@ uint32_t TextRenderer::BuildText(Device* device, Buffer*& buffer) {
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
 	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, &mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
-	mAABB = AABB(mTextAABB, ObjectToWorld());
-	mTextAABB.mExtents.z = .001f;
+	mAABB = mTextAABB * ObjectToWorld();
 	PROFILER_END;
 
 	if (glyphCount == 0) return 0;

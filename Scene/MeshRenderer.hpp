@@ -3,11 +3,10 @@
 #include <Content/Material.hpp>
 #include <Content/Mesh.hpp>
 #include <Core/DescriptorSet.hpp>
-#include <Scene/RaycastReceiver.hpp>
 #include <Scene/Renderer.hpp>
 #include <Util/Util.hpp>
 
-class MeshRenderer : public Renderer, public RaycastReceiver {
+class MeshRenderer : public Renderer {
 public:
 	union PushConstantValue {
 		int32_t intValue;
@@ -60,10 +59,9 @@ public:
 	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass);
 	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass);
 
-	inline virtual void RayMask(uint32_t m) { mRayMask = m; }
-	inline virtual uint32_t RayMask() override { return mRayMask; }
-	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t) override;
-	inline virtual AABB RaycastBounds() override { UpdateTransform(); return mAABB; }
+	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
+
+	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t, bool any) override;
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 
 private:

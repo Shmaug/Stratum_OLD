@@ -324,7 +324,7 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 	aiReleaseImport(scene);
 
 	mVertexCount = (uint32_t)vertices.size();
-	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
+	mBounds = AABB(mn, mx);
 	mVertexInput = &StdVertex::VertexInput;
 
 	if (!uniqueBones.size())
@@ -366,7 +366,7 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 
 	uint32_t indexSize = mIndexType == VK_INDEX_TYPE_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
 	
-	mBounds = AABB((mn + mx) * .5f, (mx - mn) * .5f);
+	mBounds = AABB(mn, mx);
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }

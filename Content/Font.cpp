@@ -294,7 +294,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 			mn = min(mn, glyphs[i].mPosition);
 			mx = max(mx, glyphs[i].mPosition + glyphs[i].mSize);
 		}
-		*aabb = AABB(float3((mn + mx) * .5f, 0), float3((mx - mn) * .5f, 0));
+		*aabb = AABB(float3(mn, 0), float3(mx, 0));
 	}
 	return glyphCount;
 }
