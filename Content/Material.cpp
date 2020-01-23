@@ -147,7 +147,7 @@ void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* cam
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
 	}
 
-	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA&& shader->mDescriptorBindings.size() && shader->mDescriptorBindings.count("Camera")) {
+	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA && shader->mDescriptorBindings.count("Camera")) {
 		auto binding = shader->mDescriptorBindings.at("Camera");
 		VkDescriptorSet camds = *camera->DescriptorSet(binding.second.stageFlags);
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);

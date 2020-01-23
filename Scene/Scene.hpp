@@ -78,6 +78,8 @@ private:
 	/// Used in PreFrame() to add a shadow camera to mShadowCameras
 	ENGINE_EXPORT void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
 
+	Mesh* mSkyboxCube;
+
 	Bvh* mBvh;
 	bool mBvhDirty;
 

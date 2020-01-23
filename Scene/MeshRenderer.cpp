@@ -28,7 +28,6 @@ void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassT
 }
 
 void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
-	PROFILER_BEGIN_RESUME("Draw MeshRenderer");
 	::Mesh* mesh = Mesh();
 
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
@@ -52,7 +51,6 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 	commandBuffer->BindIndexBuffer(mesh->IndexBuffer().get(), 0, mesh->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
-	PROFILER_END;
 }
 
 void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {

@@ -17,6 +17,8 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	mSwapchain(VK_NULL_HANDLE), mPhysicalDevice(VK_NULL_HANDLE), mImageCount(0), mFormat({}),
 	mCurrentBackBufferIndex(0), mImageAvailableSemaphoreIndex(0), mFrameData(nullptr), mDirectDisplay(VK_NULL_HANDLE) {
 
+	printf("Creating window... ");
+
 	#ifdef __linux
 	mXCBConnection = XCBConnection;
 	mXCBScreen = XCBScreen;
@@ -66,6 +68,8 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	info.connection = mXCBConnection;
 	info.window = mXCBWindow;
 	ThrowIfFailed(vkCreateXcbSurfaceKHR(*mInstance, &info, nullptr, &mSurface), "vkCreateXcbSurfaceKHR Failed");
+
+	printf("Done\n");
 
 	#else
 	mWindowedRect = {};

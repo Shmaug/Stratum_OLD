@@ -22,7 +22,9 @@ using namespace std;
 bool RendererCompare(Object* oa, Object* ob) {
 	Renderer* a = dynamic_cast<Renderer*>(oa);
 	Renderer* b = dynamic_cast<Renderer*>(ob);
-	if (a->RenderQueue() == b->RenderQueue()) {
+	uint32_t qa = a->Visible() ? a->RenderQueue() : 0xFFFFFFFF;
+	uint32_t qb = b->Visible() ? b->RenderQueue() : 0xFFFFFFFF;
+	if (qa == qb && qa != 0xFFFFFFFF) {
 		MeshRenderer* ma = dynamic_cast<MeshRenderer*>(a);
 		MeshRenderer* mb = dynamic_cast<MeshRenderer*>(b);
 		if (ma && mb)
@@ -31,7 +33,7 @@ bool RendererCompare(Object* oa, Object* ob) {
 			else
 				return ma->Material() < mb->Material();
 	}
-	return a->RenderQueue() < b->RenderQueue();
+	return qa < qb;
 };
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
@@ -52,8 +54,11 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 		mLightBuffers[i]->Map();
 		mShadowBuffers[i]->Map();
 	}
+
+	mSkyboxCube = Mesh::CreateCube("SkyCube", mInstance->Device(), 1.f);
 }
 Scene::~Scene(){
+	safe_delete(mSkyboxCube);
 	safe_delete(mBvh);
 
 	while (mObjects.size())
@@ -230,7 +235,7 @@ Object* Scene::LoadModelScene(const string& filename,
 
 			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
 			light->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
-			light->Type(Sun);
+			light->Type(LIGHT_TYPE_SUN);
 			light->Intensity(li * directionalLightIntensity);
 			light->Color(col / li);
 			light->CastShadows(true);
@@ -260,7 +265,7 @@ Object* Scene::LoadModelScene(const string& filename,
 			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
 			light->LocalPosition(position.x * scale, position.y * scale, position.z * scale);
 			light->LocalRotation(quaternion(rotation.x, rotation.y, rotation.z, rotation.w));
-			light->Type(Spot);
+			light->Type(LIGHT_TYPE_SPOT);
 			light->InnerSpotAngle(scene->mLights[i]->mAngleInnerCone);
 			light->OuterSpotAngle(scene->mLights[i]->mAngleOuterCone);
 			light->Intensity(li * spotLightIntensity);
@@ -291,7 +296,7 @@ Object* Scene::LoadModelScene(const string& filename,
 
 			shared_ptr<Light> light = make_shared<Light>(scene->mLights[i]->mName.C_Str());
 			light->LocalPosition(position.x * scale, position.y* scale, position.z* scale);
-			light->Type(Point);
+			light->Type(LIGHT_TYPE_POINT);
 			light->Intensity(li * pointLightIntensity);
 			light->Range((-b + sqrtf(b*b - 4*a*c)) / (2 * a));
 			light->Color(col / li);
@@ -308,19 +313,15 @@ Object* Scene::LoadModelScene(const string& filename,
 }
 
 void Scene::Update() {
-	PROFILER_BEGIN("Pre Update");
-	for (const auto& p : mPluginManager->Plugins())
-		if (p->mEnabled)
-			p->PreUpdate();
-	PROFILER_END;
-
 	PROFILER_BEGIN("Update");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->Update();
-	PROFILER_END;
+			p->PreUpdate();
 
-	PROFILER_BEGIN("Post Update");
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled)
+			p->Update();
+
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
 			p->PostUpdate();
@@ -406,12 +407,6 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
-	if (!mBvh) {
-		PROFILER_BEGIN("Sort Renderers");
-		sort(mRenderers.begin(), mRenderers.end(), RendererCompare);
-		PROFILER_END;
-	}
-
 	Camera* mainCamera = nullptr;
 	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
 		return a->RenderPriority() > b->RenderPriority();
@@ -423,6 +418,12 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		}
 	if (!mainCamera) return;
 
+	if (!mBvh) {
+		PROFILER_BEGIN("Sort Renderers");
+		sort(mRenderers.begin(), mRenderers.end(), RendererCompare);
+		PROFILER_END;
+	}
+
 	Device* device = commandBuffer->Device();
 
 	PROFILER_BEGIN("Lighting");
@@ -430,6 +431,18 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	mShadowCount = 0;
 	mActiveLights.clear();
 	if (mainCamera && mLights.size()) {
+		AABB sceneBounds;
+		if (mBvh)
+			sceneBounds = BVH()->Bounds();
+		else {
+			for (Renderer* r : mRenderers)
+				if (r->Visible())
+					sceneBounds.Encapsulate(r->Bounds());
+		}
+		float3 sceneCenter = sceneBounds.Center();
+		float3 sceneExtent = sceneBounds.Extents();
+		float sceneExtentMax = max(max(sceneExtent.x, sceneExtent.y), sceneExtent.z) * 1.73205080757; // sqrt(3)*x
+		
 		PROFILER_BEGIN("Gather Lights");
 		uint32_t li = 0;
 		uint32_t frameContextIndex = device->FrameContextIndex();
@@ -469,49 +482,92 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 			if (l->CastShadows() && si+1 < maxShadows) {
 				switch (l->Type()) {
-				case Sun: {
+				case LIGHT_TYPE_SUN: {
 					float4 cascadeSplits = 0;
 					float cf = min(l->ShadowDistance(), mainCamera->Far());
-					cascadeSplits[0] = .07f * cf;
-					cascadeSplits[1] = .18f * cf;
-					cascadeSplits[2] = .40f * cf;
-					cascadeSplits[3] = cf;
+
+					switch (l->CascadeCount()) {
+					case 4:
+						cascadeSplits[0] = cf * .07f;
+						cascadeSplits[1] = cf * .18f;
+						cascadeSplits[2] = cf * .40f;
+						cascadeSplits[3] = cf;
+					case 3:
+						cascadeSplits[0] = cf * .15f;
+						cascadeSplits[1] = cf * .4f;
+						cascadeSplits[2] = cf;
+						cascadeSplits[3] = cf;
+					case 2:
+						cascadeSplits[0] = cf * .4f;
+						cascadeSplits[1] = cf;
+						cascadeSplits[2] = cf;
+						cascadeSplits[3] = cf;
+					case 1:
+						cascadeSplits = cf;
+					}
 
 					lights[li].CascadeSplits = cascadeSplits / mainCamera->Far();
 					lights[li].ShadowIndex = (int32_t)si;
 					
 					float z0 = mainCamera->Near();
-					for (uint32_t ci = 0; ci < 4; ci++) {
+					for (uint32_t ci = 0; ci < l->CascadeCount(); ci++) {
 						float z1 = cascadeSplits[ci];
 
-						float3 center = 0;
+						// compute corners and center of the frusum this cascade covers
+						float3 pos = 0;
+						for (uint32_t j = 0; j < 4; j++) {
+							corners[j]   = rays[j].mOrigin + rays[j].mDirection * z0;
+							corners[j+4] = rays[j].mOrigin + rays[j].mDirection * z1;
+							pos += corners[j] + corners[j+4];
+						}
+						pos /= 8.f;
+
+						// min and max relative to light rotation
 						float3 mx = 0;
 						float3 mn = 1e20f;
 						quaternion r = inverse(l->WorldRotation());
-						
-						for (uint32_t j = 0; j < 4; j++) {
-							corners[j]   = rays[j].mOrigin + rays[j].mDirection * z0;
-							corners[2*j] = rays[j].mOrigin + rays[j].mDirection * z1;
-							center += corners[j] + corners[2 * j];
-						}
 						for (uint32_t j = 0; j < 8; j++) {
-							corners[j] = r * (corners[j] - center);
-							mx = max(mx, corners[j]);
-							mn = min(mn, corners[j]);
+							float3 rc = r * (corners[j] - pos);
+							mx = max(mx, rc);
+							mn = min(mn, rc);
 						}
 
-						float3 ext = mx - mn;
-						float sz = max(ext.x, ext.y);
-						AddShadowCamera(si, &shadows[si], true, sz, center / 8, l->WorldRotation(), -5*sz, sz);
+						if (max(mx.x - mn.x, mx.y - mn.y) > sceneExtentMax) {
+							// use scene bounds instead of frustum bounds
+							pos = sceneCenter;
+							corners[0] = float3(-sceneExtent.x,  sceneExtent.y, -sceneExtent.z) + sceneCenter;
+							corners[1] = float3( sceneExtent.x,  sceneExtent.y, -sceneExtent.z) + sceneCenter;
+							corners[2] = float3(-sceneExtent.x, -sceneExtent.y, -sceneExtent.z) + sceneCenter;
+							corners[3] = float3( sceneExtent.x, -sceneExtent.y, -sceneExtent.z) + sceneCenter;
+							corners[4] = float3(-sceneExtent.x,  sceneExtent.y,  sceneExtent.z) + sceneCenter;
+							corners[5] = float3( sceneExtent.x,  sceneExtent.y,  sceneExtent.z) + sceneCenter;
+							corners[6] = float3(-sceneExtent.x, -sceneExtent.y,  sceneExtent.z) + sceneCenter;
+							corners[7] = float3( sceneExtent.x, -sceneExtent.y,  sceneExtent.z) + sceneCenter;
+						}
+						
+						// project direction onto scene bounds for near and far
+						float3 fwd   = l->WorldRotation() * float3(0, 0, 1);
+						float3 right = l->WorldRotation() * float3(1, 0, 0);
+						float near = 0;
+						float far = 0;
+						float sz = 0;
+						for (uint32_t j = 0; j < 8; j++){
+							float d = dot(corners[j] - pos, fwd);
+							near = min(near, d);
+							far = max(far, d);
+							sz = max(sz, abs(dot(corners[j] - pos, right)));
+						}
+
+						AddShadowCamera(si, &shadows[si], true, 2*sz, pos, l->WorldRotation(), near, far);
 						si++;
 						z0 = z1;
 					}
 
 					break;
 				}
-				case Point:
+				case LIGHT_TYPE_POINT:
 					break;
-				case Spot:
+				case LIGHT_TYPE_SPOT:
 					lights[li].ShadowIndex = (int32_t)si;
 					AddShadowCamera(si, &shadows[si], false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
 					si++;
@@ -553,7 +609,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 }
 
 void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {	
-	PROFILER_BEGIN("PreRender");
 	camera->PreRender();
 	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0) {
 		PROFILER_END;
@@ -567,49 +622,53 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 			END_CMD_REGION(commandBuffer);
 			PROFILER_END;
 		}
-		mEnvironment->PreRender(commandBuffer, camera);
 	}
+
+	PROFILER_BEGIN("Gather Renderers");
+	mRenderList.clear();
+	BVH()->FrustumCheck(camera, mRenderList, pass);
+	sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
+	PROFILER_END;
+
+
+	PROFILER_BEGIN("PreRender");
+	BEGIN_CMD_REGION(commandBuffer, "PreRender");
+	// plugin prerender
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
 			p->PreRender(commandBuffer, camera, pass);
-	PROFILER_END;
-
-	
-	PROFILER_BEGIN("Gather Renderers");
-	mRenderList.clear();
-	if (mBvh) {
-		BVH()->FrustumCheck(camera, mRenderList, pass);
-		PROFILER_BEGIN("Sort Renderers");
-		sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
-		PROFILER_END;
-	} else
-		for (Renderer* r : mRenderers)
-			if (r->Visible() && (r->PassMask() & pass) && camera->IntersectFrustum(r->Bounds()))
-				mRenderList.push_back(r);
-	PROFILER_END;
-
-	if (mRenderList.size() == 0) return;
-
-	PROFILER_BEGIN("Renderer PreRender");
+	// renderer prerender
 	for (Object* o : mRenderList)
 		dynamic_cast<Renderer*>(o)->PreRender(commandBuffer, camera, pass);
+	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
 
 
-	PROFILER_BEGIN("Draw Renderers");
-	BEGIN_CMD_REGION(commandBuffer, "Draw Renderers");
+	PROFILER_BEGIN("Render");
+	BEGIN_CMD_REGION(commandBuffer, "Render");
+	// begin renderpass
 	if (!framebuffer) framebuffer = camera->Framebuffer();
 	framebuffer->BeginRenderPass(commandBuffer);
 	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
-
-
-	PROFILER_BEGIN("PreRenderScene");
+	
+	// plugin prerender
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PreRenderScene(commandBuffer, camera, pass);
-	PROFILER_END;
 
+	// skybox
+	if (mEnvironment->mSkyboxMaterial && pass == PASS_MAIN) {
+		mEnvironment->PreRender(commandBuffer, camera);
 
+		VkPipelineLayout layout = commandBuffer->BindMaterial(mEnvironment->mSkyboxMaterial.get(), pass, mSkyboxCube->VertexInput(), camera, mSkyboxCube->Topology());
+		if (!layout) return;
+		commandBuffer->BindVertexBuffer(mSkyboxCube->VertexBuffer().get(), 0, 0);
+		commandBuffer->BindIndexBuffer(mSkyboxCube->IndexBuffer().get(), 0, mSkyboxCube->IndexType());
+		vkCmdDrawIndexed(*commandBuffer, mSkyboxCube->IndexCount(), 1, mSkyboxCube->BaseIndex(), mSkyboxCube->BaseVertex(), 0);
+		commandBuffer->mTriangleCount += mSkyboxCube->IndexCount() / 3;
+	}
+
+	#pragma region Render batched
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 	DescriptorSet* batchDS = nullptr;
 	Buffer* batchBuffer = nullptr;
@@ -619,13 +678,10 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 
 	auto DrawLastBatch = [&](){
 		if (batchStart) {
-			PROFILER_BEGIN_RESUME("Draw Batched");
 			batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
 			batchStart = nullptr;
-			PROFILER_END;
 		}
 	};
-
 	for (Object* o : mRenderList) {
 		Renderer* r = dynamic_cast<Renderer*>(o);
 		bool batched = false;
@@ -637,7 +693,6 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					DrawLastBatch();
 
 					// start a new batch
-					PROFILER_BEGIN_RESUME("Start Batch");
 					batchSize = 0;
 					batchStart = cur;
 					
@@ -658,7 +713,6 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					}
 
 					batchDS->FlushWrites();
-					PROFILER_END;
 				}
 
 				// append to batch
@@ -672,20 +726,18 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		if (!batched) {
 			// render last batch
 			DrawLastBatch();
-
-			PROFILER_BEGIN_RESUME("Draw Unbatched");
 			r->Draw(commandBuffer, camera, pass);
-			PROFILER_END;
 		}
 	}
 	// render last batch
 	DrawLastBatch();
+	#pragma endregion
 
 	if (mDrawGizmos && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw Gizmos");
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
-		/*
-		for (Camera* c : data.mShadowCameras)
+		
+		for (Camera* c : mShadowCameras)
 			if (camera != c) {
 				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
 				float3 f1 = c->ClipToWorld(float3(-1, 1, 0));
@@ -708,7 +760,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 				mGizmos->DrawLine(f2, f6, 1);
 				mGizmos->DrawLine(f3, f7, 1);
 			}
-		*/
+		
 
 		if (mBvh) mBvh->DrawGizmos(commandBuffer, camera, this);
 
@@ -724,19 +776,15 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		PROFILER_END;
 	}
 
-	PROFILER_BEGIN("PostRenderScene");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRenderScene(commandBuffer, camera, pass);
-	PROFILER_END;
 
 	vkCmdEndRenderPass(*commandBuffer);
 
-	END_CMD_REGION(commandBuffer);
-	PROFILER_END;
-
-	PROFILER_BEGIN("PostRender");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
+
+	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
 }
 

@@ -57,14 +57,14 @@ void Profiler::FrameEnd() {
 	mCurrentSample = nullptr;
 }
 
-void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel) {
+void PrintSample(char*& data, const ProfilerSample* s, uint32_t tabLevel, double minTime) {
 	double t = s->mTime.count() * 1e-6;
 	for (uint32_t i = 0; i < tabLevel; i++)
 		data += sprintf(data, "    ");
-	data += sprintf(data, "%s (%u): %.2fms\n", s->mLabel, s->mCalls, t);
+	if (t >= minTime) data += sprintf(data, "%s (%u): %.2fms\n", s->mLabel, s->mCalls, t);
 	for (const auto& pc : s->mChildren)
-		PrintSample(data, &pc, tabLevel + 1);
+		PrintSample(data, &pc, tabLevel + 1, minTime);
 }
-void Profiler::PrintLastFrame(char* buffer) {
-	PrintSample(buffer, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 0);
+void Profiler::PrintLastFrame(char* buffer, double minTime) {
+	PrintSample(buffer, &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT], 0, minTime);
 }
