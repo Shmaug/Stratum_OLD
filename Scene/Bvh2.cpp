@@ -1,5 +1,3 @@
-#pragma once
-
 #include <Scene/Bvh2.hpp>
 
 #include <Scene/Renderer.hpp>
@@ -119,7 +117,6 @@ void Bvh2::Build(Object** objects, uint32_t objectCount, uint32_t mask) {
     }
 }
 
-
 void Bvh2::FrustumCheck(Camera* camera, vector<Object*>& objects, uint32_t mask) {
     if (mNodes.size() == 0) return;
 
@@ -216,6 +213,8 @@ Object* Bvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask) {
 }
 
 void Bvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {
+    return;
+    
     const float3 colors[] {
         float3(1,0,0),
         float3(0,1,0),

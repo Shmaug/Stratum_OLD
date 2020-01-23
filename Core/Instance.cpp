@@ -35,16 +35,16 @@ Instance::Instance(const DisplayCreateInfo& display)
 
 	vector<const char*> deviceExtensions {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-
 		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 	};
-	
-	set<string> instanceExtensions;
+	vector<const char*> validationLayers;
+	set<string> instanceExtensions { VK_KHR_SURFACE_EXTENSION_NAME };
 	#ifdef ENABLE_DEBUG_LAYERS
 	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
+	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
 	#endif
-
-	instanceExtensions.insert(VK_KHR_SURFACE_EXTENSION_NAME);
 	#ifdef __linux
 	instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 	instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
@@ -52,13 +52,6 @@ Instance::Instance(const DisplayCreateInfo& display)
 	instanceExtensions.insert(VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME);
 	#else
 	instanceExtensions.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-	#endif
-
-	vector<const char*> validationLayers;
-	#ifdef ENABLE_DEBUG_LAYERS
-	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
-	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
-	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
 	#endif
 
 	#pragma region Create Vulkan Instance
@@ -151,10 +144,13 @@ Instance::Instance(const DisplayCreateInfo& display)
 
 	mMaxFramesInFlight = 0xFFFF;
 
+	printf("Creating devices and windows\n");
+
 	uint32_t deviceCount;
-	vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
+	ThrowIfFailed(vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr), "vkEnumeratePhysicalDevices failed");
 	vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
+	ThrowIfFailed(vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data()), "vkEnumeratePhysicalDevices failed");
+
 
 	#pragma region Create Windows
 	if (display.mDeviceIndex >= devices.size()){
@@ -165,14 +161,13 @@ Instance::Instance(const DisplayCreateInfo& display)
 
 	#ifdef __linux
 	// create xcb connection
-	if (!mXCBConnection) {
-		mXCBConnection = xcb_connect(nullptr, nullptr);
-		if (int err = xcb_connection_has_error(mXCBConnection)){
-			fprintf_color(COLOR_RED, stderr, "Failed to connect to xcb: %d\n", err);
-			throw;
-		}
-		mXCBKeySymbols = xcb_key_symbols_alloc(mXCBConnection);
+	mXCBConnection = xcb_connect(nullptr, nullptr);
+	if (int err = xcb_connection_has_error(mXCBConnection)){
+		fprintf_color(COLOR_RED, stderr, "Failed to connect to xcb: %d\n", err);
+		throw;
 	}
+	printf("XCB connection established.\n");
+	mXCBKeySymbols = xcb_key_symbols_alloc(mXCBConnection);
 
 	// find xcb screen
 	for (xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(mXCBConnection)); iter.rem; xcb_screen_next(&iter)) {
@@ -191,6 +186,10 @@ Instance::Instance(const DisplayCreateInfo& display)
 			}
 		}
 		if (mWindow) break;
+	}
+	if (!mWindow) {
+		fprintf_color(COLOR_RED, stderr, "Failed to find a device with XCB presentation support!\n");
+		throw;
 	}
 	#else
 	mWindow = new ::Window(this, "Stratum", mWindowInput, display.mWindowPosition, hInstance);

@@ -6,9 +6,9 @@
 #include <Shaders/include/shadercompat.h>
 
 enum LightType {
-	Sun = LIGHT_SUN,
-	Point = LIGHT_POINT,
-	Spot = LIGHT_SPOT,
+	LIGHT_TYPE_SUN = LIGHT_SUN,
+	LIGHT_TYPE_POINT = LIGHT_POINT,
+	LIGHT_TYPE_SPOT = LIGHT_SPOT,
 };
 
 class Light : public virtual Object {
@@ -46,20 +46,23 @@ public:
 
 	inline void ShadowDistance(float d) { mShadowDistance = d; }
 	inline float ShadowDistance() { return mShadowDistance; }
+
+	inline void CascadeCount(uint32_t c) { mCascadeCount = c; }
+	inline uint32_t CascadeCount() { return mCascadeCount; }
 	
 	inline AABB Bounds() override {
 		float3 c, e;
 		switch (mType) {
-		case Point:
+		case LIGHT_TYPE_POINT:
 			return AABB(WorldPosition() - mRange, WorldPosition() + mRange);
-		case Spot:
+		case LIGHT_TYPE_SPOT:
 			e = float3(0, 0, mRange * .5f);
 			c = float3(mRange * float2(sinf(mOuterSpotAngle * .5f)), mRange * .5f);
 			return AABB(c - e, c + e) * ObjectToWorld();
-		case Sun:
+		case LIGHT_TYPE_SUN:
 			return AABB(float3(-1e10f), float3(1e10f));
 		}
-		fprintf_color(COLOR_RED_BOLD, stderr, "Invalid light type!");
+		fprintf_color(COLOR_RED_BOLD, stderr, "Unknown light type!");
 		throw;
 	}
 
@@ -72,6 +75,8 @@ private:
 	float mRange;
 	float mInnerSpotAngle;
 	float mOuterSpotAngle;
+
 	bool mCastShadows;
 	float mShadowDistance;
+	uint32_t mCascadeCount;
 };

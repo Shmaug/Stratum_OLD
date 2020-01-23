@@ -102,6 +102,8 @@ void CommandBuffer::BeginRenderPass(RenderPass* renderPass, const VkExtent2D& bu
 	vkCmdBeginRenderPass(*this, &info, VK_SUBPASS_CONTENTS_INLINE);
 
 	mCurrentRenderPass = renderPass;
+
+	mTriangleCount = 0;
 }
 void CommandBuffer::EndRenderPass() {
 	vkCmdEndRenderPass(*this);
@@ -154,17 +156,14 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 
 	if (pipeline != mCurrentPipeline && mCurrentCamera == camera && mCurrentMaterial == material) return shader->mPipelineLayout;
 
-	PROFILER_BEGIN_RESUME("Bind Material");
 
 	Material::VariantData* data = material->GetData(pass);
 
 	if (pipeline != mCurrentPipeline) {
-		PROFILER_BEGIN_RESUME("Bind Pipeline");
 		vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		mCurrentPipeline = pipeline;
 		mCurrentCamera = nullptr;
 		mCurrentMaterial = nullptr;
-		PROFILER_END;
 	}
 
 	if (mCurrentCamera != camera || mCurrentMaterial != material) {
@@ -174,8 +173,6 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 	}
 	
 	material->SetPushConstantParameters(this, camera, data);
-
-	PROFILER_END;
 
 	return shader->mPipelineLayout;
 }

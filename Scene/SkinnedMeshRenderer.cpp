@@ -82,7 +82,6 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 }
 
 void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
-	PROFILER_BEGIN_RESUME("Draw SkinnedMeshRenderer");
 	::Mesh* mesh = MeshRenderer::Mesh();
 
 	VkCullModeFlags cull = (pass == PASS_DEPTH) ? VK_CULL_MODE_NONE : VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
@@ -107,7 +106,6 @@ void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* ca
 	commandBuffer->BindIndexBuffer(mesh->IndexBuffer().get(), 0, mesh->IndexType());
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
-	PROFILER_END;
 }
 
 void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

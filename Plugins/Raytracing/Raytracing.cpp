@@ -181,9 +181,16 @@ bool Raytracing::Init(Scene* scene) {
 	while (nodes.size()) {
 		Object* o = nodes.front();
 		nodes.pop();
-		mObjects.push_back(o);
 		for (uint32_t i = 0; i < o->ChildCount(); i++)
 			nodes.push(o->Child(i));
+
+		mObjects.push_back(o);
+		if (Light* l = dynamic_cast<Light*>(o)){
+			if (l->Type() == LIGHT_TYPE_SUN){
+				l->CascadeCount(1);
+				l->ShadowDistance(30);
+			}
+		}
 	}
 	#pragma endregion
 

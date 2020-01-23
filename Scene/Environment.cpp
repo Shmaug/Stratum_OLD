@@ -8,7 +8,7 @@ using namespace std;
 
 Environment::Environment(Scene* scene) : 
 	mTimeOfDay(.25f),
-	mScene(scene), mSkybox(nullptr),
+	mScene(scene),
 	mIncomingLight(2.3f),
 	mRayleighScatterCoef(2),
 	mRayleighExtinctionCoef(.5f),
@@ -28,15 +28,7 @@ Environment::Environment(Scene* scene) :
 	mEnableScattering(true),
 	mEnvironmentTexture(nullptr) {
 
-	shared_ptr<Material> skyboxMat = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.stm"));
-	shared_ptr<MeshRenderer> skybox = make_shared<MeshRenderer>("SkyCube");
-	skybox->LocalScale(1e23f);
-	skybox->Mesh(shared_ptr<Mesh>(Mesh::CreateCube("Cube", mScene->Instance()->Device())));
-	skybox->Material(skyboxMat);
-	mSkybox = skybox.get();
-	mScene->AddObject(skybox);
-
-	mSkyboxMaterial = skyboxMat.get();
+	mSkyboxMaterial = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.stm"));
 
 	mShader = mScene->AssetManager()->LoadShader("Shaders/scatter.stm");
 	mMoonTexture = mScene->AssetManager()->LoadTexture("Assets/Textures/moon.png");
@@ -204,7 +196,7 @@ Environment::Environment(Scene* scene) :
 	sun->ShadowDistance(4096);
 	sun->Color(float3(1, .99f, .95f));
 	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
-	sun->Type(Sun);
+	sun->Type(LIGHT_TYPE_SUN);
 	mSun = sun.get();
 
 	shared_ptr<Light> moon = make_shared<Light>("Moon");
@@ -212,7 +204,7 @@ Environment::Environment(Scene* scene) :
 	moon->CastShadows(false);
 	moon->Color(float3(1));
 	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
-	moon->Type(Sun);
+	moon->Type(LIGHT_TYPE_SUN);
 	mMoon = moon.get();
 }
 Environment::~Environment() {
@@ -232,7 +224,6 @@ Environment::~Environment() {
 		safe_delete(t.second.mSkyboxLUTR);
 		safe_delete(t.second.mSkyboxLUTM);
 	}
-	mScene->RemoveObject(mSkybox);
 }
 
 void Environment::SetEnvironment(Camera* camera, Material* mat) {
@@ -411,7 +402,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
 		mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
 		mSkyboxMaterial->SetParameter("_StarFade", 100 * clamp(lightdir.y, 0.f, 1.f));
-	} else if (mEnvironmentTexture)
-		mSkyboxMaterial->SetParameter("EnvironmentTexture", mEnvironmentTexture);
-	mSkyboxMaterial->SetParameter("AmbientLight", mAmbientLight);
+	}
+
+	SetEnvironment(camera, mSkyboxMaterial.get());
 }

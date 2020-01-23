@@ -35,7 +35,7 @@ public:
 	ENGINE_EXPORT static void FrameStart();
 	ENGINE_EXPORT static void FrameEnd();
 
-	ENGINE_EXPORT static void PrintLastFrame(char* buffer);
+	ENGINE_EXPORT static void PrintLastFrame(char* buffer, double minTime = 0);
 	inline static const ProfilerSample* LastFrame() { return &mFrames[(mCurrentFrame + PROFILER_FRAME_COUNT - 1) % PROFILER_FRAME_COUNT]; }
 
 private:

@@ -92,7 +92,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 
 	#ifdef PROFILER_ENABLE
 	if (mPrintPerformance) {
-		Profiler::PrintLastFrame(perfText);
+		Profiler::PrintLastFrame(perfText, 0);
 		reg->Draw(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 32), 16.f);
 	}
 	#endif

@@ -88,10 +88,9 @@ private:
 	Light* mMoon;
 
     Scene* mScene;
-	Object* mSkybox;
 
 	Shader* mShader;
-	Material* mSkyboxMaterial;
+	std::shared_ptr<Material> mSkyboxMaterial;
 
 
 	float mMoonSize;

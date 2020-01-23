@@ -18,7 +18,6 @@ UILabel::~UILabel() {
 }
 
 uint32_t UILabel::BuildText(Device* device, Buffer*& buffer) {
-	PROFILER_BEGIN("Build Text");
 	mTempGlyphs.clear();
 	mTempGlyphs.reserve(mText.length());
 	uint32_t glyphCount = Font()->GenerateGlyphs(mText, mTextScale, &mTextAABB, mTempGlyphs, mHorizontalAnchor, mVerticalAnchor);
@@ -29,7 +28,6 @@ uint32_t UILabel::BuildText(Device* device, Buffer*& buffer) {
 		safe_delete(buffer);
 	if (!buffer) buffer = new Buffer(mName + " Glyph Buffer", device, nullptr, glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	buffer->Upload(mTempGlyphs.data(), glyphCount * sizeof(TextGlyph));
-	PROFILER_END;
 	return glyphCount;
 }
 

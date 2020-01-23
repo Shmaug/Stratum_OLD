@@ -9,6 +9,8 @@ public:
 	ENGINE_EXPORT ~Bvh2();
 
 	ENGINE_EXPORT virtual void Build(Object** objects, uint32_t count, uint32_t mask = ~0) override;
+
+	inline virtual AABB Bounds() override { return mNodes.size() ? mNodes[0].mBounds : AABB(); };
 	ENGINE_EXPORT virtual Object* Intersect(const Ray& ray, float* t = nullptr, bool any = false, uint32_t mask = ~0) override;
 	ENGINE_EXPORT virtual void FrustumCheck(Camera* camera, std::vector<Object*>& objects, uint32_t mask = ~0) override;
 
