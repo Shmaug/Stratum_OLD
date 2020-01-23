@@ -252,8 +252,7 @@ void TerrainRenderer::Initialize() {
 		DescriptorSet* ds = new DescriptorSet("Terrain DS", device, gen->mDescriptorSetLayouts[0]);
 		ds->CreateStorageTextureDescriptor(mHeightmap, gen->mDescriptorBindings.at("Heightmap").second.binding);
 		
-		VkDescriptorSet vds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gen->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, gen->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 		
 		commandBuffer->PushConstant(gen, "Scale", &scale);
 		commandBuffer->PushConstant(gen, "Offset", &offset);
@@ -437,8 +436,7 @@ void TerrainRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, Pa
 		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("IndirectCommands").second.binding);
 		compDesc->CreateStorageBufferDescriptor(mInstanceBuffers[i], compute->mDescriptorBindings.at("DetailInstances").second.binding);
 		compDesc->CreateStorageBufferDescriptor(transformBuffers[i], compute->mDescriptorBindings.at("DetailTransforms").second.binding);
-		VkDescriptorSet ds = *compDesc;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, &ds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->mPipelineLayout, 0, 1, *compDesc, 0, nullptr);
 		commandBuffer->PushConstant(compute, "DetailCount", &counts[i]);
 		commandBuffer->PushConstant(compute, "CameraPosition", &cp);
 		commandBuffer->PushConstant(compute, "ImposterRange", &mDetails[i].mImposterRange);
@@ -494,8 +492,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 	if (shader->mDescriptorBindings.count("ShadowAtlas"))
 		objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
 
-	VkDescriptorSet ds = *objds;
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *objds, 0, nullptr);
 
 	float sz = mSize * .5f;
 
@@ -561,8 +558,7 @@ void TerrainRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassTyp
 		if (shader->mDescriptorBindings.count("ShadowAtlas"))
 			objds->CreateSampledTextureDescriptor(Scene()->ShadowAtlas(commandBuffer->Device()), SHADOW_ATLAS_BINDING);
 
-		ds = *objds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *objds, 0, nullptr);
 
 		float t = Scene()->Instance()->TotalTime();
 		commandBuffer->PushConstant(shader, "Time", &t);

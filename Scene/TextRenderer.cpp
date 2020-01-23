@@ -63,8 +63,7 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	VkPushConstantRange colorRange = shader->mPushConstants.at("Color");
 	VkPushConstantRange offsetRange = shader->mPushConstants.at("Offset");
 
-	VkDescriptorSet objds = *descriptorSet;
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &objds, 0, nullptr);
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *descriptorSet, 0, nullptr);
 	commandBuffer->PushConstant(shader, "ObjectToWorld", &o2w);
 	commandBuffer->PushConstant(shader, "WorldNormal", &normal);
 	commandBuffer->PushConstant(shader, "Offset", &offset);

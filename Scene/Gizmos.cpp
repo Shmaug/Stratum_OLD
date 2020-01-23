@@ -279,8 +279,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			commandBuffer->BindVertexBuffer(mVertices, 0, 0);
 			commandBuffer->BindIndexBuffer(mIndices, 0, VK_INDEX_TYPE_UINT16);
 
-			VkDescriptorSet ds = *gizmoDS;
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *gizmoDS, 0, nullptr);
 
 			// wire cube	
 			vkCmdDrawIndexed(*commandBuffer, 24, wireCubeCount, 36, 0, instanceOffset);
@@ -297,8 +296,7 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			commandBuffer->BindVertexBuffer(mVertices, 0, 0);
 			commandBuffer->BindIndexBuffer(mIndices, 0, VK_INDEX_TYPE_UINT16);
 
-			VkDescriptorSet ds = *gizmoDS;
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &ds, 0, nullptr);
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *gizmoDS, 0, nullptr);
 
 			// billboard
 			vkCmdDrawIndexed(*commandBuffer, 6, billboardCount, 0, 0, instanceOffset);

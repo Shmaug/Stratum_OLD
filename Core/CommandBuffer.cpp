@@ -126,20 +126,16 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass
 	if (mCurrentPipeline == pipeline) {
 		if (mCurrentCamera != camera && camera) {
 			mCurrentCamera = camera;
-			if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera")) {
-				VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
-				vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
-			}
+			if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera"))
+				vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags), 0, nullptr);
 		}
 		return shader->mPipelineLayout;
 	}
 	mCurrentPipeline = pipeline;
 	vkCmdBindPipeline(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	if (camera) {
-		if (mCurrentRenderPass && shader->mDescriptorBindings.count("Camera")) {
-			VkDescriptorSet camds = *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags);
-			vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
-		}
+		if (mCurrentRenderPass && shader->mDescriptorBindings.count("Camera"))
+			vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags), 0, nullptr);
 		mCurrentCamera = camera;
 	}
 	mCurrentMaterial = nullptr;

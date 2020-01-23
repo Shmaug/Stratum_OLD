@@ -26,4 +26,5 @@ private:
 
 	Device* mDevice;
 	std::unordered_map<std::string, Asset*> mAssets;
+	std::mutex mMutex;
 };

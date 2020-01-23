@@ -9,7 +9,7 @@
 using namespace std;
 
 void Device::FrameContext::Reset() {
-	PROFILER_BEGIN_RESUME("Wait for GPU");
+	PROFILER_BEGIN("Wait for GPU");
 	for (auto f : mFences)
 		f->Wait();
 	PROFILER_END;
@@ -299,6 +299,7 @@ shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool 
 }
 
 Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) {
+	lock_guard lock(mTmpBufferMutex);
 	FrameContext* frame = CurrentFrameContext();
 
 	auto closest = frame->mTempBuffers.end();
@@ -322,6 +323,7 @@ Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBuff
 	return b;
 }
 DescriptorSet* Device::GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout) {
+	lock_guard lock(mTmpDescriptorSetMutex);
 	FrameContext* frame = CurrentFrameContext();
 
 	auto& sets = frame->mTempDescriptorSets[layout];

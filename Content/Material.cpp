@@ -100,7 +100,7 @@ void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* cam
 
 		// set descriptor parameters
 		if (data->mDirty[frameContextIndex]) {
-			PROFILER_BEGIN_RESUME("Write Descriptor Sets");
+			PROFILER_BEGIN("Write Descriptor Sets");
 			for (auto& m : mParameters) {
 				if (m.second.index() > 4) continue;
 				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
@@ -143,18 +143,19 @@ void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* cam
 			PROFILER_END;
 		}
 
-		VkDescriptorSet matds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_MATERIAL, 1, &matds, 0, nullptr);
+		PROFILER_BEGIN("Bind Descriptor Sets");
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_MATERIAL, 1, *ds, 0, nullptr);
+		PROFILER_END;
 	}
 
 	if (camera && shader->mDescriptorSetLayouts.size() > PER_CAMERA && shader->mDescriptorBindings.count("Camera")) {
 		auto binding = shader->mDescriptorBindings.at("Camera");
-		VkDescriptorSet camds = *camera->DescriptorSet(binding.second.stageFlags);
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, &camds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(binding.second.stageFlags), 0, nullptr);
 	}
 
 }
 void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
+	PROFILER_BEGIN("Push Constants");
 	// set push constant parameters
 	GraphicsShader* shader = data->mShaderVariant;
 	for (auto& m : mParameters) {
@@ -224,4 +225,5 @@ void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* c
 
 		vkCmdPushConstants(*commandBuffer, shader->mPipelineLayout, range.stageFlags, range.offset, range.size, &value);
 	}
+	PROFILER_END;
 }

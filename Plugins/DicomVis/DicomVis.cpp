@@ -294,20 +294,18 @@ void DicomVis::Update() {
 void DicomVis::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 		if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
 
-	char perfText[8192];
-	snprintf(perfText, 8192, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
-
 	Font* reg = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 18);
 	Font* bld = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 16);
 
-	bld->Draw(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
-
-	#ifdef PROFILER_ENABLE
 	if (mPrintPerformance) {
-		Profiler::PrintLastFrame(perfText);
-		reg->Draw(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 32), 16.f);
+		#ifdef PROFILER_ENABLE
+		#endif
+
+		char perfText[64];
+		snprintf(perfText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+		bld->DrawScreenString(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+
 	}
-	#endif
 }
 
 void DicomVis::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

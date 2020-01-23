@@ -8,6 +8,9 @@
 
 #pragma static_sampler Sampler
 
+#pragma multi_compile TEXTURED
+#pragma multi_compile SCREEN_SPACE
+
 #include "include/shadercompat.h"
 
 // per-object
@@ -18,19 +21,21 @@
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 ObjectToWorld;
-	float4x4 WorldToObject;
 	float4 Color;
-	float2 Offset;
-	float2 Extent;
-	float2 Bounds;
+	float4 ScaleTranslate;
+	float4 Bounds;
+	float2 ScreenSize;
+	float4 TextureST;
 }
 
 #include "include/util.hlsli"
 
 struct v2f {
 	float4 position : SV_Position;
-	float4 texcoord : TEXCOORD0;
-	float4 worldPos : TEXCOORD1;
+	#ifndef SCREEN_SPACE
+	float4 worldPos : TEXCOORD0;
+	#endif
+	float4 texcoord : TEXCOORD1;
 };
 
 v2f vsmain(uint index : SV_VertexID) {
@@ -43,15 +48,20 @@ v2f vsmain(uint index : SV_VertexID) {
 		float2(1,1)
 	};
 
-	float2 p = Offset + Extent * (positions[index] * 2 - 1);
+	float2 p = positions[index] * ScaleTranslate.xy + ScaleTranslate.zw;
+	
+	v2f o;
+	#ifdef SCREEN_SPACE
+	o.position = float4((p / ScreenSize) * 2 - 1, .01, 1);
+	o.position.y = -o.position.y;
+	#else
 	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
 	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(p, 0, 1.0));
-
-	v2f o;
 	o.position = mul(Camera.ViewProjection, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
-	o.texcoord.xy = positions[index];
-	o.texcoord.zw = abs(p);
+	#endif
+	o.texcoord.xy = positions[index] * TextureST.xy + TextureST.zw;
+	o.texcoord.zw = abs((p - Bounds.xy) / Bounds.zw) - 1;
 
 	return o;
 }
@@ -59,7 +69,15 @@ v2f vsmain(uint index : SV_VertexID) {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
+#ifdef SCREEN_SPACE
+	depthNormal = 0;
+	#else
 	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
-	clip(any(Bounds - i.texcoord.zw));
+	#endif
+	#ifdef TEXTURED
 	color = MainTexture.SampleLevel(Sampler, i.texcoord.xy, 0) * Color;
+	#else
+	color = Color;
+	#endif
+	color.a *= !any(i.texcoord.zw > 0);
 }

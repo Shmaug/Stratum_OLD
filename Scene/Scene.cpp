@@ -407,6 +407,7 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
+	PROFILER_BEGIN("Scene PreFrame");
 	Camera* mainCamera = nullptr;
 	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
 		return a->RenderPriority() > b->RenderPriority();
@@ -606,66 +607,81 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 	mGizmos->PreFrame();
 	mEnvironment->Update();
+
+	PROFILER_END;
 }
 
-void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {	
+void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
 	camera->PreRender();
-	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0) {
-		PROFILER_END;
+	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0)
 		return;
-	}
-	if (pass == PASS_MAIN) {
-		if (camera->DepthFramebuffer()) {
-			PROFILER_BEGIN("Depth Prepass");
-			BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
-			Render(commandBuffer, camera, camera->DepthFramebuffer(), PASS_DEPTH);
-			END_CMD_REGION(commandBuffer);
-			PROFILER_END;
-		}
-	}
 
 	PROFILER_BEGIN("Gather Renderers");
 	mRenderList.clear();
 	BVH()->FrustumCheck(camera, mRenderList, pass);
+	PROFILER_END;
+	PROFILER_BEGIN("Sort Renderers");
 	sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
 	PROFILER_END;
 
+	if (pass == PASS_MAIN && camera->DepthFramebuffer()) {
+		PROFILER_BEGIN("Depth Prepass");
+		BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
+		Render(commandBuffer, camera, camera->DepthFramebuffer(), PASS_DEPTH, true, mRenderList);
+		END_CMD_REGION(commandBuffer);
+		PROFILER_END;
+	}
+	Render(commandBuffer, camera, framebuffer, pass, clear, mRenderList);
+}
 
-	PROFILER_BEGIN("PreRender");
-	BEGIN_CMD_REGION(commandBuffer, "PreRender");
-	// plugin prerender
+void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear, vector<Object*>& renderList) {
+	camera->PreRender();
+	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0)
+		return;
+
+	PROFILER_BEGIN("Plugin PreRender");
+	BEGIN_CMD_REGION(commandBuffer, "Plugin PreRender");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
 			p->PreRender(commandBuffer, camera, pass);
+	END_CMD_REGION(commandBuffer);
+	PROFILER_END;
+
+	PROFILER_BEGIN("Renderer PreRender");
+	BEGIN_CMD_REGION(commandBuffer, "Renderer PreRender");
 	// renderer prerender
-	for (Object* o : mRenderList)
+	for (Object* o : renderList)
 		dynamic_cast<Renderer*>(o)->PreRender(commandBuffer, camera, pass);
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
 
-
 	PROFILER_BEGIN("Render");
 	BEGIN_CMD_REGION(commandBuffer, "Render");
+
+	PROFILER_BEGIN("Begin RenderPass");
 	// begin renderpass
 	if (!framebuffer) framebuffer = camera->Framebuffer();
 	framebuffer->BeginRenderPass(commandBuffer);
 	if (clear) framebuffer->Clear(commandBuffer);
 	camera->Set(commandBuffer);
-	
-	// plugin prerender
+	PROFILER_END;
+
+	PROFILER_BEGIN("Plugin PreRenderScene");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PreRenderScene(commandBuffer, camera, pass);
+	PROFILER_END;
 
 	// skybox
 	if (mEnvironment->mSkyboxMaterial && pass == PASS_MAIN) {
+		PROFILER_BEGIN("Draw skybox");
 		mEnvironment->PreRender(commandBuffer, camera);
-
 		VkPipelineLayout layout = commandBuffer->BindMaterial(mEnvironment->mSkyboxMaterial.get(), pass, mSkyboxCube->VertexInput(), camera, mSkyboxCube->Topology());
 		if (!layout) return;
 		commandBuffer->BindVertexBuffer(mSkyboxCube->VertexBuffer().get(), 0, 0);
 		commandBuffer->BindIndexBuffer(mSkyboxCube->IndexBuffer().get(), 0, mSkyboxCube->IndexType());
 		vkCmdDrawIndexed(*commandBuffer, mSkyboxCube->IndexCount(), 1, mSkyboxCube->BaseIndex(), mSkyboxCube->BaseVertex(), 0);
 		commandBuffer->mTriangleCount += mSkyboxCube->IndexCount() / 3;
+		PROFILER_END;
 	}
 
 	#pragma region Render batched
@@ -676,13 +692,15 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	MeshRenderer* batchStart = nullptr;
 	uint32_t batchSize = 0;
 
-	auto DrawLastBatch = [&](){
+	auto DrawLastBatch = [&]() {
 		if (batchStart) {
+			PROFILER_BEGIN("Draw Batch");
 			batchStart->DrawInstanced(commandBuffer, camera, batchSize, *batchDS, pass);
 			batchStart = nullptr;
+			PROFILER_END;
 		}
 	};
-	for (Object* o : mRenderList) {
+	for (Object* o : renderList) {
 		Renderer* r = dynamic_cast<Renderer*>(o);
 		bool batched = false;
 		if (MeshRenderer* cur = dynamic_cast<MeshRenderer*>(r)) {
@@ -693,9 +711,10 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					DrawLastBatch();
 
 					// start a new batch
+					PROFILER_BEGIN("Start batch");
 					batchSize = 0;
 					batchStart = cur;
-					
+
 					batchBuffer = commandBuffer->Device()->GetTempBuffer("Instance Batch", sizeof(InstanceBuffer) * INSTANCE_BATCH_SIZE, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 					curBatch = (InstanceBuffer*)batchBuffer->MappedData();
 
@@ -713,20 +732,25 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 					}
 
 					batchDS->FlushWrites();
+					PROFILER_END;
 				}
 
 				// append to batch
+				PROFILER_BEGIN("Append to batch");
 				curBatch[batchSize].ObjectToWorld = cur->ObjectToWorld();
 				curBatch[batchSize].WorldToObject = cur->WorldToObject();
 				batchSize++;
 				batched = true;
+				PROFILER_END;
 			}
 		}
 
 		if (!batched) {
 			// render last batch
 			DrawLastBatch();
+			PROFILER_BEGIN("Draw Unbatched");
 			r->Draw(commandBuffer, camera, pass);
+			PROFILER_END;
 		}
 	}
 	// render last batch
@@ -736,7 +760,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	if (mDrawGizmos && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw Gizmos");
 		BEGIN_CMD_REGION(commandBuffer, "Draw Gizmos");
-		
+		/*
 		for (Camera* c : mShadowCameras)
 			if (camera != c) {
 				float3 f0 = c->ClipToWorld(float3(-1, -1, 0));
@@ -760,7 +784,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 				mGizmos->DrawLine(f2, f6, 1);
 				mGizmos->DrawLine(f3, f7, 1);
 			}
-		
+		*/
 
 		if (mBvh) mBvh->DrawGizmos(commandBuffer, camera, this);
 
@@ -776,13 +800,19 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		PROFILER_END;
 	}
 
+	PROFILER_BEGIN("Plugin PostRenderScene");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRenderScene(commandBuffer, camera, pass);
+	PROFILER_END;
 
+	PROFILER_BEGIN("End RenderPass");
 	vkCmdEndRenderPass(*commandBuffer);
+	PROFILER_END;
 
+	PROFILER_BEGIN("Plugin PostRender");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
+	PROFILER_END;
 
 	END_CMD_REGION(commandBuffer);
 	PROFILER_END;
@@ -790,36 +820,14 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 
 Bvh* Scene::BVH() {
 	if (mBvh && mBvhDirty) {
+		PROFILER_BEGIN("Build BVH");
 		Object** objs = new Object*[mObjects.size()];
 		for (uint32_t i = 0; i < mObjects.size(); i++)
 			objs[i] = mObjects[i].get();
 		mBvh->Build(objs, mObjects.size());
 		delete[] objs;
 		mBvhDirty = false;
+		PROFILER_END;
 	}
 	return mBvh;
-}
-
-Object* Scene::Raycast(const Ray& worldRay, float* t, bool any, uint32_t mask) {
-	if (mBvh) return BVH()->Intersect(worldRay, t, any, mask);
-
-	Object* closest = nullptr;
-	float hitT = -1.f;
-
-	for (const shared_ptr<Object>& n : mObjects) {
-		if (!n->EnabledHierarchy()) continue;
-		if (Object* c = dynamic_cast<Object*>(n.get())) {
-			if ((c->LayerMask() & mask) == 0) continue;
-
-			float curT = worldRay.Intersect(c->Bounds()).x;
-			if (hitT >= 0 && curT >= hitT) continue;
-
-			if (c->Intersect(worldRay, &curT, any) && curT < hitT) {
-				closest = c;
-				hitT = curT;
-			}
-		}
-	}
-
-	return closest;
 }

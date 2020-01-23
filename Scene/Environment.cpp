@@ -79,8 +79,7 @@ Environment::Environment(Scene* scene) :
 		DescriptorSet* ds = new DescriptorSet("Particle Density", device, particleDensity->mDescriptorSetLayouts[0]);
 		ds->CreateStorageTextureDescriptor(dlut.mParticleDensityLUT, particleDensity->mDescriptorBindings.at("_RWParticleDensityLUT").second.binding);
 		ds->FlushWrites();
-		VkDescriptorSet vds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 		commandBuffer->PushConstant(particleDensity, "_AtmosphereHeight", &mAtmosphereHeight);
 		commandBuffer->PushConstant(particleDensity, "_PlanetRadius", &mPlanetRadius);
 		commandBuffer->PushConstant(particleDensity, "_DensityScaleHeight", &mDensityScale);
@@ -97,8 +96,7 @@ Environment::Environment(Scene* scene) :
 		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUTM, skyboxc->mDescriptorBindings.at("SkyboxLUTM").second.binding);
 		ds2->CreateSampledTextureDescriptor(dlut.mParticleDensityLUT, skyboxc->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 		ds2->FlushWrites();
-		vds = *ds2;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skyboxc->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skyboxc->mPipelineLayout, 0, 1, *ds2, 0, nullptr);
 
 		commandBuffer->PushConstant(skyboxc, "_AtmosphereHeight", &mAtmosphereHeight);
 		commandBuffer->PushConstant(skyboxc, "_PlanetRadius", &mPlanetRadius);
@@ -133,12 +131,11 @@ Environment::Environment(Scene* scene) :
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipeline);
 
 		DescriptorSet* ds = new DescriptorSet("Ambient LUT", device, ambient->mDescriptorSetLayouts[0]);
-		ds->CreateStorageBufferDescriptor(&ambientBuffer, ambient->mDescriptorBindings.at("_RWAmbientLightLUT").second.binding);
+		ds->CreateStorageBufferDescriptor(&ambientBuffer, 0, ambientBuffer.Size(), ambient->mDescriptorBindings.at("_RWAmbientLightLUT").second.binding);
 		ds->CreateStorageTextureDescriptor(randTex, ambient->mDescriptorBindings.at("_RandomVectors").second.binding);
 		ds->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, ambient->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 		ds->FlushWrites();
-		VkDescriptorSet vds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
 		commandBuffer->PushConstant(ambient, "_AtmosphereHeight", &mAtmosphereHeight);
 		commandBuffer->PushConstant(ambient, "_PlanetRadius", &mPlanetRadius);
@@ -157,11 +154,10 @@ Environment::Environment(Scene* scene) :
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipeline);
 
 		DescriptorSet* ds2 = new DescriptorSet("Ambient LUT", device, direct->mDescriptorSetLayouts[0]);
-		ds2->CreateStorageBufferDescriptor(&dirBuffer, direct->mDescriptorBindings.at("_RWDirectLightLUT").second.binding);
+		ds2->CreateStorageBufferDescriptor(&dirBuffer, 0, dirBuffer.Size(), direct->mDescriptorBindings.at("_RWDirectLightLUT").second.binding);
 		ds2->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, direct->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 		ds2->FlushWrites();
-		vds = *ds2;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipelineLayout, 0, 1, *ds2, 0, nullptr);
 
 		commandBuffer->PushConstant(direct, "_AtmosphereHeight", &mAtmosphereHeight);
 		commandBuffer->PushConstant(direct, "_PlanetRadius", &mPlanetRadius);
@@ -334,8 +330,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		ds->CreateStorageTextureDescriptor(l->mOutscatterLUT, scatter->mDescriptorBindings.at("_ExtinctionLUT").second.binding);
 		ds->CreateSampledTextureDescriptor(dlut->mParticleDensityLUT, scatter->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
 		ds->FlushWrites();
-		VkDescriptorSet vds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
 		commandBuffer->PushConstant(scatter, "_BottomLeftCorner", &r0);
 		commandBuffer->PushConstant(scatter, "_TopLeftCorner", &r1);
@@ -369,8 +364,7 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
 		ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
 		ds->FlushWrites();
-		vds = *ds;
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, &vds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
 		commandBuffer->PushConstant(shaft, "_BottomLeftCorner", &r0);
 		commandBuffer->PushConstant(shaft, "_TopLeftCorner", &r1);
