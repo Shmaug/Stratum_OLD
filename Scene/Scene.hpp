@@ -40,7 +40,7 @@ public:
 
 	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer = nullptr, PassType pass = PASS_MAIN, bool clear = true);
 
-	ENGINE_EXPORT Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = ~0);
+	inline Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = ~0) { return BVH()->Intersect(worldRay, t, any, mask); }
 
 	/// Buffer of GPULight structs (defined in shadercompat.h)
 	inline Buffer* LightBuffer() const { return mLightBuffers[mInstance->Device()->FrameContextIndex()]; }
@@ -77,6 +77,8 @@ private:
 	
 	/// Used in PreFrame() to add a shadow camera to mShadowCameras
 	ENGINE_EXPORT void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
+
+	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear, std::vector<Object*>& renderList);
 
 	Mesh* mSkyboxCube;
 

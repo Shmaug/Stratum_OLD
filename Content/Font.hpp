@@ -40,8 +40,11 @@ public:
 	ENGINE_EXPORT const FontGlyph* Glyph(uint32_t c) const;
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
-	/// Draws str relative to the screen
-	ENGINE_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	/// Draws a string in the world
+	ENGINE_EXPORT void DrawWorldString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	/// Draws a string on the screen, where screenPos is in pixels and (0,0) is the bottom-left of the screen
+	ENGINE_EXPORT void DrawScreenString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	
 	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
 
 	inline float PixelSize() const { return mPixelSize; };

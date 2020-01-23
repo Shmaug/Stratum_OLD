@@ -11,6 +11,7 @@ DescriptorSet::DescriptorSet(const string& name, Device* device, VkDescriptorSet
 	allocInfo.descriptorPool = mDevice->mDescriptorPool;
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &layout;
+	lock_guard lock(device->mDescriptorPoolMutex);
 	ThrowIfFailed(vkAllocateDescriptorSets(*mDevice, &allocInfo, &mDescriptorSet), "vkAllocateDescriptorSets failed");
 	mDevice->SetObjectName(mDescriptorSet, name, VK_OBJECT_TYPE_DESCRIPTOR_SET);
 }
@@ -27,6 +28,7 @@ DescriptorSet::~DescriptorSet() {
 		delete mImageInfoPool.front();
 		mImageInfoPool.pop();
 	}
+	lock_guard lock(mDevice->mDescriptorPoolMutex);
 	ThrowIfFailed(vkFreeDescriptorSets(*mDevice, mDevice->mDescriptorPool, 1, &mDescriptorSet), "vkFreeDescriptorSets failed");
 }
 
@@ -53,9 +55,6 @@ void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize o
 	mPending.push_back(write);
 	mPendingBuffers.push_back(info);
 }
-void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t binding) {
-	CreateStorageBufferDescriptor(buffer, 0, buffer->Size(), binding);
-}
 
 void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
 	VkDescriptorBufferInfo* info;
@@ -79,9 +78,6 @@ void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize o
 	write.descriptorCount = 1;
 	mPending.push_back(write);
 	mPendingBuffers.push_back(info);
-}
-void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, uint32_t binding) {
-	CreateUniformBufferDescriptor(buffer, 0, buffer->Size(), binding);
 }
 
 void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {

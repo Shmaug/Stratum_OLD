@@ -62,9 +62,7 @@ private:
 		shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->Device()->GetCommandBuffer();
 		PROFILER_END;
 
-		PROFILER_BEGIN("Scene PreFrame");
 		mScene->PreFrame(commandBuffer.get());
-		PROFILER_END;
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras())
@@ -75,7 +73,7 @@ private:
 				camera->ResolveWindow(commandBuffer.get());
 		PROFILER_END;
 
-		PROFILER_BEGIN("Execute CommandBuffers");
+		PROFILER_BEGIN("Execute CommandBuffer");
 		mInstance->Device()->Execute(commandBuffer);
 		PROFILER_END;
 	}

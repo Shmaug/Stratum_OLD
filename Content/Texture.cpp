@@ -56,7 +56,7 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 	int32_t x, y, channels;
 	uint32_t size;
 	uint8_t* pixels = load(filename, srgb, size, x, y, channels, mFormat);
-	
+
 	mWidth = x;
 	mHeight = y;
 	mDepth = 1;
@@ -69,7 +69,7 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 
 	CreateImage();
 	CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
-	
+
 	VkBufferImageCopy copyRegion = {};
 	copyRegion.bufferOffset = 0;
 	copyRegion.bufferRowLength = 0;
@@ -81,16 +81,13 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 	copyRegion.imageOffset = { 0, 0, 0 };
 	copyRegion.imageExtent = { mWidth, mHeight, 1 };
 
-	vector<shared_ptr<Buffer>> uploadBuffers;
-	vector<shared_ptr<Fence>> fences;
 	VkDeviceSize dataSize = mWidth * mHeight * size * channels;
 
-	shared_ptr<Buffer> uploadBuffer = make_shared<Buffer>(name + " Copy", mDevice, pixels, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	uploadBuffers.push_back(uploadBuffer);
+	Buffer uploadBuffer(name + " Copy", mDevice, pixels, dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	auto commandBuffer = mDevice->GetCommandBuffer();
 	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
-	vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer.get(), mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+	vkCmdCopyBufferToImage(*commandBuffer, uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 	GenerateMipMaps(commandBuffer.get());
 	mDevice->Execute(commandBuffer, false)->Wait();
 
@@ -141,12 +138,12 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 	auto commandBuffer = mDevice->GetCommandBuffer();
 	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
 	
-	shared_ptr<Buffer> uploadBuffer = make_shared<Buffer>(name + " Copy", mDevice, dataSize * mArrayLayers, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	uploadBuffer->Map();
+	Buffer uploadBuffer(name + " Copy", mDevice, dataSize * mArrayLayers, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	uploadBuffer.Map();
 	for (uint32_t j = 0; j < mArrayLayers; j++)
-		memcpy((uint8_t*)uploadBuffer->MappedData() + j * dataSize, pixels[j], dataSize);
+		memcpy((uint8_t*)uploadBuffer.MappedData() + j * dataSize, pixels[j], dataSize);
 
-	vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer.get(), mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+	vkCmdCopyBufferToImage(*commandBuffer, uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 	GenerateMipMaps(commandBuffer.get());
 	mDevice->Execute(commandBuffer, false)->Wait();
@@ -179,11 +176,11 @@ Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize 
 	copyRegion.imageOffset = { 0, 0, 0 };
 	copyRegion.imageExtent = { mWidth, mHeight, mDepth };
 
-	Buffer* uploadBuffer = new Buffer(name + " Copy", mDevice, pixels, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	Buffer uploadBuffer(name + " Copy", mDevice, pixels, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	auto commandBuffer = mDevice->GetCommandBuffer();
 	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
-	vkCmdCopyBufferToImage(*commandBuffer, *uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+	vkCmdCopyBufferToImage(*commandBuffer, uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 	if (mipLevels == 0)
 		GenerateMipMaps(commandBuffer.get());
@@ -191,8 +188,6 @@ Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize 
 		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
 
 	mDevice->Execute(commandBuffer, false)->Wait();
-
-	delete uploadBuffer;
 }
 
 Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)

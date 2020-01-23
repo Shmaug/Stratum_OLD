@@ -89,6 +89,9 @@ private:
 
 	VkDescriptorPool mDescriptorPool;
 
+	std::mutex mTmpDescriptorSetMutex;
+	std::mutex mTmpBufferMutex;
+	std::mutex mDescriptorPoolMutex;
 	std::mutex mCommandPoolMutex;
 	std::unordered_map<std::thread::id, VkCommandPool> mCommandPools;
 	std::unordered_map<VkCommandPool, std::queue<std::shared_ptr<CommandBuffer>>> mCommandBuffers;

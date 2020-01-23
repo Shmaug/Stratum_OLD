@@ -1,6 +1,6 @@
 #include "CameraControl.hpp"
-#include <Interface/UICanvas.hpp>
 #include <Scene/Scene.hpp>
+#include <Scene/Interface.hpp>
 #include <Util/Profiler.hpp>
 
 using namespace std;
@@ -9,7 +9,7 @@ ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
 	: mScene(nullptr), mCameraPivot(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)),
-	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mPrintPerformance(false) {
+	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mShowPerformance(false) {
 	mEnabled = true;
 }
 CameraControl::~CameraControl() {
@@ -42,9 +42,10 @@ bool CameraControl::Init(Scene* scene) {
 void CameraControl::Update() {
 	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
-	if (mInput->KeyDownFirst(KEY_F3))
-		mPrintPerformance = !mPrintPerformance;
+	if (mInput->KeyDownFirst(KEY_TILDE))
+		mShowPerformance = !mShowPerformance;
 
+	#pragma region Camera control
 	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = float3(mInput->CursorDelta(), 0);
 		if (mInput->KeyDown(KEY_LSHIFT)) {
@@ -68,6 +69,7 @@ void CameraControl::Update() {
 
 	for (uint32_t i = 0; i < mCameras.size(); i++)
 		mCameras[i]->LocalPosition(0, 0, -mCameraDistance);
+	#pragma endregion
 
 	// count fps
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();
@@ -81,19 +83,61 @@ void CameraControl::Update() {
 
 void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
+	if (mShowPerformance) {
+		char tmpText[32];
 
-	char perfText[8192];
-	snprintf(perfText, 8192, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+		Font* reg = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 18);
+		Font* bld = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 16);
 
-	Font* reg = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 18);
-	Font* bld = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 16);
+		float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
 
-	bld->Draw(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+		#ifdef PROFILER_ENABLE
+		const ProfilerSample* frames = Profiler::Frames();
+		const uint32_t pointCount = PROFILER_FRAME_COUNT - 1;
+		float2 points[pointCount];
+		float m = 0;
+		for (uint32_t i = 0; i < pointCount; i++) {
+			points[i].x = (float)i / (pointCount - 1.f);
+			points[i].y = frames[(i + Profiler::CurrentFrameIndex() + 2) % PROFILER_FRAME_COUNT].mDuration.count() * 1e-6;
+			m = fmaxf(points[i].y, m);
+		}
+		m = fmaxf(m, 5.f) + 3.f;
+		for (uint32_t i = 0; i < pointCount; i++)
+			points[i].y /= m;
 
-	#ifdef PROFILER_ENABLE
-	if (mPrintPerformance) {
-		Profiler::PrintLastFrame(perfText, 0);
-		reg->Draw(commandBuffer, camera, perfText, 1.f, float2(5, camera->FramebufferHeight() - 32), 16.f);
+		DrawScreenRect(commandBuffer, camera, float2(0, 0), float2(s.x, 100), float4(.1f, .1f, .1f, 1));
+
+		// Draw performance graph
+		{
+			GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/line.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
+			if (!shader) return;
+			VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+			if (!layout) return;
+
+			float4 color(.2f, 1.f, .2f, 1.f);
+			float4 st(s.x, 100, 0, 0);
+			float4 sz(0, 0, s);
+
+			Buffer* b = commandBuffer->Device()->GetTempBuffer("Perf Graph Pts", sizeof(float2) * pointCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			memcpy(b->MappedData(), points, sizeof(float2) * pointCount);
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Perf Graph DS", shader->mDescriptorSetLayouts[PER_OBJECT]);
+			ds->CreateStorageBufferDescriptor(b, 0, sizeof(float2) * pointCount, INSTANCE_BUFFER_BINDING);
+			ds->FlushWrites();
+
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+
+			commandBuffer->PushConstant(shader, "Color", &color);
+			commandBuffer->PushConstant(shader, "ScaleTranslate", &st);
+			commandBuffer->PushConstant(shader, "Bounds", &sz);
+			commandBuffer->PushConstant(shader, "ScreenSize", &sz.z);
+			vkCmdDraw(*commandBuffer, pointCount, 1, 0, 0);
+		}
+
+		snprintf(tmpText, 32, "%.1fms (%.1ffps)", m, 1000.f / m);
+		bld->DrawScreenString(commandBuffer, camera, tmpText, 1.f, float2(2, 100), 16.f, Minimum, Maximum);
+		#endif
+
+		snprintf(tmpText, 32, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+		bld->DrawScreenString(commandBuffer, camera, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 	}
-	#endif
 }

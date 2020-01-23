@@ -29,7 +29,7 @@ private:
 	Object* mCameraPivot;
 	std::vector<Camera*> mCameras;
 
-	bool mPrintPerformance;
+	bool mShowPerformance;
 
 	float mFrameTimeAccum;
 	float mFps;
