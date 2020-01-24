@@ -1,7 +1,6 @@
 #include "CameraControl.hpp"
 #include <Scene/Scene.hpp>
 #include <Scene/Interface.hpp>
-#include <Util/Profiler.hpp>
 
 using namespace std;
 
@@ -9,8 +8,9 @@ ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
 	: mScene(nullptr), mCameraPivot(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)),
-	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mShowPerformance(false) {
+	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mSnapshotPerformance(false), mShowPerformance(false), mSelectedFrame(PROFILER_FRAME_COUNT) {
 	mEnabled = true;
+	memset(mProfilerFrames, 0, sizeof(ProfilerSample) * (PROFILER_FRAME_COUNT - 1));
 }
 CameraControl::~CameraControl() {
 	for (Camera* c : mCameras)
@@ -45,9 +45,37 @@ void CameraControl::Update() {
 	if (mInput->KeyDownFirst(KEY_TILDE))
 		mShowPerformance = !mShowPerformance;
 
+	// Snapshot profiler frames
+	if (mInput->KeyDownFirst(KEY_F3)) {
+		mSnapshotPerformance = !mSnapshotPerformance;
+		if (mSnapshotPerformance) {
+			mSelectedFrame = PROFILER_FRAME_COUNT;
+			queue<pair<ProfilerSample*, const ProfilerSample*>> samples;
+			for (uint32_t i = 0; i < PROFILER_FRAME_COUNT - 1; i++) {
+				mProfilerFrames[i].mParent = nullptr;
+				samples.push(make_pair(mProfilerFrames + i, Profiler::Frames() + ((i + Profiler::CurrentFrameIndex() + 2) % PROFILER_FRAME_COUNT)));
+				while (samples.size()) {
+					auto p = samples.front();
+					samples.pop();
+
+					p.first->mStartTime = p.second->mStartTime;
+					p.first->mDuration = p.second->mDuration;
+					strncpy(p.first->mLabel, p.second->mLabel, PROFILER_LABEL_SIZE);
+					p.first->mChildren.resize(p.second->mChildren.size());
+
+					auto it2 = p.second->mChildren.begin();
+					for (auto it = p.first->mChildren.begin(); it != p.first->mChildren.end(); it++, it2++) {
+						it->mParent = p.first;
+						samples.push(make_pair(&*it, &*it2));
+					}
+				}
+			}
+		}
+	}
+
 	#pragma region Camera control
 	if (mInput->KeyDown(MOUSE_MIDDLE)) {
-		float3 md = float3(mInput->CursorDelta(), 0);
+		float3 md = mInput->CursorDelta();
 		if (mInput->KeyDown(KEY_LSHIFT)) {
 			md.x = -md.x;
 			md = md * .0005f * mCameraDistance;
@@ -81,63 +109,125 @@ void CameraControl::Update() {
 	}
 }
 
+void DrawScreenLine(CommandBuffer* commandBuffer, Camera* camera, const float2* points, size_t pointCount, const float2& pos, const float2& size, const float4& color) {
+	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/line.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
+	if (!shader) return;
+	VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+	if (!layout) return;
+
+	float4 st(size, pos);
+	float4 sz(0, 0, camera->FramebufferWidth(), camera->FramebufferHeight());
+
+	Buffer* b = commandBuffer->Device()->GetTempBuffer("Perf Graph Pts", sizeof(float2) * pointCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	memcpy(b->MappedData(), points, sizeof(float2) * pointCount);
+	DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Perf Graph DS", shader->mDescriptorSetLayouts[PER_OBJECT]);
+	ds->CreateStorageBufferDescriptor(b, 0, sizeof(float2) * pointCount, INSTANCE_BUFFER_BINDING);
+	ds->FlushWrites();
+
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+
+	commandBuffer->PushConstant(shader, "Color", &color);
+	commandBuffer->PushConstant(shader, "ScaleTranslate", &st);
+	commandBuffer->PushConstant(shader, "Bounds", &sz);
+	commandBuffer->PushConstant(shader, "ScreenSize", &sz.z);
+	vkCmdDraw(*commandBuffer, pointCount, 1, 0, 0);
+}
+
 void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
 	if (mShowPerformance) {
-		char tmpText[32];
+		char tmpText[64];
 
-		Font* reg = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 18);
-		Font* bld = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 16);
+		Font* sem11 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 11);
+		Font* sem16 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 16);
+		Font* reg14 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 14);
 
 		float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
 
+		float graphHeight = 100;
+
 		#ifdef PROFILER_ENABLE
-		const ProfilerSample* frames = Profiler::Frames();
 		const uint32_t pointCount = PROFILER_FRAME_COUNT - 1;
+
 		float2 points[pointCount];
 		float m = 0;
 		for (uint32_t i = 0; i < pointCount; i++) {
+			points[i].y = (mSnapshotPerformance ? mProfilerFrames[i] : Profiler::Frames()[(i + Profiler::CurrentFrameIndex() + 2) % PROFILER_FRAME_COUNT]).mDuration.count() * 1e-6f;
 			points[i].x = (float)i / (pointCount - 1.f);
-			points[i].y = frames[(i + Profiler::CurrentFrameIndex() + 2) % PROFILER_FRAME_COUNT].mDuration.count() * 1e-6;
 			m = fmaxf(points[i].y, m);
 		}
 		m = fmaxf(m, 5.f) + 3.f;
 		for (uint32_t i = 0; i < pointCount; i++)
 			points[i].y /= m;
 
-		DrawScreenRect(commandBuffer, camera, float2(0, 0), float2(s.x, 100), float4(.1f, .1f, .1f, 1));
+		DrawScreenRect(commandBuffer, camera, float2(0, 0), float2(s.x, graphHeight), float4(.1f, .1f, .1f, 1));
+		DrawScreenRect(commandBuffer, camera, float2(0, graphHeight - 1), float2(s.x, 2), float4(.2f, .2f, .2f, 1));
 
-		// Draw performance graph
-		{
-			GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/line.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
-			if (!shader) return;
-			VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
-			if (!layout) return;
+		snprintf(tmpText, 64, "%.1fms", m);
+		sem11->DrawScreenString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight - 10), 11.f);
 
-			float4 color(.2f, 1.f, .2f, 1.f);
-			float4 st(s.x, 100, 0, 0);
-			float4 sz(0, 0, s);
-
-			Buffer* b = commandBuffer->Device()->GetTempBuffer("Perf Graph Pts", sizeof(float2) * pointCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			memcpy(b->MappedData(), points, sizeof(float2) * pointCount);
-			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Perf Graph DS", shader->mDescriptorSetLayouts[PER_OBJECT]);
-			ds->CreateStorageBufferDescriptor(b, 0, sizeof(float2) * pointCount, INSTANCE_BUFFER_BINDING);
-			ds->FlushWrites();
-
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
-
-			commandBuffer->PushConstant(shader, "Color", &color);
-			commandBuffer->PushConstant(shader, "ScaleTranslate", &st);
-			commandBuffer->PushConstant(shader, "Bounds", &sz);
-			commandBuffer->PushConstant(shader, "ScreenSize", &sz.z);
-			vkCmdDraw(*commandBuffer, pointCount, 1, 0, 0);
+		for (float i = 1; i < 3; i++) {
+			float x = m * i / 3.f;
+			snprintf(tmpText, 32, "%.1fms", x);
+			DrawScreenRect(commandBuffer, camera, float2(0, graphHeight * (i / 3.f) - 1), float2(s.x, 1), float4(.2f, .2f, .2f, 1));
+			sem11->DrawScreenString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 		}
 
-		snprintf(tmpText, 32, "%.1fms (%.1ffps)", m, 1000.f / m);
-		bld->DrawScreenString(commandBuffer, camera, tmpText, 1.f, float2(2, 100), 16.f, Minimum, Maximum);
+		DrawScreenLine(commandBuffer, camera, points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
+
+		if (mSnapshotPerformance) {
+			float2 c = mInput->CursorPos();
+			c.y = s.y - c.y;
+
+			if (c.y < 100) {
+				uint32_t hvr = (uint32_t)((c.x / s.x) * (PROFILER_FRAME_COUNT - 2) + .5f);
+				DrawScreenRect(commandBuffer, camera, float2(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), float4(1, 1, 1, .15f));
+				if (mInput->KeyDown(MOUSE_LEFT))
+					mSelectedFrame = hvr;
+			}
+
+			if (mSelectedFrame < PROFILER_FRAME_COUNT - 1) {
+				ProfilerSample* selected = nullptr;
+				float sampleHeight = 20;
+
+				// selection line
+				DrawScreenRect(commandBuffer, camera, float2(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), 1);
+
+				float id = 1.f / (float)mProfilerFrames[mSelectedFrame].mDuration.count();
+
+				queue<pair<ProfilerSample*, uint32_t>> samples;
+				samples.push(make_pair(mProfilerFrames + mSelectedFrame, 0));
+				while (samples.size()) {
+					auto p = samples.front();
+					samples.pop();
+
+					float2 pos(s.x * (p.first->mStartTime - mProfilerFrames[mSelectedFrame].mStartTime).count() * id, graphHeight + 20 + sampleHeight * p.second);
+					float2 size(s.x * (float)p.first->mDuration.count() * id, sampleHeight);
+					float4 col(0, 0, 0, 1);
+
+					if (c.x > pos.x&& c.y > pos.y && c.x < pos.x + size.x && c.y < pos.y + size.y) {
+						selected = p.first;
+						col.rgb = 1;
+					}
+
+					DrawScreenRect(commandBuffer, camera, pos, size, col);
+					DrawScreenRect(commandBuffer, camera, pos + 1, size - 2, float4(.3f, .9f, .3f, 1));
+
+					for (auto it = p.first->mChildren.begin(); it != p.first->mChildren.end(); it++)
+						samples.push(make_pair(&*it, p.second + 1));
+				}
+
+				if (selected) {
+					snprintf(tmpText, 64, "%s: %.2fms\n", selected->mLabel, selected->mDuration.count() * 1e-6f);
+					DrawScreenRect(commandBuffer, camera, float2(0, graphHeight), float2(s.x, 20), float4(0,0,0,.8f));
+					reg14->DrawScreenString(commandBuffer, camera, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
+				}
+			}
+
+		}
 		#endif
 
-		snprintf(tmpText, 32, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
-		bld->DrawScreenString(commandBuffer, camera, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+		snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+		sem16->DrawScreenString(commandBuffer, camera, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 	}
 }

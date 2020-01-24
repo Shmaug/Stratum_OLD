@@ -45,7 +45,7 @@ bool Tokenizer::Next(float& token) {
     char* buf = new char[1 + mCurrent - start];
     buf[mCurrent - start] = '\0';
     memcpy(buf, mBuffer + start, mCurrent - start);
-    token = atof(buf);
+    token = (float)atof(buf);
     delete[] buf;
 
     return true;

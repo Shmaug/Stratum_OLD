@@ -152,7 +152,6 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 
 	if (pipeline != mCurrentPipeline && mCurrentCamera == camera && mCurrentMaterial == material) return shader->mPipelineLayout;
 
-
 	Material::VariantData* data = material->GetData(pass);
 
 	if (pipeline != mCurrentPipeline) {

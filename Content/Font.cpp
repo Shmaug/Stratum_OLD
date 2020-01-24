@@ -223,14 +223,14 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 
 		float x = 0.f;
 		switch (horizontalAnchor) {
-		case Minimum:
+		case TEXT_ANCHOR_MIN:
 			lineMin = 0;
 			lineMax = 0;
 			return;
-		case Middle:
+		case TEXT_ANCHOR_MID:
 			x = (lineMax + lineMin) * .5f;
 			break;
-		case Maximum:
+		case TEXT_ANCHOR_MAX:
 			x = lineMax;
 			break;
 		}
@@ -274,13 +274,13 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 
 	float verticalOffset = 0;
 	switch (verticalAnchor) {
-	case Minimum:
+	case TEXT_ANCHOR_MIN:
 		verticalOffset = -p.y  * scale;
 		break;
-	case Middle:
+	case TEXT_ANCHOR_MID:
 		verticalOffset = (lc * (-mDescender - (mAscender - mDescender) * .5f)+ (lc - 1) * mLineSpace) * scale * .5f;
 		break;
-	case Maximum:
+	case TEXT_ANCHOR_MAX:
 		verticalOffset = 0;
 		break;
 	}

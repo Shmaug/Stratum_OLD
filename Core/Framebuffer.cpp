@@ -1,5 +1,6 @@
 #include <Core/CommandBuffer.hpp>
 #include <Core/Framebuffer.hpp>
+#include <Util/Profiler.hpp>
 
 using namespace std;
 
@@ -95,7 +96,7 @@ bool Framebuffer::UpdateBuffers() {
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
 	if (mFramebuffers[frameContextIndex] == VK_NULL_HANDLE
 		|| mDepthBuffers[frameContextIndex]->Width() != mWidth || mDepthBuffers[frameContextIndex]->Height() != mHeight) {
-
+		PROFILER_BEGIN("Create Framebuffers");
 		if (mFramebuffers[frameContextIndex] != VK_NULL_HANDLE)
 			vkDestroyFramebuffer(*mDevice, mFramebuffers[frameContextIndex], nullptr);
 
@@ -128,7 +129,7 @@ bool Framebuffer::UpdateBuffers() {
 		fb.layers = 1;
 		vkCreateFramebuffer(*mDevice, &fb, nullptr, &mFramebuffers[frameContextIndex]);
 		mDevice->SetObjectName(mFramebuffers[frameContextIndex], mName + " Framebuffer " + to_string(frameContextIndex), VK_OBJECT_TYPE_FRAMEBUFFER);
-
+		PROFILER_END;
 		return true;
 	}
 	return false;

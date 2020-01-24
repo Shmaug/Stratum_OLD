@@ -24,6 +24,8 @@ public:
 		std::vector<Buffer*> mTempBuffersInUse;
 		std::vector<DescriptorSet*> mTempDescriptorSetsInUse;
 
+		Device* mDevice;
+
 		inline FrameContext() : mFences({}), mSemaphores({}), mTempBuffers({}), mTempDescriptorSets({}), mTempBuffersInUse({}), mTempDescriptorSetsInUse({}) {};
 		ENGINE_EXPORT ~FrameContext();
 		ENGINE_EXPORT void Reset();

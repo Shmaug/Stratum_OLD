@@ -107,7 +107,7 @@ public:
 			}
 		}
 		#endif
-		
+
 		printf("Initialized.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
@@ -138,10 +138,7 @@ public:
 			mScene->Update();
 			Render();
 
-			// present windows
-			PROFILER_BEGIN("Present");
 			mInstance->AdvanceFrame();
-			PROFILER_END;
 
 			#ifdef PROFILER_ENABLE
 			Profiler::FrameEnd();

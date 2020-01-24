@@ -3,6 +3,7 @@
 #include <Core/EnginePlugin.hpp>
 #include <Scene/TextRenderer.hpp>
 #include <Input/MouseKeyboardInput.hpp>
+#include <Util/Profiler.hpp>
 
 class CameraControl : public EnginePlugin {
 public:
@@ -30,6 +31,9 @@ private:
 	std::vector<Camera*> mCameras;
 
 	bool mShowPerformance;
+	bool mSnapshotPerformance;
+	ProfilerSample mProfilerFrames[PROFILER_FRAME_COUNT - 1];
+	uint32_t mSelectedFrame;
 
 	float mFrameTimeAccum;
 	float mFps;

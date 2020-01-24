@@ -10,11 +10,12 @@
 #define PROFILER_END
 #endif
 
-#define PROFILER_FRAME_COUNT 1024
+#define PROFILER_FRAME_COUNT 512
 #define PROFILER_LABEL_SIZE 64
 
 #include <Util/Util.hpp>
 #include <chrono>
+#include <list>
 
 struct ProfilerSample {
 	char mLabel[PROFILER_LABEL_SIZE];

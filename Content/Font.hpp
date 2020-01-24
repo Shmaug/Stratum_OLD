@@ -25,7 +25,7 @@ struct TextGlyph {
 	float2 mUVSize;
 };
 enum TextAnchor {
-	Minimum, Middle, Maximum
+	TEXT_ANCHOR_MIN, TEXT_ANCHOR_MID, TEXT_ANCHOR_MAX
 };
 
 class Font : public Asset {
@@ -41,11 +41,11 @@ public:
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
 	/// Draws a string in the world
-	ENGINE_EXPORT void DrawWorldString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	ENGINE_EXPORT void DrawWorldString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN);
 	/// Draws a string on the screen, where screenPos is in pixels and (0,0) is the bottom-left of the screen
-	ENGINE_EXPORT void DrawScreenString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum);
+	ENGINE_EXPORT void DrawScreenString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN);
 	
-	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = Minimum, TextAnchor verticalAnchor = Minimum) const;
+	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN) const;
 
 	inline float PixelSize() const { return mPixelSize; };
 	inline float LineSpacing() const { return mLineSpace; };

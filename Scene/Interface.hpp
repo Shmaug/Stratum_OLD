@@ -8,3 +8,6 @@
 ENGINE_EXPORT void DrawScreenRect(CommandBuffer* commandBuffer, Camera* camera, const float2& screenPos, const float2& scale, const float4& color);
 /// Draw a rectangle in the world, "scale" units big with the bottom-left corner at screenPos
 ENGINE_EXPORT void DrawWorldRect(CommandBuffer* commandBuffer, Camera* camera, const float4x4& objectToWorld, const float2& offset, const float2& scale, const float4& color);
+
+
+ENGINE_EXPORT void DrawScreenLine(CommandBuffer* commandBuffer, Camera* camera, const float2* points, size_t pointCount, const float2& pos, const float2& size, const float4& color);

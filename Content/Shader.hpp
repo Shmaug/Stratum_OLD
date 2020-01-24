@@ -63,7 +63,7 @@ public:
 	std::unordered_map<PipelineInstance, VkPipeline> mPipelines;
 	Shader* mShader;
 
-	inline GraphicsShader() : ShaderVariant() { mShader = nullptr; }
+	inline GraphicsShader() : ShaderVariant() { mShader = nullptr; mStages[0] = {}; mStages[1] = {}; }
 	ENGINE_EXPORT VkPipeline GetPipeline(RenderPass* renderPass, const VertexInput* vertexInput,
 		VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM,

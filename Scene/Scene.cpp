@@ -442,7 +442,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		}
 		float3 sceneCenter = sceneBounds.Center();
 		float3 sceneExtent = sceneBounds.Extents();
-		float sceneExtentMax = max(max(sceneExtent.x, sceneExtent.y), sceneExtent.z) * 1.73205080757; // sqrt(3)*x
+		float sceneExtentMax = max(max(sceneExtent.x, sceneExtent.y), sceneExtent.z) * 1.73205080757f; // sqrt(3)*x
 		
 		PROFILER_BEGIN("Gather Lights");
 		uint32_t li = 0;
