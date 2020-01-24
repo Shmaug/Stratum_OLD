@@ -624,13 +624,6 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
 	PROFILER_END;
 
-	if (pass == PASS_MAIN && camera->DepthFramebuffer()) {
-		PROFILER_BEGIN("Depth Prepass");
-		BEGIN_CMD_REGION(commandBuffer, "Depth Prepass");
-		Render(commandBuffer, camera, camera->DepthFramebuffer(), PASS_DEPTH, true, mRenderList);
-		END_CMD_REGION(commandBuffer);
-		PROFILER_END;
-	}
 	Render(commandBuffer, camera, framebuffer, pass, clear, mRenderList);
 }
 
