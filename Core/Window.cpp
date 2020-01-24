@@ -334,9 +334,10 @@ void Window::CreateSwapchain(::Device* device) {
 			presentMode = availablePresentMode;
 
 	// find the preferrable number of back buffers
-	mImageCount = capabilities.minImageCount + 1;
-	if (capabilities.maxImageCount > 0 && mImageCount > capabilities.maxImageCount)
+	if (capabilities.maxImageCount > 0)
 		mImageCount = capabilities.maxImageCount;
+	else
+		mImageCount = capabilities.minImageCount;
 
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

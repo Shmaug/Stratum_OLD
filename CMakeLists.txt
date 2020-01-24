@@ -3,10 +3,6 @@ cmake_minimum_required (VERSION 2.8)
 option(ENABLE_DEBUG_LAYERS "Enable debug layers?" TRUE)
 set(STRATUM_HOME ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "Directory of Stratum")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-option(LINK_PERFTOOLS_PROFILER "Link gperftools profiler?" FALSE)
-endif()
-
 include(stratum.cmake)
 
 add_library(Engine SHARED
@@ -93,13 +89,9 @@ if(WIN32)
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
-	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-		target_link_libraries(Engine "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
-		target_link_libraries(Stratum "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
-	else()
-		target_link_libraries(Engine "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
-		target_link_libraries(Stratum "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
-	endif()
+
+	target_link_libraries(Engine "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
+	target_link_libraries(Stratum "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
 
 	if (${ENABLE_DEBUG_LAYERS})
 		target_link_libraries(Engine "$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib")
@@ -127,10 +119,6 @@ else()
 		"libz.so"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libassimp.a"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/libIrrXML.a" )
-
-	if (${LINK_PERFTOOLS_PROFILER})
-		target_compile_options(Engine PUBLIC -Wl,--no-as-needed -lprofiler -Wl,--as-needed)
-	endif()
 
 	target_link_libraries(Stratum "${PROJECT_BINARY_DIR}/bin/libEngine.so" "libvulkan.so.1")
 endif(WIN32)

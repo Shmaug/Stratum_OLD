@@ -33,6 +33,8 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 Instance::Instance(const DisplayCreateInfo& display)
 	: mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0), mWindow(nullptr), mWindowInput(nullptr), mDestroyPending(false) {
 
+	memset(const_cast<ProfilerSample*>(Profiler::Frames()), 0, sizeof(ProfilerSample)* PROFILER_FRAME_COUNT);
+
 	vector<const char*> deviceExtensions {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
@@ -204,6 +206,8 @@ Instance::Instance(const DisplayCreateInfo& display)
 	mMaxFramesInFlight = mWindow->mImageCount;
 
 	mDevice->mFrameContexts = new Device::FrameContext[mMaxFramesInFlight];
+	for (uint32_t i = 0; i < mMaxFramesInFlight; i++)
+		mDevice->mFrameContexts[i].mDevice = mDevice;
 
 	mStartTime = mClock.now();
 	mLastFrame = mClock.now();
@@ -465,13 +469,13 @@ bool Instance::PollEvents() {
 }
 
 void Instance::AdvanceFrame() {
-	uint32_t wi = 0;
+	PROFILER_BEGIN("Present");
 	vector<VkSemaphore> waitSemaphores;
 	for (const shared_ptr<Semaphore>& s : mDevice->CurrentFrameContext()->mSemaphores)
 		waitSemaphores.push_back(*s);
 	// will wait on the semaphores signalled by the frame mMaxFramesInFlight ago
 	mWindow->Present(waitSemaphores);
-	wi++;
+	PROFILER_END;
 
 	mFrameCount++;
 

@@ -8,7 +8,7 @@
 using namespace std;
 
 TextRenderer::TextRenderer(const string& name)
-	: Object(name), mVisible(true), mColor(float4(1)), mTextScale(1.f), mHorizontalAnchor(Middle), mVerticalAnchor(Middle), mShader(nullptr) {}
+	: Object(name), mVisible(true), mColor(float4(1)), mTextScale(1.f), mHorizontalAnchor(TEXT_ANCHOR_MID), mVerticalAnchor(TEXT_ANCHOR_MID), mShader(nullptr) {}
 TextRenderer::~TextRenderer() {}
 
 bool TextRenderer::UpdateTransform() {

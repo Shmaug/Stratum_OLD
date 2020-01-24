@@ -9,14 +9,19 @@
 using namespace std;
 
 void Device::FrameContext::Reset() {
-	PROFILER_BEGIN("Wait for GPU");
-	for (auto f : mFences)
-		f->Wait();
-	PROFILER_END;
-	mFences.clear();
+	if (mFences.size()) {
+		PROFILER_BEGIN("Wait for GPU");
+		vector<VkFence> fences(mFences.size());
+		for (uint32_t i = 0; i < mFences.size(); i++)
+			fences[i] = *mFences[i];
+		ThrowIfFailed(vkWaitForFences(*mDevice, fences.size(), fences.data(), true, numeric_limits<uint64_t>::max()), "vkWaitForFences failed");
+		PROFILER_END;
+	}
 
+	mFences.clear();
 	mSemaphores.clear();
 
+	PROFILER_BEGIN("Clear old buffers");
 	for (auto it = mTempBuffers.begin(); it != mTempBuffers.end();) {
 		if (it->second == 1) {
 			safe_delete(it->first);
@@ -26,6 +31,7 @@ void Device::FrameContext::Reset() {
 		it->second--;
 		it++;
 	}
+	PROFILER_END;
 
 	for (Buffer* b : mTempBuffersInUse)
 		mTempBuffers.push_back(make_pair(b, 8));

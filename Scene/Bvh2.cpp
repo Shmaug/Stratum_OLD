@@ -121,8 +121,7 @@ void Bvh2::FrustumCheck(Camera* camera, vector<Object*>& objects, uint32_t mask)
     if (mNodes.size() == 0) return;
 
     bool bbhits[2];
-    int32_t closer, other;
-
+	
     uint32_t todo[1024];
     int32_t stackptr = 0;
 

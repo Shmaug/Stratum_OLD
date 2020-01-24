@@ -29,9 +29,9 @@
 
 #define PI 3.1415926535897932384626433832795f
 
-#define rpt2(i) for (int i = 0; i < 2; i++)
-#define rpt3(i) for (int i = 0; i < 3; i++)
-#define rpt4(i) for (int i = 0; i < 4; i++)
+#define rpt2(i) for (int i = 0; i < 2; ++i)
+#define rpt3(i) for (int i = 0; i < 3; ++i)
+#define rpt4(i) for (int i = 0; i < 4; ++i)
 
 template <class T>
 inline void hash_combine(std::size_t& seed, const T& v) {
@@ -62,10 +62,10 @@ struct int2 {
 	int2(const float2& s);
 	int2(const double2& s);
 	inline int2(int32_t x, int32_t y) : x(x), y(y) {};
-	inline int2(int32_t s) { rpt2(i) v[i] = s;};
+	inline int2(const int32_t s) { rpt2(i) v[i] = s;};
 	inline int2() : int2(0) {};
 
-	inline int2 operator=(int32_t s) {
+	inline int2 operator=(const int32_t s) {
 		rpt2(i) v[i] = s;
 		return *this;
 	}
@@ -79,7 +79,7 @@ struct int2 {
 		rpt2(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline int2 operator -(int32_t s) const {
+	inline int2 operator -(const int32_t s) const {
 		int2 r;
 		rpt2(i) r.v[i] = v[i] - s;
 		return r;
@@ -89,7 +89,7 @@ struct int2 {
 		rpt2(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline int2 operator -=(int32_t s) {
+	inline int2 operator -=(const int32_t s) {
 		rpt2(i) v[i] -= s;
 		return *this;
 	}
@@ -97,13 +97,13 @@ struct int2 {
 		rpt2(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend int2 operator -(int32_t a, const int2& s) {
+	inline friend int2 operator -(const int32_t a, const int2& s) {
 		int2 r;
 		rpt2(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline int2 operator +(int32_t s) const {
+	inline int2 operator +(const int32_t s) const {
 		int2 r;
 		rpt2(i) r.v[i] = v[i] + s;
 		return r;
@@ -113,7 +113,7 @@ struct int2 {
 		rpt2(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline int2 operator +=(int32_t s) {
+	inline int2 operator +=(const int32_t s) {
 		rpt2(i) v[i] += s;
 		return *this;
 	}
@@ -121,9 +121,9 @@ struct int2 {
 		rpt2(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend int2 operator +(int32_t a, const int2& s) { return s + a; }
+	inline friend int2 operator +(const int32_t a, const int2& s) { return s + a; }
 
-	inline int2 operator *(int32_t s) const {
+	inline int2 operator *(const int32_t s) const {
 		int2 r;
 		rpt2(i) r.v[i] = v[i] * s;
 		return r;
@@ -133,7 +133,7 @@ struct int2 {
 		rpt2(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline int2 operator *=(int32_t s) {
+	inline int2 operator *=(const int32_t s) {
 		rpt2(i) v[i] *= s;
 		return *this;
 	}
@@ -141,14 +141,14 @@ struct int2 {
 		rpt2(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend int2 operator *(int32_t a, const int2& s) { return s * a; }
+	inline friend int2 operator *(const int32_t a, const int2& s) { return s * a; }
 
-	inline friend int2 operator /(int32_t a, const int2& s) {
+	inline friend int2 operator /(const int32_t a, const int2& s) {
 		int2 r;
 		rpt2(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline int2 operator /(int32_t s) const {
+	inline int2 operator /(const int32_t s) const {
 		int2 r;
 		rpt2(i) r.v[i] = v[i] / s;
 		return r;
@@ -158,7 +158,7 @@ struct int2 {
 		rpt2(i) r.v[i] = v[i] / s.v[i];
 		return r;
 	}
-	inline int2 operator /=(int32_t s) {
+	inline int2 operator /=(const int32_t s) {
 		rpt2(i) v[i] /= s;
 		return *this;
 	}
@@ -167,7 +167,7 @@ struct int2 {
 		return *this;
 	}
 
-	inline int2 operator %(int32_t s) {
+	inline int2 operator %(const int32_t s) {
 		int2 r;
 		rpt2(i) r.v[i] = v[i] % s;
 		return r;
@@ -210,10 +210,10 @@ struct int3 {
 	int3(const double3& s);
 	inline int3(const int2& v, int32_t z) : x(v.x), y(v.y), z(z) {};
 	inline int3(int32_t x, int32_t y, int32_t z) : x(x), y(y), z(z) {};
-	inline int3(int32_t s) { rpt3(i) v[i] = s;};
+	inline int3(const int32_t s) { rpt3(i) v[i] = s;};
 	inline int3() : int3(0) {};
 
-	inline int3 operator=(int32_t s) {
+	inline int3 operator=(const int32_t s) {
 		rpt3(i) v[i] = s;
 		return *this;
 	}
@@ -227,7 +227,7 @@ struct int3 {
 		rpt3(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline int3 operator -(int32_t s) const {
+	inline int3 operator -(const int32_t s) const {
 		int3 r;
 		rpt3(i) r.v[i] = v[i] - s;
 		return r;
@@ -237,7 +237,7 @@ struct int3 {
 		rpt3(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline int3 operator -=(int32_t s) {
+	inline int3 operator -=(const int32_t s) {
 		rpt3(i) v[i] -= s;
 		return *this;
 	}
@@ -245,13 +245,13 @@ struct int3 {
 		rpt3(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend int3 operator -(int32_t a, const int3& s) {
+	inline friend int3 operator -(const int32_t a, const int3& s) {
 		int3 r;
 		rpt3(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline int3 operator +(int32_t s) const {
+	inline int3 operator +(const int32_t s) const {
 		int3 r;
 		rpt3(i) r.v[i] = v[i] + s;
 		return r;
@@ -261,7 +261,7 @@ struct int3 {
 		rpt3(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline int3 operator +=(int32_t s) {
+	inline int3 operator +=(const int32_t s) {
 		rpt3(i) v[i] += s;
 		return *this;
 	}
@@ -269,9 +269,9 @@ struct int3 {
 		rpt3(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend int3 operator +(int32_t a, const int3& s) { return s + a; }
+	inline friend int3 operator +(const int32_t a, const int3& s) { return s + a; }
 
-	inline int3 operator *(int32_t s) const {
+	inline int3 operator *(const int32_t s) const {
 		int3 r;
 		rpt3(i) r.v[i] = v[i] * s;
 		return r;
@@ -281,7 +281,7 @@ struct int3 {
 		rpt3(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline int3 operator *=(int32_t s) {
+	inline int3 operator *=(const int32_t s) {
 		rpt3(i) v[i] *= s;
 		return *this;
 	}
@@ -289,14 +289,14 @@ struct int3 {
 		rpt3(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend int3 operator *(int32_t a, const int3& s) { return s * a; }
+	inline friend int3 operator *(const int32_t a, const int3& s) { return s * a; }
 
-	inline friend int3 operator /(int32_t a, const int3& s) {
+	inline friend int3 operator /(const int32_t a, const int3& s) {
 		int3 r;
 		rpt3(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline int3 operator /(int32_t s) const {
+	inline int3 operator /(const int32_t s) const {
 		int3 r;
 		rpt3(i) r.v[i] = v[i] / s;
 		return r;
@@ -306,7 +306,7 @@ struct int3 {
 		rpt3(i) r.v[i] = v[i] / s.v[i];
 		return r;
 	}
-	inline int3 operator /=(int32_t s) {
+	inline int3 operator /=(const int32_t s) {
 		rpt3(i) v[i] /= s;
 		return *this;
 	}
@@ -315,7 +315,7 @@ struct int3 {
 		return *this;
 	}
 
-	inline int3 operator %(int32_t s) {
+	inline int3 operator %(const int32_t s) {
 		int3 r;
 		rpt3(i) r.v[i] = v[i] % s;
 		return r;
@@ -362,10 +362,10 @@ struct int4 {
 	inline int4(const int3& v, int32_t w) : x(v.x), y(v.y), z(v.z), w(w) {};
 	inline int4(const int2& v, int32_t z, int32_t w) : x(v.x), y(v.y), z(z), w(w) {};
 	inline int4(int32_t x, int32_t y, int32_t z, int32_t w) : x(x), y(y), z(z), w(w) {};
-	inline int4(int32_t s) { rpt4(i) v[i] = s;};
+	inline int4(const int32_t s) { rpt4(i) v[i] = s;};
 	inline int4() : int4(0) {};
 
-	inline int4 operator=(int32_t s) {
+	inline int4 operator=(const int32_t s) {
 		rpt4(i) v[i] = s;
 		return *this;
 	}
@@ -379,7 +379,7 @@ struct int4 {
 		rpt4(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline int4 operator -(int32_t s) const {
+	inline int4 operator -(const int32_t s) const {
 		int4 r;
 		rpt4(i) r.v[i] = v[i] - s;
 		return r;
@@ -389,7 +389,7 @@ struct int4 {
 		rpt4(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline int4 operator -=(int32_t s) {
+	inline int4 operator -=(const int32_t s) {
 		rpt4(i) v[i] -= s;
 		return *this;
 	}
@@ -397,13 +397,13 @@ struct int4 {
 		rpt4(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend int4 operator -(int32_t a, const int4& s) {
+	inline friend int4 operator -(const int32_t a, const int4& s) {
 		int4 r;
 		rpt4(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline int4 operator +(int32_t s) const {
+	inline int4 operator +(const int32_t s) const {
 		int4 r;
 		rpt4(i) r.v[i] = v[i] + s;
 		return r;
@@ -413,7 +413,7 @@ struct int4 {
 		rpt4(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline int4 operator +=(int32_t s) {
+	inline int4 operator +=(const int32_t s) {
 		rpt4(i) v[i] += s;
 		return *this;
 	}
@@ -421,9 +421,9 @@ struct int4 {
 		rpt4(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend int4 operator +(int32_t a, const int4& s) { return s + a; }
+	inline friend int4 operator +(const int32_t a, const int4& s) { return s + a; }
 
-	inline int4 operator *(int32_t s) const {
+	inline int4 operator *(const int32_t s) const {
 		int4 r;
 		rpt4(i) r.v[i] = v[i] * s;
 		return r;
@@ -433,7 +433,7 @@ struct int4 {
 		rpt4(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline int4 operator *=(int32_t s) {
+	inline int4 operator *=(const int32_t s) {
 		rpt4(i) v[i] *= s;
 		return *this;
 	}
@@ -441,14 +441,14 @@ struct int4 {
 		rpt4(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend int4 operator *(int32_t a, const int4& s) { return s * a; }
+	inline friend int4 operator *(const int32_t a, const int4& s) { return s * a; }
 
-	inline friend int4 operator /(int32_t a, const int4& s) {
+	inline friend int4 operator /(const int32_t a, const int4& s) {
 		int4 r;
 		rpt4(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline int4 operator /(int32_t s) const {
+	inline int4 operator /(const int32_t s) const {
 		int4 r;
 		rpt4(i) r.v[i] = v[i] / s;
 		return r;
@@ -458,7 +458,7 @@ struct int4 {
 		rpt4(i) r.v[i] = v[i] / s.v[i];
 		return r;
 	}
-	inline int4 operator /=(int32_t s) {
+	inline int4 operator /=(const int32_t s) {
 		rpt4(i) v[i] /= s;
 		return *this;
 	}
@@ -467,7 +467,7 @@ struct int4 {
 		return *this;
 	}
 
-	inline int4 operator %(int32_t s) {
+	inline int4 operator %(const int32_t s) {
 		int4 r;
 		rpt4(i) r.v[i] = v[i] % s;
 		return r;
@@ -538,7 +538,7 @@ struct uint2 {
 		rpt2(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend uint2 operator -(uint32_t a, const uint2& s) {
+	inline friend uint2 operator -(const uint32_t a, const uint2& s) {
 		uint2 r;
 		rpt2(i) r.v[i] = a - s.v[i];
 		return r;
@@ -562,7 +562,7 @@ struct uint2 {
 		rpt2(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend uint2 operator +(uint32_t a, const uint2& s) { return s + a; }
+	inline friend uint2 operator +(const uint32_t a, const uint2& s) { return s + a; }
 
 	inline uint2 operator *(uint32_t s) const {
 		uint2 r;
@@ -582,9 +582,9 @@ struct uint2 {
 		rpt2(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend uint2 operator *(uint32_t a, const uint2& s) { return s * a; }
+	inline friend uint2 operator *(const uint32_t a, const uint2& s) { return s * a; }
 
-	inline friend uint2 operator /(uint32_t a, const uint2& s) {
+	inline friend uint2 operator /(const uint32_t a, const uint2& s) {
 		uint2 r;
 		rpt2(i) r.v[i] = a / s.v[i];
 		return r;
@@ -681,7 +681,7 @@ struct uint3 {
 		rpt3(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend uint3 operator -(uint32_t a, const uint3& s) {
+	inline friend uint3 operator -(const uint32_t a, const uint3& s) {
 		uint3 r;
 		rpt3(i) r.v[i] = a - s.v[i];
 		return r;
@@ -705,7 +705,7 @@ struct uint3 {
 		rpt3(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend uint3 operator +(uint32_t a, const uint3& s) { return s + a; }
+	inline friend uint3 operator +(const uint32_t a, const uint3& s) { return s + a; }
 
 	inline uint3 operator *(uint32_t s) const {
 		uint3 r;
@@ -725,9 +725,9 @@ struct uint3 {
 		rpt3(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend uint3 operator *(uint32_t a, const uint3& s) { return s * a; }
+	inline friend uint3 operator *(const uint32_t a, const uint3& s) { return s * a; }
 
-	inline friend uint3 operator /(uint32_t a, const uint3& s) {
+	inline friend uint3 operator /(const uint32_t a, const uint3& s) {
 		uint3 r;
 		rpt3(i) r.v[i] = a / s.v[i];
 		return r;
@@ -828,7 +828,7 @@ struct uint4 {
 		rpt4(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend uint4 operator -(uint32_t a, const uint4& s) {
+	inline friend uint4 operator -(const uint32_t a, const uint4& s) {
 		uint4 r;
 		rpt4(i) r.v[i] = a - s.v[i];
 		return r;
@@ -852,7 +852,7 @@ struct uint4 {
 		rpt4(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend uint4 operator +(uint32_t a, const uint4& s) { return s + a; }
+	inline friend uint4 operator +(const uint32_t a, const uint4& s) { return s + a; }
 
 	inline uint4 operator *(uint32_t s) const {
 		uint4 r;
@@ -872,9 +872,9 @@ struct uint4 {
 		rpt4(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend uint4 operator *(uint32_t a, const uint4& s) { return s * a; }
+	inline friend uint4 operator *(const uint32_t a, const uint4& s) { return s * a; }
 
-	inline friend uint4 operator /(uint32_t a, const uint4& s) {
+	inline friend uint4 operator /(const uint32_t a, const uint4& s) {
 		uint4 r;
 		rpt4(i) r.v[i] = a / s.v[i];
 		return r;
@@ -939,7 +939,7 @@ struct float2 {
 	inline float2(const int2& s) { rpt2(i) v[i] = (float)s.v[i]; };
 	float2(const double2& s);
 	inline float2(float x, float y) : x(x), y(y) {};
-	inline float2(float s) { rpt2(i) v[i] = s;};
+	inline float2(const float s) { rpt2(i) v[i] = s;};
 	inline float2() : float2(0) {};
 
 	inline float2 operator=(float s) {
@@ -956,7 +956,7 @@ struct float2 {
 		rpt2(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline float2 operator -(float s) const {
+	inline float2 operator -(const float s) const {
 		float2 r;
 		rpt2(i) r.v[i] = v[i] - s;
 		return r;
@@ -966,7 +966,7 @@ struct float2 {
 		rpt2(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline float2 operator -=(float s) {
+	inline float2 operator -=(const float s) {
 		rpt2(i) v[i] -= s;
 		return *this;
 	}
@@ -974,13 +974,13 @@ struct float2 {
 		rpt2(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend float2 operator -(float a, const float2& s) {
+	inline friend float2 operator -(const float a, const float2& s) {
 		float2 r;
 		rpt2(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline float2 operator +(float s) const {
+	inline float2 operator +(const float s) const {
 		float2 r;
 		rpt2(i) r.v[i] = v[i] + s;
 		return r;
@@ -990,7 +990,7 @@ struct float2 {
 		rpt2(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline float2 operator +=(float s) {
+	inline float2 operator +=(const float s) {
 		rpt2(i) v[i] += s;
 		return *this;
 	}
@@ -998,9 +998,9 @@ struct float2 {
 		rpt2(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend float2 operator +(float a, const float2& s) { return s + a; }
+	inline friend float2 operator +(const float a, const float2& s) { return s + a; }
 
-	inline float2 operator *(float s) const {
+	inline float2 operator *(const float s) const {
 		float2 r;
 		rpt2(i) r.v[i] = v[i] * s;
 		return r;
@@ -1010,7 +1010,7 @@ struct float2 {
 		rpt2(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline float2 operator *=(float s) {
+	inline float2 operator *=(const float s) {
 		rpt2(i) v[i] *= s;
 		return *this;
 	}
@@ -1018,16 +1018,16 @@ struct float2 {
 		rpt2(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend float2 operator *(float a, const float2& s) { return s * a; }
+	inline friend float2 operator *(const float a, const float2& s) { return s * a; }
 
-	inline friend float2 operator /(float a, const float2& s) {
+	inline friend float2 operator /(const float a, const float2& s) {
 		float2 r;
 		rpt2(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline float2 operator /(float s) const { return operator*(1.f / s); }
+	inline float2 operator /(const float s) const { return operator*(1.f / s); }
 	inline float2 operator /(const float2& s) const { return operator*(1.f / s); }
-	inline float2 operator /=(float s) { return operator*=(1.f / s); }
+	inline float2 operator /=(const float s) { return operator*=(1.f / s); }
 	inline float2 operator /=(const float2& v) { return operator*=(1.f / v); }
 
 	inline float& operator[](int i) {
@@ -1057,11 +1057,12 @@ struct float3 {
 	inline float3(const float2& v, float z) : x(v.x), y(v.y), z(z) {};
 	inline float3(float x, const float2& v) : x(x), y(v.x), z(v.y) {};
 	float3(const double3& s);
+	float3(const float2& s);
 	inline float3(float x, float y, float z) : x(x), y(y), z(z) {};
-	inline float3(float s) { rpt3(i) v[i] = s;};
+	inline float3(const float s) { rpt3(i) v[i] = s;};
 	inline float3() : float3(0) {};
 
-	inline float3 operator=(float s) {
+	inline float3 operator=(const float s) {
 		rpt3(i) v[i] = s;
 		return *this;
 	}
@@ -1075,7 +1076,7 @@ struct float3 {
 		rpt3(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline float3 operator -(float s) const {
+	inline float3 operator -(const float s) const {
 		float3 r;
 		rpt3(i) r.v[i] = v[i] - s;
 		return r;
@@ -1085,7 +1086,7 @@ struct float3 {
 		rpt3(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline float3 operator -=(float s) {
+	inline float3 operator -=(const float s) {
 		rpt3(i) v[i] -= s;
 		return *this;
 	}
@@ -1093,13 +1094,13 @@ struct float3 {
 		rpt3(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend float3 operator -(float a, const float3& s) {
+	inline friend float3 operator -(const float a, const float3& s) {
 		float3 r;
 		rpt3(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline float3 operator +(float s) const {
+	inline float3 operator +(const float s) const {
 		float3 r;
 		rpt3(i) r.v[i] = v[i] + s;
 		return r;
@@ -1109,7 +1110,7 @@ struct float3 {
 		rpt3(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline float3 operator +=(float s) {
+	inline float3 operator +=(const float s) {
 		rpt3(i) v[i] += s;
 		return *this;
 	}
@@ -1117,9 +1118,9 @@ struct float3 {
 		rpt3(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend float3 operator +(float a, const float3& s) { return s + a; }
+	inline friend float3 operator +(const float a, const float3& s) { return s + a; }
 
-	inline float3 operator *(float s) const {
+	inline float3 operator *(const float s) const {
 		float3 r;
 		rpt3(i) r.v[i] = v[i] * s;
 		return r;
@@ -1129,7 +1130,7 @@ struct float3 {
 		rpt3(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline float3 operator *=(float s) {
+	inline float3 operator *=(const float s) {
 		rpt3(i) v[i] *= s;
 		return *this;
 	}
@@ -1137,16 +1138,16 @@ struct float3 {
 		rpt3(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend float3 operator *(float a, const float3& s) { return s * a; }
+	inline friend float3 operator *(const float a, const float3& s) { return s * a; }
 
-	inline friend float3 operator /(float a, const float3& s) {
+	inline friend float3 operator /(const float a, const float3& s) {
 		float3 r;
 		rpt3(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline float3 operator /(float s) const { return operator*(1.f / s); }
+	inline float3 operator /(const float s) const { return operator*(1.f / s); }
 	inline float3 operator /(const float3& s) const { return operator*(1.f / s); }
-	inline float3 operator /=(float s) { return operator*=(1.f / s); }
+	inline float3 operator /=(const float s) { return operator*=(1.f / s); }
 	inline float3 operator /=(const float3& v) { return operator*=(1.f / v); }
 
 	inline float& operator[](int i) {
@@ -1177,15 +1178,17 @@ struct float4 {
 	inline float4(const int4& s) { rpt4(i) v[i] = (float)s.v[i]; };
 	inline float4(const float2& v0, const float2& v1) : x(v0.x), y(v0.y), z(v1.x), w(v1.y) {};
 	float4(const double4& s);
+	float4(const float2& s);
+	float4(const float3& s);
 	inline float4(const float3& v, float w) : x(v.x), y(v.y), z(v.z), w(w) {};
 	inline float4(float x, const float3& v) : x(x), y(v.x), z(v.y), w(v.z) {};
 	inline float4(float x, float y, const float2& v) : x(x), y(y), z(v.x), w(v.y) {};
 	inline float4(const float2& v, float z, float w) : x(v.x), y(v.y), z(z), w(w) {};
 	inline float4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {};
-	inline float4(float s) { rpt4(i) v[i] = s;};
+	inline float4(const float s) { rpt4(i) v[i] = s;};
 	inline float4() : float4(0) {};
 
-	inline float4 operator=(float s) {
+	inline float4 operator=(const float s) {
 		rpt4(i) v[i] = s;
 		return *this;
 	}
@@ -1199,7 +1202,7 @@ struct float4 {
 		rpt4(i) r.v[i] = -v[i];
 		return r;
 	}
-	inline float4 operator -(float s) const {
+	inline float4 operator -(const float s) const {
 		float4 r;
 		rpt4(i) r.v[i] = v[i] - s;
 		return r;
@@ -1209,7 +1212,7 @@ struct float4 {
 		rpt4(i) r.v[i] = v[i] - s.v[i];
 		return r;
 	}
-	inline float4 operator -=(float s) {
+	inline float4 operator -=(const float s) {
 		rpt4(i) v[i] -= s;
 		return *this;
 	}
@@ -1217,13 +1220,13 @@ struct float4 {
 		rpt4(i) v[i] -= s.v[i];
 		return *this;
 	}
-	inline friend float4 operator -(float a, const float4& s) {
+	inline friend float4 operator -(const float a, const float4& s) {
 		float4 r;
 		rpt4(i) r.v[i] = a - s.v[i];
 		return r;
 	}
 
-	inline float4 operator +(float s) const {
+	inline float4 operator +(const float s) const {
 		float4 r;
 		rpt4(i) r.v[i] = v[i] + s;
 		return r;
@@ -1233,7 +1236,7 @@ struct float4 {
 		rpt4(i) r.v[i] = v[i] + s.v[i];
 		return r;
 	}
-	inline float4 operator +=(float s) {
+	inline float4 operator +=(const float s) {
 		rpt4(i) v[i] += s;
 		return *this;
 	}
@@ -1241,9 +1244,9 @@ struct float4 {
 		rpt4(i) v[i] += s.v[i];
 		return *this;
 	}
-	inline friend float4 operator +(float a, const float4& s) { return s + a; }
+	inline friend float4 operator +(const float a, const float4& s) { return s + a; }
 
-	inline float4 operator *(float s) const {
+	inline float4 operator *(const float s) const {
 		float4 r;
 		rpt4(i) r.v[i] = v[i] * s;
 		return r;
@@ -1253,7 +1256,7 @@ struct float4 {
 		rpt4(i) r.v[i] = v[i] * s.v[i];
 		return r;
 	}
-	inline float4 operator *=(float s) {
+	inline float4 operator *=(const float s) {
 		rpt4(i) v[i] *= s;
 		return *this;
 	}
@@ -1261,16 +1264,16 @@ struct float4 {
 		rpt4(i) v[i] *= s.v[i];
 		return *this;
 	}
-	inline friend float4 operator *(float a, const float4& s) { return s * a; }
+	inline friend float4 operator *(const float a, const float4& s) { return s * a; }
 
-	inline friend float4 operator /(float a, const float4& s) {
+	inline friend float4 operator /(const float a, const float4& s) {
 		float4 r;
 		rpt4(i) r.v[i] = a / s.v[i];
 		return r;
 	}
-	inline float4 operator /(float s) const { return operator*(1.f / s); }
+	inline float4 operator /(const float s) const { return operator*(1.f / s); }
 	inline float4 operator /(const float4& s) const { return operator*(1.f / s); }
-	inline float4 operator /=(float s) { return operator*=(1.f / s); }
+	inline float4 operator /=(const float s) { return operator*=(1.f / s); }
 	inline float4 operator /=(const float4& v) { return operator*=(1.f / v); }
 
 	inline float& operator[](int i) {
@@ -1418,6 +1421,7 @@ struct double3 {
 	inline double3(double x, const double2& v) : x(x), y(v.x), z(v.y) {};
 	inline double3(double x, double y, double z) : x(x), y(y), z(z) {};
 	inline double3(double s) { rpt3(i) v[i] = s;};
+	inline double3(const double2& v);
 	inline double3() : double3(0) {};
 
 	inline double3 operator=(double s) {
@@ -1542,6 +1546,8 @@ struct double4 {
 	inline double4(const double2& v, double z, double w) : x(v.x), y(v.y), z(z), w(w) {};
 	inline double4(double x, double y, double z, double w) : x(x), y(y), z(z), w(w) {};
 	inline double4(double s) { rpt4(i) v[i] = s;};
+	double4(const double2& s);
+	double4(const double3& s);
 	inline double4() : double4(0) {};
 
 	inline double4 operator=(double s) {
@@ -1669,6 +1675,14 @@ inline uint4::uint4(const double4& s) { rpt4(i) v[i] = (uint32_t)s.v[i]; }
 inline float2::float2(const double2& s) { rpt2(i) v[i] = (float)s.v[i]; }
 inline float3::float3(const double3& s) { rpt3(i) v[i] = (float)s.v[i]; }
 inline float4::float4(const double4& s) { rpt4(i) v[i] = (float)s.v[i]; }
+
+inline float3::float3(const float2& s) { rpt2(i) v[i] = s.v[i]; z = 0; }
+inline float4::float4(const float2& s) { rpt2(i) v[i] = s.v[i]; z = w = 0; }
+inline float4::float4(const float3& s) { rpt3(i) v[i] = s.v[i]; w = 0; }
+
+inline double3::double3(const double2& s) { rpt2(i) v[i] = s.v[i]; z = 0; }
+inline double4::double4(const double2& s) { rpt2(i) v[i] = s.v[i]; z = w = 0; }
+inline double4::double4(const double3& s) { rpt3(i) v[i] = s.v[i]; w = 0; }
 #pragma pack(pop)
 
 #pragma region trigonometry
@@ -1821,31 +1835,31 @@ inline double4 degrees(const double4& r) {
 
 inline float2 pow(const float2& a, const float2& b) {
 	float2 r;
-	rpt2(i) r.v[i] = powf(a.v[i], b[i]);
+	rpt2(i) r.v[i] = powf(a.v[i], b.v[i]);
 	return r;
 }
 inline float3 pow(const float3& a, const float3& b) {
 	float3 r;
-	rpt3(i) r.v[i] = powf(a.v[i], b[i]);
+	rpt3(i) r.v[i] = powf(a.v[i], b.v[i]);
 	return r;
 }
 inline float4 pow(const float4& a, const float4& b) {
 	float4 r;
-	rpt4(i) r.v[i] = powf(a.v[i], b[i]);
+	rpt4(i) r.v[i] = powf(a.v[i], b.v[i]);
 	return r;
 }
 
-inline float2 pow(const float2& a, float b) {
+inline float2 pow(const float2& a, const float b) {
 	float2 r;
 	rpt2(i) r.v[i] = powf(a.v[i], b);
 	return r;
 }
-inline float3 pow(const float3& a, float b) {
+inline float3 pow(const float3& a, const float b) {
 	float3 r;
 	rpt3(i) r.v[i] = powf(a.v[i], b);
 	return r;
 }
-inline float4 pow(const float4& a, float b) {
+inline float4 pow(const float4& a, const float b) {
 	float4 r;
 	rpt4(i) r.v[i] = powf(a.v[i], b);
 	return r;
@@ -1853,31 +1867,31 @@ inline float4 pow(const float4& a, float b) {
 
 inline double2 pow(const double2& a, const double2& b) {
 	double2 r;
-	rpt2(i) r.v[i] = pow(a.v[i], b[i]);
+	rpt2(i) r.v[i] = pow(a.v[i], b.v[i]);
 	return r;
 }
 inline double3 pow(const double3& a, const double3& b) {
 	double3 r;
-	rpt3(i) r.v[i] = pow(a.v[i], b[i]);
+	rpt3(i) r.v[i] = pow(a.v[i], b.v[i]);
 	return r;
 }
 inline double4 pow(const double4& a, const double4& b) {
 	double4 r;
-	rpt4(i) r.v[i] = pow(a.v[i], b[i]);
+	rpt4(i) r.v[i] = pow(a.v[i], b.v[i]);
 	return r;
 }
 
-inline double2 pow(const double2& a, float b) {
+inline double2 pow(const double2& a, const float b) {
 	double2 r;
 	rpt2(i) r.v[i] = pow(a.v[i], b);
 	return r;
 }
-inline double3 pow(const double3& a, float b) {
+inline double3 pow(const double3& a, const float b) {
 	double3 r;
 	rpt3(i) r.v[i] = pow(a.v[i], b);
 	return r;
 }
-inline double4 pow(const double4& a, float b) {
+inline double4 pow(const double4& a, const float b) {
 	double4 r;
 	rpt4(i) r.v[i] = pow(a.v[i], b);
 	return r;
@@ -1885,65 +1899,77 @@ inline double4 pow(const double4& a, float b) {
 
 inline uint32_t dot(const uint2& a, const uint2& b) {
 	uint32_t r = 0;
-	rpt2(i) r += a.v[i] * b.v[i];
+	uint2 m = a * b;
+	rpt2(i) r += m.v[i];
 	return r;
 }
 inline uint32_t dot(const uint3& a, const uint3& b) {
 	uint32_t r = 0;
-	rpt3(i) r += a.v[i] * b.v[i];
+	uint3 m = a * b;
+	rpt3(i) r += m.v[i];
 	return r;
 }
 inline uint32_t dot(const uint4& a, const uint4& b) {
 	uint32_t r = 0;
-	rpt4(i) r += a.v[i] * b.v[i];
+	uint4 m = a * b;
+	rpt4(i) r += m.v[i];
 	return r;
 }
 
 inline int32_t dot(const int2& a, const int2& b) {
 	int32_t r = 0;
-	rpt2(i) r += a.v[i] * b.v[i];
+	int2 m = a * b;
+	rpt2(i) r += m.v[i];
 	return r;
 }
 inline int32_t dot(const int3& a, const int3& b) {
 	int32_t r = 0;
-	rpt3(i) r += a.v[i] * b.v[i];
+	int3 m = a * b;
+	rpt3(i) r += m.v[i];
 	return r;
 }
 inline int32_t dot(const int4& a, const int4& b) {
 	int32_t r = 0;
-	rpt4(i) r += a.v[i] * b.v[i];
+	int4 m = a * b;
+	rpt4(i) r += m.v[i];
 	return r;
 }
 
 inline float dot(const float2& a, const float2& b) {
 	float r = 0;
-	rpt2(i) r += a.v[i] * b.v[i];
+	float2 m = a * b;
+	rpt2(i) r += m.v[i];
 	return r;
 }
 inline float dot(const float3& a, const float3& b) {
 	float r = 0;
-	rpt3(i) r += a.v[i] * b.v[i];
+	float3 m = a * b;
+	rpt3(i) r += m.v[i];
 	return r;
 }
 inline float dot(const float4& a, const float4& b) {
 	float r = 0;
-	rpt4(i) r += a.v[i] * b.v[i];
+	float4 m = a * b;
+	rpt4(i) r += m.v[i];
 	return r;
 }
 
 inline double dot(const double2& a, const double2& b) {
 	double r = 0;
-	rpt2(i) r += a.v[i] * b.v[i];
+	double2 m = a * b;
+	rpt2(i) r += m.v[i];
 	return r;
 }
 inline double dot(const double3& a, const double3& b) {
 	double r = 0;
-	rpt3(i) r += a.v[i] * b.v[i];
+	double3 m = a * b;
+	rpt3(i) r += m.v[i];
 	return r;
 }
 inline double dot(const double4& a, const double4& b) {
 	double r = 0;
-	rpt4(i) r += a.v[i] * b.v[i];
+	double4 m = a * b;
+	rpt4(i) r += m.v[i];
 	return r;
 }
 
@@ -2097,18 +2123,18 @@ struct quaternion {
 		return *this;
 	}
 
-	inline quaternion operator *(float s) const {
+	inline quaternion operator *(const float s) const {
 		quaternion r;
 		rpt4(i) r.v[i] = v[i] * s;
 		return r;
 	}
-	inline quaternion operator *=(float s) {
+	inline quaternion operator *=(const float s) {
 		rpt4(i) v[i] *= s;
 		return *this;
 	}
 
-	inline quaternion operator /(float s) const { return operator*(1.f / s); }
-	inline quaternion operator /=(float s) { return operator*=(1.f / s); }
+	inline quaternion operator /(const float s) const { return operator*(1.f / s); }
+	inline quaternion operator /=(const float s) { return operator*=(1.f / s); }
 
 	inline float3 operator *(const float3& vec) const {
 		return 2 * dot(xyz, vec) * xyz + (w * w - dot(xyz, xyz)) * vec + 2 * w * cross(xyz, vec);
@@ -2136,7 +2162,7 @@ struct float4x4 {
 			v[3] = float4(m41,m42,m43,m44);
 		};
 	inline float4x4(const float4& c1, const float4& c2, const float4& c3, const float4& c4) { v[0] = c1; v[1] = c2; v[2] = c3; v[3] = c4; };
-	inline float4x4(float s) : float4x4(
+	inline float4x4(const float s) : float4x4(
 		s, 0, 0, 0,
 		0, s, 0, 0,
 		0, 0, s, 0,
@@ -2316,7 +2342,7 @@ inline float4x4 inverse(const float4x4& m) {
 	return inv / ((d0.x + d0.y) + (d0.z + d0.w));
 }
 inline quaternion inverse(const quaternion& q) {
-	float s = 1.f / dot(q.xyzw, q.xyzw);
+	const float s = 1.f / dot(q.xyzw, q.xyzw);
 	return quaternion(-q.x, -q.y, -q.z, q.w) * s;
 }
 
@@ -2459,8 +2485,8 @@ namespace std {
 }
 
 #pragma region min, max, clamp
-inline int32_t min(int32_t a, int32_t b) { return a < b ? a : b; }
-inline int32_t max(int32_t a, int32_t b) { return a > b ? a : b; }
+inline int32_t min(const int32_t a, int32_t b) { return a < b ? a : b; }
+inline int32_t max(const int32_t a, int32_t b) { return a > b ? a : b; }
 inline int32_t clamp(int32_t x, int32_t l, int32_t h) { return min(max(x, l), h); }
 
 inline int2 min(const int2& a, const int2& b) {
@@ -2526,8 +2552,8 @@ inline int4 abs(const int4& a) {
 	return r;
 }
 
-inline uint32_t min(uint32_t a, uint32_t b) { return a < b ? a : b; }
-inline uint32_t max(uint32_t a, uint32_t b) { return a > b ? a : b; }
+inline uint32_t min(const uint32_t a, const uint32_t b) { return a < b ? a : b; }
+inline uint32_t max(const uint32_t a, const uint32_t b) { return a > b ? a : b; }
 inline uint32_t clamp(uint32_t x, uint32_t l, uint32_t h) { return min(max(x, l), h); }
 
 inline uint2 min(const uint2& a, const uint2& b) {
@@ -2581,7 +2607,7 @@ inline uint4 clamp(const uint4& a, const uint4& l, const uint4& h) {
 inline float clamp(float x, float l, float h) {
 	return fminf(fmaxf(x, l), h);
 }
-inline float frac(float a) {
+inline float frac(const float a) {
 	return a - floorf(a);
 }
 
@@ -2796,20 +2822,20 @@ inline double4 frac(const double4& a) {
 }
 #pragma endregion
 
-inline float lerp(float a, float b, float t) {
+inline float lerp(const float a, const float b, const float t) {
 	return a + (b - a) * t;
 }
-inline float2 lerp(const float2& a, const float2& b, float t) {
+inline float2 lerp(const float2& a, const float2& b, const float t) {
 	float2 ba = b - a;
 	ba *= t;
 	return a + ba;
 }
-inline float3 lerp(const float3& a, const float3& b, float t) {
+inline float3 lerp(const float3& a, const float3& b, const float t) {
 	float3 ba = b - a;
 	ba *= t;
 	return a + ba;
 }
-inline float4 lerp(const float4& a, const float4& b, float t) {
+inline float4 lerp(const float4& a, const float4& b, const float t) {
 	float4 ba = b - a;
 	ba *= t;
 	return a + ba;
@@ -2834,12 +2860,12 @@ inline double4 lerp(const double4& a, const double4& b, double t) {
 	return a + ba;
 }
 
-inline quaternion lerp(const quaternion& a, const quaternion& b, float t) {
+inline quaternion lerp(const quaternion& a, const quaternion& b, const float t) {
 	quaternion ba = b - a;
 	ba *= t;
 	return a + ba;
 }
-inline quaternion slerp(const quaternion& v0, quaternion v1, float t){
+inline quaternion slerp(const quaternion& v0, quaternion v1, const float t){
 	float d = dot(v0.xyzw, v1.xyzw);
 	if (d < 0) {
 		v1.xyzw = -v1.xyzw;
