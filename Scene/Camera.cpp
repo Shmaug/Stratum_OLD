@@ -57,7 +57,6 @@ void Camera::CreateDescriptorSet() {
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
 	mMatricesDirty(true),
-	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
@@ -69,7 +68,6 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
-	mDepthFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
 	CreateDescriptorSet();
 }
@@ -77,7 +75,6 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
 	mMatricesDirty(true),
 	mFramebuffer(nullptr),
-	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
@@ -92,7 +89,6 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	colorFormats.push_back(targetWindow->Format().format);
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
-	mDepthFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, {}, depthFormat, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
 	CreateDescriptorSet();
 }
@@ -100,7 +96,6 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr),
 	mMatricesDirty(true),
 	mFramebuffer(framebuffer),
-	mDepthFramebuffer(nullptr),
 	mDeleteFramebuffer(false),
 	mRenderDepthNormals(false),
 	mOrthographic(false), mOrthographicSize(3),
@@ -121,7 +116,6 @@ Camera::~Camera() {
 	safe_delete_array(mUniformBufferPtrs);
 	safe_delete(mUniformBuffer);
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
-	safe_delete(mDepthFramebuffer);
 }
 
 float4 Camera::WorldToClip(const float3& worldPos) {
@@ -158,8 +152,6 @@ void Camera::PreRender() {
 	if (mTargetWindow && (FramebufferWidth() != mTargetWindow->BackBufferSize().width || FramebufferHeight() != mTargetWindow->BackBufferSize().height)) {
 		mFramebuffer->Width(mTargetWindow->BackBufferSize().width);
 		mFramebuffer->Height(mTargetWindow->BackBufferSize().height);
-		mDepthFramebuffer->Width(mTargetWindow->BackBufferSize().width);
-		mDepthFramebuffer->Height(mTargetWindow->BackBufferSize().height);
 		mMatricesDirty = true;
 
 		mViewport.x = 0;
