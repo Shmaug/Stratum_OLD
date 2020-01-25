@@ -24,11 +24,51 @@ Environment::Environment(Scene* scene) :
 	mMieSct(float4(2, 2, 2, 0) * .000001f),
 	mAmbientLight(0),
 	mMoonSize(.04f),
-	mEnableCelestials(true),
-	mEnableScattering(true),
+	mEnableCelestials(false),
+	mEnableScattering(false),
+	mAtmosphereInitialized(false),
 	mEnvironmentTexture(nullptr) {
 
 	mSkyboxMaterial = make_shared<Material>("Skybox", mScene->AssetManager()->LoadShader("Shaders/skybox.stm"));
+}
+Environment::~Environment() {
+	if (mAtmosphereInitialized) {
+		mScene->RemoveObject(mSun);
+		mScene->RemoveObject(mMoon);
+	}
+
+	for (auto t : mCameraLUTs) {
+		for (uint32_t i = 0; i < t.first->Device()->MaxFramesInFlight(); i++) {
+			safe_delete(t.second[i].mInscatterLUT);
+			safe_delete(t.second[i].mOutscatterLUT);
+			safe_delete(t.second[i].mLightShaftLUT);
+		}
+		safe_delete_array(t.second);
+	}
+	for (auto t : mDeviceLUTs) {
+		safe_delete(t.second.mParticleDensityLUT);
+		safe_delete(t.second.mSkyboxLUTR);
+		safe_delete(t.second.mSkyboxLUTM);
+	}
+}
+
+void Environment::InitializeAtmosphere() {
+	shared_ptr<Light> sun = make_shared<Light>("Sun");
+	mScene->AddObject(sun);
+	sun->CastShadows(true);
+	sun->ShadowDistance(4096);
+	sun->Color(float3(1, .99f, .95f));
+	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
+	sun->Type(LIGHT_TYPE_SUN);
+	mSun = sun.get();
+
+	shared_ptr<Light> moon = make_shared<Light>("Moon");
+	mScene->AddObject(moon);
+	moon->CastShadows(false);
+	moon->Color(float3(1));
+	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
+	moon->Type(LIGHT_TYPE_SUN);
+	mMoon = moon.get();
 
 	mShader = mScene->AssetManager()->LoadShader("Shaders/scatter.stm");
 	mMoonTexture = mScene->AssetManager()->LoadTexture("Assets/Textures/moon.png");
@@ -186,44 +226,12 @@ Environment::Environment(Scene* scene) :
 
 	delete randTex;
 
-	shared_ptr<Light> sun = make_shared<Light>("Sun");
-	mScene->AddObject(sun);
-	sun->CastShadows(true);
-	sun->ShadowDistance(4096);
-	sun->Color(float3(1, .99f, .95f));
-	sun->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
-	sun->Type(LIGHT_TYPE_SUN);
-	mSun = sun.get();
-
-	shared_ptr<Light> moon = make_shared<Light>("Moon");
-	mScene->AddObject(moon);
-	moon->CastShadows(false);
-	moon->Color(float3(1));
-	moon->LocalRotation(quaternion(float3(PI / 4, PI / 4, 0)));
-	moon->Type(LIGHT_TYPE_SUN);
-	mMoon = moon.get();
-}
-Environment::~Environment() {
-	mScene->RemoveObject(mSun);
-	mScene->RemoveObject(mMoon);
-
-	for (auto t : mCameraLUTs) {
-		for (uint32_t i = 0; i < t.first->Device()->MaxFramesInFlight(); i++) {
-			safe_delete(t.second[i].mInscatterLUT);
-			safe_delete(t.second[i].mOutscatterLUT);
-			safe_delete(t.second[i].mLightShaftLUT);
-		}
-		safe_delete_array(t.second);
-	}
-	for (auto t : mDeviceLUTs) {
-		safe_delete(t.second.mParticleDensityLUT);
-		safe_delete(t.second.mSkyboxLUTR);
-		safe_delete(t.second.mSkyboxLUTM);
-	}
+	mAtmosphereInitialized = true;
 }
 
 void Environment::SetEnvironment(Camera* camera, Material* mat) {
 	if (mEnableScattering) {
+		if (!mAtmosphereInitialized) InitializeAtmosphere();
 		CamLUT* l = mCameraLUTs.at(camera) + camera->Device()->FrameContextIndex();
 		mat->SetParameter("InscatteringLUT", l->mInscatterLUT);
 		mat->SetParameter("ExtinctionLUT", l->mOutscatterLUT);
@@ -252,6 +260,7 @@ void Environment::SetEnvironment(Camera* camera, Material* mat) {
 
 void Environment::Update() {
 	if (mEnableCelestials) {
+		if (!mAtmosphereInitialized) InitializeAtmosphere();
 		mSun->LocalRotation(quaternion(float3(0, radians(23.5f), radians(23.5f))) * quaternion(float3(mTimeOfDay * PI * 2, 0, 0)));
 		mMoon->LocalRotation(quaternion(float3(0, radians(70.f), radians(70.f))) * quaternion(float3(PI + mTimeOfDay * PI * 2, 0, 0)));
 
@@ -274,13 +283,16 @@ void Environment::Update() {
 		mSun->Color((1.055f * pow((mDirectionalLUT[index0] * weight0 + mDirectionalLUT[index1] * weight1).rgb, 1.f / 2.4f) - .055f));
 		mAmbientLight = .1f * length(1.055f * pow(mAmbientLUT[index0] * weight0 + mAmbientLUT[index1] * weight1, 1.f / 2.4f) - .055f);
 	} else {
-		mSun->mEnabled = false;
-		mMoon->mEnabled = false;
+		if (mAtmosphereInitialized) {
+			mSun->mEnabled = false;
+			mMoon->mEnabled = false;
+		}
 	}
 }
 
 void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 	if (mEnableScattering) {
+		if (!mAtmosphereInitialized) InitializeAtmosphere();
 		if (mCameraLUTs.count(camera) == 0) {
 			CamLUT* t = new CamLUT[commandBuffer->Device()->MaxFramesInFlight()];
 			memset(t, 0, sizeof(CamLUT) * commandBuffer->Device()->MaxFramesInFlight());

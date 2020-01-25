@@ -20,6 +20,8 @@ public:
 	inline void CameraEuler(const float3& e) { mCameraEuler = e; }
 	inline Object* CameraPivot() const { return mCameraPivot; }
 
+	inline int Priority() override { return 1000; }
+
 private:
 	Scene* mScene;
 	float mCameraDistance;

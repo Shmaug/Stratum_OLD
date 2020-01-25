@@ -36,6 +36,10 @@ private:
 	friend class Scene;
 	ENGINE_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera);
 
+	ENGINE_EXPORT void InitializeAtmosphere();
+
+	bool mAtmosphereInitialized;
+
 	bool mEnableCelestials;
 	bool mEnableScattering;
 

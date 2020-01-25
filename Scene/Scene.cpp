@@ -43,12 +43,14 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
 
-	mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, 
-		VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_LOAD);
+	mShadowAtlasFramebuffer = new Framebuffer("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, {}, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_LOAD);
+	mShadowAtlases = new Texture*[mInstance->Device()->MaxFramesInFlight()];
+	
 	uint32_t c = mInstance->Device()->MaxFramesInFlight();
 	mLightBuffers = new Buffer*[c];
 	mShadowBuffers = new Buffer*[c];
 	for (uint32_t i = 0; i < c; i++) {
+		mShadowAtlases[i] = new Texture("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, 1, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		mLightBuffers[i] = new Buffer("Light Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mShadowBuffers[i] = new Buffer("Shadow Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(ShadowData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mLightBuffers[i]->Map();
@@ -68,9 +70,11 @@ Scene::~Scene(){
 	safe_delete(mEnvironment);
 
 	for (uint32_t i = 0; i < mInstance->Device()->MaxFramesInFlight(); i++) {
+		safe_delete(mShadowAtlases[i]);
 		safe_delete(mLightBuffers[i]);
 		safe_delete(mShadowBuffers[i]);
 	}
+	safe_delete_array(mShadowAtlases);
 	safe_delete_array(mLightBuffers);
 	safe_delete_array(mShadowBuffers);
 	safe_delete(mShadowAtlasFramebuffer);
@@ -597,7 +601,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			mShadowCameras[i]->mEnabled = false;
 		mDrawGizmos = g;
 
-		mShadowAtlasFramebuffer->ResolveDepth(commandBuffer);
+		mShadowAtlasFramebuffer->ResolveDepth(commandBuffer, mShadowAtlases[commandBuffer->Device()->FrameContextIndex()]->Image());
 
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
@@ -612,10 +616,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 }
 
 void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
-	camera->PreRender();
-	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0)
-		return;
-
 	PROFILER_BEGIN("Gather Renderers");
 	mRenderList.clear();
 	BVH()->FrustumCheck(camera, mRenderList, pass);
@@ -720,7 +720,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 							if (curShader->mDescriptorBindings.count("Shadows"))
 								batchDS->CreateStorageBufferDescriptor(mShadowBuffers[frameContextIndex], 0, mShadowBuffers[frameContextIndex]->Size(), SHADOW_BUFFER_BINDING);
 							if (curShader->mDescriptorBindings.count("ShadowAtlas"))
-								batchDS->CreateSampledTextureDescriptor(mShadowAtlasFramebuffer->DepthBuffer(), SHADOW_ATLAS_BINDING);
+								batchDS->CreateSampledTextureDescriptor(mShadowAtlases[frameContextIndex], SHADOW_ATLAS_BINDING);
 						}
 					}
 
@@ -800,11 +800,6 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 
 	PROFILER_BEGIN("End RenderPass");
 	vkCmdEndRenderPass(*commandBuffer);
-	PROFILER_END;
-
-	PROFILER_BEGIN("Plugin PostRender");
-	for (const auto& p : mPluginManager->Plugins())
-		if (p->mEnabled) p->PostRender(commandBuffer, camera, pass);
 	PROFILER_END;
 
 	END_CMD_REGION(commandBuffer);
