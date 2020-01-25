@@ -18,7 +18,6 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 	ENGINE_EXPORT virtual void PreRender();
-	ENGINE_EXPORT virtual void ResolveWindow(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT virtual void Set(CommandBuffer* commandBuffer);
 
 	ENGINE_EXPORT virtual float4 WorldToClip(const float3& worldPos);
@@ -29,6 +28,11 @@ public:
 	inline virtual void RenderPriority(uint32_t x) { mRenderPriority = x; }
 
 	inline Window* TargetWindow() const { return mTargetWindow; }
+
+	// If TargetWindow is nullptr and SampleCount is not VK_SAMPLE_COUNT_1, resolves the framebuffer to ResolveBuffer and transitions ResolveBuffer to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	// If TargetWindow is nullptr and SampleCount is VK_SAMPLE_COUNT_1, transitions the framebuffer to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	// If TargetWindow is not nullptr, resolves or copies the framebuffer to the window
+	ENGINE_EXPORT virtual void Resolve(CommandBuffer* commandBuffer);
 
 	inline virtual bool Orthographic() const { return mOrthographic; }
 	inline virtual float OrthographicSize() const { return mOrthographicSize; }
@@ -57,10 +61,11 @@ public:
 	inline virtual void PerspectiveSize(const float2& p) { mPerspectiveSize = p; mFieldOfView = 0; mMatricesDirty = true; }
 	inline virtual void FramebufferWidth (uint32_t w) { mFramebuffer->Width(w);  mMatricesDirty = true; }
 	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mMatricesDirty = true; }
+	inline virtual void SampleCount(VkSampleCountFlagBits s) { mFramebuffer->SampleCount(s); }
 
 	inline virtual ::Framebuffer* Framebuffer() const { return mFramebuffer; }
-	inline virtual Texture* ColorBuffer() const { return mFramebuffer->ColorBuffer(0); }
-	inline virtual Texture* DepthNormalBuffer() const { return mRenderDepthNormals ? mFramebuffer->ColorBuffer(1) : nullptr; }
+	inline virtual Texture* ColorBuffer(uint32_t index = 0) const { return mFramebuffer->ColorBuffer(index); }
+	inline virtual Texture* ResolveBuffer(uint32_t index = 0) const { return mFramebuffer->SampleCount() == VK_SAMPLE_COUNT_1_BIT ? mFramebuffer->ColorBuffer(index) : mResolveBuffers[mDevice->FrameContextIndex()][index]; }
 
 	inline virtual Buffer* UniformBuffer() const { return mUniformBuffer; }
 	ENGINE_EXPORT virtual ::DescriptorSet* DescriptorSet(VkShaderStageFlags stage);
@@ -99,6 +104,7 @@ private:
 	float4x4 mInvViewProjection;
 	bool mMatricesDirty;
 
+	// Frustum planes
 	float4 mFrustum[6];
 
 	VkViewport mViewport;
@@ -107,6 +113,9 @@ private:
 	::Device* mDevice;
 	::Framebuffer* mFramebuffer;
 	bool mDeleteFramebuffer;
+
+	// Resolve buffers, if the camera does not have a TargetWindow
+	std::vector<Texture*>* mResolveBuffers;
 
 	void** mUniformBufferPtrs;
 	Buffer* mUniformBuffer;

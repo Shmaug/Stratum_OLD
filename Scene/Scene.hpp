@@ -94,6 +94,8 @@ private:
 	std::vector<Camera*> mShadowCameras;
 	Framebuffer* mShadowAtlasFramebuffer;
 
+	Texture** mShadowAtlases;
+
 	std::vector<Light*> mActiveLights;
 
 	::AssetManager* mAssetManager;

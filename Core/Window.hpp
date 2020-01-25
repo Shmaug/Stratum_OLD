@@ -35,7 +35,9 @@ public:
 	inline std::string Title() const { return mTitle; }
 
 	inline uint32_t CurrentBackBufferIndex() const { return mCurrentBackBufferIndex; }
-	inline VkImage CurrentBackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
+	inline VkImage BackBuffer() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImage; }
+	inline VkImageView BackBufferView() const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[mCurrentBackBufferIndex].mSwapchainImageView; }
+	inline VkImage BackBuffer(uint32_t i) const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[i].mSwapchainImage; }
 	inline VkImageView BackBufferView(uint32_t i) const { if (!mFrameData) return VK_NULL_HANDLE; return mFrameData[i].mSwapchainImageView; }
 	inline uint32_t BackBufferCount() const { return mImageCount; }
 	inline VkExtent2D BackBufferSize() const { return mSwapchainSize; }

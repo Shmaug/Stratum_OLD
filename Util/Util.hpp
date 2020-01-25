@@ -70,7 +70,7 @@ namespace fs = std::filesystem;
 enum PassType {
 	PASS_MAIN = 1 << 24,
 	PASS_DEPTH = 1 << 25,
-	PASS_MASK_MAX_ENUM = 1 << 26
+	PASS_MASK_MAX_ENUM = 1 << 31
 };
 
 enum BlendMode {

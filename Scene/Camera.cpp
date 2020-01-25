@@ -69,6 +69,9 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
+	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
+	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
+
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
@@ -90,6 +93,9 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
+	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
+	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
+
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, ::Framebuffer* framebuffer)
@@ -103,16 +109,22 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 	mNear(.03f), mFar(500.f),
 	mRenderPriority(100),
 	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
+	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
+	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
 	CreateDescriptorSet();
 }
 
 Camera::~Camera() {
 	if (mTargetWindow) mTargetWindow->mTargetCamera = nullptr;
-	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
+	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++) {
 		for (auto& s : mDescriptorSets[i]) {
 			vkDestroyDescriptorSetLayout(*mDevice, s.second->Layout(), nullptr);
 			safe_delete(s.second);
 		}
+		for (uint32_t j = 0; j < mResolveBuffers[i].size(); j++)
+			safe_delete(mResolveBuffers[i][j]);
+	}
+	safe_delete_array(mResolveBuffers);
 	safe_delete_array(mUniformBufferPtrs);
 	safe_delete(mUniformBuffer);
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
@@ -160,56 +172,27 @@ void Camera::PreRender() {
 		mViewport.height = (float)mFramebuffer->Height();
 	}
 }
-void Camera::ResolveWindow(CommandBuffer* commandBuffer) {
+void Camera::Resolve(CommandBuffer* commandBuffer) {
 	if (!mFramebuffer->Width() || !mFramebuffer->Height()) return;
 
-	mFramebuffer->ResolveColor(commandBuffer);
-	// resolve or copy render target to target window
-	if (mTargetWindow) {
-		PROFILER_BEGIN("Copy to Window");
-		BEGIN_CMD_REGION(commandBuffer, "Copy");
-		mFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
-
-		VkImageMemoryBarrier barrier = {};
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = mTargetWindow->CurrentBackBuffer();
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		barrier.subresourceRange.levelCount = 1;
-		barrier.subresourceRange.layerCount = 1;
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier
-		);
-
-		VkImageCopy region = {};
-		region.extent = { FramebufferWidth(), FramebufferHeight(), 1 };
-		region.dstSubresource.layerCount = 1;
-		region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		region.srcSubresource.layerCount = 1;
-		region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		vkCmdCopyImage(*commandBuffer,
-			mFramebuffer->ColorBuffer(0)->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			mTargetWindow->CurrentBackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-		swap(barrier.oldLayout, barrier.newLayout);
-		swap(barrier.srcAccessMask, barrier.dstAccessMask);
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &barrier );
-
-		mFramebuffer->ColorBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+	vector<Texture*>& buffers = mResolveBuffers[mDevice->FrameContextIndex()];
+	if (mFramebuffer->SampleCount() == VK_SAMPLE_COUNT_1_BIT)
+		for (uint32_t i = 0; i < buffers.size(); i++)
+			mFramebuffer->ColorBuffer(i)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+	else {
+		PROFILER_BEGIN("Resolve/Copy Camera");
+		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy Camera");
+		for (uint32_t i = 0; i < buffers.size(); i++) {
+			if (buffers[i] && (buffers[i]->Width() != mFramebuffer->Width() || buffers[i]->Height() != mFramebuffer->Height()))
+				delete buffers[i];
+			if (!buffers[i]) {
+				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(0)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+			} else
+				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+			mFramebuffer->ResolveColor(commandBuffer, 0, buffers[i]->Image());
+			buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		}
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}

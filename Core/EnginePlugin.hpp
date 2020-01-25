@@ -24,8 +24,8 @@ public:
 	inline virtual void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
 	/// Called after a camera finishes rendering the scene, before EndRenderPass
 	inline virtual void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
-	/// Called after a camera finishes rendering, after EndRenderPass
-	inline virtual void PostRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
+	/// Called before a camera presents to a window, but after the camera resolves to Camera::ResolveBuffer. Good for post-processing
+	inline virtual void PostProcess(CommandBuffer* commandBuffer, Camera* camera) {}
 
 	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
 	

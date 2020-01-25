@@ -68,9 +68,36 @@ private:
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy())
 				mScene->Render(commandBuffer.get(), camera, camera->Framebuffer(), PASS_MAIN);
+
 		for (const auto& camera : mScene->Cameras())
-			if (camera->EnabledHierarchy()) 
-				camera->ResolveWindow(commandBuffer.get());
+			if (camera->EnabledHierarchy())
+				camera->Resolve(commandBuffer.get());
+
+		for (const auto& camera : mScene->Cameras())
+			if (camera->EnabledHierarchy()) {
+				PROFILER_BEGIN("Plugin PostProcess");
+				for (const auto& p : mPluginManager->Plugins())
+					if (p->mEnabled) p->PostProcess(commandBuffer.get(), camera);
+				PROFILER_END;
+			}
+		for (const auto& camera : mScene->Cameras())
+			if (camera->TargetWindow() && camera->EnabledHierarchy()) {
+				Texture* src = camera->ResolveBuffer();
+				src->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
+				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+				VkImageCopy rgn = {};
+				rgn.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				rgn.srcSubresource.layerCount = 1;
+				rgn.extent = { src->Width(), src->Height(), 1 };
+				rgn.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				rgn.dstSubresource.layerCount = 1;
+				vkCmdCopyImage(*commandBuffer,
+					src->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					camera->TargetWindow()->BackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					1, &rgn);
+				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer.get());
+				src->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
+			}
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffer");

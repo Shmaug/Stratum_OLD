@@ -17,6 +17,7 @@ public:
 
 	inline void Width(uint32_t w) { mWidth = w; }
 	inline void Height(uint32_t h) { mHeight = h; }
+	inline void SampleCount(VkSampleCountFlagBits s) { mSampleCount = s; }
 
 	inline uint32_t Width() const { return mWidth; }
 	inline uint32_t Height() const { return mHeight; }
@@ -24,12 +25,13 @@ public:
 
 	inline void ClearValue(uint32_t i, const VkClearValue& value) { mClearValues[i] = value; }
 
-	inline Texture* ColorBuffer(uint32_t i) { return mResolveBuffers[mDevice->FrameContextIndex()][i]; }	
-	inline Texture* DepthBuffer() { return mResolveDepthBuffers[mDevice->FrameContextIndex()]; }
+	inline Texture* ColorBuffer(uint32_t i) { return mColorBuffers[mDevice->FrameContextIndex()][i]; }
+	inline Texture* DepthBuffer() { return mDepthBuffers[mDevice->FrameContextIndex()]; }
+
+	ENGINE_EXPORT void ResolveColor(CommandBuffer* commandBuffer, uint32_t index, VkImage destination);
+	ENGINE_EXPORT void ResolveDepth(CommandBuffer* commandBuffer, VkImage destination);
 
 	ENGINE_EXPORT void Clear(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void ResolveColor(CommandBuffer* commandBuffer);
-	ENGINE_EXPORT void ResolveDepth(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }
 	inline ::Device* Device() const { return mDevice; }
@@ -38,19 +40,19 @@ private:
 	::Device* mDevice;
 	std::vector<Texture*>* mColorBuffers;
 	Texture** mDepthBuffers;
-	std::vector<Texture*>* mResolveBuffers;
-	Texture** mResolveDepthBuffers;
 	VkFramebuffer* mFramebuffers;
 	::RenderPass* mRenderPass;
 
+	std::vector<VkSubpassDependency> mSubpassDependencies;
+	VkAttachmentLoadOp mLoadOp;
+
 	uint32_t mWidth;
 	uint32_t mHeight;
-	VkImageUsageFlags mColorUsage;
-	VkImageUsageFlags mDepthUsage;
 	VkSampleCountFlagBits mSampleCount;
 	std::vector<VkFormat> mColorFormats;
 	std::vector<VkClearValue> mClearValues;
 	VkFormat mDepthFormat;
 
+	ENGINE_EXPORT void CreateRenderPass();
 	ENGINE_EXPORT bool UpdateBuffers();
 };
