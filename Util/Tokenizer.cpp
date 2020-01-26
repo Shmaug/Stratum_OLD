@@ -68,3 +68,21 @@ bool Tokenizer::Next(int& token) {
 
     return true;
 }
+
+bool Tokenizer::Next(unsigned int& token) {
+    // eat up any leading delimeters
+    while (mCurrent < mLength && mDelimiters.count(mBuffer[mCurrent])) mCurrent++;
+    if (mCurrent >= mLength) return false;
+
+    // read until we hit a delimiter
+    size_t start = mCurrent;
+    while (mCurrent < mLength && !mDelimiters.count(mBuffer[mCurrent])) mCurrent++;
+
+    char* buf = new char[1 + mCurrent - start];
+    buf[mCurrent - start] = '\0';
+    memcpy(buf, mBuffer + start, mCurrent - start);
+    token = (uint32_t)atoi(buf);
+    delete[] buf;
+
+    return true;
+}

@@ -98,6 +98,10 @@ private:
 				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer.get());
 				src->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
 			}
+
+		for (const auto& camera : mScene->Cameras())
+			if (camera->EnabledHierarchy())
+				camera->PostRender(commandBuffer.get());
 		PROFILER_END;
 
 		PROFILER_BEGIN("Execute CommandBuffer");

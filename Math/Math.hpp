@@ -1168,10 +1168,10 @@ struct float4 {
 		float v[4];
 		struct { float x, y, z, w; };
 		struct { float r, g, b, a; };
+		struct { float2 xy, zw; };
+		struct { float2 rg, ba; };
 		float3 xyz;
 		float3 rgb;
-		float2 xy;
-		float2 rg;
 	};
 
 	inline float4(const uint4& s) { rpt4(i) v[i] = (float)s.v[i]; };

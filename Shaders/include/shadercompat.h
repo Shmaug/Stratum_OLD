@@ -57,6 +57,11 @@ struct ShadowData {
 	float InvProj22;
 };
 
+struct VertexWeight {
+	float4 Weights;
+	uint4 Indices;
+};
+
 #ifdef __cplusplus
 #undef uint
 #endif

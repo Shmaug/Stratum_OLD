@@ -83,7 +83,7 @@ float SampleShadowCascadePCF(uint index, float3 cameraPos, float3 worldPos, floa
 	ShadowData s = Shadows[index];
 
 	float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + (cameraPos - s.CameraPosition), 1));
-	float z = shadowPos.z - .0003;
+	float z = shadowPos.z / shadowPos.w - .0003;
 
 	float2 shadowUV = saturate(shadowPos.xy / shadowPos.w * .5 + .5);
 
@@ -92,35 +92,19 @@ float SampleShadowCascadePCF(uint index, float3 cameraPos, float3 worldPos, floa
 	sz = scale * 9 / sz;
 
 	float attenuation = 0;
-	[unroll]
 	for (uint i = 0; i < 32; i++)
 		attenuation += ShadowAtlas.SampleCmpLevelZero(ShadowSampler, saturate(shadowUV + PoissonSamples[i] * sz) * s.ShadowST.xy + s.ShadowST.zw, z);
 	return attenuation / 32;
 }
 float SampleShadowPCF(GPULight l, float3 cameraPos, float3 worldPos, float depth) {
-	float2 ct = l.Type == LIGHT_SUN ? CascadeSplit(l.CascadeSplits, depth) : 0;
-	uint ci = (uint)ct.x;
-	if (ci < 0) return 1;
-	float s = SampleShadowCascadePCF(l.ShadowIndex + ci, cameraPos, worldPos, ct.y);
-	//if (ci < 3) s = lerp(s, SampleShadowCascadePCF(l.ShadowIndex + ci + 1, cameraPos, worldPos, ct.y * .5f), frac(ct.x));
-	return s;
-}
-
-float SampleShadowCascade(uint index, float3 cameraPos, float3 worldPos) {
-	ShadowData s = Shadows[index];
-
-	float4 shadowPos = mul(s.WorldToShadow, float4(worldPos + (cameraPos - s.CameraPosition), 1));
-	float z = shadowPos.z * s.InvProj22 - .001;
-
-	shadowPos.xyz /= shadowPos.w;
-
-	float2 shadowUV = saturate(shadowPos.xy * .5 + .5);
-	shadowUV = shadowUV * s.ShadowST.xy + s.ShadowST.zw;
-	return dot(.25, ShadowAtlas.GatherCmp(ShadowSampler, shadowUV, z, 0));
-}
-float SampleShadow(GPULight l, float3 cameraPos, float3 worldPos, float depth) {
-	float2 ct = l.Type == LIGHT_SUN ? CascadeSplit(l.CascadeSplits, depth) : 0;
-	return ct.x < 0 ? 1 : SampleShadowCascade(l.ShadowIndex + (uint)ct.x, cameraPos, worldPos);
+	if (l.Type == LIGHT_SUN) {
+		float2 ct = CascadeSplit(l.CascadeSplits, depth);
+		uint ci = (uint)ct.x;
+		if (ci < 0) return 1;
+		return SampleShadowCascadePCF(l.ShadowIndex + ci, cameraPos, worldPos, ct.y);
+	} else {
+		return SampleShadowCascadePCF(l.ShadowIndex, cameraPos, worldPos, 1);
+	}
 }
 
 float LightAttenuation(uint li, float3 cameraPos, float3 worldPos, float3 normal, float depth, out float3 L) {

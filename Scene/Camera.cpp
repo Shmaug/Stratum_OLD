@@ -176,6 +176,7 @@ void Camera::Resolve(CommandBuffer* commandBuffer) {
 	if (!mFramebuffer->Width() || !mFramebuffer->Height()) return;
 
 	vector<Texture*>& buffers = mResolveBuffers[mDevice->FrameContextIndex()];
+	if (buffers.size() < mFramebuffer->ColorBufferCount()) buffers.resize(mFramebuffer->ColorBufferCount());
 	if (mFramebuffer->SampleCount() == VK_SAMPLE_COUNT_1_BIT)
 		for (uint32_t i = 0; i < buffers.size(); i++)
 			mFramebuffer->ColorBuffer(i)->TransitionImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
@@ -184,9 +185,9 @@ void Camera::Resolve(CommandBuffer* commandBuffer) {
 		BEGIN_CMD_REGION(commandBuffer, "Resolve/Copy Camera");
 		for (uint32_t i = 0; i < buffers.size(); i++) {
 			if (buffers[i] && (buffers[i]->Width() != mFramebuffer->Width() || buffers[i]->Height() != mFramebuffer->Height()))
-				delete buffers[i];
+				safe_delete(buffers[i]);
 			if (!buffers[i]) {
-				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(0)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(0)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 			} else
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
@@ -196,6 +197,12 @@ void Camera::Resolve(CommandBuffer* commandBuffer) {
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
+}
+void Camera::PostRender(CommandBuffer* commandBuffer) {
+	vector<Texture*>& buffers = mResolveBuffers[mDevice->FrameContextIndex()];
+	if (mFramebuffer->SampleCount() == VK_SAMPLE_COUNT_1_BIT)
+		for (uint32_t i = 0; i < buffers.size(); i++)
+			mFramebuffer->ColorBuffer(i)->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 }
 void Camera::Set(CommandBuffer* commandBuffer) {
 	UpdateMatrices();
@@ -272,15 +279,6 @@ bool Camera::UpdateMatrices() {
 void Camera::Dirty() {
 	Object::Dirty();
 	mMatricesDirty = true;
-}
-bool Camera::IntersectFrustum(const AABB& aabb) {
-	UpdateMatrices();
-	for (uint32_t i = 0; i < 6; i++) {
-		float r = dot(aabb.Extents(), abs(mFrustum[i].xyz));
-		float d = dot(aabb.Center(), mFrustum[i].xyz) - mFrustum[i].w;
-		if (d <= -r) return false;
-	}
-	return true;
 }
 
 void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

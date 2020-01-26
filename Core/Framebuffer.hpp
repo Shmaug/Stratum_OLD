@@ -31,6 +31,8 @@ public:
 	ENGINE_EXPORT void ResolveColor(CommandBuffer* commandBuffer, uint32_t index, VkImage destination);
 	ENGINE_EXPORT void ResolveDepth(CommandBuffer* commandBuffer, VkImage destination);
 
+	inline uint32_t ColorBufferCount() const { return mColorBuffers ? (uint32_t)mColorBuffers[mDevice->FrameContextIndex()].size() : 0; }
+
 	ENGINE_EXPORT void Clear(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void BeginRenderPass(CommandBuffer* commandBuffer);
 	inline ::RenderPass* RenderPass() const { return mRenderPass; }

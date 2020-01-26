@@ -66,10 +66,6 @@ const ::VertexInput Float3VertexInput{
 	}
 };
 
-struct VertexWeight {
-	uint16_t indices[4];
-	float weights[4];
-};
 struct AIWeight {
 	string bones[4];
 	float4 weights;
@@ -148,9 +144,9 @@ Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* roo
 	return bone;
 }
 
-Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mIndexCount(0), mVertexCount(0), mBaseVertex(0), mBaseIndex(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
+Mesh::Mesh(const string& name) : mName(name), mVertexInput(nullptr), mBvh(nullptr), mIndexCount(0), mVertexCount(0), mBaseVertex(0), mBaseIndex(0), mIndexType(VK_INDEX_TYPE_UINT16) {}
 Mesh::Mesh(const string& name, ::Device* device, const string& filename, float scale)
-	: mName(name), mVertexInput(nullptr), mBaseVertex(0), mBaseIndex(0), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+	: mName(name), mVertexInput(nullptr), mBvh(nullptr), mBaseVertex(0), mBaseIndex(0), mTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
 
 	const aiScene* scene = aiImportFile(filename.c_str(), aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs | aiProcess_MakeLeftHanded);
 	if (!scene) {
@@ -158,11 +154,12 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 		throw;
 	}
 	vector<StdVertex> vertices;
-	vector<AIWeight> weights;
-	unordered_map<string, aiBone*> uniqueBones;
 	vector<uint16_t> indices16;
 	vector<uint32_t> indices32;
 	float3 mn, mx;
+
+	vector<AIWeight> weights;
+	unordered_map<string, aiBone*> uniqueBones;
 
 	uint32_t vertexCount = 0;
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++)
@@ -258,13 +255,13 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 			}
 		}
 
-		mRig = make_shared<AnimationRig>();
+		AnimationRig rig;
 
 		// compute bone matrices and bonesByName
 		unordered_map<string, uint32_t> bonesByName;
 		for (auto& b : uniqueBones) {
 			aiNode* node = scene->mRootNode->FindNode(b.second->mName);
-			Bone* bone = AddBone(*mRig, node, scene, root, boneMap, scale);
+			Bone* bone = AddBone(rig, node, scene, root, boneMap, scale);
 			if (!bone) continue;
 			BoneTransform bt;
 			bt.FromMatrix(ConvertMatrix(b.second->mOffsetMatrix), scale);
@@ -280,7 +277,7 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 		BoneTransform roott;
 		roott.FromMatrix(rootTransform, scale);
 
-		for (auto& b : *mRig) {
+		for (auto& b : rig) {
 			if (!b->Parent()) {
 				BoneTransform bt {
 					b->LocalPosition(),
@@ -304,8 +301,8 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 			weights[i].NormalizeWeights();
 			for (unsigned int j = 0; j < 4; j++) {
 				if (bonesByName.count(weights[i].bones[j])) {
-					vertexWeights[i].indices[j] = bonesByName.at(weights[i].bones[j]);
-					vertexWeights[i].weights[j] = weights[i].weights[j];
+					vertexWeights[i].Indices[j] = bonesByName.at(weights[i].bones[j]);
+					vertexWeights[i].Weights[j] = weights[i].weights[j];
 				}
 			}
 		}
@@ -335,17 +332,17 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 	else
 		mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices16.data(), sizeof(uint16_t) * indices16.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
-	printf("Loaded %s / %d verts %d tris / %d bones / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mRig ? (int)mRig->size() : (int)0, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
+	printf("Loaded %s / %d verts %d tris / %.2fx%.2fx%.2f\n", filename.c_str(), (int)vertices.size(), (int)(use32bit ? indices32.size() : indices16.size()) / 3, mx.x - mn.x, mx.y - mn.y, mx.z - mn.z);
 }
-Mesh::Mesh(const string& name, ::Device* device, shared_ptr<Buffer> vertexBuffer, shared_ptr<Buffer> indexBuffer, const AABB& bounds,
+Mesh::Mesh(const string& name, ::Device* device, const AABB& bounds, TriangleBvh2* bvh, shared_ptr<Buffer> vertexBuffer, shared_ptr<Buffer> indexBuffer,
 	uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
-	: mName(name), mVertexInput(vertexInput), mBaseIndex(baseIndex), mIndexCount(indexCount), mIndexType(indexType), mBaseVertex(baseVertex), mVertexCount(vertexCount), mBounds(bounds), mTopology(topology) {
+	: mName(name), mVertexInput(vertexInput), mBvh(bvh), mBaseIndex(baseIndex), mIndexCount(indexCount), mIndexType(indexType), mBaseVertex(baseVertex), mVertexCount(vertexCount), mBounds(bounds), mTopology(topology) {
 	
 	mVertexBuffer = vertexBuffer;
 	mIndexBuffer = indexBuffer;
 }
 Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
-	: mName(name), mVertexInput(vertexInput), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
+	: mName(name), mVertexInput(vertexInput), mBvh(nullptr), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
 	
 	float3 mn, mx;
 	for (uint32_t i = 0; i < indexCount; i++) {
@@ -369,6 +366,33 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 	mBounds = AABB(mn, mx);
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+}
+Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const VertexWeight* weights, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+	: mName(name), mVertexInput(vertexInput), mBvh(nullptr), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
+
+	float3 mn, mx;
+	for (uint32_t i = 0; i < indexCount; i++) {
+		uint32_t index;
+		if (mIndexType == VK_INDEX_TYPE_UINT32)
+			index = ((uint32_t*)indices)[i];
+		else
+			index = ((uint16_t*)indices)[i];
+
+		const float3& pos = *(float3*)((uint8_t*)vertices + vertexSize * index);
+		if (i == 0)
+			mn = mx = pos;
+		else {
+			mn = min(pos, mn);
+			mx = max(pos, mx);
+		}
+	}
+
+	uint32_t indexSize = mIndexType == VK_INDEX_TYPE_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
+
+	mBounds = AABB(mn, mx);
+	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+	mWeightBuffer = make_shared<Buffer>(name + " Weight Buffer", device, weights, sizeof(VertexWeight) * vertexCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
 
 Mesh* Mesh::CreatePlane(const string& name, Device* device, float s) {
@@ -405,10 +429,13 @@ Mesh* Mesh::CreateCube(const string& name, Device* device, float r) {
 	return new Mesh(name, device, verts, indices, 8, sizeof(float3), 36, &Float3VertexInput, VK_INDEX_TYPE_UINT16);
 }
 
+bool Mesh::Intersect(const Ray& ray, float* t, bool any) {
+	if (!mBvh) return false;
+	mBvh->Intersect(ray, t, any);
+}
+
 Mesh::~Mesh() {
-	if (mRig)
-		for (Bone* b : *mRig)
-			safe_delete(b);
-	for (auto it : mAnimations)
-		safe_delete(it.second);
+	for (auto kp : mAnimations)
+		safe_delete(kp.second);
+	safe_delete(mBvh);
 }

@@ -330,7 +330,6 @@ void Texture::CreateImage() {
 	mDevice->SetObjectName(mImageMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
 	vkBindImageMemory(*mDevice, mImage, mImageMemory, 0);
 }
-
 void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -349,8 +348,12 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 
 void AccessFlags(VkImageLayout layout, VkAccessFlags& access, VkPipelineStageFlags& stage) {
 	switch (layout) {
+	case VK_IMAGE_LAYOUT_UNDEFINED:
+		access = 0;
+		stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		break;
 	case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-		access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+		access = 0;
 		stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		break;
 	case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
@@ -377,6 +380,9 @@ void AccessFlags(VkImageLayout layout, VkAccessFlags& access, VkPipelineStageFla
 		access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		break;
+	default:
+		fprintf_color(COLOR_RED, stderr, "Unsupported layout transition\n");
+		throw;
 	}
 }
 

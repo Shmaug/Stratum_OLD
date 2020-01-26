@@ -131,19 +131,19 @@ bool Framebuffer::UpdateBuffers() {
 
 void Framebuffer::BeginRenderPass(CommandBuffer* commandBuffer) {
 	uint32_t frameContextIndex = mDevice->FrameContextIndex();
-	if (UpdateBuffers()){
-		VkPipelineStageFlags srcStage, destStage;
-		vector<VkImageMemoryBarrier> barriers;
-		for (uint32_t i = 0; i < mColorFormats.size(); i++)
-			barriers.push_back(mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, srcStage, destStage));
-		if (barriers.size())
+	if (UpdateBuffers()) {
+		if (mColorFormats.size()) {
+			VkPipelineStageFlags srcStage, destStage;
+			vector<VkImageMemoryBarrier> barriers;
+			for (uint32_t i = 0; i < mColorFormats.size(); i++)
+				barriers.push_back(mColorBuffers[frameContextIndex][i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, srcStage, destStage));
 			vkCmdPipelineBarrier(*commandBuffer,
 				srcStage, destStage,
 				0,
 				0, nullptr,
 				0, nullptr,
 				(uint32_t)barriers.size(), barriers.data());
-
+		}
 		mDepthBuffers[frameContextIndex]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, commandBuffer);
 	}
 	commandBuffer->BeginRenderPass(mRenderPass, { mWidth, mHeight }, mFramebuffers[frameContextIndex], mClearValues.data(), (uint32_t)mClearValues.size());

@@ -26,7 +26,6 @@ add_library(Engine SHARED
 	"Core/Window.cpp"
 	"Input/InputManager.cpp"
 	"Input/MouseKeyboardInput.cpp"
-	"Scene/Bvh2.cpp"
 	"Scene/Camera.cpp"
 	"Scene/Gizmos.cpp"
 	"Scene/Interface.cpp"
@@ -35,8 +34,10 @@ add_library(Engine SHARED
 	"Scene/Environment.cpp"
 	"Scene/Scene.cpp"
 	"Scene/Object.cpp"
+	"Scene/ObjectBvh2.cpp"
 	"Scene/SkinnedMeshRenderer.cpp"
 	"Scene/TextRenderer.cpp"
+	"Scene/TriangleBvh2.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Tokenizer.cpp"
 	"Util/Profiler.cpp" )

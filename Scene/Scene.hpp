@@ -6,7 +6,7 @@
 #include <Core/DescriptorSet.hpp>
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
-#include <Scene/Bvh.hpp>
+#include <Scene/ObjectBvh2.hpp>
 #include <Scene/Camera.hpp>
 #include <Scene/Gizmos.hpp>
 #include <Scene/Environment.hpp>
@@ -64,9 +64,7 @@ public:
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }
 
-	ENGINE_EXPORT Bvh* BVH();
-	inline void BVH(Bvh* bvh) { safe_delete(mBvh); mBvh = bvh; mBvhDirty = true; }
-
+	ENGINE_EXPORT ObjectBvh2* BVH();
 	inline void BvhDirty(Object* reason) { mBvhDirty = true; }
 
 private:
@@ -82,7 +80,7 @@ private:
 
 	Mesh* mSkyboxCube;
 
-	Bvh* mBvh;
+	ObjectBvh2* mBvh;
 	bool mBvhDirty;
 
 	float2 mShadowTexelSize;

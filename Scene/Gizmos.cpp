@@ -90,13 +90,15 @@ Gizmos::~Gizmos() {
 	safe_delete_array(mInstanceBuffers);
 }
 
-bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position, float radius, const float4& color){
-	float t = input->mWorldRay.Intersect(Sphere(position, radius)).x;
-	float lt = input->mLastWorldRay.Intersect(Sphere(position, radius)).x;
+bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position, float radius, const float4& color) {
+	float2 t;
+	bool th = input->mWorldRay.Intersect(Sphere(position, radius), t);
+	float2 lt;
+	bool lth = input->mLastWorldRay.Intersect(Sphere(position, radius), lt);
 
 	DrawWireCircle(position, radius, plane, color);
 	
-	if (input->mAxis.at(0) < .5f || t < 0 || lt < 0) return false;
+	if (input->mAxis.at(0) < .5f || !th || !lth || t.x < 0 || lt.x < 0) return false;
 
 	float3 fwd = plane * float3(0,0,1);
 	float3 p  = input->mWorldRay.mOrigin + input->mWorldRay.mDirection * input->mWorldRay.Intersect(fwd, position);
@@ -106,9 +108,11 @@ bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, 
 
 	return true;
 }
-bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation, float radius){
-	float t = input->mWorldRay.Intersect(Sphere(center, radius)).x;
-	float lt = input->mLastWorldRay.Intersect(Sphere(center, radius)).x;
+bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation, float radius, float sensitivity) {
+	float2 t;
+	bool th = input->mWorldRay.Intersect(Sphere(center, radius), t);
+	float2 lt;
+	bool lth = input->mLastWorldRay.Intersect(Sphere(center, radius), lt);
 
 	quaternion r = rotation;
 	DrawWireCircle(center, radius, r, float4(.2f,.2f,1,.5f));
@@ -117,15 +121,15 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 	r *= quaternion(float3(PI/2, 0, 0));
 	DrawWireCircle(center, radius, r, float4(.2f,1,.2f,.5f));
 
-	if (input->mAxis.at(0) < .25f || t < 0 || lt < 0) return false;
+	if (input->mAxis.at(0) < .5f || !th || !lth || t.x < 0 || lt.x < 0) return false;
 
-	float3 p = input->mWorldRay.mOrigin - center + input->mWorldRay.mDirection * t;
-	float3 lp = input->mLastWorldRay.mOrigin - center + input->mLastWorldRay.mDirection * lt;
+	float3 p = input->mWorldRay.mOrigin - center + input->mWorldRay.mDirection * t.x;
+	float3 lp = input->mLastWorldRay.mOrigin - center + input->mLastWorldRay.mDirection * lt.x;
 
 	float3 rotAxis = cross(normalize(lp), normalize(p));
 	float angle = length(rotAxis);
 	if (fabsf(angle) > .0001f)
-		rotation = quaternion(asinf(angle) * .5f, rotAxis / angle) * rotation;
+		rotation = quaternion(asinf(angle) * sensitivity, rotAxis / angle) * rotation;
 
 	return true;
 }
