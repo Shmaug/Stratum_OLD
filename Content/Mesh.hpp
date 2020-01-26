@@ -9,6 +9,9 @@
 #include <Core/Instance.hpp>
 #include <Util/Util.hpp>
 #include <Scene/Object.hpp>
+#include <Scene/TriangleBvh2.hpp>
+
+#include <Shaders/include/shadercompat.h>
 
 struct StdVertex {
 	float3 position;
@@ -19,11 +22,11 @@ struct StdVertex {
 	ENGINE_EXPORT static const ::VertexInput VertexInput;
 };
 
-class Bone : public Object {
+class Bone : public virtual Object {
 public:
 	uint32_t mBoneIndex;
 	float4x4 mBindOffset;
-	Bone(const std::string& name, uint32_t index) : Object(name), mBindOffset(float4x4(1)), mBoneIndex(index) {}
+	inline Bone(const std::string& name, uint32_t index) : Object(name), mBindOffset(float4x4(1)), mBoneIndex(index) {}
 };
 
 class Mesh : public Asset {
@@ -37,11 +40,14 @@ public:
 	const std::string mName;
 
 	ENGINE_EXPORT Mesh(const std::string& name);
-	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
-		std::shared_ptr<Buffer> vertexBuffer, std::shared_ptr<Buffer> indexBuffer, const AABB& bounds, uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount,
+	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device, const AABB& bounds, TriangleBvh2* bvh,
+		std::shared_ptr<Buffer> vertexBuffer, std::shared_ptr<Buffer> indexBuffer, uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
 		const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
+		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
+		const void* vertices, const VertexWeight* weights, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT ~Mesh() override;
 
@@ -61,7 +67,7 @@ public:
 	inline uint32_t IndexCount() const { return mIndexCount; }
 	inline VkIndexType IndexType() const { return mIndexType; }
 
-	inline std::shared_ptr<AnimationRig> Rig() const { return mRig; }
+	ENGINE_EXPORT bool Intersect(const Ray& ray, float* t, bool any);
 
 	inline const ::VertexInput* VertexInput() const { return mVertexInput; }
 
@@ -72,6 +78,8 @@ private:
 	friend class AssetManager;
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device, const std::string& filename, float scale = 1.f);
 
+	TriangleBvh2* mBvh;
+
 	const ::VertexInput* mVertexInput;
 	uint32_t mBaseVertex;
 	uint32_t mVertexCount;
@@ -79,8 +87,7 @@ private:
 	uint32_t mIndexCount;
 	VkIndexType mIndexType;
 	VkPrimitiveTopology mTopology;
-
-	std::shared_ptr<AnimationRig> mRig;
+	
 	std::unordered_map<std::string, Animation*> mAnimations;
 
 	AABB mBounds;

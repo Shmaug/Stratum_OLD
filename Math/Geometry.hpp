@@ -2,14 +2,6 @@
 
 #include <Math/Math.hpp>
 
-struct Plane {
-	float3 mNormal;
-	float mDistance;
-	
-	inline Plane() : mNormal(float3()), mDistance(0) {}
-	inline Plane(const float3& normal, float distance) : mNormal(normal), mDistance(distance) {}
-	inline Plane(const float3& point, const float3& normal) : mNormal(normal), mDistance(dot(point, normal)) {}
-};
 struct Sphere {
 	float3 mCenter;
 	float mRadius;
@@ -58,6 +50,17 @@ struct AABB {
 		return !(dx || dy || dz);
 	}
 
+	inline bool Intersects(const float4 frustum[6]) const {
+		float3 center = Center();
+		float3 extent = Extents();
+		for (uint32_t i = 0; i < 6; i++) {
+			float r = dot(extent, abs(frustum[i].xyz));
+			float d = dot(center, frustum[i].xyz) - frustum[i].w;
+			if (d <= -r) return false;
+		}
+		return true;
+	}
+
 	inline void Encapsulate(const float3& p) {
 		mMin = min(mMin, p);
 		mMax = max(mMax, p);
@@ -99,14 +102,14 @@ struct Ray {
 	inline Ray() : mOrigin(float3()), mDirection(float3(0,0,1)) {};
 	inline Ray(const float3& ro, const float3& rd) : mOrigin(ro), mDirection(rd) {};
 
-	inline float Intersect(const Plane& plane) const {
-		return -(dot(mOrigin, plane.mNormal) + plane.mDistance) / dot(mDirection, plane.mNormal);
+	inline float Intersect(const float4& plane) const {
+		return -(dot(mOrigin, plane.xyz) + plane.w) / dot(mDirection, plane.xyz);
 	}
 	inline float Intersect(const float3& planeNormal, const float3& planePoint) const {
 		return -dot(mOrigin - planePoint, planeNormal) / dot(mDirection, planeNormal);
 	}
 
-	inline float2 Intersect(const AABB& aabb) const {
+	inline bool Intersect(const AABB& aabb, float2& t) const {
 		float3 m = 1.f / mDirection;
 		float3 n = m * (mOrigin - (aabb.mMax + aabb.mMin) * .5f);
 		float3 k = abs(m) * (aabb.mMax - aabb.mMin) * .5f;
@@ -114,17 +117,40 @@ struct Ray {
 		float3 t2 = -n + k;
 		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
 		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
-		if (tN > tF || tF < 0) return -1.f;
-		return float2(tN, tF);
+		if (tN > tF) return false;
+		t = float2(tN, tF);
+		return true;
 	}
-	inline float2 Intersect(const Sphere& sphere) const {
+	inline bool Intersect(const Sphere& sphere, float2& t) const {
 		float3 pq = mOrigin - sphere.mCenter;
 		float a = dot(mDirection, mDirection);
 		float b = 2 * dot(pq, mDirection);
 		float c = dot(pq, pq) - sphere.mRadius * sphere.mRadius;
 		float d = b * b - 4 * a * c;
-		if (d < 0.f) return -1.f;
+		if (d < 0.f) return false;
 		d = sqrt(d);
-		return -.5f * float2(b + d, b - d) / a;
+		t = -.5f * float2(b + d, b - d) / a;
+		return true;
+	}
+	// returns t,u,v
+	inline float3 Intersect(const float3& v0, const float3& v1, const float3& v2) const {
+		float3 v1v0 = v1 - v0;
+		float3 v2v0 = v2 - v0;
+		float3 rov0 = mOrigin - v0;
+
+		// The four determinants above have lots of terms in common. Knowing the changing
+		// the order of the columns/rows doesn't change the volume/determinant, and that
+		// the volume is dot(cross(a,b,c)), we can precompute some common terms and reduce
+		// it all to:
+		float3 n = cross(v1v0, v2v0);
+		float3 q = cross(rov0, mDirection);
+		float d = 1.f / dot(mDirection, n);
+		float u = d * dot(-q, v2v0);
+		float v = d * dot( q, v1v0);
+		float t = d * dot(-n, rov0);
+
+		//if (u < 0 || v < 0 || (u + v) > 1.f) t = -1.f;
+
+		return float3(t, u, v);
 	}
 };

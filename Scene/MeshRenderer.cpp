@@ -58,9 +58,15 @@ void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 }
 
 bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
-	// TODO: ray-mesh collision
-	return false;
+	::Mesh* m = Mesh();
+	if (!m) return false;
+	Ray r;
+	r.mOrigin = (WorldToObject() * float4(ray.mOrigin, 1)).xyz;
+	r.mDirection = (transpose(ObjectToWorld()) * float4(ray.mDirection, 1)).xyz;
+	return m->Intersect(r, t, any);
 }
 
 
-void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
+void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
+	//Scene()->Gizmos()->DrawWireCube(Bounds().Center(), Bounds().Extents(), quaternion(), float4(1, 1, 1, 1));
+};

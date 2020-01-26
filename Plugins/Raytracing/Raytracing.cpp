@@ -19,7 +19,6 @@ public:
 			mScene->RemoveObject(obj);
 	}
 
-
 	PLUGIN_EXPORT bool Init(Scene* scene) override {
 		mScene = scene;
 
@@ -129,7 +128,7 @@ public:
 
 			} else return;
 
-			mat->PassMask((PassType)PASS_RAYTRACE);
+			//mat->PassMask((PassType)PASS_RAYTRACE);
 
 			aiColor3D emissiveColor(0);
 			aiColor4D baseColor(1);
@@ -190,6 +189,7 @@ public:
 	}
 
 	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
+		return;
 		Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
 		
 		float3 cp = camera->WorldPosition();

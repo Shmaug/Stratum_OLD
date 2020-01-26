@@ -4,8 +4,6 @@
 #include <Core/Instance.hpp>
 #include <Util/Profiler.hpp>
 
-#include <Scene/Bvh2.hpp>
-
 #include <assimp/scene.h>
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
@@ -39,7 +37,7 @@ bool RendererCompare(Object* oa, Object* ob) {
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false), mBvhDirty(true) {
 	mGizmos = new ::Gizmos(this);
-	mBvh = new Bvh2();
+	mBvh = new ObjectBvh2();
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
 
@@ -50,7 +48,7 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mLightBuffers = new Buffer*[c];
 	mShadowBuffers = new Buffer*[c];
 	for (uint32_t i = 0; i < c; i++) {
-		mShadowAtlases[i] = new Texture("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, 1, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		mShadowAtlases[i] = nullptr;
 		mLightBuffers[i] = new Buffer("Light Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mShadowBuffers[i] = new Buffer("Shadow Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(ShadowData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		mLightBuffers[i]->Map();
@@ -118,14 +116,12 @@ Object* Scene::LoadModelScene(const string& filename,
 	shared_ptr<Buffer> vertexBuffer = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Vertices"), mInstance->Device(), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 	shared_ptr<Buffer> indexBuffer  = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Indices") , mInstance->Device(), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
 		materials.push_back(materialSetupFunc(this, scene->mMaterials[m]));
 
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
 		const aiMesh* mesh = scene->mMeshes[m];
 		VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
 
 		uint32_t baseVertex = (uint32_t)vertices.size();
 		uint32_t baseIndex  = (uint32_t)indices.size();
@@ -144,10 +140,9 @@ Object* Scene::LoadModelScene(const string& filename,
 			if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
 			vertex.position *= scale;
 			vertices.push_back(vertex);
-
 		}
 
-		float3 mn = vertices[0].position, mx = vertices[0].position;
+		float3 mn = vertices[baseVertex].position, mx = vertices[baseVertex].position;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
 			indices.push_back(f.mIndices[0]);
@@ -170,8 +165,11 @@ Object* Scene::LoadModelScene(const string& filename,
 		uint32_t vertexCount = (uint32_t)vertices.size() - baseVertex;
 		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
 
+		TriangleBvh2* bvh = new TriangleBvh2();
+		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, VK_INDEX_TYPE_UINT32);
+
 		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
-			vertexBuffer, indexBuffer, AABB(mn, mx), baseVertex, vertexCount, baseIndex, indexCount,
+			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, baseVertex, vertexCount, baseIndex, indexCount,
 			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
 	}
 
@@ -407,11 +405,18 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 	sd->WorldToShadow = sc->ViewProjection();
 	sd->CameraPosition = pos;
 	sd->ShadowST = float4(sc->ViewportWidth() - 2, sc->ViewportHeight() - 2, sc->ViewportX() + 1, sc->ViewportY() + 1) / SHADOW_ATLAS_RESOLUTION;
-	sd->InvProj22 = 1.f / (sc->Projection()[2][2] * (sc->Far() - sc->Near()));
+	sd->InvProj22 = 1.f / (sc->Projection()[2][2] * (far - near));
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	PROFILER_BEGIN("Scene PreFrame");
+	
+	PROFILER_BEGIN("Renderer PreFrame");
+	for (Renderer* r : mRenderers)
+		if (r->EnabledHierarchy())
+			r->PreFrame(commandBuffer);
+	PROFILER_END;
+
 	Camera* mainCamera = nullptr;
 	sort(mCameras.begin(), mCameras.end(), [](const auto& a, const auto& b) {
 		return a->RenderPriority() > b->RenderPriority();
@@ -430,7 +435,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	}
 
 	Device* device = commandBuffer->Device();
-
 	PROFILER_BEGIN("Lighting");
 	uint32_t si = 0;
 	mShadowCount = 0;
@@ -573,6 +577,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 				case LIGHT_TYPE_POINT:
 					break;
 				case LIGHT_TYPE_SPOT:
+					lights[li].CascadeSplits = 1.f;
 					lights[li].ShadowIndex = (int32_t)si;
 					AddShadowCamera(si, &shadows[si], false, l->OuterSpotAngle() * 2, l->WorldPosition(), l->WorldRotation(), l->Radius() - .001f, l->Range());
 					si++;
@@ -585,7 +590,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 		}
 		PROFILER_END;
 	}
-
 	if (si) {
 		PROFILER_BEGIN("Render Shadows");
 		BEGIN_CMD_REGION(commandBuffer, "Render Shadows");
@@ -601,16 +605,22 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 			mShadowCameras[i]->mEnabled = false;
 		mDrawGizmos = g;
 
-		mShadowAtlasFramebuffer->ResolveDepth(commandBuffer, mShadowAtlases[commandBuffer->Device()->FrameContextIndex()]->Image());
+		uint32_t fc = commandBuffer->Device()->FrameContextIndex();
+		if (!mShadowAtlases[fc]) {
+			mShadowAtlases[fc] = new Texture("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, 1, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			mShadowAtlases[fc]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+		}else
+			mShadowAtlases[fc]->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+		mShadowAtlasFramebuffer->ResolveDepth(commandBuffer, mShadowAtlases[fc]->Image());
+		mShadowAtlases[fc]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
 
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
-
+	mEnvironment->Update();
 	PROFILER_END;
 
 	mGizmos->PreFrame();
-	mEnvironment->Update();
 
 	PROFILER_END;
 }
@@ -618,7 +628,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
 	PROFILER_BEGIN("Gather Renderers");
 	mRenderList.clear();
-	BVH()->FrustumCheck(camera, mRenderList, pass);
+	BVH()->FrustumCheck(camera->Frustum(), mRenderList, pass);
 	PROFILER_END;
 	PROFILER_BEGIN("Sort Renderers");
 	sort(mRenderList.begin(), mRenderList.end(), RendererCompare);
@@ -631,6 +641,12 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	camera->PreRender();
 	if (camera->FramebufferWidth() == 0 || camera->FramebufferHeight() == 0)
 		return;
+
+	PROFILER_BEGIN("Environment PreRender");
+	BEGIN_CMD_REGION(commandBuffer, "Environment PreRender");
+	mEnvironment->PreRender(commandBuffer, camera);
+	END_CMD_REGION(commandBuffer);
+	PROFILER_END;
 
 	PROFILER_BEGIN("Plugin PreRender");
 	BEGIN_CMD_REGION(commandBuffer, "Plugin PreRender");
@@ -667,7 +683,6 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	// skybox
 	if (mEnvironment->mSkyboxMaterial && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw skybox");
-		mEnvironment->PreRender(commandBuffer, camera);
 		VkPipelineLayout layout = commandBuffer->BindMaterial(mEnvironment->mSkyboxMaterial.get(), pass, mSkyboxCube->VertexInput(), camera, mSkyboxCube->Topology());
 		if (!layout) return;
 		commandBuffer->BindVertexBuffer(mSkyboxCube->VertexBuffer().get(), 0, 0);
@@ -806,7 +821,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	PROFILER_END;
 }
 
-Bvh* Scene::BVH() {
+ObjectBvh2* Scene::BVH() {
 	if (mBvh && mBvhDirty) {
 		PROFILER_BEGIN("Build BVH");
 		Object** objs = new Object*[mObjects.size()];

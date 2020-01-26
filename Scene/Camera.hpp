@@ -18,6 +18,7 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 
 	ENGINE_EXPORT virtual void PreRender();
+	ENGINE_EXPORT virtual void PostRender(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT virtual void Set(CommandBuffer* commandBuffer);
 
 	ENGINE_EXPORT virtual float4 WorldToClip(const float3& worldPos);
@@ -78,8 +79,7 @@ public:
 	inline virtual float4x4 InverseView() { UpdateMatrices(); return mInvView; }
 	inline virtual float4x4 InverseProjection() { UpdateMatrices(); return mInvProjection; }
 	inline virtual float4x4 InverseViewProjection() { UpdateMatrices(); return mInvViewProjection; }
-
-	ENGINE_EXPORT virtual bool IntersectFrustum(const AABB& aabb);
+	inline virtual const float4* Frustum() { UpdateMatrices(); return mFrustum; }
 
 	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 

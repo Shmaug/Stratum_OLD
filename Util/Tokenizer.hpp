@@ -11,6 +11,7 @@ public:
     ENGINE_EXPORT bool Next(std::string& token);
     ENGINE_EXPORT bool Next(float& token);
     ENGINE_EXPORT bool Next(int& token);
+    ENGINE_EXPORT bool Next(unsigned int& token);
 
 private:
     char* mBuffer;

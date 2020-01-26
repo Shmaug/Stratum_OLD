@@ -5,58 +5,16 @@
 using namespace std;
 
 SkinnedMeshRenderer::SkinnedMeshRenderer(const string& name) : MeshRenderer(name), Object(name) {}
-SkinnedMeshRenderer::~SkinnedMeshRenderer() {
-    for (Bone* b : mRig)
-        safe_delete(b);
+SkinnedMeshRenderer::~SkinnedMeshRenderer() {}
+
+void SkinnedMeshRenderer::Rig(const AnimationRig& rig) {
+	mBoneMap.clear();
+	mRig = rig;
+	for (auto b : mRig) mBoneMap.emplace(b->mName, b);
 }
 
 Bone* SkinnedMeshRenderer::GetBone(const string& boneName) const {
-	if (mCopyRig)
-		return mCopyRig->GetBone(boneName);
-	else
-		return mBoneMap.at(boneName);
-}
-
-void SkinnedMeshRenderer::Mesh(::Mesh* mesh, Object* rigRoot) {
-	mMesh = mesh;
-
-	if ((mCopyRig = dynamic_cast<SkinnedMeshRenderer*>(rigRoot)) != nullptr && rigRoot != this) {
-        for (Bone* b : mRig)
-            safe_delete(b);
-		mRig.clear();
-		mBoneMap.clear();
-        mRigRoot = nullptr;
-	} else {
-		mRig.clear();
-		mBoneMap.clear();
-		mCopyRig = nullptr;
-        mRigRoot = rigRoot;
-
-        if (mesh) {
-            AnimationRig& meshRig = *mesh->Rig();
-
-            mRig.resize(meshRig.size());
-            for (uint32_t i = 0; i < meshRig.size(); i++) {
-				auto bone = make_shared<Bone>(meshRig[i]->mName, i);
-				Scene()->AddObject(bone);
-                mRig[i] = bone.get();
-                mRig[i]->LocalPosition(meshRig[i]->LocalPosition());
-                mRig[i]->LocalRotation(meshRig[i]->LocalRotation());
-                mRig[i]->LocalScale(meshRig[i]->LocalScale());
-                mRig[i]->mBindOffset = meshRig[i]->mBindOffset;
-                if (Bone* parent = dynamic_cast<Bone*>(meshRig[i]->Parent()))
-                    mRig[parent->mBoneIndex]->AddChild(mRig[i]);
-                else
-                    rigRoot->AddChild(mRig[i]);
-                mBoneMap.emplace(mRig[i]->mName, mRig[i]);
-            }
-        }
-    }
-    Dirty();
-}
-void SkinnedMeshRenderer::Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot) {
-    Mesh(mesh.get(), rigRoot);
-	mMesh = mesh;
+	return mBoneMap.count(boneName) ? mBoneMap.at(boneName) : nullptr;
 }
 
 void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
@@ -64,21 +22,17 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 
 	::Mesh* m = MeshRenderer::Mesh();
 
-	Buffer* poseBuffer = commandBuffer->Device()->GetTempBuffer(mName + " PoseBuffer", mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 	mVertexBuffer = commandBuffer->Device()->GetTempBuffer(mName + " VertexBuffer", m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkBufferCopy region = {};
 	region.size = m->VertexBuffer()->Size();
 	vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(), *mVertexBuffer, 1, &region);
 
-    if (!mCopyRig) {
-		float4x4 rigOffset(1.f);
-		if (mRigRoot) rigOffset = mRigRoot->WorldToObject();
-
-		// pose space -> bone space
-		float4x4* skin = (float4x4*)poseBuffer->MappedData();
-		for (uint32_t i = 0; i < mRig.size(); i++)
-			skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * rigOffset;
-    }
+	Buffer* poseBuffer = commandBuffer->Device()->GetTempBuffer(mName + " PoseBuffer", mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+	
+	// pose space -> bone space
+	float4x4* skin = (float4x4*)poseBuffer->MappedData();
+	for (uint32_t i = 0; i < mRig.size(); i++)
+		skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * WorldToObject();
 }
 
 void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
@@ -98,6 +52,8 @@ void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* ca
 	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);
+	for (const auto& kp : mPushConstants)
+		commandBuffer->PushConstant(shader, kp.first, &kp.second);
 	
 	if (instanceDS != VK_NULL_HANDLE)
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, &instanceDS, 0, nullptr);

@@ -8,8 +8,10 @@ public:
 	ENGINE_EXPORT SkinnedMeshRenderer(const std::string& name);
 	ENGINE_EXPORT ~SkinnedMeshRenderer();
 
-	ENGINE_EXPORT virtual void Mesh(::Mesh* mesh, Object* rigRoot);
-	ENGINE_EXPORT virtual void Mesh(std::shared_ptr<::Mesh> mesh, Object* rigRoot);
+	ENGINE_EXPORT virtual void Rig(const AnimationRig& rig);
+
+	inline virtual void Mesh(::Mesh* mesh) { mMesh = mesh; }
+	inline virtual void Mesh(std::shared_ptr<::Mesh> mesh) { mMesh = mesh; }
 
 	ENGINE_EXPORT virtual Bone* GetBone(const std::string& name) const;
 	
@@ -24,6 +26,4 @@ protected:
 
 	std::unordered_map<std::string, Bone*> mBoneMap;
 	AnimationRig mRig;
-	SkinnedMeshRenderer* mCopyRig;
-	Object* mRigRoot;
 };
