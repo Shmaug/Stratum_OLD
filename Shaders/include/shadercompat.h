@@ -24,10 +24,10 @@ struct InstanceBuffer {
 };
 
 struct CameraBuffer {
-	float4x4 View;
-	float4x4 Projection;
-	float4x4 ViewProjection;
-	float4x4 InvProjection;
+	float4x4 View[2];
+	float4x4 Projection[2];
+	float4x4 ViewProjection[2];
+	float4x4 InvProjection[2];
 	float4 Viewport;
 	float4 ProjParams;
 	float3 Up;

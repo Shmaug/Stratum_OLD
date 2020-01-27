@@ -49,6 +49,8 @@
 	float _StarFade;
 
 	float3 AmbientLight;
+
+	uint StereoEye;
 };
 
 #include "include/util.hlsli"
@@ -95,7 +97,7 @@ void vsmain(
 		position = float4(vertex.xy, 0, 1);
 		viewRay = float3(Camera.View[0].z, Camera.View[1].z, Camera.View[2].z);
 	} else {
-		position = mul(Camera.Projection, float4(vertex, 1));
+		position = mul(Camera.Projection[StereoEye], float4(vertex, 1));
 		viewRay = mul(vertex, (float3x3)Camera.View);
 	}
 	screenPos = ComputeScreenPos(position);
