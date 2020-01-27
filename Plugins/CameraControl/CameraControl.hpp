@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Core/EnginePlugin.hpp>
-#include <Scene/TextRenderer.hpp>
 #include <Input/MouseKeyboardInput.hpp>
 #include <Util/Profiler.hpp>
 

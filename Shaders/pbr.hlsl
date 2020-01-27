@@ -10,9 +10,9 @@
 
 #pragma render_queue 1000
 
-#pragma array MainTextures 1024
-#pragma array NormalTextures 1024
-#pragma array MaskTextures 1024
+#pragma array MainTextures 64
+#pragma array NormalTextures 64
+#pragma array MaskTextures 64
 
 #pragma static_sampler Sampler
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
@@ -53,6 +53,7 @@
 	float3 Emission;
 
 	// Set by scene
+	uint StereoEye;
 	float3 AmbientLight;
 	uint LightCount;
 	float2 ShadowTexelSize;
@@ -93,7 +94,7 @@ v2f vsmain(
 		0,0,0,1);
 	float4 worldPos = mul(mul(ct, Instances[instance].ObjectToWorld), float4(vertex, 1.0));
 
-	o.position = mul(Camera.ViewProjection, worldPos);
+	o.position = mul(Camera.ViewProjection[StereoEye], worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	
 	o.screenPos = ComputeScreenPos(o.position);

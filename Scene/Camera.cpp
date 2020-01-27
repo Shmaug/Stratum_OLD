@@ -60,10 +60,9 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
-	mFieldOfView(PI/4), mPerspectiveSize(0),
+	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100),
-	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
+	mRenderPriority(100) {
 
 	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
@@ -81,10 +80,9 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	mDeleteFramebuffer(true),
 	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
-	mFieldOfView(PI/4), mPerspectiveSize(0),
+	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100),
-	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
+	mRenderPriority(100) {
 
 	mTargetWindow->mTargetCamera = this;
 
@@ -105,10 +103,9 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 	mDeleteFramebuffer(false),
 	mRenderDepthNormals(false),
 	mOrthographic(false), mOrthographicSize(3),
-	mFieldOfView(PI/4), mPerspectiveSize(0),
+	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100),
-	mView(float4x4(1.f)), mProjection(float4x4(1.f)), mViewProjection(float4x4(1.f)), mInvViewProjection(float4x4(1.f)) {
+	mRenderPriority(100) {
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
 	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
 	CreateDescriptorSet();
@@ -130,17 +127,17 @@ Camera::~Camera() {
 	if (mDeleteFramebuffer) safe_delete(mFramebuffer);
 }
 
-float4 Camera::WorldToClip(const float3& worldPos) {
+float4 Camera::WorldToClip(const float3& worldPos, StereoEye eye) {
 	UpdateMatrices();
-	return mViewProjection * float4(worldPos - WorldPosition(), 1);
+	return mViewProjection[eye] * float4(worldPos - WorldPosition(), 1);
 }
-float3 Camera::ClipToWorld(const float3& clipPos) {
+float3 Camera::ClipToWorld(const float3& clipPos, StereoEye eye) {
 	UpdateMatrices();
-	float4 wp = mInvViewProjection * float4(clipPos, 1);
+	float4 wp = mInvViewProjection[eye] * float4(clipPos, 1);
 	wp.xyz /= wp.w;
 	return wp.xyz + WorldPosition();
 }
-Ray Camera::ScreenToWorldRay(const float2& uv) {
+Ray Camera::ScreenToWorldRay(const float2& uv, StereoEye eye) {
 	UpdateMatrices();
 	float2 clip = 2.f * uv - 1.f;
 	Ray ray;
@@ -149,7 +146,7 @@ Ray Camera::ScreenToWorldRay(const float2& uv) {
 		ray.mOrigin = WorldPosition() + WorldRotation() * float3(clip * mOrthographicSize, mNear);
 		ray.mDirection = WorldRotation().forward();
 	} else {
-		float4 p1 = mInvViewProjection * float4(clip, .1f, 1);
+		float4 p1 = mInvViewProjection[eye] * float4(clip, .1f, 1);
 		ray.mDirection = normalize(p1.xyz / p1.w);
 		ray.mOrigin = WorldPosition() + ray.mDirection * mNear;
 	}
@@ -204,43 +201,61 @@ void Camera::PostRender(CommandBuffer* commandBuffer) {
 		for (uint32_t i = 0; i < buffers.size(); i++)
 			mFramebuffer->ColorBuffer(i)->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, commandBuffer);
 }
+
 void Camera::Set(CommandBuffer* commandBuffer) {
 	UpdateMatrices();
 	CameraBuffer& buf = *(CameraBuffer*)mUniformBufferPtrs[commandBuffer->Device()->FrameContextIndex()];
-	buf.View = mView;
-	buf.Projection = mProjection;
-	buf.ViewProjection = mViewProjection;
-	buf.InvProjection = mInvProjection;
+	buf.View[0] = mView[0];
+	buf.View[1] = mView[1];
+	buf.Projection[0] = mProjection[0];
+	buf.Projection[1] = mProjection[1];
+	buf.ViewProjection[0] = mViewProjection[0];
+	buf.ViewProjection[1] = mViewProjection[1];
+	buf.InvProjection[0] = mInvProjection[0];
+	buf.InvProjection[1] = mInvProjection[1];
 	buf.Viewport = float4(mViewport.width, mViewport.height, mNear, mFar);
 	buf.ProjParams = float4(Aspect(), mOrthographicSize, mFieldOfView, mOrthographic ? 1.f : 0.f);
 	buf.Position = WorldPosition();
 	buf.Right = WorldRotation() * float3(1, 0, 0);
 	buf.Up = WorldRotation() * float3(0, 1, 0);
 	
-	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
-	VkRect2D scissor{ {0, 0}, { mFramebuffer->Width(), mFramebuffer->Height() } };
+	VkRect2D scissor{ { 0, 0 }, { mFramebuffer->Width(), mFramebuffer->Height() } };
 	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
 	vkCmdSetLineWidth(*commandBuffer, 1.0f);
+	
+	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 }
 
 bool Camera::UpdateMatrices() {
 	if (!mMatricesDirty) return false;
 
-	mView = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
+	switch (mStereoMode) {
+	case STEREO_NONE:
+		mView[0] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
 
-	if (mOrthographic)
-		mProjection = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
-	else {
-		if (mFieldOfView)
-			mProjection = float4x4::PerspectiveFov(mFieldOfView, Aspect(), mNear, mFar);
-		else
-			mProjection = float4x4::Perspective(mPerspectiveSize.x, mPerspectiveSize.y, mNear, mFar);
+		if (mOrthographic)
+			mProjection[0] = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
+		else if (mFieldOfView)
+			mProjection[0] = float4x4::PerspectiveFov(mFieldOfView, Aspect(), mNear, mFar);
+		break;
+
+	case STEREO_SBS_HORIZONTAL:
+	case STEREO_SBS_VERTICAL:
+		mView[0] = mView[1] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
+		mView[0] = mView[0] * mEyeTransform[0];
+		mView[1] = mView[1] * mEyeTransform[1];
+		break;
 	}
 
-	mViewProjection = mProjection * mView;
-	mInvView = inverse(mView);
-	mInvProjection = inverse(mProjection);
-	mInvViewProjection = inverse(mViewProjection);
+	mViewProjection[0] = mProjection[0] * mView[0];
+	mViewProjection[1] = mProjection[1] * mView[1];
+
+	mInvView[0] = inverse(mView[0]);
+	mInvView[1] = inverse(mView[1]);
+	mInvProjection[0] = inverse(mProjection[0]);
+	mInvProjection[1] = inverse(mProjection[1]);
+	mInvViewProjection[0] = inverse(mViewProjection[0]);
+	mInvViewProjection[1] = inverse(mViewProjection[1]);
 	
 	float3 corners[8] {
 		float3(-1,  1, 0),
@@ -275,7 +290,6 @@ bool Camera::UpdateMatrices() {
 	mMatricesDirty = false;
 	return true;
 }
-
 void Camera::Dirty() {
 	Object::Dirty();
 	mMatricesDirty = true;
