@@ -18,6 +18,16 @@
 #define LIGHT_POINT 1
 #define LIGHT_SPOT 2
 
+#define STRATUM_PUSH_CONSTANTS \
+uint StereoEye; \
+float3 AmbientLight; \
+uint LightCount; \
+float2 ShadowTexelSize;
+
+#define STRATUM_MATRIX_V Camera.View[StereoEye]
+#define STRATUM_MATRIX_P Camera.Projection[StereoEye]
+#define STRATUM_MATRIX_VP Camera.ViewProjection[StereoEye]
+
 struct InstanceBuffer {
 	float4x4 ObjectToWorld;
 	float4x4 WorldToObject;

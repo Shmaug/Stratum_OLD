@@ -1,6 +1,7 @@
 #include "CameraControl.hpp"
 #include <Scene/Scene.hpp>
 #include <Scene/Interface.hpp>
+#include <Content/Font.hpp>
 
 using namespace std;
 

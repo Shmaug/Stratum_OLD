@@ -7,11 +7,11 @@ float3 ComputeView(float3 worldPos, float4 screenPos) {
 		float3 view = float3(screenPos.xy / screenPos.w * 2 - 1, Camera.Viewport.z);
 		view.x *= Camera.ProjParams.x; // aspect
 		view.xy *= Camera.ProjParams.y; // ortho size
-		return -mul(float4(view, 1), Camera.View).xyz;
+		return -mul(float4(view, 1), STRATUM_MATRIX_V).xyz;
 	} else
 		return normalize(-worldPos.xyz);
 	
 }
 float LinearDepth01(float screenPos_z) {
-	return screenPos_z / Camera.Projection[2][2] / (Camera.Viewport.w - Camera.Viewport.z);
+	return screenPos_z / STRATUM_MATRIX_P[2][2] / (Camera.Viewport.w - Camera.Viewport.z);
 }

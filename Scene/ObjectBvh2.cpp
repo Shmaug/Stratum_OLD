@@ -188,8 +188,8 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 				}
 			}
 		} else {
-			bool h0 = (mNodes[ni + 1].mMask & mask) && ray.Intersect(mNodes[ni + 1].mBounds, bbhits.xy);
-			bool h1 = (mNodes[ni + node.mRightOffset].mMask & mask) && ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.zw);
+			bool h0 = (mNodes[ni + 1].mMask & mask) && ray.Intersect(mNodes[ni + 1].mBounds, bbhits.v2[0]);
+			bool h1 = (mNodes[ni + node.mRightOffset].mMask & mask) && ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.v2[1]);
 			float t0 = fminf(bbhits.x, bbhits.y);
 			float t1 = fminf(bbhits.z, bbhits.w);
 			if (t0 < near) t0 = fmaxf(bbhits.x, bbhits.y);

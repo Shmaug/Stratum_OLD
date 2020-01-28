@@ -14,6 +14,8 @@
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	STRATUM_PUSH_CONSTANTS
+
 	float4x4 ObjectToWorld;
 	float4 Color;
 	float4 ScaleTranslate;
@@ -40,7 +42,7 @@ v2f vsmain(uint index : SV_VertexID) {
 #else
 	float4x4 ct = float4x4(1, 0, 0, -Camera.Position.x, 0, 1, 0, -Camera.Position.y, 0, 0, 1, -Camera.Position.z, 0, 0, 0, 1);
 	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(p, 0, 1.0));
-	o.position = mul(Camera.ViewProjection, worldPos);
+	o.position = mul(STRATUM_MATRIX_VP, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 #endif
 	o.canvasPos = abs((p - Bounds.xy) / Bounds.zw) - 1;

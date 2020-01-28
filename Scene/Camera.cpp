@@ -62,7 +62,7 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100) {
+	mRenderPriority(100), mStereoMode(STEREO_NONE) {
 
 	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
 	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
@@ -82,7 +82,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100) {
+	mRenderPriority(100), mStereoMode(STEREO_NONE) {
 
 	mTargetWindow->mTargetCamera = this;
 
@@ -105,7 +105,7 @@ Camera::Camera(const string& name, ::Framebuffer* framebuffer)
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
-	mRenderPriority(100) {
+	mRenderPriority(100), mStereoMode(STEREO_NONE) {
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
 	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
 	CreateDescriptorSet();
@@ -269,7 +269,7 @@ bool Camera::UpdateMatrices() {
 		float3( 1, -1, 1),
 	};
 	for (uint32_t i = 0; i < 8; i++) {
-		float4 c = mInvViewProjection * float4(corners[i], 1);
+		float4 c = mInvViewProjection[0] * float4(corners[i], 1);
 		corners[i] = c.xyz / c.w + WorldPosition();
 	}
 

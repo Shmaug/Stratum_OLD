@@ -128,6 +128,9 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass
 			mCurrentCamera = camera;
 			if (mCurrentRenderPass && camera && shader->mDescriptorBindings.count("Camera"))
 				vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags), 0, nullptr);
+			
+			uint32_t eye = 0;
+			PushConstant(shader, "StereoEye", &eye);
 		}
 		return shader->mPipelineLayout;
 	}
@@ -137,6 +140,8 @@ VkPipelineLayout CommandBuffer::BindShader(GraphicsShader* shader, PassType pass
 		if (mCurrentRenderPass && shader->mDescriptorBindings.count("Camera"))
 			vkCmdBindDescriptorSets(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(shader->mDescriptorBindings.at("Camera").second.stageFlags), 0, nullptr);
 		mCurrentCamera = camera;
+		uint32_t eye = 0;
+		PushConstant(shader, "StereoEye", &eye);
 	}
 	mCurrentMaterial = nullptr;
 	return shader->mPipelineLayout;
@@ -168,6 +173,8 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 	}
 	
 	material->SetPushConstantParameters(this, camera, data);
+	uint32_t eye = 0;
+	PushConstant(data->mShaderVariant, "StereoEye", &eye);
 
 	return shader->mPipelineLayout;
 }

@@ -431,7 +431,7 @@ Mesh* Mesh::CreateCube(const string& name, Device* device, float r) {
 
 bool Mesh::Intersect(const Ray& ray, float* t, bool any) {
 	if (!mBvh) return false;
-	mBvh->Intersect(ray, t, any);
+	return mBvh->Intersect(ray, t, any);
 }
 
 Mesh::~Mesh() {
