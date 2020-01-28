@@ -123,7 +123,7 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 }
 
 bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
-	if (mNodes.size() == 0) return nullptr;
+	if (mNodes.size() == 0) return false;
 
 	float hitT = 1e20f;
 	int hitPrim = -1;
@@ -167,8 +167,8 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 				}
 			}
 		} else {
-			bool h0 = ray.Intersect(mNodes[ni + 1].mBounds, bbhits.xy);
-			bool h1 = ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.zw);
+			bool h0 = ray.Intersect(mNodes[ni + 1].mBounds, bbhits.v2[0]);
+			bool h1 = ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.v2[1]);
 			float t0 = fminf(bbhits.x, bbhits.y);
 			float t1 = fminf(bbhits.z, bbhits.w);
 			if (t0 < near) t0 = fmaxf(bbhits.x, bbhits.y);

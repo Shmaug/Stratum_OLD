@@ -29,6 +29,8 @@
 [[vk::binding(BINDING_START + 6, PER_MATERIAL)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	STRATUM_PUSH_CONSTANTS
+
 	float4 _MoonRotation;
 	float _MoonSize;
 
@@ -47,10 +49,6 @@
 
 	float4 _StarRotation;
 	float _StarFade;
-
-	float3 AmbientLight;
-
-	uint StereoEye;
 };
 
 #include "include/util.hlsli"
@@ -95,10 +93,10 @@ void vsmain(
 	out float3 viewRay : TEXCOORD1) {
 	if (Camera.ProjParams.w) {
 		position = float4(vertex.xy, 0, 1);
-		viewRay = float3(Camera.View[0].z, Camera.View[1].z, Camera.View[2].z);
+		viewRay = float3(STRATUM_MATRIX_V[0].z, STRATUM_MATRIX_V[1].z, STRATUM_MATRIX_V[2].z);
 	} else {
-		position = mul(Camera.Projection[StereoEye], float4(vertex, 1));
-		viewRay = mul(vertex, (float3x3)Camera.View);
+		position = mul(STRATUM_MATRIX_P, float4(vertex, 1));
+		viewRay = mul(vertex, (float3x3)STRATUM_MATRIX_V);
 	}
 	screenPos = ComputeScreenPos(position);
 }

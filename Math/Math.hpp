@@ -1166,10 +1166,9 @@ struct float3 {
 struct float4 {
 	union {
 		float v[4];
+		float2 v2[2];
 		struct { float x, y, z, w; };
 		struct { float r, g, b, a; };
-		struct { float2 xy, zw; };
-		struct { float2 rg, ba; };
 		float3 xyz;
 		float3 rgb;
 	};

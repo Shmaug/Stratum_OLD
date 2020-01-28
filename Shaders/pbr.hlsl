@@ -28,9 +28,9 @@
 // per-camera
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 // per-material
-[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTextures[1024]	: register(t4);
-[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTextures[1024]	: register(t12);
-[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTextures[1024]	: register(t20); // rgba ->ao, rough, metallic (glTF spec.)
+[[vk::binding(BINDING_START + 0, PER_MATERIAL)]] Texture2D<float4> MainTextures[64]		: register(t4);
+[[vk::binding(BINDING_START + 1, PER_MATERIAL)]] Texture2D<float4> NormalTextures[64]	: register(t12);
+[[vk::binding(BINDING_START + 2, PER_MATERIAL)]] Texture2D<float4> MaskTextures[64]		: register(t20); // rgba ->ao, rough, metallic (glTF spec.)
 
 [[vk::binding(BINDING_START + 3, PER_MATERIAL)]] Texture3D<float3> InscatteringLUT		: register(t29);
 [[vk::binding(BINDING_START + 4, PER_MATERIAL)]] Texture3D<float3> ExtinctionLUT		: register(t30);
@@ -52,11 +52,7 @@
 	float BumpStrength;
 	float3 Emission;
 
-	// Set by scene
-	uint StereoEye;
-	float3 AmbientLight;
-	uint LightCount;
-	float2 ShadowTexelSize;
+	STRATUM_PUSH_CONSTANTS
 };
 
 //#define SHOW_CASCADE_SPLITS
@@ -94,7 +90,7 @@ v2f vsmain(
 		0,0,0,1);
 	float4 worldPos = mul(mul(ct, Instances[instance].ObjectToWorld), float4(vertex, 1.0));
 
-	o.position = mul(Camera.ViewProjection[StereoEye], worldPos);
+	o.position = mul(STRATUM_MATRIX_VP, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	
 	o.screenPos = ComputeScreenPos(o.position);

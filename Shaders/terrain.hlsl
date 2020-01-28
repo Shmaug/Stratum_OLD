@@ -40,13 +40,12 @@
 [[vk::binding(BINDING_START + 10, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	STRATUM_PUSH_CONSTANTS
+
 	float4x4 ObjectToWorld;
 	float4x4 WorldToObject;
 	float TerrainSize;
 	float TerrainHeight;
-	uint LightCount;
-	float2 ShadowTexelSize;
-	float3 AmbientLight;
 };
 
 //#define SHOW_CASCADE_SPLITS
@@ -96,7 +95,7 @@ v2f vsmain(
 	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(vertex, 1.0));
 
 	v2f o;
-	o.position = mul(Camera.ViewProjection, worldPos);
+	o.position = mul(STRATUM_MATRIX_VP, worldPos);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.screenPos = ComputeScreenPos(o.position);
 	o.terrainPos = terrainPos;

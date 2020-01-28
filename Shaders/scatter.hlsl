@@ -3,7 +3,6 @@
 #pragma kernel ParticleDensityLUT
 #pragma kernel AmbientLightLUT
 #pragma kernel DirectLightLUT
-#pragma kernel LightShaftLUT
 
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler PointClampSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_edge filter=nearest
@@ -417,6 +416,7 @@ void DirectLightLUT(uint3 id : SV_DispatchThreadID) {
 	_RWDirectLightLUT[id.x] = color;
 }
 
+/*
 [numthreads(8, 8, 1)]
 void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 	if (Lights[0].ShadowIndex < 0 || Lights[0].Type != LIGHT_SUN) {
@@ -443,3 +443,4 @@ void LightShaftLUT(uint3 id : SV_DispatchThreadID) {
 	}
 	_LightShaftLUT[id.xy] = attenuation / 32.0;
 }
+*/

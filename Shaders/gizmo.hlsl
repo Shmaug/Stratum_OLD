@@ -27,6 +27,10 @@ struct Gizmo {
 [[vk::binding(BINDING_START + 0, PER_OBJECT)]] SamplerState Sampler : register(s0);
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[16] : register(t1);
 
+[[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	STRATUM_PUSH_CONSTANTS
+}
+
 #include "include/util.hlsli"
 
 struct v2f {
@@ -51,7 +55,7 @@ v2f vsmain(
 	worldPos.xyz -= Camera.Position;
 
 	v2f o;
-	o.position = mul(Camera.ViewProjection, float4(worldPos, 1));
+	o.position = mul(STRATUM_MATRIX_VP, float4(worldPos, 1));
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.color = g.Color;
 	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;
