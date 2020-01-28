@@ -20,19 +20,51 @@ Bone* SkinnedMeshRenderer::GetBone(const string& boneName) const {
 void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
+	VkBufferMemoryBarrier barrier = {};
+	barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	barrier.size = VK_WHOLE_SIZE;
+	barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
 	::Mesh* m = MeshRenderer::Mesh();
 
-	mVertexBuffer = commandBuffer->Device()->GetTempBuffer(mName + " VertexBuffer", m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	VkBufferCopy region = {};
-	region.size = m->VertexBuffer()->Size();
-	vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(), *mVertexBuffer, 1, &region);
-
-	Buffer* poseBuffer = commandBuffer->Device()->GetTempBuffer(mName + " PoseBuffer", mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-	
 	// pose space -> bone space
+	Buffer* poseBuffer = commandBuffer->Device()->GetTempBuffer(mName + " PoseBuffer", mRig.size() * sizeof(float4x4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 	float4x4* skin = (float4x4*)poseBuffer->MappedData();
 	for (uint32_t i = 0; i < mRig.size(); i++)
-		skin[i] = mRig[i]->mBindOffset * mRig[i]->ObjectToWorld() * WorldToObject();
+		skin[i] = mRig[i]->mInverseBind * mRig[i]->ObjectToWorld() * WorldToObject();
+
+	mVertexBuffer = commandBuffer->Device()->GetTempBuffer(mName + " VertexBuffer", m->VertexBuffer()->Size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+	barrier.buffer = *mVertexBuffer;
+	barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		0, 0, nullptr, 1, &barrier, 0, nullptr);
+
+	ComputeShader* s = Scene()->AssetManager()->LoadShader("Shaders/skinner.stm")->GetCompute("skin", {});
+	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s->mPipeline);
+
+	DescriptorSet* ds = new DescriptorSet("Skinning", commandBuffer->Device(), s->mDescriptorSetLayouts[0]);
+	ds->CreateStorageBufferDescriptor(m->VertexBuffer().get(), 0, m->VertexBuffer()->Size(), s->mDescriptorBindings.at("InputVertices").second.binding);
+	ds->CreateStorageBufferDescriptor(mVertexBuffer,		   0, mVertexBuffer->Size(),     s->mDescriptorBindings.at("OutputVertices").second.binding);
+	//ds->CreateStorageBufferDescriptor(m->WeightBuffer().get(), 0, m->WeightBuffer()->Size(), s->mDescriptorBindings.at("Weights").second.binding);
+	//ds->CreateStorageBufferDescriptor(poseBuffer, 0, poseBuffer->Size(), s->mDescriptorBindings.at("Pose").second.binding);
+	ds->FlushWrites();
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+	uint32_t vc = m->VertexCount();
+	uint32_t vs = sizeof(StdVertex);
+	commandBuffer->PushConstant(s, "VertexCount", &vc);
+	commandBuffer->PushConstant(s, "VertexStride", &vs);
+
+	vkCmdDispatch(*commandBuffer, (vc + 63) / 64, 1, 1);
+
+	barrier.buffer = *mVertexBuffer;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+		0, 0, nullptr, 1, &barrier, 0, nullptr);
 }
 
 void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) {
