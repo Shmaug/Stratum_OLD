@@ -45,7 +45,7 @@ private:
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string& name, float scale = 1.f);
 	void LoadSkel(const fs::path& file, AnimationRig& destRig, float scale = 1.f);
-	shared_ptr<Mesh> LoadSkin(const fs::path& file, float scale = 1.f);
+	shared_ptr<Mesh> LoadSkin(const fs::path& file, AnimationRig& destRig, float scale = 1.f);
 	Object* Load(const fs::path& file, float scale = 1.f);
 
 	MouseKeyboardInput* mInput;
@@ -164,7 +164,7 @@ void MeshView::LoadSkel(const fs::path& filepath, AnimationRig& destRig, float s
 
 	printf("Loaded %s\n", filepath.string().c_str());
 }
-shared_ptr<Mesh> MeshView::LoadSkin(const fs::path& filepath, float scale) {
+shared_ptr<Mesh> MeshView::LoadSkin(const fs::path& filepath, AnimationRig& destRig, float scale) {
 	ifstream file(filepath.string());
 
 	Tokenizer t(file, { '{', '}', ' ', '\n', '\r', '\t' });
@@ -221,8 +221,7 @@ shared_ptr<Mesh> MeshView::LoadSkin(const fs::path& filepath, float scale) {
 					if (!t.Next(weights[i].Weights[j])) THROW_INVALID_SKIN
 				}
 			}
-		}
-		else if (token == "triangles") {
+		} else if (token == "triangles") {
 			uint32_t sz;
 			if (!t.Next(sz)) THROW_INVALID_SKIN
 			if (sz*3 > indices.size()) indices.resize(sz*3);
@@ -231,7 +230,43 @@ shared_ptr<Mesh> MeshView::LoadSkin(const fs::path& filepath, float scale) {
 				if (!t.Next(indices[3*i+1])) THROW_INVALID_SKIN
 				if (!t.Next(indices[3*i+2])) THROW_INVALID_SKIN
 			}
+		} else if (token == "bindings") {
+			uint32_t sz;
+			if (!t.Next(sz)) THROW_INVALID_SKIN
+				if (sz * 3 > indices.size()) indices.resize(sz * 3);
+			for (uint32_t i = 0; i < sz; i++) {
+				Bone* j = destRig[i];
+				if (!t.Next(j->mInverseBind[0][0])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[1][0])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[2][0])) THROW_INVALID_SKIN
+
+				if (!t.Next(j->mInverseBind[0][1])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[1][1])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[2][1])) THROW_INVALID_SKIN
+					
+				if (!t.Next(j->mInverseBind[0][2])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[1][2])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[2][2])) THROW_INVALID_SKIN
+					
+				if (!t.Next(j->mInverseBind[0][3])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[1][3])) THROW_INVALID_SKIN
+				if (!t.Next(j->mInverseBind[2][3])) THROW_INVALID_SKIN
+
+				j->mInverseBind[0][2] = -j->mInverseBind[0][2];
+				j->mInverseBind[1][2] = -j->mInverseBind[1][2];
+				j->mInverseBind[2][2] = -j->mInverseBind[2][2];
+				j->mInverseBind[3][2] = -j->mInverseBind[3][2];
+
+				j->mInverseBind[2][0] = -j->mInverseBind[2][0];
+				j->mInverseBind[2][1] = -j->mInverseBind[2][1];
+				j->mInverseBind[2][2] = -j->mInverseBind[2][2];
+				j->mInverseBind[2][3] = -j->mInverseBind[2][3];
+			}
 		}
+	}
+
+	for (uint32_t i = 0; i < indices.size(); i++) {
+
 	}
 
 	printf("Loaded %s\n", filepath.string().c_str());
@@ -254,7 +289,7 @@ bool MeshView::Init(Scene* scene) {
 
 	mScene->Environment()->EnableCelestials(false);
 	mScene->Environment()->EnableScattering(false);
-	mScene->Environment()->AmbientLight(.05f);
+	mScene->Environment()->AmbientLight(.3f);
 
 	auto light = make_shared<Light>("Spot");
 	light->CastShadows(true);
@@ -319,11 +354,12 @@ bool MeshView::Init(Scene* scene) {
 	auto wasp = make_shared<SkinnedMeshRenderer>("Wasp");
 	wasp->LocalPosition(-2, 1, 0);
 	wasp->Rig(waspRig);
-	wasp->Mesh(LoadSkin("Assets/Models/wasp.skin", 1));
+	wasp->Mesh(LoadSkin("Assets/Models/wasp.skin", waspRig, 1));
 	wasp->Material(waspMat);
 	wasp->PushConstant("TextureIndex", 0u);
 	mScene->AddObject(wasp);
 	mObjects.push_back(wasp.get());
+	waspRig[0]->AddChild(wasp.get());
 	#pragma endregion
 
 	#pragma region head
@@ -342,16 +378,14 @@ bool MeshView::Init(Scene* scene) {
 	AnimationRig headRig;
 	LoadSkel("Assets/Models/head/head.skel", headRig, .3f);
 
-	headRig[0]->LocalPosition(2, 1, 0);
-
 	auto head = make_shared<SkinnedMeshRenderer>("Head");
-	head->LocalPosition(2, 1, 0);
 	head->Rig(headRig);
-	head->Mesh(LoadSkin("Assets/Models/head/head_tex.skin", .3f));
+	head->Mesh(LoadSkin("Assets/Models/head/head_tex.skin", headRig, .3f));
 	head->Material(headMat);
 	head->PushConstant("TextureIndex", 0u);
 	mScene->AddObject(head);
 	mObjects.push_back(head.get());
+	headRig[0]->AddChild(head.get());
 	#pragma endregion
 
 	return true;

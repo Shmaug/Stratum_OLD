@@ -149,8 +149,8 @@ void fsmain(v2f i,
 	MaterialInfo material;
 	material.diffuse = DiffuseAndSpecularFromMetallic(col.rgb, Metallic*mask.b, material.specular, material.oneMinusReflectivity);
 	material.perceptualRoughness = Roughness * mask.g * .99;
-	material.occlusion = mask.r;
 	material.roughness = max(.002, material.perceptualRoughness * material.perceptualRoughness);
+	material.occlusion = mask.r;
 	material.emission = Emission;
 
 	float3 eval = EvaluateLighting(material, i.worldPos.xyz, normal, view, i.worldPos.w);

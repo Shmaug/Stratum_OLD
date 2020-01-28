@@ -13,6 +13,8 @@
 
 #include <Shaders/include/shadercompat.h>
 
+#pragma pack(push)
+#pragma pack(1)
 struct StdVertex {
 	float3 position;
 	float3 normal;
@@ -21,12 +23,13 @@ struct StdVertex {
 
 	ENGINE_EXPORT static const ::VertexInput VertexInput;
 };
+#pragma pack(pop)
 
 class Bone : public virtual Object {
 public:
 	uint32_t mBoneIndex;
-	float4x4 mBindOffset;
-	inline Bone(const std::string& name, uint32_t index) : Object(name), mBindOffset(float4x4(1)), mBoneIndex(index) {}
+	float4x4 mInverseBind;
+	inline Bone(const std::string& name, uint32_t index) : Object(name), mInverseBind(float4x4(1)), mBoneIndex(index) {}
 };
 
 class Mesh : public Asset {
