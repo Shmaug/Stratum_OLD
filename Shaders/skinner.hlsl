@@ -15,7 +15,7 @@
 [numthreads(64, 1, 1)]
 void skin(uint3 index : SV_DispatchThreadID) {
 	if (index.x >= VertexCount) return;
-	/*
+	
 	VertexWeight w = Weights[index.x];
 
 	float4x4 pose = 0;
@@ -29,15 +29,17 @@ void skin(uint3 index : SV_DispatchThreadID) {
 	pose /= sum;
 
 	float3x3 pose3 = (float3x3)pose;
-	*/
 
 	uint address = VertexStride * index.x;
-	for (uint i = 0; i < VertexStride/4; i += 4) {
-		uint x = InputVertices.Load(address + i);
-		OutputVertices.Store(address + i, x);
-	}
 
-	//v.position.xyz = mul(pose, float4(v.position.xyz, 1)).xyz;
-	//v.normal.xyz = normalize(mul(pose3, float3(v.normal.xyz)));
-	//v.tangent = float4(mul(pose3, v.tangent.xyz), v.tangent.w);
+	float3 vertex;
+	vertex.x = asfloat(InputVertices.Load(address + 0));
+	vertex.y = asfloat(InputVertices.Load(address + 4));
+	vertex.z = asfloat(InputVertices.Load(address + 8));
+
+	vertex = mul(pose, float4(vertex, 1)).xyz;
+
+	vertex.x = OutputVertices.Store(address + 0, asuint(vertex.x));
+	vertex.y = OutputVertices.Store(address + 4, asuint(vertex.y));
+	vertex.z = OutputVertices.Store(address + 8, asuint(vertex.z));
 }
