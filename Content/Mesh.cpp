@@ -367,7 +367,7 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 }
-Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const VertexWeight* weights, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const VertexWeight* weights, const vector<pair<string, const void*>>&  shapeKeys, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
 	: mName(name), mVertexInput(vertexInput), mBvh(nullptr), mIndexCount(indexCount), mIndexType(indexType), mVertexCount(vertexCount), mBaseVertex(0), mBaseIndex(0), mTopology(topology) {
 
 	float3 mn, mx;
@@ -393,6 +393,9 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const Ver
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 	mWeightBuffer = make_shared<Buffer>(name + " Weight Buffer", device, weights, sizeof(VertexWeight) * vertexCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	mIndexBuffer = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+	for (auto i : shapeKeys)
+		mShapeKeys.emplace(i.first, make_shared<Buffer>(name + i.first, device, i.second, vertexSize * vertexCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
 }
 
 Mesh* Mesh::CreatePlane(const string& name, Device* device, float s) {

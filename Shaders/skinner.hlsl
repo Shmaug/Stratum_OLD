@@ -1,15 +1,22 @@
 #pragma kernel skin
+#pragma kernel blend
 
 #include <include/shadercompat.h>
 
-[[vk::binding(0, 0)]] RWStructuredBuffer<float> InputVertices	: register(u0);
-[[vk::binding(1, 0)]] RWStructuredBuffer<float> OutputVertices	: register(u1);
-[[vk::binding(2, 0)]] RWStructuredBuffer<VertexWeight> Weights	: register(u2);
-[[vk::binding(3, 0)]] RWStructuredBuffer<float4x4> Pose			: register(u3);
+[[vk::binding(0, 0)]] RWByteAddressBuffer Vertices				: register(u0);
+[[vk::binding(1, 0)]] RWByteAddressBuffer BlendTarget0			: register(u1);
+[[vk::binding(2, 0)]] RWByteAddressBuffer BlendTarget1			: register(u2);
+[[vk::binding(3, 0)]] RWByteAddressBuffer BlendTarget2			: register(u3);
+[[vk::binding(4, 0)]] RWByteAddressBuffer BlendTarget3			: register(u4);
+[[vk::binding(5, 0)]] RWStructuredBuffer<VertexWeight> Weights	: register(u5);
+[[vk::binding(6, 0)]] RWStructuredBuffer<float4x4> Pose			: register(u6);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b0) {
 	uint VertexCount;
 	uint VertexStride;
+	uint NormalOffset;
+
+	float4 BlendFactors;
 }
 
 [numthreads(64, 1, 1)]
@@ -18,28 +25,49 @@ void skin(uint3 index : SV_DispatchThreadID) {
 	
 	VertexWeight w = Weights[index.x];
 
-	float4x4 pose = 0;
-	float sum = dot(w.Weights, 1);
+	float4x4 transform = 0;
+	transform += Pose[w.Indices[0]] * w.Weights[0];
+	transform += Pose[w.Indices[1]] * w.Weights[1];
+	transform += Pose[w.Indices[2]] * w.Weights[2];
+	transform += Pose[w.Indices[3]] * w.Weights[3];
 
-	if (sum < .0001) return;
+	uint address = index.x * VertexStride;
+	float3 vertex = asfloat(Vertices.Load3(address));
+	float3 normal = asfloat(Vertices.Load3(address + NormalOffset));
 
-	for (uint i = 0; i < 4; i++)
-		if (w.Weights[i] > 0)
-			pose += w.Weights[i] * Pose[w.Indices[i]];
-	pose /= sum;
+	vertex = mul(transform, float4(vertex, 1)).xyz;
+	normal = mul((float3x3)transform, normal);
 
-	float3x3 pose3 = (float3x3)pose;
+	Vertices.Store3(address, asuint(vertex));
+	Vertices.Store3(address + NormalOffset, asuint(normal));
+}
 
-	uint address = VertexStride * index.x;
+[numthreads(64, 1, 1)]
+void blend(uint3 index : SV_DispatchThreadID) {
+	if (index.x >= VertexCount) return;
+	
+	uint address = index.x * VertexStride;
 
-	float3 vertex;
-	vertex.x = asfloat(InputVertices.Load(address + 0));
-	vertex.y = asfloat(InputVertices.Load(address + 4));
-	vertex.z = asfloat(InputVertices.Load(address + 8));
+	float sum = dot(1, abs(BlendFactors));
+	float isum = max(0, 1 - sum);
 
-	vertex = mul(pose, float4(vertex, 1)).xyz;
+	float3 vertex = isum * asfloat(Vertices.Load3(address));
+	float3 normal = isum * asfloat(Vertices.Load3(address + NormalOffset));
 
-	vertex.x = OutputVertices.Store(address + 0, asuint(vertex.x));
-	vertex.y = OutputVertices.Store(address + 4, asuint(vertex.y));
-	vertex.z = OutputVertices.Store(address + 8, asuint(vertex.z));
+	vertex += BlendFactors[0] * asfloat(BlendTarget0.Load3(address));
+	normal += BlendFactors[0] * asfloat(BlendTarget0.Load3(address + NormalOffset));
+
+	vertex += BlendFactors[1] * asfloat(BlendTarget1.Load3(address));
+	normal += BlendFactors[1] * asfloat(BlendTarget1.Load3(address + NormalOffset));
+
+	vertex += BlendFactors[2] * asfloat(BlendTarget2.Load3(address));
+	normal += BlendFactors[2] * asfloat(BlendTarget2.Load3(address + NormalOffset));
+
+	vertex += BlendFactors[3] * asfloat(BlendTarget3.Load3(address));
+	normal += BlendFactors[3] * asfloat(BlendTarget3.Load3(address + NormalOffset));
+
+	normal = normalize(normal);
+
+	Vertices.Store3(address, asuint(vertex));
+	Vertices.Store3(address + NormalOffset, asuint(normal));
 }

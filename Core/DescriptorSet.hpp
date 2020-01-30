@@ -12,6 +12,7 @@ public:
 	ENGINE_EXPORT DescriptorSet(const std::string& name, Device* device, VkDescriptorSetLayout layout);
 	ENGINE_EXPORT ~DescriptorSet();
 
+	ENGINE_EXPORT void CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
 	ENGINE_EXPORT void CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
 	ENGINE_EXPORT void CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
 	
