@@ -212,23 +212,4 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 	return hitObject;
 }
 
-void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {
-	const float3 colors[]{
-		float3(1,0,0),
-		float3(0,1,0),
-		float3(0,0,1),
-	};
-	queue<pair<uint32_t, uint32_t>> nodes;
-	nodes.push(make_pair(0u, 0u));
-	while (nodes.size()) {
-		auto p = nodes.front();
-		nodes.pop();
-
-		scene->Gizmos()->DrawWireCube(mNodes[p.first].mBounds.Center(), mNodes[p.first].mBounds.Extents(), quaternion(), float4(colors[p.second % 3], .1f));
-
-		if (mNodes[p.first].mRightOffset) {
-			nodes.push(make_pair(p.first + 1, p.second + 1));
-			nodes.push(make_pair(p.first + mNodes[p.first].mRightOffset, p.second + 1));
-		}
-	}
-}
+void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {}

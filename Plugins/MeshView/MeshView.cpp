@@ -24,11 +24,11 @@ public:
 		MouseKeyboardInput* input = Scene()->InputManager()->GetFirst<MouseKeyboardInput>();
 
 		quaternion r = WorldRotation();
-		if (Scene()->Gizmos()->RotationHandle(input->GetPointer(0), WorldPosition(), r, .1f))
+		if (Gizmos::RotationHandle(mName + to_string(mBoneIndex), input->GetPointer(0), WorldPosition(), r, .1f))
 			LocalRotation(Parent() ? inverse(Parent()->WorldRotation()) * r : r);
 
 		float3 center = (ObjectToWorld() * float4(mBox.Center(), 1.f)).xyz;
-		Scene()->Gizmos()->DrawWireCube(center, mBox.Extents(), WorldRotation(), float4(1,1,1,.2f));
+		Gizmos::DrawWireCube(center, mBox.Extents(), WorldRotation(), float4(1,1,1,.2f));
 	}
 };
 
@@ -45,8 +45,8 @@ public:
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 
 	PLUGIN_EXPORT void Update() override {
-		if (mInput->KeyDown(KEY_RIGHT)) mHeadBlend += .5f * mScene->Instance()->DeltaTime();
-		if (mInput->KeyDown(KEY_LEFT))  mHeadBlend -= .5f * mScene->Instance()->DeltaTime();
+		if (mInput->KeyDown(KEY_RIGHT)) mHeadBlend += 2.f * mScene->Instance()->DeltaTime();
+		if (mInput->KeyDown(KEY_LEFT))  mHeadBlend -= 2.f * mScene->Instance()->DeltaTime();
 		mHeadBlend = clamp(mHeadBlend, 0.f, 1.f);
 		mHead->ShapeKey("head1", mHeadBlend);
 		mHead->ShapeKey("head2", 1.f - mHeadBlend);
@@ -356,11 +356,11 @@ bool MeshView::Init(Scene* scene) {
 	auto light = make_shared<Light>("Spot");
 	light->CastShadows(true);
 	light->Type(LIGHT_TYPE_SPOT);
-	light->Color(float3(1, .75f, .75f));
+	light->Color(float3(1, .4f, .4f));
 	light->Intensity(15.f);
 	light->Range(16.f);
 	light->LocalPosition(3, 3, -1);
-	light->InnerSpotAngle(radians(25.f));
+	light->InnerSpotAngle(radians(20.f));
 	light->OuterSpotAngle(radians(30.f));
 	light->LocalRotation(quaternion(float3(PI * .25f, -PI / 2, 0)));
 	mScene->AddObject(light);
@@ -369,11 +369,11 @@ bool MeshView::Init(Scene* scene) {
 	auto light2 = make_shared<Light>("Spot");
 	light2->CastShadows(true);
 	light2->Type(LIGHT_TYPE_SPOT);
-	light2->Color(float3(.75, 1, .85f));
+	light2->Color(float3(.4, 1, .4f));
 	light2->Intensity(15.f);
 	light2->Range(16.f);
 	light2->LocalPosition(-3, 3, 1);
-	light2->InnerSpotAngle(radians(20.f));
+	light2->InnerSpotAngle(radians(10.f));
 	light2->OuterSpotAngle(radians(25.f));
 	light2->LocalRotation(quaternion(float3(PI * .25f, PI / 2, 0)));
 	mScene->AddObject(light2);
@@ -458,7 +458,6 @@ bool MeshView::Init(Scene* scene) {
 
 void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	const Ray& ray = mInput->GetPointer(0)->mWorldRay;
-	Gizmos* gizmos = mScene->Gizmos();
 
 	bool change = mInput->GetPointer(0)->mAxis.at(0) > .5f;
 
@@ -469,17 +468,17 @@ void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		if (selectedLight) {
 			switch (selectedLight->Type()) {
 			case LIGHT_TYPE_SPOT:
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				Gizmos::DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
 					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(
+				Gizmos::DrawWireCircle(
 					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
 					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				break;
 
 			case LIGHT_TYPE_POINT:
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
 				break;
 			}
 		}
@@ -487,13 +486,13 @@ void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
 		if (mInput->KeyDown(KEY_LSHIFT)) {
 			quaternion r = mSelected->WorldRotation();
-			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
+			if (Gizmos::RotationHandle("Selected Light Rotation", mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);
 				change = false;
 			}
 		} else {
 			float3 p = mSelected->WorldPosition();
-			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
+			if (Gizmos::PositionHandle("Selected Light Position", mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
 				mSelected->LocalPosition(p);
 				change = false;
 			}
@@ -508,7 +507,7 @@ void MeshView::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		hover = hover && lt.x > 0;
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
-		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
+		Gizmos::DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
 			mScene->AssetManager()->LoadTexture("Assets/Textures/icons.png"), float4(.5f, .5f, 0, 0));
 
 		if (hover && change)

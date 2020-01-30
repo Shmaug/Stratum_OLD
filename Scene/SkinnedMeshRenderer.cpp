@@ -65,7 +65,7 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 		ComputeShader* s = skinner->GetCompute("blend", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s->mPipeline);
 	
-		DescriptorSet* ds = new DescriptorSet("Blend", commandBuffer->Device(), s->mDescriptorSetLayouts[0]);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blend", s->mDescriptorSetLayouts[0]);
 		ds->CreateStorageBufferDescriptor(mVertexBuffer, 0, mVertexBuffer->Size(), s->mDescriptorBindings.at("Vertices").second.binding);
 		ds->CreateStorageBufferDescriptor(targets[0], 0, mVertexBuffer->Size(), s->mDescriptorBindings.at("BlendTarget0").second.binding);
 		ds->CreateStorageBufferDescriptor(targets[1], 0, mVertexBuffer->Size(), s->mDescriptorBindings.at("BlendTarget1").second.binding);
@@ -102,7 +102,7 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 		ComputeShader* s = skinner->GetCompute("skin", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s->mPipeline);
 
-		DescriptorSet* ds = new DescriptorSet("Skinning", commandBuffer->Device(), s->mDescriptorSetLayouts[0]);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Skinning", s->mDescriptorSetLayouts[0]);
 		ds->CreateStorageBufferDescriptor(mVertexBuffer,		   0, mVertexBuffer->Size(),     s->mDescriptorBindings.at("Vertices").second.binding);
 		ds->CreateStorageBufferDescriptor(m->WeightBuffer().get(), 0, m->WeightBuffer()->Size(), s->mDescriptorBindings.at("Weights").second.binding);
 		ds->CreateStorageBufferDescriptor(poseBuffer, 0, poseBuffer->Size(), s->mDescriptorBindings.at("Pose").second.binding);
@@ -155,9 +155,9 @@ void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* ca
 void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	if (mRig.size()){
 		for (auto b : mRig) {
-			Scene()->Gizmos()->DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));
+			Gizmos::DrawWireSphere(b->WorldPosition(), .01f, float4(0.25f, 1.f, 0.25f, 1.f));
 			if (Bone* parent = dynamic_cast<Bone*>(b->Parent()))
-				Scene()->Gizmos()->DrawLine(b->WorldPosition(), parent->WorldPosition(), float4(0.25f, 1.f, 0.25f, 1.f));
+				Gizmos::DrawLine(b->WorldPosition(), parent->WorldPosition(), float4(0.25f, 1.f, 0.25f, 1.f));
 		}
 	}
 }

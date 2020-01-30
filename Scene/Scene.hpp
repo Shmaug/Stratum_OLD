@@ -56,7 +56,6 @@ public:
 
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
 	inline ::Instance* Instance() const { return mInstance; }
-	inline ::Gizmos* Gizmos() const { return mGizmos; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 	inline ::Environment* Environment() const { return mEnvironment; }
@@ -98,7 +97,6 @@ private:
 
 	::AssetManager* mAssetManager;
 	::Instance* mInstance;
-	::Gizmos* mGizmos;
 	::InputManager* mInputManager;
 	::PluginManager* mPluginManager;
 	::Environment* mEnvironment;

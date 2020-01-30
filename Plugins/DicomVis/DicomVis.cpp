@@ -423,7 +423,7 @@ public:
 		float t;
 		PROFILER_BEGIN("Raycast");
 		if (mScene->Raycast(ray, &t))
-			mScene->Gizmos()->DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
+			Gizmos::DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
 		PROFILER_END;
 	}
 };
