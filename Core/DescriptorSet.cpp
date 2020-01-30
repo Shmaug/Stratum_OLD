@@ -32,6 +32,30 @@ DescriptorSet::~DescriptorSet() {
 	ThrowIfFailed(vkFreeDescriptorSets(*mDevice, mDevice->mDescriptorPool, 1, &mDescriptorSet), "vkFreeDescriptorSets failed");
 }
 
+void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
+	VkDescriptorBufferInfo* info;
+	if (mBufferInfoPool.empty())
+		info = new VkDescriptorBufferInfo();
+	else {
+		info = mBufferInfoPool.front();
+		mBufferInfoPool.pop();
+	}
+	info->buffer = *buffer;
+	info->offset = offset;
+	info->range = range;
+
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = mDescriptorSet;
+	write.dstBinding = binding;
+	write.dstArrayElement = index;
+	write.pBufferInfo = info;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	write.descriptorCount = 1;
+	mPending.push_back(write);
+	mPendingBuffers.push_back(info);
+}
+
 void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
 	VkDescriptorBufferInfo* info;
 	if (mBufferInfoPool.empty())

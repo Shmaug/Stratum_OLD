@@ -28,13 +28,13 @@ public:
 			LocalRotation(Parent() ? inverse(Parent()->WorldRotation()) * r : r);
 
 		float3 center = (ObjectToWorld() * float4(mBox.Center(), 1.f)).xyz;
-		Scene()->Gizmos()->DrawWireCube(center, mBox.Extents(), WorldRotation(), 1.f);
+		Scene()->Gizmos()->DrawWireCube(center, mBox.Extents(), WorldRotation(), float4(1,1,1,.2f));
 	}
 };
 
 class MeshView : public EnginePlugin {
 public:
-	PLUGIN_EXPORT MeshView() : mScene(nullptr), mSelected(nullptr), mInput(nullptr) {
+	PLUGIN_EXPORT MeshView() : mScene(nullptr), mSelected(nullptr), mInput(nullptr), mHeadBlend(0.f) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~MeshView() {
@@ -44,12 +44,24 @@ public:
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
 
+	PLUGIN_EXPORT void Update() override {
+		if (mInput->KeyDown(KEY_RIGHT)) mHeadBlend += .5f * mScene->Instance()->DeltaTime();
+		if (mInput->KeyDown(KEY_LEFT))  mHeadBlend -= .5f * mScene->Instance()->DeltaTime();
+		mHeadBlend = clamp(mHeadBlend, 0.f, 1.f);
+		mHead->ShapeKey("head1", mHeadBlend);
+		mHead->ShapeKey("head2", 1.f - mHeadBlend);
+	}
+
 	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
 
 private:
 	Scene* mScene;
 	vector<Object*> mObjects;
 	Object* mSelected;
+
+	SkinnedMeshRenderer* mHead;
+
+	float mHeadBlend;
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string &name, float scale) {
 		shared_ptr<SkelJoint> j = make_shared<SkelJoint>(name, destRig.size());
@@ -138,7 +150,6 @@ private:
 		string token;
 		if (!t.Next(token) || token != "balljoint") THROW_INVALID_SKEL
 			if (!t.Next(token)) THROW_INVALID_SKEL
-
 				ReadJoint(t, destRig, token, scale);
 
 		if (t.Next(token)) {
@@ -152,11 +163,13 @@ private:
 		printf("Loaded %s\n", filepath.string().c_str());
 	}
 
-	shared_ptr<Mesh> LoadSkin(const fs::path& filepath, AnimationRig& destRig, vector<StdVertex>& vertices, vector<VertexWeight>& weights, float scale) {
+	shared_ptr<Mesh> LoadSkin(const fs::path& filepath, AnimationRig& destRig, float scale, bool calcNormals) {
 		ifstream file(filepath.string());
 
 		Tokenizer t(file, { '{', '}', ' ', '\n', '\r', '\t' });
 
+		vector<StdVertex> vertices;
+		vector<VertexWeight> weights;
 		vector<uint32_t> indices;
 
 		uint32_t sz;
@@ -254,25 +267,70 @@ private:
 			}
 		}
 
-		/*
-		for (i = 0; i < vertices.size(); i++)
-			vertices[i].normal = 0;
-		for (i = 0; i < indices.size(); i+=3) {
-			float3 n = normalize(cross(
-				normalize(vertices[indices[i+2]].position - vertices[indices[i]].position),
-				normalize(vertices[indices[i+1]].position - vertices[indices[i]].position) ));
-			vertices[indices[i+0]].normal += n;
-			vertices[indices[i+1]].normal += n;
-			vertices[indices[i+2]].normal += n;
+		if (calcNormals){
+			for (i = 0; i < vertices.size(); i++)
+				vertices[i].normal = 0;
+			for (i = 0; i < indices.size(); i+=3) {
+				float3 n = normalize(cross(
+					normalize(vertices[indices[i+2]].position - vertices[indices[i]].position),
+					normalize(vertices[indices[i+1]].position - vertices[indices[i]].position) ));
+				vertices[indices[i+0]].normal += n;
+				vertices[indices[i+1]].normal += n;
+				vertices[indices[i+2]].normal += n;
+			}
+			for (i = 0; i < vertices.size(); i++)
+				vertices[i].normal = normalize(vertices[i].normal);
 		}
-		for (i = 0; i < vertices.size(); i++)
-			vertices[i].normal = normalize(vertices[i].normal);
-		*/
 		
 		printf("Loaded %s\n", filepath.string().c_str());
 
+		vector<vector<StdVertex>> shapes;
+		vector<pair<string, const void*>> shapeKeys;
+
+		for (const auto& p : fs::directory_iterator(filepath.parent_path())) {
+			if (p.path().extension().string() == ".morph") {
+				ifstream mfile(p.path().string());
+				Tokenizer mt(mfile, { '{', '}', ' ', '\n', '\r', '\t' });
+
+				shapes.push_back({});
+				vector<StdVertex>& shape = shapes.back();
+				shape.resize(vertices.size());
+				memcpy(shape.data(), vertices.data(), vertices.size() * sizeof(StdVertex));
+
+
+				while (mt.Next(token)) {
+					if (token == "positions") {
+						if (!mt.Next(sz)) THROW_INVALID_SKIN
+						for (i = 0; i < sz; i++) {
+							uint32_t j;
+							if (!mt.Next(j)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].position.x)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].position.y)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].position.z)) THROW_INVALID_SKIN
+							shape[j].position *= scale;
+							shape[j].position.z = -shape[j].position.z;
+						}
+					} else if (token == "normals") {
+						if (!mt.Next(sz)) THROW_INVALID_SKIN
+						for (i = 0; i < sz; i++) {
+							uint32_t j;
+							if (!mt.Next(j)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].normal.x)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].normal.y)) THROW_INVALID_SKIN
+							if (!mt.Next(shape[j].normal.z)) THROW_INVALID_SKIN
+							shape[j].normal.z = -shape[j].normal.z;
+						}
+					}
+				}
+
+				shapeKeys.push_back(make_pair(p.path().stem().string(), shape.data()));
+
+				printf("Loaded %s\n", p.path().string().c_str());
+			}
+		}
+
 		return make_shared<Mesh>(filepath.filename().string(), mScene->Instance()->Device(),
-			vertices.data(), weights.data(), indices.data(), (uint32_t)vertices.size(), sizeof(StdVertex),
+			vertices.data(), weights.data(), shapeKeys, indices.data(), (uint32_t)vertices.size(), sizeof(StdVertex),
 			(uint32_t)indices.size(), &StdVertex::VertexInput, VK_INDEX_TYPE_UINT32);
 	}
 
@@ -351,18 +409,13 @@ bool MeshView::Init(Scene* scene) {
 	waspMat->SetParameter("Emission", float3(0));
 
 	AnimationRig waspRig;
-	vector<StdVertex> waspVertices;
-	vector<VertexWeight> waspWeights;
 	LoadSkel("Assets/Models/wasp.skel", waspRig, 1);
 
-	waspRig[0]->LocalPosition(-2, 1, 0);
+	waspRig[0]->LocalPosition(-1, 1, 0);
 
 	auto wasp = make_shared<SkinnedMeshRenderer>("Wasp");
-	wasp->LocalPosition(-2, 1, 0);
-	wasp->Mesh(LoadSkin("Assets/Models/wasp.skin", waspRig, waspVertices, waspWeights, 1));
+	wasp->Mesh(LoadSkin("Assets/Models/wasp.skin", waspRig,  1, true));
 	wasp->Rig(waspRig);
-	wasp->Vertices(waspVertices);
-	wasp->Weights(waspWeights);
 	wasp->Material(waspMat);
 	wasp->PushConstant("TextureIndex", 0u);
 	mScene->AddObject(wasp);
@@ -384,20 +437,20 @@ bool MeshView::Init(Scene* scene) {
 	headMat->SetParameter("Emission", float3(0));
 
 	AnimationRig headRig;
-	vector<StdVertex> headVertices;
-	vector<VertexWeight> headWeights;
 	LoadSkel("Assets/Models/head/head.skel", headRig, .3f);
 
+	headRig[0]->LocalPosition(1, 1, 0);
+	headRig[0]->LocalRotation(quaternion(float3(0, -PI / 2, 0)));
+
 	auto head = make_shared<SkinnedMeshRenderer>("Head");
-	head->Mesh(LoadSkin("Assets/Models/head/head_tex.skin", headRig, headVertices, headWeights, .3f));
+	head->Mesh(LoadSkin("Assets/Models/head/head_tex.skin", headRig, .3f, false));
 	head->Rig(headRig);
-	head->Vertices(headVertices);
-	head->Weights(headWeights);
 	head->Material(headMat);
 	head->PushConstant("TextureIndex", 0u);
 	mScene->AddObject(head);
 	mObjects.push_back(head.get());
 	headRig[0]->AddChild(head.get());
+	mHead = head.get();
 	#pragma endregion
 
 	return true;

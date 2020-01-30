@@ -50,7 +50,8 @@ public:
 		const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
-		const void* vertices, const VertexWeight* weights, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
+		const void* vertices, const VertexWeight* weights, const std::vector<std::pair<std::string, const void*>>&  shapeKeys, 
+		const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	ENGINE_EXPORT ~Mesh() override;
 
@@ -62,6 +63,7 @@ public:
 	inline std::shared_ptr<Buffer> VertexBuffer() const { return mVertexBuffer; }
 	inline std::shared_ptr<Buffer> IndexBuffer () const { return mIndexBuffer; }
 	inline std::shared_ptr<Buffer> WeightBuffer() const { return mWeightBuffer; }
+	inline std::shared_ptr<Buffer> ShapeKey(const std::string& name) const { return (mShapeKeys.count(name) == 0) ? nullptr : mShapeKeys.at(name); }
 
 	inline VkPrimitiveTopology Topology() const { return mTopology; }
 	inline uint32_t BaseVertex() const { return mBaseVertex; }
@@ -95,6 +97,8 @@ private:
 
 	AABB mBounds;
 	std::shared_ptr<Buffer> mWeightBuffer;
-	std::shared_ptr<Buffer> mVertexBuffer;
 	std::shared_ptr<Buffer> mIndexBuffer;
+
+	std::shared_ptr<Buffer> mVertexBuffer;
+	std::unordered_map<std::string, std::shared_ptr<Buffer>> mShapeKeys;
 };
