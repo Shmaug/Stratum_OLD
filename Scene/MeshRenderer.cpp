@@ -66,7 +66,6 @@ bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
 	return m->Intersect(r, t, any);
 }
 
-
 void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	//Scene()->Gizmos()->DrawWireCube(Bounds().Center(), Bounds().Extents(), quaternion(), float4(1, 1, 1, 1));
+	//Gizmos::DrawWireCube(Bounds().Center(), Bounds().Extents(), quaternion(), float4(1, 1, 1, 1));
 };

@@ -308,18 +308,18 @@ void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	float3 f6 = ClipToWorld(float3(1, -1, 1));
 	float3 f7 = ClipToWorld(float3(1, 1, 1));
 
-	Scene()->Gizmos()->DrawLine(f0, f1, 1);
-	Scene()->Gizmos()->DrawLine(f0, f2, 1);
-	Scene()->Gizmos()->DrawLine(f3, f1, 1);
-	Scene()->Gizmos()->DrawLine(f3, f2, 1);
+	Gizmos::DrawLine(f0, f1, 1);
+	Gizmos::DrawLine(f0, f2, 1);
+	Gizmos::DrawLine(f3, f1, 1);
+	Gizmos::DrawLine(f3, f2, 1);
 	
-	Scene()->Gizmos()->DrawLine(f4, f5, 1);
-	Scene()->Gizmos()->DrawLine(f4, f6, 1);
-	Scene()->Gizmos()->DrawLine(f7, f5, 1);
-	Scene()->Gizmos()->DrawLine(f7, f6, 1);
+	Gizmos::DrawLine(f4, f5, 1);
+	Gizmos::DrawLine(f4, f6, 1);
+	Gizmos::DrawLine(f7, f5, 1);
+	Gizmos::DrawLine(f7, f6, 1);
 	
-	Scene()->Gizmos()->DrawLine(f0, f4, 1);
-	Scene()->Gizmos()->DrawLine(f1, f5, 1);
-	Scene()->Gizmos()->DrawLine(f2, f6, 1);
-	Scene()->Gizmos()->DrawLine(f3, f7, 1);
+	Gizmos::DrawLine(f0, f4, 1);
+	Gizmos::DrawLine(f1, f5, 1);
+	Gizmos::DrawLine(f2, f6, 1);
+	Gizmos::DrawLine(f3, f7, 1);
 }

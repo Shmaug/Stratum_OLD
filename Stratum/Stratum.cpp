@@ -142,6 +142,7 @@ public:
 		printf("Initialized.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
+		Gizmos::Initialize(mInstance->Device(), mAssetManager);
 		mInputManager->RegisterInputDevice(mInstance->Window()->mInput);
 	}
 
@@ -184,6 +185,7 @@ public:
 	}
 
 	~Stratum() {
+		Gizmos::Destroy(mInstance->Device());
 		safe_delete(mScene);
 
 		#ifdef ENABLE_DEBUG_LAYERS

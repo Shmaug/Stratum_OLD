@@ -31,9 +31,31 @@ const ::VertexInput GizmoVertexInput {
 	}
 };
 
-Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0), mDevice(scene->Instance()->Device()) {
-	mGizmoShader = scene->AssetManager()->LoadShader("Shaders/gizmo.stm");
-	mWhiteTexture = scene->AssetManager()->LoadTexture("Assets/Textures/white.png");
+Buffer* Gizmos::mVertices;
+Buffer* Gizmos::mIndices;
+
+uint32_t* Gizmos::mBufferIndex;
+std::vector<std::pair<DescriptorSet*, Buffer*>>* Gizmos::mInstanceBuffers;
+
+Texture* Gizmos::mWhiteTexture;
+
+std::vector<Texture*> Gizmos::mTextures;
+std::unordered_map<Texture*, uint32_t> Gizmos::mTextureMap;
+
+uint32_t Gizmos::mLineVertexCount;
+uint32_t Gizmos::mTriVertexCount;
+
+std::vector<Gizmos::Gizmo> Gizmos::mTriDrawList;
+std::vector<Gizmos::Gizmo> Gizmos::mLineDrawList;
+
+size_t Gizmos::mHotControl;
+
+void Gizmos::Initialize(Device* device, AssetManager* assetManager) {
+	mLineVertexCount = 0;
+	mTriVertexCount = 0;
+	mHotControl = -1;
+
+	mWhiteTexture = assetManager->LoadTexture("Assets/Textures/white.png");
 	mTextures.push_back(mWhiteTexture);
 	mTextureMap.emplace(mWhiteTexture, 0);
 	
@@ -71,17 +93,17 @@ Gizmos::Gizmos(Scene* scene) : mLineVertexCount(0), mTriVertexCount(0), mDevice(
 		indices[60 + 2*i+1] = 8 + (i+1) % CircleResolution;
 	}
 
-	mVertices = new Buffer("Gizmo Vertices", mDevice, vertices, sizeof(GizmoVertex) * (8 + CircleResolution), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-	mIndices = new Buffer("Gizmo Indices", mDevice, indices, sizeof(uint16_t) * (60 + 2*CircleResolution), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-	mBufferIndex = new uint32_t[mDevice->MaxFramesInFlight()];
-	mInstanceBuffers = new vector<pair<DescriptorSet*, Buffer*>>[mDevice->MaxFramesInFlight()];
+	mVertices = new Buffer("Gizmo Vertices", device, vertices, sizeof(GizmoVertex) * (8 + CircleResolution), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+	mIndices = new Buffer("Gizmo Indices", device, indices, sizeof(uint16_t) * (60 + 2*CircleResolution), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	mBufferIndex = new uint32_t[device->MaxFramesInFlight()];
+	mInstanceBuffers = new vector<pair<DescriptorSet*, Buffer*>>[device->MaxFramesInFlight()];
 
-	memset(mBufferIndex, 0, sizeof(uint32_t) * mDevice->MaxFramesInFlight());
+	memset(mBufferIndex, 0, sizeof(uint32_t) * device->MaxFramesInFlight());
 }
-Gizmos::~Gizmos() {
+void Gizmos::Destroy(Device* device) {
 	safe_delete(mVertices);
 	safe_delete(mIndices);
-	for (uint32_t i = 0; i < mDevice->MaxFramesInFlight(); i++)
+	for (uint32_t i = 0; i < device->MaxFramesInFlight(); i++)
 		for (auto& p : mInstanceBuffers[i]){
 			safe_delete(p.first);
 			safe_delete(p.second);
@@ -90,7 +112,9 @@ Gizmos::~Gizmos() {
 	safe_delete_array(mInstanceBuffers);
 }
 
-bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, float3& position, float radius, const float4& color) {
+bool Gizmos::PositionHandle(const string& name, const InputPointer* input, const quaternion& plane, float3& position, float radius, const float4& color) {
+	size_t controlId = hash<string>()(name);
+
 	float2 t;
 	bool th = input->mWorldRay.Intersect(Sphere(position, radius), t);
 	float2 lt;
@@ -98,7 +122,12 @@ bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, 
 
 	DrawWireCircle(position, radius, plane, color);
 	
-	if (input->mAxis.at(0) < .5f || !th || !lth || t.x < 0 || lt.x < 0) return false;
+	if (input->mAxis.at(0) < .5f) {
+		if (mHotControl == controlId) mHotControl = -1;
+		return false;
+	}
+	if (mHotControl != controlId && (!th || !lth || t.x < 0 || lt.x < 0)) return false;
+	mHotControl = controlId;
 
 	float3 fwd = plane * float3(0,0,1);
 	float3 p  = input->mWorldRay.mOrigin + input->mWorldRay.mDirection * input->mWorldRay.Intersect(fwd, position);
@@ -108,10 +137,12 @@ bool Gizmos::PositionHandle(const InputPointer* input, const quaternion& plane, 
 
 	return true;
 }
-bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, quaternion& rotation, float radius, float sensitivity) {
+bool Gizmos::RotationHandle(const string& name, const InputPointer* input, const float3& center, quaternion& rotation, float radius, float sensitivity) {
+	size_t controlId = hash<string>()(name);
+
 	float2 t;
-	bool th = input->mWorldRay.Intersect(Sphere(center, radius), t);
 	float2 lt;
+	bool th = input->mWorldRay.Intersect(Sphere(center, radius), t);
 	bool lth = input->mLastWorldRay.Intersect(Sphere(center, radius), lt);
 
 	quaternion r = rotation;
@@ -121,7 +152,15 @@ bool Gizmos::RotationHandle(const InputPointer* input, const float3& center, qua
 	r *= quaternion(float3(PI/2, 0, 0));
 	DrawWireCircle(center, radius, r, float4(.2f,1,.2f,.5f));
 
-	if (input->mAxis.at(0) < .5f || !th || !lth || t.x < 0 || lt.x < 0) return false;
+	if (input->mAxis.at(0) < .5f) {
+		if (mHotControl == controlId) mHotControl = -1;
+		return false;
+	}
+	if (mHotControl != controlId && (!th || !lth || t.x < 0 || lt.x < 0)) return false;
+	mHotControl = controlId;
+
+	if (!th) t.x = input->mWorldRay.Intersect(normalize(input->mWorldRay.mOrigin - center), center);
+	if (!lth) lt.x = input->mLastWorldRay.Intersect(normalize(input->mLastWorldRay.mOrigin - center), center);
 
 	float3 p = input->mWorldRay.mOrigin - center + input->mWorldRay.mDirection * t.x;
 	float3 lp = input->mLastWorldRay.mOrigin - center + input->mLastWorldRay.mDirection * lt.x;
@@ -198,8 +237,8 @@ void Gizmos::DrawWireSphere(const float3& center, float radius, const float4& co
 	DrawWireCircle(center, radius, quaternion(.70710678f, 0, 0, .70710678f), color);
 }
 
-void Gizmos::PreFrame() {
-	mBufferIndex[mDevice->FrameContextIndex()] = 0;
+void Gizmos::PreFrame(Scene* scene) {
+	mBufferIndex[scene->Instance()->Device()->FrameContextIndex()] = 0;
 	mTriDrawList.clear();
 	mLineDrawList.clear();
 	mTextures.clear();
@@ -209,7 +248,7 @@ void Gizmos::PreFrame() {
 }
 void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	uint32_t instanceOffset = 0;
-	GraphicsShader* shader = mGizmoShader->GetGraphics(pass, {});
+	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/gizmo.stm")->GetGraphics(pass, {});
 	uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 
 	uint32_t billboardCount = 0;

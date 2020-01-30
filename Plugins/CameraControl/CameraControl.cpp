@@ -1,6 +1,6 @@
 #include "CameraControl.hpp"
 #include <Scene/Scene.hpp>
-#include <Scene/Interface.hpp>
+#include <Scene/GUI.hpp>
 #include <Content/Font.hpp>
 
 using namespace std;
@@ -117,7 +117,7 @@ void CameraControl::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	float t;
 	PROFILER_BEGIN("Raycast");
 	if (mScene->Raycast(ray, &t))
-		mScene->Gizmos()->DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
+		Gizmos::DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
 	PROFILER_END;
 }
 
@@ -148,8 +148,8 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 		for (uint32_t i = 0; i < pointCount; i++)
 			points[i].y /= m;
 
-		DrawScreenRect(commandBuffer, camera, float2(0, 0), float2(s.x, graphHeight), float4(.1f, .1f, .1f, 1));
-		DrawScreenRect(commandBuffer, camera, float2(0, graphHeight - 1), float2(s.x, 2), float4(.2f, .2f, .2f, 1));
+		GUI::DrawScreenRect(commandBuffer, camera, float2(0, 0), float2(s.x, graphHeight), float4(.1f, .1f, .1f, 1));
+		GUI::DrawScreenRect(commandBuffer, camera, float2(0, graphHeight - 1), float2(s.x, 2), float4(.2f, .2f, .2f, 1));
 
 		snprintf(tmpText, 64, "%.1fms", m);
 		sem11->DrawScreenString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight - 10), 11.f);
@@ -157,11 +157,11 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 		for (float i = 1; i < 3; i++) {
 			float x = m * i / 3.f;
 			snprintf(tmpText, 32, "%.1fms", x);
-			DrawScreenRect(commandBuffer, camera, float2(0, graphHeight * (i / 3.f) - 1), float2(s.x, 1), float4(.2f, .2f, .2f, 1));
+			GUI::DrawScreenRect(commandBuffer, camera, float2(0, graphHeight * (i / 3.f) - 1), float2(s.x, 1), float4(.2f, .2f, .2f, 1));
 			sem11->DrawScreenString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 		}
 
-		DrawScreenLine(commandBuffer, camera, points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
+		GUI::DrawScreenLine(commandBuffer, camera, points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
 
 		if (mSnapshotPerformance) {
 			float2 c = mInput->CursorPos();
@@ -169,7 +169,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 
 			if (c.y < 100) {
 				uint32_t hvr = (uint32_t)((c.x / s.x) * (PROFILER_FRAME_COUNT - 2) + .5f);
-				DrawScreenRect(commandBuffer, camera, float2(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), float4(1, 1, 1, .15f));
+				GUI::DrawScreenRect(commandBuffer, camera, float2(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), float4(1, 1, 1, .15f));
 				if (mInput->KeyDown(MOUSE_LEFT))
 					mSelectedFrame = hvr;
 			}
@@ -179,7 +179,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 				float sampleHeight = 20;
 
 				// selection line
-				DrawScreenRect(commandBuffer, camera, float2(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), 1);
+				GUI::DrawScreenRect(commandBuffer, camera, float2(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), 1);
 
 				float id = 1.f / (float)mProfilerFrames[mSelectedFrame].mDuration.count();
 
@@ -198,8 +198,8 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 						col.rgb = 1;
 					}
 
-					DrawScreenRect(commandBuffer, camera, pos, size, col);
-					DrawScreenRect(commandBuffer, camera, pos + 1, size - 2, float4(.3f, .9f, .3f, 1));
+					GUI::DrawScreenRect(commandBuffer, camera, pos, size, col);
+					GUI::DrawScreenRect(commandBuffer, camera, pos + 1, size - 2, float4(.3f, .9f, .3f, 1));
 
 					for (auto it = p.first->mChildren.begin(); it != p.first->mChildren.end(); it++)
 						samples.push(make_pair(&*it, p.second + 1));
@@ -207,7 +207,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 
 				if (selected) {
 					snprintf(tmpText, 64, "%s: %.2fms\n", selected->mLabel, selected->mDuration.count() * 1e-6f);
-					DrawScreenRect(commandBuffer, camera, float2(0, graphHeight), float2(s.x, 20), float4(0,0,0,.8f));
+					GUI::DrawScreenRect(commandBuffer, camera, float2(0, graphHeight), float2(s.x, 20), float4(0,0,0,.8f));
 					reg14->DrawScreenString(commandBuffer, camera, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
 				}
 			}

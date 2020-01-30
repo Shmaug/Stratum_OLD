@@ -1,9 +1,9 @@
-#include <Scene/Interface.hpp>
+#include <Scene/GUI.hpp>
 #include <Scene/Scene.hpp>
 
 using namespace std;
 
-void DrawScreenRect(CommandBuffer* commandBuffer, Camera* camera, const float2& screenPos, const float2& scale, const float4& color) {
+void GUI::DrawScreenRect(CommandBuffer* commandBuffer, Camera* camera, const float2& screenPos, const float2& scale, const float4& color) {
 	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
 	if (!shader) return;
 
@@ -21,7 +21,7 @@ void DrawScreenRect(CommandBuffer* commandBuffer, Camera* camera, const float2& 
 	vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
 }
 
-void DrawWorldRect(CommandBuffer * commandBuffer, Camera * camera, const float4x4& objectToWorld, const float2& offset, const float2& scale, const float4& color) {
+void GUI::DrawWorldRect(CommandBuffer * commandBuffer, Camera * camera, const float4x4& objectToWorld, const float2& offset, const float2& scale, const float4& color) {
 	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(PASS_MAIN, {});
 	if (!shader) return;
 
@@ -38,7 +38,7 @@ void DrawWorldRect(CommandBuffer * commandBuffer, Camera * camera, const float4x
 	vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
 }
 
-void DrawScreenLine(CommandBuffer* commandBuffer, Camera* camera, const float2* points, size_t pointCount, const float2& pos, const float2& size, const float4& color) {
+void GUI::DrawScreenLine(CommandBuffer* commandBuffer, Camera* camera, const float2* points, size_t pointCount, const float2& pos, const float2& size, const float4& color) {
 	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/line.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
 	if (!shader) return;
 	VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr, nullptr, VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);

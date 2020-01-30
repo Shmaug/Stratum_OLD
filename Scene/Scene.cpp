@@ -36,7 +36,6 @@ bool RendererCompare(Object* oa, Object* ob) {
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
 	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false), mBvhDirty(true) {
-	mGizmos = new ::Gizmos(this);
 	mBvh = new ObjectBvh2();
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
@@ -64,7 +63,6 @@ Scene::~Scene(){
 	while (mObjects.size())
 		RemoveObject(mObjects[0].get());
 
-	safe_delete(mGizmos);
 	safe_delete(mEnvironment);
 
 	for (uint32_t i = 0; i < mInstance->Device()->MaxFramesInFlight(); i++) {
@@ -620,7 +618,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	mEnvironment->Update();
 	PROFILER_END;
 
-	mGizmos->PreFrame();
+	Gizmos::PreFrame(this);
 
 	PROFILER_END;
 }
@@ -779,18 +777,18 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 				float3 f5 = c->ClipToWorld(float3(-1, 1, 1));
 				float3 f6 = c->ClipToWorld(float3(1, -1, 1));
 				float3 f7 = c->ClipToWorld(float3(1, 1, 1));
-				mGizmos->DrawLine(f0, f1, 1);
-				mGizmos->DrawLine(f0, f2, 1);
-				mGizmos->DrawLine(f3, f1, 1);
-				mGizmos->DrawLine(f3, f2, 1);
-				mGizmos->DrawLine(f4, f5, 1);
-				mGizmos->DrawLine(f4, f6, 1);
-				mGizmos->DrawLine(f7, f5, 1);
-				mGizmos->DrawLine(f7, f6, 1);
-				mGizmos->DrawLine(f0, f4, 1);
-				mGizmos->DrawLine(f1, f5, 1);
-				mGizmos->DrawLine(f2, f6, 1);
-				mGizmos->DrawLine(f3, f7, 1);
+				Gizmos::DrawLine(f0, f1, 1);
+				Gizmos::DrawLine(f0, f2, 1);
+				Gizmos::DrawLine(f3, f1, 1);
+				Gizmos::DrawLine(f3, f2, 1);
+				Gizmos::DrawLine(f4, f5, 1);
+				Gizmos::DrawLine(f4, f6, 1);
+				Gizmos::DrawLine(f7, f5, 1);
+				Gizmos::DrawLine(f7, f6, 1);
+				Gizmos::DrawLine(f0, f4, 1);
+				Gizmos::DrawLine(f1, f5, 1);
+				Gizmos::DrawLine(f2, f6, 1);
+				Gizmos::DrawLine(f3, f7, 1);
 			}
 		*/
 
@@ -803,7 +801,7 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
 				p->DrawGizmos(commandBuffer, camera);
-		mGizmos->Draw(commandBuffer, pass, camera);
+		Gizmos::Draw(commandBuffer, pass, camera);
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}

@@ -130,8 +130,6 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	float hitT;
 	Collider* hit = mScene->Raycast(ray, hitT);
 
-	Gizmos* gizmos = mScene->Gizmos();
-
 	bool change = mInput->KeyDownFirst(MOUSE_LEFT);
 
 	// manipulate selection
@@ -141,17 +139,17 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		if (selectedLight) {
 			switch (selectedLight->Type()) {
 			case LightType::Spot:
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				Gizmos::DrawWireCircle(selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
 					selectedLight->Range() * tanf(selectedLight->InnerSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireCircle(
+				Gizmos::DrawWireCircle(
 					selectedLight->WorldPosition() + selectedLight->WorldRotation() * float3(0, 0, selectedLight->Range()),
 					selectedLight->Range() * tanf(selectedLight->OuterSpotAngle()), selectedLight->WorldRotation(), float4(selectedLight->Color(), .5f));
 				break;
 
 			case LightType::Point:
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
-				gizmos->DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Radius(), float4(selectedLight->Color(), .5f));
+				Gizmos::DrawWireSphere(selectedLight->WorldPosition(), selectedLight->Range(), float4(selectedLight->Color(), .2f));
 				break;
 			}
 		}
@@ -159,13 +157,13 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		float s = camera->Orthographic() ? .05f : .05f * length(mSelected->WorldPosition() - camera->WorldPosition());
 		if (mInput->KeyDown(KEY_SHIFT)) {
 			quaternion r = mSelected->WorldRotation();
-			if (mScene->Gizmos()->RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
+			if (Gizmos::RotationHandle(mInput->GetPointer(0), mSelected->WorldPosition(), r, s)) {
 				mSelected->LocalRotation(r);
 				change = false;
 			}
 		} else {
 			float3 p = mSelected->WorldPosition();
-			if (mScene->Gizmos()->PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
+			if (Gizmos::PositionHandle(mInput->GetPointer(0), camera->WorldRotation(), p, s)) {
 				mSelected->LocalPosition(p);
 				change = false;
 			}
@@ -179,7 +177,7 @@ void TerrainSystem::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		bool hover = lt > 0 && (hitT < 0 || lt < hitT);
 
 		float3 col = light->mEnabled ? light->Color() : light->Color() * .2f;
-		gizmos->DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
+		Gizmos::DrawBillboard(light->WorldPosition(), hover && light != selectedLight ? .09f : .075f, camera->WorldRotation(), float4(col, 1),
 			mScene->AssetManager()->LoadTexture("Assets/Textures/icons.png"), float4(.5f, .5f, 0, 0));
 
 		if (hover) {

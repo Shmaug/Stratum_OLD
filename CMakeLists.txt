@@ -28,7 +28,7 @@ add_library(Engine SHARED
 	"Input/MouseKeyboardInput.cpp"
 	"Scene/Camera.cpp"
 	"Scene/Gizmos.cpp"
-	"Scene/Interface.cpp"
+	"Scene/GUI.cpp"
 	"Scene/Light.cpp"
 	"Scene/MeshRenderer.cpp"
 	"Scene/Environment.cpp"
