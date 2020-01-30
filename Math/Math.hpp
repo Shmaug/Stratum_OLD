@@ -2254,13 +2254,23 @@ struct float4x4 {
 		return *this;
 	}
 
+	inline float4x4 operator+=(const float4x4& m) {
+		rpt4(i) v[i] += m.v[i];
+		return *this;
+	}
+
+	inline float4x4 operator+=(const float& s) {
+		rpt4(i) v[i] += s;
+		return *this;
+	}
+
 	inline float4x4 operator*(const float& s) const {
 		float4x4 r;
 		rpt4(i) r.v[i] = v[i] * s;
 		return r;
 	}
 	inline float4x4 operator*=(const float& s) {
-		rpt4(i) v[i] += s;
+		rpt4(i) v[i] *= s;
 		return *this;
 	}
 	inline float4x4 operator/(const float& s) const { return operator *(1.f / s); }
@@ -2286,6 +2296,12 @@ struct float4x4 {
 		return true;
 	}
 	inline bool operator !=(const float4x4& a) const { return !operator ==(a); }
+	
+	inline friend float4x4 operator*(const float& s, const float4x4& m) {
+		float4x4 r;
+		rpt4(i) r.v[i] = m.v[i] * s;
+		return r;
+	}
 };
 #pragma pack(pop)
 
