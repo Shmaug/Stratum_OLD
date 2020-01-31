@@ -117,7 +117,7 @@ Shader::Shader(const string& name, ::Device* device, const string& filename)
 			if (bindingFlags.size() <= b.second.first) bindingFlags.resize((size_t)b.second.first + 1);
 
 			bindings[b.second.first].push_back(b.second.second);
-			bindingFlags[b.second.first].push_back(b.second.second.descriptorCount ? VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT : 0);
+			bindingFlags[b.second.first].push_back(b.second.second.descriptorCount > 1 ? VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT : 0);
 
 			// read static samplers
 			for (const auto& s : compiled.mVariants[v].mStaticSamplers) {
