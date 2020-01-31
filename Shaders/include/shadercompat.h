@@ -20,6 +20,7 @@
 
 #define STRATUM_PUSH_CONSTANTS \
 uint StereoEye; \
+float4 StereoClipTransform; \
 float3 AmbientLight; \
 uint LightCount; \
 float2 ShadowTexelSize;
@@ -27,6 +28,7 @@ float2 ShadowTexelSize;
 #define STRATUM_MATRIX_V Camera.View[StereoEye]
 #define STRATUM_MATRIX_P Camera.Projection[StereoEye]
 #define STRATUM_MATRIX_VP Camera.ViewProjection[StereoEye]
+#define StratumOffsetClipPosStereo(clipPos) clipPos.xy = clipPos.xy * StereoClipTransform.xy + StereoClipTransform.zw
 
 struct InstanceBuffer {
 	float4x4 ObjectToWorld;

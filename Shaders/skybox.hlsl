@@ -98,6 +98,7 @@ void vsmain(
 		position = mul(STRATUM_MATRIX_P, float4(vertex, 1));
 		viewRay = mul(vertex, (float3x3)STRATUM_MATRIX_V);
 	}
+	StratumOffsetClipPosStereo(position);
 	screenPos = ComputeScreenPos(position);
 }
 

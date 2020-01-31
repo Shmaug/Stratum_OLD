@@ -69,6 +69,7 @@ v2f vsmain(uint id : SV_VertexId) {
 	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);
 	float4 worldPos = mul(mul(ct, ObjectToWorld), float4(p, 0, 1));
 	o.position = mul(STRATUM_MATRIX_VP, worldPos);
+	StratumOffsetClipPosStereo(o.position);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 #endif
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];

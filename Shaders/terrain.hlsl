@@ -96,6 +96,7 @@ v2f vsmain(
 
 	v2f o;
 	o.position = mul(STRATUM_MATRIX_VP, worldPos);
+	StratumOffsetClipPosStereo(o.position);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.screenPos = ComputeScreenPos(o.position);
 	o.terrainPos = terrainPos;

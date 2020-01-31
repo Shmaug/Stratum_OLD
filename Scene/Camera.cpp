@@ -226,17 +226,39 @@ void Camera::Set(CommandBuffer* commandBuffer) {
 	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 }
 
+void Camera::SetStereo(CommandBuffer* commandBuffer, ShaderVariant* shader, StereoEye eye) {
+	if (!shader) return;
+	uint32_t eyec = eye;
+	commandBuffer->PushConstant(shader, "StereoEye", &eyec);
+
+	float4 clipst(1, 1, 0, 0);
+	VkRect2D scissor{ { 0, 0 }, { mFramebuffer->Width(), mFramebuffer->Height() } };
+	if (mStereoMode == STEREO_SBS_HORIZONTAL) {
+		clipst = float4(.5f, 1, eye == EYE_LEFT ? -.25f : .25f, 0);
+		scissor.extent.width /= 2;
+		scissor.offset.x = eye == EYE_LEFT ? 0 : scissor.extent.width;
+	} else if (mStereoMode == STEREO_SBS_VERTICAL) {
+		clipst = float4(1, .5f, 0, eye == EYE_LEFT ? -.25f : .25f);
+		scissor.extent.height /= 2;
+		scissor.offset.y = eye == EYE_LEFT ? 0 : scissor.extent.height;
+	}
+
+	commandBuffer->PushConstant(shader, "StereoClipTransform", &clipst);
+
+	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
+}
+
 bool Camera::UpdateMatrices() {
 	if (!mMatricesDirty) return false;
 
 	switch (mStereoMode) {
 	case STEREO_NONE:
-		mView[0] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
+		mView[0] = mView[1] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
 
 		if (mOrthographic)
-			mProjection[0] = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
+			mProjection[0] = mProjection[1] = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
 		else if (mFieldOfView)
-			mProjection[0] = float4x4::PerspectiveFov(mFieldOfView, Aspect(), mNear, mFar);
+			mProjection[0] = mProjection[1] = float4x4::PerspectiveFov(mFieldOfView, Aspect(), mNear, mFar);
 		break;
 
 	case STEREO_SBS_HORIZONTAL:
@@ -244,6 +266,11 @@ bool Camera::UpdateMatrices() {
 		mView[0] = mView[1] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
 		mView[0] = mView[0] * mEyeTransform[0];
 		mView[1] = mView[1] * mEyeTransform[1];
+
+		if (mOrthographic)
+			mProjection[0] = mProjection[1] = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);
+		else if (mFieldOfView)
+			mProjection[0] = mProjection[1] = float4x4::PerspectiveFov(mFieldOfView, Aspect(), mNear, mFar);
 		break;
 	}
 
