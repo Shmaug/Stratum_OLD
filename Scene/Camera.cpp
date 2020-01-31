@@ -221,8 +221,6 @@ void Camera::Set(CommandBuffer* commandBuffer) {
 	
 	VkRect2D scissor{ { 0, 0 }, { mFramebuffer->Width(), mFramebuffer->Height() } };
 	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
-	vkCmdSetLineWidth(*commandBuffer, 1.0f);
-	
 	vkCmdSetViewport(*commandBuffer, 0, 1, &mViewport);
 }
 
