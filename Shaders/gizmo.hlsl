@@ -56,6 +56,7 @@ v2f vsmain(
 
 	v2f o;
 	o.position = mul(STRATUM_MATRIX_VP, float4(worldPos, 1));
+	StratumOffsetClipPosStereo(o.position);
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 	o.color = g.Color;
 	o.texcoord = texcoord * g.TextureST.xy + g.TextureST.zw;

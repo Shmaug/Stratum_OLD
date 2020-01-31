@@ -49,8 +49,15 @@ void MeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, u
 
 	commandBuffer->BindVertexBuffer(mesh->VertexBuffer().get(), 0, 0);
 	commandBuffer->BindIndexBuffer(mesh->IndexBuffer().get(), 0, mesh->IndexType());
+	camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 	vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
 	commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
+	
+	if (camera->StereoMode() != STEREO_NONE) {
+		camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+		vkCmdDrawIndexed(*commandBuffer, mesh->IndexCount(), instanceCount, mesh->BaseIndex(), mesh->BaseVertex(), 0);
+		commandBuffer->mTriangleCount += instanceCount * (mesh->IndexCount() / 3);
+	}
 }
 
 void MeshRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {

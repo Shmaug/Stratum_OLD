@@ -324,11 +324,24 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 
 			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *gizmoDS, 0, nullptr);
 
-			// wire cube	
+			// wire cube
+			camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 			vkCmdDrawIndexed(*commandBuffer, 24, wireCubeCount, 36, 0, instanceOffset);
+			if (camera->StereoMode() != STEREO_NONE) {
+				camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+				vkCmdDrawIndexed(*commandBuffer, 24, wireCubeCount, 36, 0, instanceOffset);
+			}
+
 			instanceOffset += wireCubeCount;
+
 			// wire circle
+			camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 			vkCmdDrawIndexed(*commandBuffer, CircleResolution * 2, wireCircleCount, 60, 0, instanceOffset);
+			if (camera->StereoMode() != STEREO_NONE) {
+				camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+				vkCmdDrawIndexed(*commandBuffer, CircleResolution * 2, wireCircleCount, 60, 0, instanceOffset);
+			}
+
 			instanceOffset += wireCircleCount;
 		}
 	}
@@ -342,10 +355,23 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *gizmoDS, 0, nullptr);
 
 			// billboard
+			camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 			vkCmdDrawIndexed(*commandBuffer, 6, billboardCount, 0, 0, instanceOffset);
+			if (camera->StereoMode() != STEREO_NONE) {
+				camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+				vkCmdDrawIndexed(*commandBuffer, 6, billboardCount, 0, 0, instanceOffset);
+			}
+
 			instanceOffset += billboardCount;
+
 			// cube	
+			camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 			vkCmdDrawIndexed(*commandBuffer, 36, cubeCount, 0, 0, instanceOffset);
+			if (camera->StereoMode() != STEREO_NONE) {
+				camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+				vkCmdDrawIndexed(*commandBuffer, 36, cubeCount, 0, 0, instanceOffset);
+			}
+
 			instanceOffset += cubeCount;
 		}
 	}

@@ -681,12 +681,18 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	// skybox
 	if (mEnvironment->mSkyboxMaterial && pass == PASS_MAIN) {
 		PROFILER_BEGIN("Draw skybox");
+		ShaderVariant* shader = mEnvironment->mSkyboxMaterial->GetShader(PASS_MAIN);
 		VkPipelineLayout layout = commandBuffer->BindMaterial(mEnvironment->mSkyboxMaterial.get(), pass, mSkyboxCube->VertexInput(), camera, mSkyboxCube->Topology());
-		if (!layout) return;
 		commandBuffer->BindVertexBuffer(mSkyboxCube->VertexBuffer().get(), 0, 0);
 		commandBuffer->BindIndexBuffer(mSkyboxCube->IndexBuffer().get(), 0, mSkyboxCube->IndexType());
+		camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 		vkCmdDrawIndexed(*commandBuffer, mSkyboxCube->IndexCount(), 1, mSkyboxCube->BaseIndex(), mSkyboxCube->BaseVertex(), 0);
 		commandBuffer->mTriangleCount += mSkyboxCube->IndexCount() / 3;
+		if (camera->StereoMode() != STEREO_NONE) {
+			camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+			vkCmdDrawIndexed(*commandBuffer, mSkyboxCube->IndexCount(), 1, mSkyboxCube->BaseIndex(), mSkyboxCube->BaseVertex(), 0);
+			commandBuffer->mTriangleCount += mSkyboxCube->IndexCount() / 3;
+		}
 		PROFILER_END;
 	}
 
@@ -805,6 +811,8 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 		END_CMD_REGION(commandBuffer);
 		PROFILER_END;
 	}
+
+	camera->Set(commandBuffer);
 
 	PROFILER_BEGIN("Plugin PostRenderScene");
 	for (const auto& p : mPluginManager->Plugins())

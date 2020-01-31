@@ -68,6 +68,14 @@ void TextRenderer::Draw(CommandBuffer* commandBuffer, Camera* camera, PassType p
 	commandBuffer->PushConstant(shader, "WorldNormal", &normal);
 	commandBuffer->PushConstant(shader, "Offset", &offset);
 	commandBuffer->PushConstant(shader, "Color", &mColor);
+	camera->SetStereo(commandBuffer, shader, EYE_LEFT);
 	vkCmdDraw(*commandBuffer, glyphCount * 6, 1, 0, 0);
 	commandBuffer->mTriangleCount += glyphCount * 2;
+
+
+	if (camera->StereoMode() != STEREO_NONE) {
+		camera->SetStereo(commandBuffer, shader, EYE_RIGHT);
+		vkCmdDraw(*commandBuffer, glyphCount * 6, 1, 0, 0);
+		commandBuffer->mTriangleCount += glyphCount * 2;
+	}
 }
