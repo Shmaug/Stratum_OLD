@@ -7,6 +7,8 @@
 #include <Core/DescriptorSet.hpp>
 #include <Input/InputDevice.hpp>
 
+class AssetManager;
+
 class Gizmos {
 public:
 

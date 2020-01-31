@@ -409,12 +409,12 @@ bool MeshView::Init(Scene* scene) {
 	waspMat->SetParameter("Emission", float3(0));
 
 	AnimationRig waspRig;
-	LoadSkel("Assets/Models/wasp.skel", waspRig, 1);
+	LoadSkel("Assets/Models/wasp/wasp.skel", waspRig, 1);
 
 	waspRig[0]->LocalPosition(-1, 1, 0);
 
 	auto wasp = make_shared<SkinnedMeshRenderer>("Wasp");
-	wasp->Mesh(LoadSkin("Assets/Models/wasp.skin", waspRig,  1, true));
+	wasp->Mesh(LoadSkin("Assets/Models/wasp/wasp.skin", waspRig,  1, true));
 	wasp->Rig(waspRig);
 	wasp->Material(waspMat);
 	wasp->PushConstant("TextureIndex", 0u);
