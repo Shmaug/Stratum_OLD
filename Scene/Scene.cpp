@@ -408,6 +408,8 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	PROFILER_BEGIN("Scene PreFrame");
+
+	vkCmdSetLineWidth(*commandBuffer, 1.0f);
 	
 	PROFILER_BEGIN("Renderer PreFrame");
 	for (Renderer* r : mRenderers)
