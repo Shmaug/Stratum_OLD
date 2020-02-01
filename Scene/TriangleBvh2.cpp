@@ -4,7 +4,7 @@
 
 using namespace std;
 
-void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, VkIndexType indexType) {
+void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, int32_t vertexOffset, VkIndexType indexType) {
 	mPrimitives.clear();
 	mNodes.clear();
 
@@ -14,9 +14,10 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 		mVertices[i] = *(float3*)((uint8_t*)vertices + vertexStride * i);
 
 	for (uint32_t i = 0; i < indexCount; i += 3) {
-		uint3 tri = indexType == VK_INDEX_TYPE_UINT16 ?
-			uint3(((uint16_t*)indices)[i], ((uint16_t*)indices)[i+1], ((uint16_t*)indices)[i+2]) :
-			uint3(((uint32_t*)indices)[i], ((uint32_t*)indices)[i+1], ((uint32_t*)indices)[i+2]);
+		int3 tri = indexType == VK_INDEX_TYPE_UINT16 ?
+			int3(((uint16_t*)indices)[i], ((uint16_t*)indices)[i+1], ((uint16_t*)indices)[i+2]) :
+			int3(((uint32_t*)indices)[i], ((uint32_t*)indices)[i+1], ((uint32_t*)indices)[i+2]);
+		tri += vertexOffset;
 		float3 v0 = *(float3*)((uint8_t*)vertices + vertexStride * tri.x);
 		float3 v1 = *(float3*)((uint8_t*)vertices + vertexStride * tri.y);
 		float3 v2 = *(float3*)((uint8_t*)vertices + vertexStride * tri.z);
