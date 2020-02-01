@@ -72,6 +72,7 @@ public:
 	inline uint32_t IndexCount() const { return mIndexCount; }
 	inline VkIndexType IndexType() const { return mIndexType; }
 
+	inline TriangleBvh2* BVH() const { return mBvh; }
 	ENGINE_EXPORT bool Intersect(const Ray& ray, float* t, bool any);
 
 	inline const ::VertexInput* VertexInput() const { return mVertexInput; }
