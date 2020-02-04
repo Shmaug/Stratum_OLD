@@ -55,10 +55,10 @@ public:
 	inline float2 ShadowTexelSize() const { return mShadowTexelSize; }
 
 	inline ::AssetManager* AssetManager() const { return mAssetManager; }
-	inline ::Instance* Instance() const { return mInstance; }
 	inline ::InputManager* InputManager() const { return mInputManager; }
 	inline ::PluginManager* PluginManager() const { return mPluginManager; }
 	inline ::Environment* Environment() const { return mEnvironment; }
+	inline ::Instance* Instance() const { return mInstance; }
 
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }

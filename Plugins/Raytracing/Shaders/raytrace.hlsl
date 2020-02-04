@@ -85,12 +85,10 @@ int IntersectSceneLeaf(Ray ray, bool any, uint nodeIndex, out float t, out float
 		if (node.RightOffset == 0) { // leaf node
 			for (uint o = 0; o < node.PrimitiveCount; ++o) {
 				uint ti = node.StartIndex + o;
-				uint i0 = Indices[(ti + 0) * 4];
-				uint i1 = Indices[(ti + 1) * 4];
-				uint i2 = Indices[(ti + 2) * 4];
-				float3 v0 = Vertices.Load3(VertexStride * i0);
-				float3 v1 = Vertices.Load3(VertexStride * i1);
-				float3 v2 = Vertices.Load3(VertexStride * i2);
+				uint3 tri = Triangles[ti * 4];
+				float3 v0 = Vertices.Load3(VertexStride * tri.x);
+				float3 v1 = Vertices.Load3(VertexStride * tri.y);
+				float3 v2 = Vertices.Load3(VertexStride * tri.z);
 
 				float ct;
 				float2 cb;
