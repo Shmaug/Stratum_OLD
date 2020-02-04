@@ -36,7 +36,6 @@ add_library(Engine SHARED
 	"Scene/Object.cpp"
 	"Scene/ObjectBvh2.cpp"
 	"Scene/SkinnedMeshRenderer.cpp"
-	"Scene/TextRenderer.cpp"
 	"Scene/TriangleBvh2.cpp"
 	"ThirdParty/imp.cpp"
 	"Util/Tokenizer.cpp"

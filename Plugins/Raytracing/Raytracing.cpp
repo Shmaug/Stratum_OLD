@@ -166,7 +166,7 @@ public:
 			safe_delete(mFrameData[i].mNodes);
 			safe_delete(mFrameData[i].mLeafNodes);
 			safe_delete(mFrameData[i].mVertices);
-			safe_delete(mFrameData[i].mIndices);
+			safe_delete(mFrameData[i].mTriangles);
 		}
 		safe_delete_array(mFrameData);
 		for (Object* obj : mObjects)
