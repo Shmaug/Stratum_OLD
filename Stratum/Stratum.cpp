@@ -155,12 +155,12 @@ public:
 			#endif
 
 			PROFILER_BEGIN("Poll Events");
-			for (InputDevice* d : mInputManager->mInputDevices)
-				d->NextFrame();
 			if (!mInstance->PollEvents()) {
 				PROFILER_END;
 				break;
 			}
+			for (InputDevice* d : mInputManager->mInputDevices)
+				d->NextFrame();
 			PROFILER_END;
 
 			PROFILER_BEGIN("Acquire Image");
