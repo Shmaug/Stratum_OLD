@@ -111,8 +111,8 @@ Object* Scene::LoadModelScene(const string& filename,
 			totalIndices += min(mesh->mFaces[i].mNumIndices, 3u);
 	}
 
-	shared_ptr<Buffer> vertexBuffer = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Vertices"), mInstance->Device(), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-	shared_ptr<Buffer> indexBuffer  = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Indices") , mInstance->Device(), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+	shared_ptr<Buffer> vertexBuffer = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Vertices"), mInstance->Device(), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	shared_ptr<Buffer> indexBuffer  = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Indices") , mInstance->Device(), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
 		materials.push_back(materialSetupFunc(this, scene->mMaterials[m]));
@@ -143,15 +143,15 @@ Object* Scene::LoadModelScene(const string& filename,
 		float3 mn = vertices[baseVertex].position, mx = vertices[baseVertex].position;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
-			indices.push_back(f.mIndices[0]);
+			indices.push_back(f.mIndices[0] + baseVertex);
 			mn = min(vertices[baseVertex + f.mIndices[0]].position, mn);
 			mx = max(vertices[baseVertex + f.mIndices[0]].position, mx);
 			if (f.mNumIndices > 1) {
-				indices.push_back(f.mIndices[1]);
+				indices.push_back(f.mIndices[1] + baseVertex);
 				mn = min(vertices[baseVertex + f.mIndices[1]].position, mn);
 				mx = max(vertices[baseVertex + f.mIndices[1]].position, mx);
 				if (f.mNumIndices > 2) {
-					indices.push_back(f.mIndices[2]);
+					indices.push_back(f.mIndices[2] + baseVertex);
 					mn = min(vertices[baseVertex + f.mIndices[2]].position, mn);
 					mx = max(vertices[baseVertex + f.mIndices[2]].position, mx);
 				} else
@@ -164,10 +164,10 @@ Object* Scene::LoadModelScene(const string& filename,
 		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
 
 		TriangleBvh2* bvh = new TriangleBvh2();
-		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, VK_INDEX_TYPE_UINT32);
+		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, -baseVertex, VK_INDEX_TYPE_UINT32);
 
 		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
-			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, baseVertex, vertexCount, baseIndex, indexCount,
+			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, 0, vertexCount, baseIndex, indexCount,
 			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
 	}
 

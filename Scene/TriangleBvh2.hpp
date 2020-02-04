@@ -4,18 +4,6 @@
 
 class TriangleBvh2 {
 public:
-	inline TriangleBvh2(uint32_t leafSize = 4) : mLeafSize(leafSize) {};
-	inline ~TriangleBvh2() {}
-
-	inline AABB Bounds() { return mNodes.size() ? mNodes[0].mBounds : AABB(); }
-
-	ENGINE_EXPORT void Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, VkIndexType indexType);
-
-	ENGINE_EXPORT bool Intersect(const Ray& ray, float* t, bool any);
-
-private:
-	#pragma pack(push)
-	#pragma pack(1)
 	struct Primitive {
 		AABB mBounds;
 		uint3 mTriangle;
@@ -28,8 +16,20 @@ private:
 		uint32_t mCount;
 		uint32_t mRightOffset; // 1st child is at node[index + 1], 2nd child is at node[index + mRightOffset]
 	};
-	#pragma pack(pop)
 
+	inline TriangleBvh2(uint32_t leafSize = 4) : mLeafSize(leafSize) {};
+	inline ~TriangleBvh2() {}
+
+	const Node& GetNode(uint32_t index) const { return mNodes[index]; }
+	uint3 GetPrimitive(uint32_t index) const { return mPrimitives[index].mTriangle; }
+
+	inline AABB Bounds() { return mNodes.size() ? mNodes[0].mBounds : AABB(); }
+
+	ENGINE_EXPORT void Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, int32_t vertexOffset, VkIndexType indexType);
+
+	ENGINE_EXPORT bool Intersect(const Ray& ray, float* t, bool any);
+
+private:
 	std::vector<Node> mNodes;
 	std::vector<Primitive> mPrimitives;
 
