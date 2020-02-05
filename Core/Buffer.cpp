@@ -26,7 +26,7 @@ Buffer::~Buffer() {
 	if (mMemory != VK_NULL_HANDLE) {
 		vkFreeMemory(*mDevice, mMemory, nullptr);
 		#ifdef PRINT_VK_ALLOCATIONS
-		fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+		fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
 		#endif
 	}
 }
@@ -53,6 +53,15 @@ void Buffer::Upload(const void* data, VkDeviceSize size) {
 	} else {
 		if ((mUsageFlags & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
 			mUsageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			
+			if (mBuffer) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
+			if (mMemory) {
+				vkFreeMemory(*mDevice, mMemory, nullptr);
+				#ifdef PRINT_VK_ALLOCATIONS
+				fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+				#endif
+			}
+			mSize = size;
 			Allocate();
 		}
 		Buffer uploadBuffer(mName + " upload", mDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -69,7 +78,7 @@ void Buffer::CopyFrom(const Buffer& other) {
 		if (mMemory) {
 			vkFreeMemory(*mDevice, mMemory, nullptr);
 			#ifdef PRINT_VK_ALLOCATIONS
-			fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+			fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
 			#endif
 		}
 		mSize = other.mSize;

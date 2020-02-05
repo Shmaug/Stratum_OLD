@@ -41,6 +41,8 @@ namespace fs = std::experimental::filesystem;
 namespace fs = std::filesystem;
 #endif
 
+#define PRINT_VK_ALLOCATIONS
+
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)

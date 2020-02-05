@@ -132,10 +132,9 @@ int IntersectSceneLeaf(Ray ray, bool any, uint nodeIndex, out float t, out float
 
 	return hitIndex;
 }
-int IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary) {
+bool IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary, out uint primitiveId, out uint objectId) {
 	t = 1.#INF;
-	bary = 0;
-	int hitIndex = -1;
+	bool hit = false;
 
 	uint todo[32];
 	int stackptr = 0;
@@ -151,13 +150,15 @@ int IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary) {
 		if (node.RightOffset == 0) {
 			float ct;
 			float2 cb;
-			int ci = IntersectSceneLeaf(ray, any, node.StartIndex, ct, cb);
+			int prim = IntersectSceneLeaf(ray, any, node.StartIndex, ct, cb);
 
-			if (ci >= 0 && ct < t) {
+			if (prim >= 0 && ct < t) {
 				t = ct;
 				bary = cb;
-				hitIndex = ci;
-				if (any) return hitIndex;
+				primitiveId = prim;
+				objectId = node.StartIndex;
+				hit = true;
+				if (any) return true;
 			}
 		} else  {
 			uint n0 = ni + 1;
@@ -172,7 +173,7 @@ int IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary) {
 			if (h1) todo[++stackptr] = n1;
 		}
 	}
-	return hitIndex;
+	return hit;
 }
 
 float3 Unproject(float2 uv) {
@@ -199,9 +200,11 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	ray.InvDirection = 1.0 / ray.Direction;
 	ray.TMin = Near;
 	ray.TMax = Far;
-	int prim = IntersectScene(ray, false, PASS_RAYTRACE, t, bary);
 
-	if (prim >= 0) color = float3(bary, .5);// hash31(prim);
+	uint prim, object;
+	if (IntersectScene(ray, false, PASS_RAYTRACE, t, bary, prim, object)) {
+		color = hash31(prim) * .05 + hash31(object) * .95;
+	}
 
 	OutputTexture[index.xy] = float4(color, 1);
 }

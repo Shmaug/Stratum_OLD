@@ -218,7 +218,7 @@ Texture::~Texture() {
 	vkDestroyImageView(*mDevice, mView, nullptr);
 	vkFreeMemory(*mDevice, mImageMemory, nullptr);
 	#ifdef PRINT_VK_ALLOCATIONS
-	fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+	fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
 	#endif
 }
 

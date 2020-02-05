@@ -51,6 +51,7 @@ private:
 	FrameData* mFrameData;
 	
 	void Build(CommandBuffer* commandBuffer, FrameData& fd) {
+		PROFILER_BEGIN("Copy BVH");
 		ObjectBvh2* sceneBvh = mScene->BVH();
 
 		fd.mMeshes.clear();
@@ -64,6 +65,7 @@ private:
 		
 		unordered_map<Buffer*, vector<VkBufferCopy>> vertexCopies;
 
+		PROFILER_BEGIN("Copy meshes");
 		// Copy mesh BVHs
 		for (uint32_t sni = 0; sni < sceneBvh->Nodes().size(); sni++){
 			const ObjectBvh2::Node& sn = sceneBvh->Nodes()[sni];
@@ -81,7 +83,6 @@ private:
 							nodes.resize(nodeBaseIndex + bvh->Nodes().size());
 
 							for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
-
 								const TriangleBvh2::Node& n = bvh->Nodes()[ni];
 								GpuBvhNode& gn = nodes[nodeBaseIndex + ni];
 								gn.RightOffset = n.mRightOffset;
@@ -109,8 +110,10 @@ private:
 				}
 			}
 		}
-		// Copy scene BVH
+		PROFILER_END;
 
+		// Copy scene BVH
+		PROFILER_BEGIN("Copy scene");
 		fd.mBvhBase = (uint32_t)nodes.size();
 
 		nodes.resize(nodes.size() + sceneBvh->Nodes().size());
@@ -118,7 +121,6 @@ private:
 		uint32_t leafNodeIndex = 0;
 
 		for (uint32_t ni = 0; ni < sceneBvh->Nodes().size(); ni++){
-
 			const ObjectBvh2::Node& n = sceneBvh->Nodes()[ni];
 			GpuBvhNode& gn = nodes[fd.mBvhBase + ni];
 			gn.RightOffset = n.mRightOffset;
@@ -139,19 +141,20 @@ private:
 				}
 			}
 		}
+		PROFILER_END;
 
-
+		PROFILER_BEGIN("Upload data");
 		if (fd.mNodes && fd.mNodes->Size() < sizeof(GpuBvhNode) * nodes.size())
 			safe_delete(fd.mNodes);
-		if (!fd.mNodes) fd.mNodes = new Buffer("SceneBvh", mScene->Instance()->Device(), sizeof(GpuBvhNode) * nodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		if (!fd.mNodes) fd.mNodes = new Buffer("SceneBvh", mScene->Instance()->Device(), sizeof(GpuBvhNode) * nodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
 		if (fd.mLeafNodes && fd.mLeafNodes->Size() < sizeof(GpuLeafNode) * leafNodes.size())
 			safe_delete(fd.mLeafNodes);
-		if (!fd.mLeafNodes) fd.mLeafNodes = new Buffer("LeafNodes", mScene->Instance()->Device(), sizeof(GpuLeafNode) * leafNodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		if (!fd.mLeafNodes) fd.mLeafNodes = new Buffer("LeafNodes", mScene->Instance()->Device(), sizeof(GpuLeafNode) * leafNodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
 		if (fd.mTriangles && fd.mTriangles->Size() < sizeof(uint3) * triangles.size())
 			safe_delete(fd.mTriangles);
-		if (!fd.mTriangles) fd.mTriangles = new Buffer("Triangles", mScene->Instance()->Device(), sizeof(uint3) * triangles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		if (!fd.mTriangles) fd.mTriangles = new Buffer("Triangles", mScene->Instance()->Device(), sizeof(uint3) * triangles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
 		if (fd.mVertices && fd.mVertices->Size() < sizeof(StdVertex) * vertexCount)
 			safe_delete(fd.mVertices);
@@ -178,6 +181,7 @@ private:
 			0, nullptr);
 
 		fd.mDirty = false;
+		PROFILER_END;
 	}
 
 public:
