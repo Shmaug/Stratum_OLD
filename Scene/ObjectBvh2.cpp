@@ -4,13 +4,16 @@
 
 using namespace std;
 
-void ObjectBvh2::Build(Object** objects, uint32_t objectCount, uint32_t mask) {
+void ObjectBvh2::Build(Object** objects, uint32_t objectCount) {
 	mPrimitives.clear();
 	mNodes.clear();
 
-	for (uint32_t i = 0; i < objectCount; i++)
-		if (objects[i]->LayerMask() & mask)
-			mPrimitives.push_back({ objects[i]->Bounds(), objects[i] });
+	for (uint32_t i = 0; i < objectCount; i++) {
+		AABB aabb(objects[i]->Bounds());
+		aabb.mMin += 1e-3f;
+		aabb.mMax += 1e-3f;
+		mPrimitives.push_back({ aabb, objects[i] });
+	}
 
 	struct BuildTask {
 		uint32_t mParentOffset;
@@ -44,14 +47,13 @@ void ObjectBvh2::Build(Object** objects, uint32_t objectCount, uint32_t mask) {
 		node.mStartIndex = start;
 		node.mCount = nPrims;
 		node.mRightOffset = untouched;
-		node.mMask = mPrimitives[start].mObject->LayerMask();
 
 		// Calculate the bounding box for this node
 		AABB bb(mPrimitives[start].mBounds);
 		AABB bc(mPrimitives[start].mBounds.Center(), mPrimitives[start].mBounds.Center());
 		for (uint32_t p = start + 1; p < end; ++p) {
 			bb.Encapsulate(mPrimitives[p].mBounds);
-			node.mMask |= mPrimitives[p].mObject->LayerMask();
+			bc.Encapsulate(mPrimitives[p].mBounds.Center());
 		}
 		node.mBounds = bb;
 
@@ -117,8 +119,6 @@ void ObjectBvh2::Build(Object** objects, uint32_t objectCount, uint32_t mask) {
 void ObjectBvh2::FrustumCheck(const float4 frustum[6], vector<Object*>& objects, uint32_t mask) {
 	if (mNodes.size() == 0) return;
 
-	bool bbhits[2];
-
 	uint32_t todo[1024];
 	int32_t stackptr = 0;
 
@@ -134,82 +134,76 @@ void ObjectBvh2::FrustumCheck(const float4 frustum[6], vector<Object*>& objects,
 				if ((mPrimitives[node.mStartIndex + o].mObject->LayerMask() & mask) && mPrimitives[node.mStartIndex + o].mBounds.Intersects(frustum))
 					objects.push_back(mPrimitives[node.mStartIndex + o].mObject);
 		} else {
-			bbhits[0] = (mNodes[ni + 1].mMask & mask) && mNodes[ni + 1].mBounds.Intersects(frustum);
-			bbhits[1] = (mNodes[ni + node.mRightOffset].mMask & mask) && mNodes[ni + node.mRightOffset].mBounds.Intersects(frustum);
-			if (bbhits[0] && bbhits[1]) {
-				todo[++stackptr] = ni + 1;
-				todo[++stackptr] = ni + node.mRightOffset;
-			} else if (bbhits[0]) todo[++stackptr] = ni + 1;
-			else if (bbhits[1]) todo[++stackptr] = ni + node.mRightOffset;
+			uint32_t n0 = ni + 1;
+			uint32_t n1 = ni + node.mRightOffset;
+			if (mNodes[n0].mBounds.Intersects(frustum)) todo[++stackptr] = n0;
+			if (mNodes[n1].mBounds.Intersects(frustum)) todo[++stackptr] = n1;
 		}
 	}
 }
 Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask) {
 	if (mNodes.size() == 0) return nullptr;
 
-	float hitT = 1e20f;
+	float ht = 1e20f;
 	Object* hitObject = nullptr;
 
-	float4 bbhits;
-	int32_t closer, other;
+	uint32_t todo[64];
+	int stackptr = 0;
 
-	struct WorkItem {
-		uint32_t mIndex;
-		float mTmin;
-	};
-	WorkItem todo[1024];
-	int32_t stackptr = 0;
-
-	todo[stackptr].mIndex = 0;
-	todo[stackptr].mTmin = 0;
+	todo[stackptr] = 0;
 
 	while (stackptr >= 0) {
-		int ni = todo[stackptr].mIndex;
-		float near = todo[stackptr].mTmin;
+		uint32_t ni = todo[stackptr];
 		stackptr--;
-		const Node& node(mNodes[ni]);
 
-		if (near > hitT) continue;
+		const Node& node = mNodes[ni];
 
-		if (node.mRightOffset == 0) { // leaf node
+		if (node.mRightOffset == 0) {
 			for (uint32_t o = 0; o < node.mCount; ++o) {
 				if ((mPrimitives[node.mStartIndex + o].mObject->LayerMask() & mask) == 0) continue;
 
-				float curT;
-				if (!mPrimitives[node.mStartIndex + o].mObject->Intersect(ray, &curT, any) || curT < near) continue;
+				float ct;
+				if (!mPrimitives[node.mStartIndex + o].mObject->Intersect(ray, &ct, any)) continue;
 
-				if (any) {
-					if (t) *t = curT;
-					return mPrimitives[node.mStartIndex + o].mObject;
-				}
-				if (curT < hitT) {
-					hitT = curT;
+				if (ct < ht) {
+					ht = ct;
 					hitObject = mPrimitives[node.mStartIndex + o].mObject;
+					if (any) {
+						if (t) *t = ct;
+						return mPrimitives[node.mStartIndex + o].mObject;
+					}
 				}
 			}
 		} else {
-			bool h0 = (mNodes[ni + 1].mMask & mask) && ray.Intersect(mNodes[ni + 1].mBounds, bbhits.v2[0]);
-			bool h1 = (mNodes[ni + node.mRightOffset].mMask & mask) && ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.v2[1]);
-			float t0 = fminf(bbhits.x, bbhits.y);
-			float t1 = fminf(bbhits.z, bbhits.w);
-			if (t0 < near) t0 = fmaxf(bbhits.x, bbhits.y);
-			if (t1 < near) t1 = fmaxf(bbhits.z, bbhits.w);
-			if (h0 && h1 && t0 >= near && t1 >= near) {
-				closer = ni + 1;
-				other = ni + node.mRightOffset;
-				if (bbhits[1] < bbhits[0]) {
-					swap(bbhits[0], bbhits[1]);
-					swap(closer, other);
-				}
-				todo[++stackptr] = { (uint32_t)other, bbhits[1] };
-				todo[++stackptr] = { (uint32_t)closer, bbhits[0] };
-			} else if (h0 && t0 >= near) todo[++stackptr] = { (uint32_t)ni + 1, bbhits[0] };
-			else if (h1 && t1 >= near) todo[++stackptr] = { (uint32_t)ni + node.mRightOffset, bbhits[1] };
+			uint32_t n0 = ni + 1;
+			uint32_t n1 = ni + node.mRightOffset;
+
+			float2 t0;
+			float2 t1;
+			bool h0 = ray.Intersect(mNodes[n0].mBounds, t0);
+			bool h1 = ray.Intersect(mNodes[n1].mBounds, t1);
+
+			if (h0) {
+				stackptr++;
+				todo[stackptr] = n0;
+			}
+			if (h1) {
+				stackptr++;
+				todo[stackptr] = n1;
+			}
 		}
 	}
 
-	if (hitObject && t) *t = hitT;
+	if (t) *t = ht;
 	return hitObject;
 }
 
-void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {}
+void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {
+	for (uint32_t ni = 0; ni < mNodes.size(); ni++) {
+		const Node& node = mNodes[ni];
+		if (node.mRightOffset == 0) {
+			AABB box = mPrimitives[node.mStartIndex].mBounds;
+			Gizmos::DrawWireCube(box.Center(), box.Extents(), quaternion(), float4(1, 1, 1, .4f));
+		}
+	}
+}

@@ -40,5 +40,7 @@ private:
 	VkBufferUsageFlags mUsageFlags;
 	VkMemoryPropertyFlags mMemoryFlags;
 
+	VkMemoryAllocateInfo mAllocationInfo;
+
 	ENGINE_EXPORT void Allocate();
 };

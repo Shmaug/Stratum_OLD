@@ -40,7 +40,7 @@ public:
 
 	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer = nullptr, PassType pass = PASS_MAIN, bool clear = true);
 
-	inline Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = ~0) { return BVH()->Intersect(worldRay, t, any, mask); }
+	inline Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = 0xFFFFFFFF) { return BVH()->Intersect(worldRay, t, any, mask); }
 
 	/// Buffer of GPULight structs (defined in shadercompat.h)
 	inline Buffer* LightBuffer() const { return mLightBuffers[mInstance->Device()->FrameContextIndex()]; }

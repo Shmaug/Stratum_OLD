@@ -23,7 +23,12 @@ Buffer::Buffer(const Buffer& src)
 Buffer::~Buffer() {
 	if (mMappedData) Unmap();
 	if (mBuffer != VK_NULL_HANDLE) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
-	if (mMemory != VK_NULL_HANDLE) vkFreeMemory(*mDevice, mMemory, nullptr);
+	if (mMemory != VK_NULL_HANDLE) {
+		vkFreeMemory(*mDevice, mMemory, nullptr);
+		#ifdef PRINT_VK_ALLOCATIONS
+		fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+		#endif
+	}
 }
 
 void* Buffer::Map() {
@@ -61,12 +66,31 @@ void Buffer::CopyFrom(const Buffer& other) {
 	if (mMappedData) Unmap();
 	if (mSize != other.mSize) {
 		if (mBuffer) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
-		if (mMemory) vkFreeMemory(*mDevice, mMemory, nullptr);
+		if (mMemory) {
+			vkFreeMemory(*mDevice, mMemory, nullptr);
+			#ifdef PRINT_VK_ALLOCATIONS
+			fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+			#endif
+		}
 		mSize = other.mSize;
 		Allocate();
 	}
 
 	auto commandBuffer = mDevice->GetCommandBuffer();
+
+	VkBufferMemoryBarrier barrier = {};
+	barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	barrier.buffer = other;
+	barrier.size = mSize;
+	vkCmdPipelineBarrier(*commandBuffer,
+		VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0,
+		0, nullptr,
+		1, &barrier,
+		0, nullptr);
+
 	VkBufferCopy copyRegion = {};
 	copyRegion.size = mSize;
 	vkCmdCopyBuffer(*commandBuffer, other.mBuffer, mBuffer, 1, &copyRegion);
@@ -86,12 +110,14 @@ void Buffer::Allocate(){
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*mDevice, mBuffer, &memRequirements);
 
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryFlags);
-
-	ThrowIfFailed(vkAllocateMemory(*mDevice, &allocInfo, nullptr, &mMemory), "vkAllocateMemory failed for " + mName);
+	mAllocationInfo = {};
+	mAllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	mAllocationInfo.allocationSize = memRequirements.size;
+	mAllocationInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryFlags);
+	ThrowIfFailed(vkAllocateMemory(*mDevice, &mAllocationInfo, nullptr, &mMemory), "vkAllocateMemory failed for " + mName);
+	#ifdef PRINT_VK_ALLOCATIONS
+	fprintf_color(COLOR_YELLOW, stdout, "Allocated %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+	#endif
 
 	vkBindBufferMemory(*mDevice, mBuffer, mMemory, 0);
 	mDevice->SetObjectName(mMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);

@@ -54,7 +54,7 @@ private:
 	VkImageUsageFlags mUsage;
 	VkMemoryPropertyFlags mMemoryProperties;
 
-	VkDeviceSize mMemorySize;
+	VkMemoryAllocateInfo mAllocationInfo;
 
 	VkImage mImage;
 	VkImageView mView;

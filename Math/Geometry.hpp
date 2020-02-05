@@ -110,16 +110,14 @@ struct Ray {
 	}
 
 	inline bool Intersect(const AABB& aabb, float2& t) const {
-		float3 m = 1.f / mDirection;
-		float3 n = m * (mOrigin - (aabb.mMax + aabb.mMin) * .5f);
-		float3 k = abs(m) * (aabb.mMax - aabb.mMin) * .5f;
-		float3 t1 = -n - k;
-		float3 t2 = -n + k;
-		float tN = fmaxf( fmaxf( t1.x, t1.y ), t1.z );
-		float tF = fminf( fminf( t2.x, t2.y ), t2.z );
-		if (tN > tF) return false;
-		t = float2(tN, tF);
-		return true;
+		float3 id = 1.f / mDirection;
+		float3 t0 = (aabb.mMin - mOrigin) * id;
+		float3 t1 = (aabb.mMax - mOrigin) * id;
+		float3 tmin = min(t0, t1);
+		float3 tmax = max(t0, t1);
+		t.x = fmaxf(fmaxf(tmin.x, tmin.y), tmin.z);
+		t.y = fminf(fminf(tmax.x, tmax.y), tmax.z);
+		return t.x < t.y;
 	}
 	inline bool Intersect(const Sphere& sphere, float2& t) const {
 		float3 pq = mOrigin - sphere.mCenter;
@@ -133,7 +131,7 @@ struct Ray {
 		return true;
 	}
 	// returns t,u,v
-	inline float3 Intersect(const float3& v0, const float3& v1, const float3& v2) const {
+	inline bool Intersect(const float3& v0, const float3& v1, const float3& v2, float3* tuv) const {
 		float3 v1v0 = v1 - v0;
 		float3 v2v0 = v2 - v0;
 		float3 rov0 = mOrigin - v0;
@@ -149,8 +147,8 @@ struct Ray {
 		float v = d * dot( q, v1v0);
 		float t = d * dot(-n, rov0);
 
-		//if (u < 0 || v < 0 || (u + v) > 1.f) t = -1.f;
-
-		return float3(t, u, v);
+		if (u < 0 || v < 0 || (u + v) > 1.f) return false;
+		if (tuv) *tuv = float3(t, u, v);
+		return true;
 	}
 };
