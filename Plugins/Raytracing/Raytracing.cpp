@@ -13,7 +13,7 @@ using namespace std;
 #undef GetObject
 #endif
 
-#define PASS_RAYTRACE (1 << 23)
+#define PASS_RAYTRACE (1u << 23)
 
 #pragma pack(push)
 #pragma pack(1)
@@ -23,11 +23,12 @@ struct GpuBvhNode {
 	float3 Max;
 	uint32_t PrimitiveCount;
 	uint32_t RightOffset; // 1st child is at node[index + 1], 2nd child is at node[index + mRightOffset]
-	uint32_t Mask;
+	uint32_t pad[3];
 };
 struct GpuLeafNode {
 	float4x4 WorldToNode;
 	uint32_t RootIndex;
+	uint32_t pad[3];
 };
 #pragma pack(pop)
 
@@ -35,6 +36,8 @@ class Raytracing : public EnginePlugin {
 private:
 	vector<Object*> mObjects;
 	Scene* mScene;
+
+	bool mRaytrace;
 
 	struct FrameData {
 		bool mDirty;
@@ -47,120 +50,138 @@ private:
 	};
 	FrameData* mFrameData;
 	
-	void CopyMeshBVH(Mesh* mesh, vector<GpuBvhNode>& nodes, vector<StdVertex> vertices, vector<uint3>& triangles) {
-		uint32_t baseVertex = vertices.size();
-
-
-		TriangleBvh2* bvh = mesh->BVH();
-		std::queue<uint32_t> nodeQueue;
-		nodeQueue.push(0);
-		while (nodeQueue.size()) {
-			uint32_t ni = nodeQueue.front();
-			nodeQueue.pop();
-
-			TriangleBvh2::Node n = bvh->GetNode(ni);
-
-			nodes.push_back({});
-			GpuBvhNode& gn = nodes.back();
-			gn.Mask = ~0;
-			gn.RightOffset = n.mRightOffset;
-			gn.PrimitiveCount = n.mCount;
-			gn.Min = n.mBounds.mMin;
-			gn.Max = n.mBounds.mMax;
-
-			if (n.mRightOffset == 0) {
-				gn.StartIndex = triangles.size();
-				for (uint32_t i = 0; i < gn.PrimitiveCount; i++)
-					triangles.push_back(baseVertex + bvh->GetPrimitive(gn.StartIndex + i));
-			} else {
-				nodeQueue.push(ni + 1);
-				nodeQueue.push(ni + n.mRightOffset);
-			}
-		}
-
-	}
-
-	void Build(FrameData& fd) {
+	void Build(CommandBuffer* commandBuffer, FrameData& fd) {
 		ObjectBvh2* sceneBvh = mScene->BVH();
 
+		fd.mMeshes.clear();
+
 		vector<GpuBvhNode> nodes;
-		vector<GpuLeafNode> leafNodes;
-		vector<StdVertex> vertices;
 		vector<uint3> triangles;
+		vector<GpuLeafNode> leafNodes;
 
-		// Collect mesh BVHs
-		std::queue<uint32_t> nodeQueue;
-		nodeQueue.push(0);
-		while (nodeQueue.size()) {
-			uint32_t ni = nodeQueue.front();
-			nodeQueue.pop();
+		uint32_t nodeBaseIndex = 0;
+		uint32_t vertexCount = 0;
+		
+		unordered_map<Buffer*, vector<VkBufferCopy>> vertexCopies;
 
-			ObjectBvh2::Node n = sceneBvh->GetNode(ni);
+		// Copy mesh BVHs
+		for (uint32_t sni = 0; sni < sceneBvh->Nodes().size(); sni++){
+			const ObjectBvh2::Node& sn = sceneBvh->Nodes()[sni];
+			if (sn.mRightOffset == 0) {
+				for (uint32_t i = 0; i < sn.mCount; i++) {
+					MeshRenderer* mr = dynamic_cast<MeshRenderer*>(sceneBvh->GetObject(sn.mStartIndex + i));
+					if (mr && mr->Visible()) {
+						leafNodes.push_back({});
+						Mesh* m = mr->Mesh();
 
-			if (n.mRightOffset == 0) {
-				for (uint32_t i = 0; i < n.mCount; i++) {
-					MeshRenderer* mr = dynamic_cast<MeshRenderer*>(sceneBvh->GetObject(n.mStartIndex + i));
-					if (mr && (mr->LayerMask() & PASS_RAYTRACE) != 0) {
-						fd.mMeshes.emplace(mr->Mesh(), (uint32_t)nodes.size());
-						CopyMeshBVH(mr->Mesh(), nodes, vertices, triangles);
+						if (!fd.mMeshes.count(m)) {
+							fd.mMeshes.emplace(m, nodeBaseIndex);
+
+							TriangleBvh2* bvh = m->BVH();
+							nodes.resize(nodeBaseIndex + bvh->Nodes().size());
+
+							for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
+
+								const TriangleBvh2::Node& n = bvh->Nodes()[ni];
+								GpuBvhNode& gn = nodes[nodeBaseIndex + ni];
+								gn.RightOffset = n.mRightOffset;
+								gn.Min = n.mBounds.mMin;
+								gn.Max = n.mBounds.mMax;
+								gn.StartIndex = triangles.size();
+								gn.PrimitiveCount = n.mCount;
+
+								if (n.mRightOffset == 0)
+									for (uint32_t i = 0; i < n.mCount; i++)
+										triangles.push_back(vertexCount + bvh->GetTriangle(n.mStartIndex + i));
+							}
+
+							auto& cpy = vertexCopies[m->VertexBuffer().get()];
+							VkBufferCopy rgn = {};
+							rgn.srcOffset = m->BaseVertex() * sizeof(StdVertex);
+							rgn.dstOffset = vertexCount * sizeof(StdVertex);
+							rgn.size = m->VertexCount() * sizeof(StdVertex);
+							cpy.push_back(rgn);
+
+							nodeBaseIndex += bvh->Nodes().size();
+							vertexCount += m->VertexCount();
+						}
 					}
 				}
-			} else {
-				nodeQueue.push(ni + 1);
-				nodeQueue.push(ni + n.mRightOffset);
 			}
 		}
-
-		// Collect scene BVH
+		// Copy scene BVH
 
 		fd.mBvhBase = (uint32_t)nodes.size();
 
-		nodeQueue.push(0);
-		while (nodeQueue.size()) {
-			uint32_t ni = nodeQueue.front();
-			nodeQueue.pop();
+		nodes.resize(nodes.size() + sceneBvh->Nodes().size());
 
-			ObjectBvh2::Node n = sceneBvh->GetNode(ni);
+		uint32_t leafNodeIndex = 0;
 
-			nodes.push_back({});
-			GpuBvhNode& gn = nodes.back();
-			gn.Mask = 0;
+		for (uint32_t ni = 0; ni < sceneBvh->Nodes().size(); ni++){
+
+			const ObjectBvh2::Node& n = sceneBvh->Nodes()[ni];
+			GpuBvhNode& gn = nodes[fd.mBvhBase + ni];
 			gn.RightOffset = n.mRightOffset;
-			gn.PrimitiveCount = 0;
 			gn.Min = n.mBounds.mMin;
 			gn.Max = n.mBounds.mMax;
+			gn.StartIndex = leafNodeIndex;
+			gn.PrimitiveCount = 0;
 
 			if (n.mRightOffset == 0) {
-				gn.StartIndex = (uint32_t)leafNodes.size();
 				for (uint32_t i = 0; i < n.mCount; i++) {
 					MeshRenderer* mr = dynamic_cast<MeshRenderer*>(sceneBvh->GetObject(n.mStartIndex + i));
-					if (mr && (mr->LayerMask() & PASS_RAYTRACE) != 0) {
-						leafNodes.push_back({});
-						GpuLeafNode& l = leafNodes.back();
-						l.WorldToNode = mr->WorldToObject();
-						l.RootIndex = fd.mMeshes.at(mr->Mesh());
-						gn.Mask |= mr->LayerMask();
-						if (gn.PrimitiveCount == 0) {
-							gn.Max = mr->Bounds().mMax;
-							gn.Min = mr->Bounds().mMin;
-						} else {
-							gn.Max = max(gn.Max, mr->Bounds().mMax);
-							gn.Min = min(gn.Min, mr->Bounds().mMin);
-						}
+					if (mr && mr->Visible()) {
+						leafNodes[leafNodeIndex].WorldToNode = mr->WorldToObject();
+						leafNodes[leafNodeIndex].RootIndex = fd.mMeshes.at(mr->Mesh());
+						leafNodeIndex++;
 						gn.PrimitiveCount++;
 					}
 				}
-			} else {
-				nodeQueue.push(ni + 1);
-				nodeQueue.push(ni + n.mRightOffset);
 			}
 		}
+
+
+		if (fd.mNodes && fd.mNodes->Size() < sizeof(GpuBvhNode) * nodes.size())
+			safe_delete(fd.mNodes);
+		if (!fd.mNodes) fd.mNodes = new Buffer("SceneBvh", mScene->Instance()->Device(), sizeof(GpuBvhNode) * nodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		if (fd.mLeafNodes && fd.mLeafNodes->Size() < sizeof(GpuLeafNode) * leafNodes.size())
+			safe_delete(fd.mLeafNodes);
+		if (!fd.mLeafNodes) fd.mLeafNodes = new Buffer("LeafNodes", mScene->Instance()->Device(), sizeof(GpuLeafNode) * leafNodes.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		if (fd.mTriangles && fd.mTriangles->Size() < sizeof(uint3) * triangles.size())
+			safe_delete(fd.mTriangles);
+		if (!fd.mTriangles) fd.mTriangles = new Buffer("Triangles", mScene->Instance()->Device(), sizeof(uint3) * triangles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+		if (fd.mVertices && fd.mVertices->Size() < sizeof(StdVertex) * vertexCount)
+			safe_delete(fd.mVertices);
+		if (!fd.mVertices) fd.mVertices = new Buffer("Vertices", mScene->Instance()->Device(), sizeof(StdVertex) * vertexCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		
+		fd.mNodes->Upload(nodes.data(), sizeof(GpuBvhNode) * nodes.size());
+		fd.mLeafNodes->Upload(leafNodes.data(), sizeof(GpuLeafNode) * leafNodes.size());
+		fd.mTriangles->Upload(triangles.data(), sizeof(uint3) * triangles.size());
+		
+		for (auto p : vertexCopies)
+			vkCmdCopyBuffer(*commandBuffer, *p.first, *fd.mVertices, p.second.size(), p.second.data());
+
+		VkBufferMemoryBarrier barrier = {};
+		barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		barrier.buffer = *fd.mVertices;
+		barrier.size = fd.mVertices->Size();
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			0, nullptr,
+			1, &barrier,
+			0, nullptr);
 
 		fd.mDirty = false;
 	}
 
 public:
-	PLUGIN_EXPORT Raytracing() : mScene(nullptr) { mEnabled = true; }
+	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mRaytrace(false) { mEnabled = true; }
 	PLUGIN_EXPORT ~Raytracing() {
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(mFrameData[i].mNodes);
@@ -282,7 +303,7 @@ public:
 
 			} else return;
 
-			mat->PassMask((PassType)PASS_RAYTRACE);
+			mat->PassMask((PassType)(mat->PassMask() | PASS_RAYTRACE));
 
 			aiColor3D emissiveColor(0);
 			aiColor4D baseColor(1);
@@ -337,9 +358,14 @@ public:
 		#pragma endregion
 
 		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
-		memset(mFrameData, 0, sizeof(FrameData)* mScene->Instance()->Device()->MaxFramesInFlight());
-		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			mFrameData[i].mDirty = true;
+			mFrameData[i].mNodes = nullptr;
+			mFrameData[i].mLeafNodes = nullptr;
+			mFrameData[i].mVertices = nullptr;
+			mFrameData[i].mTriangles = nullptr;
+			mFrameData[i].mBvhBase = 0;
+		}
 
 		for (Camera* c : mScene->Cameras())
 			c->SampleCount(VK_SAMPLE_COUNT_1_BIT);
@@ -347,43 +373,53 @@ public:
 		return true;
 	}
 
-	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
-		Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
-		
-		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
-		if (fd.mDirty) Build(fd);
+	PLUGIN_EXPORT void Update() override {
+		MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 
-		ComputeShader* trace = rt->GetCompute("Raytrace", {});
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipeline);
-		float2 res(camera->ResolveBuffer()->Width(), camera->ResolveBuffer()->Height());
-		float4x4 vp = inverse(camera->ViewProjection());
-		float near = camera->Near();
-		float far = camera->Far();
-		float3 cp = camera->WorldPosition();
-		uint32_t vs = sizeof(StdVertex);
-
-		commandBuffer->PushConstant(trace, "Resolution", &res);
-		commandBuffer->PushConstant(trace, "InvVP", &vp);
-		commandBuffer->PushConstant(trace, "Near", &near);
-		commandBuffer->PushConstant(trace, "Far", &far);
-		commandBuffer->PushConstant(trace, "CameraPosition", &cp);
-		commandBuffer->PushConstant(trace, "VertexStride", &vs);
-		commandBuffer->PushConstant(trace, "BvhRoot", &fd.mBvhBase);
-
-		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
-		VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
-		ds->CreateUniformBufferDescriptor(camera->UniformBuffer(), bufSize * commandBuffer->Device()->FrameContextIndex(), bufSize, trace->mDescriptorBindings.at("Camera").second.binding);
-		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(), trace->mDescriptorBindings.at("OutputTexture").second.binding);
-		ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
-		ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
-		ds->CreateStorageBufferDescriptor(fd.mVertices, 0, fd.mVertices->Size(), trace->mDescriptorBindings.at("Vertices").second.binding);
-		ds->CreateStorageBufferDescriptor(fd.mTriangles, 0, fd.mTriangles->Size(), trace->mDescriptorBindings.at("Triangles").second.binding);
-		ds->FlushWrites();
-
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-		vkCmdDispatch(*commandBuffer, (camera->ResolveBuffer()->Width() + 7) / 8, (camera->ResolveBuffer()->Height() + 7) / 8, 1);
+		if (input->KeyDownFirst(KEY_F5)) mRaytrace = !mRaytrace;
 	}
 
+	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
+		if (mRaytrace) {
+			Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
+
+			FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
+			Build(commandBuffer, fd);
+
+			ComputeShader* trace = rt->GetCompute("Raytrace", {});
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipeline);
+
+			float4x4 ivp = inverse(camera->ViewProjection());
+			float3 cp = camera->WorldPosition();
+			float2 res(camera->ResolveBuffer()->Width(), camera->ResolveBuffer()->Height());
+			float near = camera->Near();
+			float far = camera->Far();
+			uint32_t vs = sizeof(StdVertex);
+			uint32_t is = sizeof(uint32_t);
+
+			commandBuffer->PushConstant(trace, "InvViewProj", &ivp);
+			commandBuffer->PushConstant(trace, "Resolution", &res);
+			commandBuffer->PushConstant(trace, "Near", &near);
+			commandBuffer->PushConstant(trace, "Far", &far);
+			commandBuffer->PushConstant(trace, "CameraPosition", &cp);
+			commandBuffer->PushConstant(trace, "VertexStride", &vs);
+			commandBuffer->PushConstant(trace, "IndexStride", &is);
+			commandBuffer->PushConstant(trace, "BvhRoot", &fd.mBvhBase);
+
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
+			VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
+			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(), trace->mDescriptorBindings.at("OutputTexture").second.binding);
+			ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
+			ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
+			ds->CreateStorageBufferDescriptor(fd.mVertices, 0, fd.mVertices->Size(), trace->mDescriptorBindings.at("Vertices").second.binding);
+			ds->CreateStorageBufferDescriptor(fd.mTriangles, 0, fd.mTriangles->Size(), trace->mDescriptorBindings.at("Triangles").second.binding);
+			ds->FlushWrites();
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+			camera->SetStereo(commandBuffer, trace, EYE_LEFT);
+			vkCmdDispatch(*commandBuffer, (camera->ResolveBuffer()->Width() + 7) / 8, (camera->ResolveBuffer()->Height() + 7) / 8, 1);
+		}
+	}
 };
 
 ENGINE_PLUGIN(Raytracing)

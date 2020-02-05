@@ -69,10 +69,37 @@ bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
 	if (!m) return false;
 	Ray r;
 	r.mOrigin = (WorldToObject() * float4(ray.mOrigin, 1)).xyz;
-	r.mDirection = (transpose(ObjectToWorld()) * float4(ray.mDirection, 1)).xyz;
+	r.mDirection = (transpose(ObjectToWorld()) * float4(ray.mDirection, 0)).xyz;
 	return m->Intersect(r, t, any);
 }
 
 void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	//Gizmos::DrawWireCube(Bounds().Center(), Bounds().Extents(), quaternion(), float4(1, 1, 1, 1));
+	static const float3 colors[13]{
+		float3(1.0, 1.0, 1.0),
+
+		float3(1.0, 0.1, 0.1),
+		float3(0.1, 1.0, 0.1),
+		float3(0.1, 0.1, 1.0),
+
+		float3(0.1, 1.0, 1.0),
+		float3(1.0, 0.1, 1.0),
+		float3(1.0, 1.0, 0.1),
+
+		float3(1.0, 0.5, 0.75),
+		float3(0.5, 1.0, 0.75),
+		float3(0.5, 0.75, 1.0),
+
+		float3(0.75, 1.0, 0.5),
+		float3(0.75, 0.5, 1.0),
+		float3(1.0, 0.75, 0.5),
+	};
+
+	TriangleBvh2* bvh = Mesh()->BVH();
+
+	for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
+		if (bvh->Nodes()[ni].mRightOffset == 0) {
+			AABB box = bvh->Nodes()[ni].mBounds;
+			Gizmos::DrawWireCube((ObjectToWorld() * float4(box.Center(), 1.f)).xyz, box.Extents() * WorldScale(), WorldRotation(), float4(colors[ni % 13], .2f));
+		}
+	}
 };

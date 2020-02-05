@@ -143,15 +143,15 @@ Object* Scene::LoadModelScene(const string& filename,
 		float3 mn = vertices[baseVertex].position, mx = vertices[baseVertex].position;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
-			indices.push_back(f.mIndices[0] + baseVertex);
+			indices.push_back(f.mIndices[0]);
 			mn = min(vertices[baseVertex + f.mIndices[0]].position, mn);
 			mx = max(vertices[baseVertex + f.mIndices[0]].position, mx);
 			if (f.mNumIndices > 1) {
-				indices.push_back(f.mIndices[1] + baseVertex);
+				indices.push_back(f.mIndices[1]);
 				mn = min(vertices[baseVertex + f.mIndices[1]].position, mn);
 				mx = max(vertices[baseVertex + f.mIndices[1]].position, mx);
 				if (f.mNumIndices > 2) {
-					indices.push_back(f.mIndices[2] + baseVertex);
+					indices.push_back(f.mIndices[2]);
 					mn = min(vertices[baseVertex + f.mIndices[2]].position, mn);
 					mx = max(vertices[baseVertex + f.mIndices[2]].position, mx);
 				} else
@@ -164,10 +164,10 @@ Object* Scene::LoadModelScene(const string& filename,
 		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
 
 		TriangleBvh2* bvh = new TriangleBvh2();
-		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, -baseVertex, VK_INDEX_TYPE_UINT32);
+		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, VK_INDEX_TYPE_UINT32);
 
 		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
-			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, 0, vertexCount, baseIndex, indexCount,
+			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, baseVertex, vertexCount, baseIndex, indexCount,
 			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
 	}
 

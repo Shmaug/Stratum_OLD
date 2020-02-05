@@ -4,24 +4,29 @@
 
 using namespace std;
 
-void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, int32_t vertexOffset, VkIndexType indexType) {
-	mPrimitives.clear();
+void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, VkIndexType indexType) {
+	mTriangles.clear();
 	mNodes.clear();
 
 	mVertices.resize(vertexCount);
 
+	vector<AABB> aabbs;
+
 	for (uint32_t i = 0; i < vertexCount; i++)
 		mVertices[i] = *(float3*)((uint8_t*)vertices + vertexStride * i);
 
+	uint16_t* indices16 = (uint16_t*)indices;
+	uint32_t* indices32 = (uint32_t*)indices;
+
 	for (uint32_t i = 0; i < indexCount; i += 3) {
-		int3 tri = indexType == VK_INDEX_TYPE_UINT16 ?
-			int3(((uint16_t*)indices)[i], ((uint16_t*)indices)[i+1], ((uint16_t*)indices)[i+2]) :
-			int3(((uint32_t*)indices)[i], ((uint32_t*)indices)[i+1], ((uint32_t*)indices)[i+2]);
-		tri += vertexOffset;
-		float3 v0 = *(float3*)((uint8_t*)vertices + vertexStride * tri.x);
-		float3 v1 = *(float3*)((uint8_t*)vertices + vertexStride * tri.y);
-		float3 v2 = *(float3*)((uint8_t*)vertices + vertexStride * tri.z);
-		mPrimitives.push_back({ AABB(min(min(v0, v1), v2), max(max(v0, v1), v2)), tri });
+		uint3 tri = indexType == VK_INDEX_TYPE_UINT16 ?
+			uint3(indices16[i], indices16[i+1], indices16[i+2]) :
+			uint3(indices32[i], indices32[i+1], indices32[i+2]);
+		mTriangles.push_back(tri);
+		float3 v0 = mVertices[tri.x];
+		float3 v1 = mVertices[tri.y];
+		float3 v2 = mVertices[tri.z];
+		aabbs.push_back(AABB(min(min(v0, v1), v2) - 1e-3f, max(max(v0, v1), v2) + 1e-3f));
 	}
 
 	struct BuildTask {
@@ -41,7 +46,7 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 	Node node;
 
 	todo[stackptr].mStart = 0;
-	todo[stackptr].mEnd = mPrimitives.size();
+	todo[stackptr].mEnd = mTriangles.size();
 	todo[stackptr].mParentOffset = 0xfffffffc;
 	stackptr++;
 
@@ -58,15 +63,17 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 		node.mRightOffset = untouched;
 
 		// Calculate the bounding box for this node
-		AABB bb(mPrimitives[start].mBounds);
-		AABB bc(mPrimitives[start].mBounds.Center(), mPrimitives[start].mBounds.Center());
-		for (uint32_t p = start + 1; p < end; ++p)
-			bb.Encapsulate(mPrimitives[p].mBounds);
+		AABB bb(aabbs[start]);
+		AABB bc(aabbs[start].Center(), aabbs[start].Center());
+		for (uint32_t p = start + 1; p < end; ++p) {
+			bb.Encapsulate(aabbs[p]);
+			bc.Encapsulate(aabbs[p].Center());
+		}
 		node.mBounds = bb;
 
 		// If the number of primitives at this point is less than the leaf
 		// size, then this will become a leaf. (Signified by rightOffset == 0)
-		if (nPrims <= 1) {
+		if (nPrims <= mLeafSize) {
 			node.mRightOffset = 0;
 			nLeafs++;
 		}
@@ -103,8 +110,9 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 		// Partition the list of objects on this split
 		uint32_t mid = start;
 		for (uint32_t i = start; i < end; ++i)
-			if (mPrimitives[i].mBounds.Center()[split_dim] < split_coord) {
-				swap(mPrimitives[i], mPrimitives[mid]);
+			if (aabbs[i].Center()[split_dim] < split_coord) {
+				swap(mTriangles[i], mTriangles[mid]);
+				swap(aabbs[i], aabbs[mid]);
 				mid++;
 			}
 
@@ -126,68 +134,64 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 	if (mNodes.size() == 0) return false;
 
-	float hitT = 1e20f;
-	int hitPrim = -1;
+	float ht = 1.e20f;
+	float2 bary = 0;
+	int hitIndex = -1;
 
-	float4 bbhits;
-	int32_t closer, other;
+	uint32_t todo[64];
+	int stackptr = 0;
 
-	struct WorkItem {
-		uint32_t mIndex;
-		float mTmin;
-	};
-	WorkItem todo[1024];
-	int32_t stackptr = 0;
-
-	todo[stackptr].mIndex = 0;
-	todo[stackptr].mTmin = 0;
+	todo[stackptr] = 0;
 
 	while (stackptr >= 0) {
-		int ni = todo[stackptr].mIndex;
-		float near = todo[stackptr].mTmin;
+		uint32_t ni = todo[stackptr];
 		stackptr--;
-		const Node& node(mNodes[ni]);
 
-		if (near > hitT) continue;
+		const Node& node = mNodes[ni];
 
-		if (node.mRightOffset == 0) { // leaf node
+		if (node.mRightOffset == 0) {
 			for (uint32_t o = 0; o < node.mCount; ++o) {
+				uint3 tri = mTriangles[node.mStartIndex + o];
+				const float3& v0 = mVertices[tri.x];
+				const float3& v1 = mVertices[tri.y];
+				const float3& v2 = mVertices[tri.z];
 
-				uint3 tri = mPrimitives[node.mStartIndex + o].mTriangle;
-				float3 isect = ray.Intersect(mVertices[tri.x], mVertices[tri.y], mVertices[tri.z]);
+				float3 tuv;
+				bool h = ray.Intersect(v0, v1, v2, &tuv);
 
-				if (isect.y < 0 || isect.z < 0 || isect.x < near || (isect.y + isect.z) > 1.f) continue;
+				if (!h || tuv.x < 0) continue;
 
-				if (any) {
-					if (t) *t = isect.x;
-					return true;
-				}
-				if (isect.x < hitT) {
-					hitT = isect.x;
-					hitPrim = node.mStartIndex + o;
+				if (tuv.x < ht) {
+					ht = tuv.x;
+					bary.x = tuv.y;
+					bary.y = tuv.z;
+					hitIndex = node.mStartIndex + o;
+					if (any) {
+						if (t) *t = ht;
+						return hitIndex;
+					}
 				}
 			}
 		} else {
-			bool h0 = ray.Intersect(mNodes[ni + 1].mBounds, bbhits.v2[0]);
-			bool h1 = ray.Intersect(mNodes[ni + node.mRightOffset].mBounds, bbhits.v2[1]);
-			float t0 = fminf(bbhits.x, bbhits.y);
-			float t1 = fminf(bbhits.z, bbhits.w);
-			if (t0 < near) t0 = fmaxf(bbhits.x, bbhits.y);
-			if (t1 < near) t1 = fmaxf(bbhits.z, bbhits.w);
-			if (h0 && t0 >= near && h1 && t1 >= near) {
-				closer = ni + 1;
-				other = ni + node.mRightOffset;
-				if (bbhits[1] < bbhits[0]) {
-					swap(bbhits[0], bbhits[1]);
-					swap(closer, other);
-				}
-				todo[++stackptr] = { (uint32_t)other, bbhits[1] };
-				todo[++stackptr] = { (uint32_t)closer, bbhits[0] };
-			} else if (h0 && t0 >= near) todo[++stackptr] = { (uint32_t)ni + 1, bbhits[0] };
-			else if (h1 && t1 >= near) todo[++stackptr] = { (uint32_t)ni + node.mRightOffset, bbhits[1] };
+			uint32_t n0 = ni + 1;
+			uint32_t n1 = ni + node.mRightOffset;
+
+			float2 t0;
+			float2 t1;
+			bool h0 = ray.Intersect(mNodes[n0].mBounds, t0);
+			bool h1 = ray.Intersect(mNodes[n1].mBounds, t1);
+
+			if (h0) {
+				stackptr++;
+				todo[stackptr] = n0;
+			}
+			if (h1) {
+				stackptr++;
+				todo[stackptr] = n1;
+			}
 		}
 	}
 
-	if (hitPrim >= -1 && t) *t = hitT;
-	return hitPrim >= 0;
+	if (t) *t = ht;
+	return hitIndex;
 }

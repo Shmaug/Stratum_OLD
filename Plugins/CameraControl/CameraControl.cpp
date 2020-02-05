@@ -75,7 +75,7 @@ void CameraControl::Update() {
 	}
 
 	#pragma region Camera control
-	if (mInput->KeyDown(MOUSE_MIDDLE) || (mInput->KeyDown(MOUSE_LEFT) && mInput->KeyDown(KEY_LALT))) {
+	if (mInput->KeyDown(MOUSE_MIDDLE)) {
 		float3 md = mInput->CursorDelta();
 		if (mInput->KeyDown(KEY_LSHIFT)) {
 			md.x = -md.x;
@@ -111,11 +111,11 @@ void CameraControl::Update() {
 }
 
 void CameraControl::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
+	PROFILER_BEGIN("Raycast");
 	float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
 	float2 c = mInput->CursorPos();
 	Ray ray = camera->ScreenToWorldRay(c / s);
 	float t;
-	PROFILER_BEGIN("Raycast");
 	if (mScene->Raycast(ray, &t))
 		Gizmos::DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
 	PROFILER_END;

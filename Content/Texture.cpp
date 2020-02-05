@@ -93,7 +93,7 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 
 	stbi_image_free(pixels);
 
-	printf("Loaded %s: %dx%d %s (%.1fkb)\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat), mMemorySize / 1000.f);
+	printf("Loaded %s: %dx%d %s\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat));
 }
 Texture::Texture(const string& name, Device* device, const string& px, const string& nx, const string& py, const string& ny, const string& pz, const string& nz, bool srgb)
 	: mName(name), mDevice(device) {
@@ -151,7 +151,7 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 	for (uint32_t i = 0; i < 6; i++)
 		stbi_image_free(pixels[i]);
 
-	printf("Loaded Cubemap %s: %dx%d %s (%.1fkb)\n", nx.c_str(), mWidth, mHeight, FormatToString(mFormat), mArrayLayers * dataSize / 1000.f);
+	printf("Loaded Cubemap %s: %dx%d %s\n", nx.c_str(), mWidth, mHeight, FormatToString(mFormat));
 }
 
 Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
@@ -217,6 +217,9 @@ Texture::~Texture() {
 	vkDestroyImage(*mDevice, mImage, nullptr);
 	vkDestroyImageView(*mDevice, mView, nullptr);
 	vkFreeMemory(*mDevice, mImageMemory, nullptr);
+	#ifdef PRINT_VK_ALLOCATIONS
+	fprintf_color(COLOR_YELLOW, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+	#endif
 }
 
 void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
@@ -319,14 +322,15 @@ void Texture::CreateImage() {
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*mDevice, mImage, &memRequirements);
 
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
-
-	mMemorySize = memRequirements.size;
-
-	ThrowIfFailed(vkAllocateMemory(*mDevice, &allocInfo, nullptr, &mImageMemory), "vkAllocateMemory failed for " + mName);
+	mAllocationInfo = {};
+	mAllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	mAllocationInfo.allocationSize = memRequirements.size;
+	mAllocationInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
+	ThrowIfFailed(vkAllocateMemory(*mDevice, &mAllocationInfo, nullptr, &mImageMemory), "vkAllocateMemory failed for " + mName);
+	#ifdef PRINT_VK_ALLOCATIONS
+	fprintf_color(COLOR_YELLOW, stdout, "Allocated %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
+	#endif
+	
 	mDevice->SetObjectName(mImageMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
 	vkBindImageMemory(*mDevice, mImage, mImageMemory, 0);
 }
