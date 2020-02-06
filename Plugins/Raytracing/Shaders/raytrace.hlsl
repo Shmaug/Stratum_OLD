@@ -30,6 +30,8 @@ struct Ray {
 
 #include "disney.hlsli"
 
+#define CMJ_DIM 16
+
 [[vk::binding(0, 0)]] RWTexture2D<float4> OutputTexture : register(u0);
 [[vk::binding(1, 0)]] RWTexture2D<float4> PreviousTexture : register(u1);
 [[vk::binding(2, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t0);
@@ -210,9 +212,9 @@ float3 LoadVertex(uint prim, float2 bary) {
 	return v0 + (v1 - v0) * bary.x + (v2 - v0) * bary.y;
 }
 
-float3 BRDF(uint index, float3 worldPos, float3 normal, DisneyMaterial material, inout Ray ray) {
-	float4 noise = NoiseTex.Load(uint3(index % 256, index / 256, 0));
-	
+float3 BRDF(float2 sample, float3 worldPos, float3 normal, DisneyMaterial material, inout Ray ray) {
+	float4 noise = NoiseTex.Load(uint3(asuint(sample), 0));
+
 	float3 bary = noise.yzw / dot(noise.yzw, 1);
 
 	uint4 lightIndex = Lights[(uint)(noise.r * (LightCount - 1) + .5)];
@@ -239,14 +241,10 @@ float3 BRDF(uint index, float3 worldPos, float3 normal, DisneyMaterial material,
 	
 	float pdf;
 	ray.Origin = worldPos + normal * .001;
-	float3 brdf = light * Disney_Sample(material, -ray.Direction, noise.xw, ray.Direction, pdf);
-
-	brdf += material.Emission;
-
-	return 2 * PI * brdf;
+	return material.Emission + light * Disney_Sample(material, -ray.Direction, sample, ray.Direction, pdf);
 }
 
-float3 Sample(inout Ray ray, uint sampleIndex, out float ndotl) {
+float3 SampleBRDF(inout Ray ray, float2 sample, out float ndotl) {
 	float t;
 	float2 bary;
 	uint prim, object;
@@ -263,13 +261,65 @@ float3 Sample(inout Ray ray, uint sampleIndex, out float ndotl) {
 		tangent = mul(tangent, leaf.WorldToNode);
 		DisneyMaterial material = Materials[leaf.MaterialIndex];
 
-		uint sampleIndex = FrameIndex * 2;
-		float3 eval = BRDF(sampleIndex, vertex, normal, material, ray);
+		float3 brdf = BRDF(sample, vertex, normal, material, ray);
 		ndotl = saturate(dot(normal, ray.Direction));
-		return eval;
+		return brdf;
 	}
 	ndotl = 0;
 	return 0;
+}
+
+
+uint permute(uint i, uint l, uint p) {
+	uint w = l - 1;
+	w |= w >> 1;
+	w |= w >> 2;
+	w |= w >> 4;
+	w |= w >> 8;
+	w |= w >> 16;
+
+	do {
+		i ^= p;
+		i *= 0xe170893d;
+		i ^= p >> 16;
+		i ^= (i & w) >> 4;
+		i ^= p >> 8;
+		i *= 0x0929eb3f;
+		i ^= p >> 23;
+		i ^= (i & w) >> 1;
+		i *= 1 | p >> 27;
+		i *= 0x6935fa69;
+		i ^= (i & w) >> 11;
+		i *= 0x74dcb303;
+		i ^= (i & w) >> 2;
+		i *= 0x9e501cc3;
+		i ^= (i & w) >> 2;
+		i *= 0xc860a3df;
+		i &= w;
+		i ^= i >> 5;
+	} while (i >= l);
+	return (i + p) % l;
+}
+float randfloat(uint i, uint p) {
+	i ^= p;
+	i ^= i >> 17;
+	i ^= i >> 10;
+	i *= 0xb36534e5;
+	i ^= i >> 12;
+	i ^= i >> 21;
+	i *= 0x93fc4795;
+	i ^= 0xdf6e307f;
+	i ^= i >> 17;
+	i *= 1 | p >> 18;
+	return i * (1.0 / 4294967808.0f);
+}
+float2 cmj(int s, int n, int p) {
+	int sx = permute(s % n, n, p * 0xa511e9b3);
+	int sy = permute(s / n, n, p * 0x63d83595);
+	float jx = randfloat(s, p * 0xa399d265);
+	float jy = randfloat(s, p * 0x711ad6a5);
+
+	return float2((s % n + (sy + jx) / n) / n, (s / n + (sx + jy) / n) / n);
 }
 
 [numthreads(8, 8, 1)]
@@ -282,11 +332,16 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	ray.TMin = Near;
 	ray.TMax = Far;
 
-	float ndotl;
-	uint sampleIndex = (FrameIndex ^ index.x ^ index.y) % 0xFFFFFF;
+	uint dimension = 1;
+	uint rnd = NoiseTex.Load(uint3(index.xy, 0));
+	uint scramble = rnd * 0x1fe3434f * ((FrameIndex + 133 * rnd) / (CMJ_DIM * CMJ_DIM));
+	int idx = permute(FrameIndex % (CMJ_DIM % CMJ_DIM), CMJ_DIM * CMJ_DIM, 0xa399d265 * dimension * scramble);
+	float2 sample = cmj(idx, 16, dimension * scramble);
 
-	float3 eval = Sample(ray, sampleIndex, ndotl);
-	//eval *= ndotl * Sample(ray, ++sampleIndex, ndotl);
+	float ndotl;
+	float3 brdf1 = SampleBRDF(ray, sample, ndotl);
+
+	float3 eval = 2 * PI * brdf1;
 
 	#ifdef ACCUMULATE
 	float3 last = PreviousTexture[index.xy].rgb;
