@@ -19,7 +19,7 @@
     "nodes" : [
         {
             "mesh" : 0,
-            "name" : "Box"
+            "name" : "Room"
         },
         {
             "mesh" : 1,
@@ -112,9 +112,9 @@
         },
         {
             "emissiveFactor" : [
-                1,
-                1,
-                1
+                2.0,
+                2.0,
+                2.0
             ],
             "name" : "Light",
             "pbrMetallicRoughness" : {}
@@ -133,17 +133,16 @@
             }
         },
         {
-            "doubleSided" : true,
             "name" : "Glass",
             "pbrMetallicRoughness" : {
                 "baseColorFactor" : [
+                    0.8,
                     1,
-                    1,
-                    1,
-                    1
+                    0.8,
+                    0.1
                 ],
                 "metallicFactor" : 0,
-                "roughnessFactor" : 0
+                "roughnessFactor" : 0.02
             }
         }
     ],

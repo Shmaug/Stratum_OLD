@@ -26,8 +26,26 @@ struct GpuBvhNode {
 	uint32_t pad[3];
 };
 struct GpuLeafNode {
+	float4x4 NodeToWorld;
 	float4x4 WorldToNode;
 	uint32_t RootIndex;
+	uint32_t MaterialIndex;
+	uint32_t pad[2];
+};
+struct DisneyMaterial {
+	float3 BaseColor;
+	float Metallic;
+	float3 Emission;
+	float Specular;
+	float Anisotropy;
+	float Roughness;
+	float SpecularTint;
+	float SheenTint;
+	float Sheen;
+	float ClearcoatGloss;
+	float Clearcoat;
+	float Subsurface;
+	float Transmission;
 	uint32_t pad[3];
 };
 #pragma pack(pop)
@@ -36,16 +54,21 @@ class Raytracing : public EnginePlugin {
 private:
 	vector<Object*> mObjects;
 	Scene* mScene;
-
-	bool mRaytrace;
+	uint32_t mFrameIndex;
 
 	struct FrameData {
-		bool mDirty;
+		Texture* mTarget;
 		Buffer* mNodes;
 		Buffer* mLeafNodes;
 		Buffer* mVertices;
 		Buffer* mTriangles;
+		Buffer* mLights;
+		Buffer* mMaterials;
 		uint32_t mBvhBase;
+		uint32_t mLightCount;
+		uint64_t mLastBuild;
+		float4x4 mInvViewProjection;
+		float3 mCameraPosition;
 		unordered_map<Mesh*, uint32_t> mMeshes; // Mesh, RootIndex
 	};
 	FrameData* mFrameData;
@@ -57,12 +80,15 @@ private:
 		fd.mMeshes.clear();
 
 		vector<GpuBvhNode> nodes;
-		vector<uint3> triangles;
 		vector<GpuLeafNode> leafNodes;
+		vector<DisneyMaterial> materials;
+		vector<uint3> triangles;
+		vector<uint4> lights;
 
 		uint32_t nodeBaseIndex = 0;
 		uint32_t vertexCount = 0;
 		
+		unordered_map<Mesh*, uint2> triangleRanges;
 		unordered_map<Buffer*, vector<VkBufferCopy>> vertexCopies;
 
 		PROFILER_BEGIN("Copy meshes");
@@ -82,6 +108,8 @@ private:
 							TriangleBvh2* bvh = m->BVH();
 							nodes.resize(nodeBaseIndex + bvh->Nodes().size());
 
+							uint32_t baseTri = triangles.size();
+
 							for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
 								const TriangleBvh2::Node& n = bvh->Nodes()[ni];
 								GpuBvhNode& gn = nodes[nodeBaseIndex + ni];
@@ -95,6 +123,8 @@ private:
 									for (uint32_t i = 0; i < n.mCount; i++)
 										triangles.push_back(vertexCount + bvh->GetTriangle(n.mStartIndex + i));
 							}
+
+							triangleRanges.emplace(m, uint2(baseTri, triangles.size()));
 
 							auto& cpy = vertexCopies[m->VertexBuffer().get()];
 							VkBufferCopy rgn = {};
@@ -133,14 +163,36 @@ private:
 				for (uint32_t i = 0; i < n.mCount; i++) {
 					MeshRenderer* mr = dynamic_cast<MeshRenderer*>(sceneBvh->GetObject(n.mStartIndex + i));
 					if (mr && mr->Visible()) {
+						leafNodes[leafNodeIndex].NodeToWorld = mr->ObjectToWorld();
 						leafNodes[leafNodeIndex].WorldToNode = mr->WorldToObject();
 						leafNodes[leafNodeIndex].RootIndex = fd.mMeshes.at(mr->Mesh());
+						leafNodes[leafNodeIndex].MaterialIndex = materials.size();
+
+						DisneyMaterial mat = {};
+						mat.BaseColor = mr->PushConstant("Color").float4Value.rgb;
+						mat.Emission = mr->PushConstant("Emission").float3Value;
+						mat.Roughness = mr->PushConstant("Roughness").floatValue;
+						mat.Metallic = mr->PushConstant("Metallic").floatValue;
+						mat.ClearcoatGloss = .03f;
+						mat.Specular = .5f;
+						mat.Transmission = 1 - mr->PushConstant("Color").float4Value.a;
+
+						if (mat.Emission.r + mat.Emission.g + mat.Emission.b > .001f) {
+							uint2 r = triangleRanges.at(mr->Mesh());
+							for (uint32_t j = r.x; j < r.y; j++)
+								lights.push_back(uint4(j, materials.size(), leafNodeIndex, 0));
+						}
+						
+						materials.push_back(mat);
+
 						leafNodeIndex++;
 						gn.PrimitiveCount++;
 					}
 				}
 			}
 		}
+
+		fd.mLightCount = lights.size();
 		PROFILER_END;
 
 		PROFILER_BEGIN("Upload data");
@@ -156,12 +208,22 @@ private:
 			safe_delete(fd.mTriangles);
 		if (!fd.mTriangles) fd.mTriangles = new Buffer("Triangles", mScene->Instance()->Device(), sizeof(uint3) * triangles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
+		if (fd.mLights && fd.mLights->Size() < sizeof(uint4) * lights.size())
+			safe_delete(fd.mLights);
+		if (!fd.mLights) fd.mLights = new Buffer("Lights", mScene->Instance()->Device(), sizeof(uint4) * lights.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+
+		if (fd.mMaterials && fd.mMaterials->Size() < sizeof(DisneyMaterial) * materials.size())
+			safe_delete(fd.mMaterials);
+		if (!fd.mMaterials) fd.mMaterials = new Buffer("Materials", mScene->Instance()->Device(), sizeof(DisneyMaterial) * materials.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+
 		if (fd.mVertices && fd.mVertices->Size() < sizeof(StdVertex) * vertexCount)
 			safe_delete(fd.mVertices);
 		if (!fd.mVertices) fd.mVertices = new Buffer("Vertices", mScene->Instance()->Device(), sizeof(StdVertex) * vertexCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		
 		fd.mNodes->Upload(nodes.data(), sizeof(GpuBvhNode) * nodes.size());
 		fd.mLeafNodes->Upload(leafNodes.data(), sizeof(GpuLeafNode) * leafNodes.size());
+		fd.mMaterials->Upload(materials.data(), sizeof(DisneyMaterial)* materials.size());
+		fd.mLights->Upload(lights.data(), sizeof(uint3) * lights.size());
 		fd.mTriangles->Upload(triangles.data(), sizeof(uint3) * triangles.size());
 		
 		for (auto p : vertexCopies)
@@ -180,18 +242,23 @@ private:
 			1, &barrier,
 			0, nullptr);
 
-		fd.mDirty = false;
+		fd.mLastBuild = mScene->Instance()->FrameCount();
 		PROFILER_END;
 	}
 
 public:
-	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mRaytrace(false) { mEnabled = true; }
+	inline int Priority() override { return 10000; }
+
+	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mFrameIndex(1) { mEnabled = true; }
 	PLUGIN_EXPORT ~Raytracing() {
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
+			safe_delete(mFrameData[i].mTarget);
 			safe_delete(mFrameData[i].mNodes);
 			safe_delete(mFrameData[i].mLeafNodes);
 			safe_delete(mFrameData[i].mVertices);
 			safe_delete(mFrameData[i].mTriangles);
+			safe_delete(mFrameData[i].mLights);
+			safe_delete(mFrameData[i].mMaterials);
 		}
 		safe_delete_array(mFrameData);
 		for (Object* obj : mObjects)
@@ -307,7 +374,7 @@ public:
 
 			} else return;
 
-			mat->PassMask((PassType)(mat->PassMask() | PASS_RAYTRACE));
+			mat->PassMask((PassType)(PASS_RAYTRACE));
 
 			aiColor3D emissiveColor(0);
 			aiColor4D baseColor(1);
@@ -343,8 +410,10 @@ public:
 			renderer->PushConstant("Emission", float3(emissiveColor.r, emissiveColor.g, emissiveColor.b));
 		};
 
+		Object* root = mScene->LoadModelScene(folder + file, matfunc, objfunc, .6f, 1.f, .05f, .0015f);
+		root->LocalRotation(quaternion(float3(0, PI / 2, 0)));
 		queue<Object*> nodes;
-		nodes.push(mScene->LoadModelScene(folder + file, matfunc, objfunc, .6f, 1.f, .05f, .0015f));
+		nodes.push(root);
 		while (nodes.size()) {
 			Object* o = nodes.front();
 			nodes.pop();
@@ -363,66 +432,120 @@ public:
 
 		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
-			mFrameData[i].mDirty = true;
+			mFrameData[i].mTarget = nullptr;
 			mFrameData[i].mNodes = nullptr;
 			mFrameData[i].mLeafNodes = nullptr;
 			mFrameData[i].mVertices = nullptr;
 			mFrameData[i].mTriangles = nullptr;
+			mFrameData[i].mLights = nullptr;
+			mFrameData[i].mMaterials = nullptr;
 			mFrameData[i].mBvhBase = 0;
+			mFrameData[i].mLightCount = 0;
+			mFrameData[i].mLastBuild = 0;
 		}
 
-		for (Camera* c : mScene->Cameras())
-			c->SampleCount(VK_SAMPLE_COUNT_1_BIT);
-	
 		return true;
 	}
 
-	PLUGIN_EXPORT void Update() override {
-		MouseKeyboardInput* input = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
+	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
+		if (pass != PASS_MAIN) return;
 
-		if (input->KeyDownFirst(KEY_F5)) mRaytrace = !mRaytrace;
+		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
+		if (fd.mLastBuild <= mScene->LastBvhBuild()) {
+			Build(commandBuffer, fd);
+			mFrameIndex = 0;
+		}
+
+		if (fd.mTarget && (fd.mTarget->Width() != camera->FramebufferWidth() || fd.mTarget->Height() != camera->FramebufferHeight()))
+			safe_delete(fd.mTarget);
+		if (!fd.mTarget) {
+			fd.mTarget = new Texture("Raytrace", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		}
+
+		FrameData& pfd = mFrameData[(commandBuffer->Device()->FrameContextIndex() + (commandBuffer->Device()->MaxFramesInFlight()-1)) % commandBuffer->Device()->MaxFramesInFlight()];
+		bool accum = pfd.mTarget && pfd.mTarget->Width() == fd.mTarget->Width() && pfd.mTarget->Height() == fd.mTarget->Height();
+
+		Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
+		ComputeShader* trace = accum ? rt->GetCompute("Raytrace", { "ACCUMULATE" }) : rt->GetCompute("Raytrace", {});
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipeline);
+
+		fd.mInvViewProjection = inverse(camera->ViewProjection());
+		fd.mCameraPosition = camera->WorldPosition();
+		float2 res(fd.mTarget->Width(), fd.mTarget->Height());
+		float near = camera->Near();
+		float far = camera->Far();
+		uint32_t vs = sizeof(StdVertex);
+		uint32_t is = sizeof(uint32_t);
+
+		if (accum && (pfd.mCameraPosition != fd.mCameraPosition || pfd.mInvViewProjection != fd.mInvViewProjection))
+			mFrameIndex = 0;
+
+		commandBuffer->PushConstant(trace, "InvViewProj", &fd.mInvViewProjection);
+		commandBuffer->PushConstant(trace, "Resolution", &res);
+		commandBuffer->PushConstant(trace, "Near", &near);
+		commandBuffer->PushConstant(trace, "Far", &far);
+		commandBuffer->PushConstant(trace, "CameraPosition", &fd.mCameraPosition);
+		commandBuffer->PushConstant(trace, "VertexStride", &vs);
+		commandBuffer->PushConstant(trace, "IndexStride", &is);
+		commandBuffer->PushConstant(trace, "BvhRoot", &fd.mBvhBase);
+		commandBuffer->PushConstant(trace, "FrameIndex", &mFrameIndex);
+		commandBuffer->PushConstant(trace, "LightCount", &fd.mLightCount);
+
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
+		VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
+		ds->CreateStorageTextureDescriptor(fd.mTarget, trace->mDescriptorBindings.at("OutputTexture").second.binding);
+		if (accum) ds->CreateStorageTextureDescriptor(pfd.mTarget, trace->mDescriptorBindings.at("PreviousTexture").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mVertices, 0, fd.mVertices->Size(), trace->mDescriptorBindings.at("Vertices").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mTriangles, 0, fd.mTriangles->Size(), trace->mDescriptorBindings.at("Triangles").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mMaterials, 0, fd.mMaterials->Size(), trace->mDescriptorBindings.at("Materials").second.binding);
+		ds->CreateStorageBufferDescriptor(fd.mLights, 0, fd.mLights->Size(), trace->mDescriptorBindings.at("Lights").second.binding);
+		ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), trace->mDescriptorBindings.at("NoiseTex").second.binding, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+		camera->SetStereo(commandBuffer, trace, EYE_LEFT);
+		vkCmdDispatch(*commandBuffer, (fd.mTarget->Width() + 7) / 8, (fd.mTarget->Height() + 7) / 8, 1);
+
+		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+
+		mFrameIndex++;
 	}
 
+	PLUGIN_EXPORT void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
+		if (pass != PASS_MAIN) return;
+
+		GraphicsShader* shader = mScene->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE", "TEXTURED" });
+		if (!shader) return;
+
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr);
+		if (!layout) return;
+
+		float2 s((float)camera->FramebufferWidth(), (float)camera->FramebufferHeight());
+		float4 b(0, 0, s);
+		float4 st(s, 0, 0);
+		float4 tst(1, -1, 0, 1);
+		float4 white = 1;
+
+		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
+
+		commandBuffer->PushConstant(shader, "Color", &white);
+		commandBuffer->PushConstant(shader, "Bounds", &b);
+		commandBuffer->PushConstant(shader, "ScreenSize", &s);
+		commandBuffer->PushConstant(shader, "ScaleTranslate", &st);
+		commandBuffer->PushConstant(shader, "TextureST", &tst);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blit", shader->mDescriptorSetLayouts[PER_OBJECT]);
+		ds->CreateSampledTextureDescriptor(fd.mTarget, shader->mDescriptorBindings.at("MainTexture").second.binding);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
+	}
 	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
-		if (mRaytrace) {
-			Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
-
-			FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
-			Build(commandBuffer, fd);
-
-			ComputeShader* trace = rt->GetCompute("Raytrace", {});
-			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipeline);
-
-			float4x4 ivp = inverse(camera->ViewProjection());
-			float3 cp = camera->WorldPosition();
-			float2 res(camera->ResolveBuffer()->Width(), camera->ResolveBuffer()->Height());
-			float near = camera->Near();
-			float far = camera->Far();
-			uint32_t vs = sizeof(StdVertex);
-			uint32_t is = sizeof(uint32_t);
-
-			commandBuffer->PushConstant(trace, "InvViewProj", &ivp);
-			commandBuffer->PushConstant(trace, "Resolution", &res);
-			commandBuffer->PushConstant(trace, "Near", &near);
-			commandBuffer->PushConstant(trace, "Far", &far);
-			commandBuffer->PushConstant(trace, "CameraPosition", &cp);
-			commandBuffer->PushConstant(trace, "VertexStride", &vs);
-			commandBuffer->PushConstant(trace, "IndexStride", &is);
-			commandBuffer->PushConstant(trace, "BvhRoot", &fd.mBvhBase);
-
-			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
-			VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
-			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(), trace->mDescriptorBindings.at("OutputTexture").second.binding);
-			ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
-			ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
-			ds->CreateStorageBufferDescriptor(fd.mVertices, 0, fd.mVertices->Size(), trace->mDescriptorBindings.at("Vertices").second.binding);
-			ds->CreateStorageBufferDescriptor(fd.mTriangles, 0, fd.mTriangles->Size(), trace->mDescriptorBindings.at("Triangles").second.binding);
-			ds->FlushWrites();
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-
-			camera->SetStereo(commandBuffer, trace, EYE_LEFT);
-			vkCmdDispatch(*commandBuffer, (camera->ResolveBuffer()->Width() + 7) / 8, (camera->ResolveBuffer()->Height() + 7) / 8, 1);
-		}
+		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	}
 };
 

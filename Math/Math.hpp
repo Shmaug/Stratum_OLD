@@ -2226,15 +2226,6 @@ struct float4x4 {
 		return r;
 	}
 
-	inline static float4x4 Translate(const float3& p) {
-		float4x4 r(1);
-		r.v[3].xyz = p;
-		return r;
-	}
-	inline static float4x4 Scale(const float3& p) {
-		return float4x4(float4(p[0], 0, 0, 0), float4(0, p[1], 0, 0), float4(0, 0, p[2], 0), float4(0, 0, 0, 1));
-	}
-
 	inline static float4x4 TRS(const float3& t, const quaternion& r, const float3& s) {
 		float4x4 rm(r);
 		rpt3(i) rm.v[i] *= s.v[i];

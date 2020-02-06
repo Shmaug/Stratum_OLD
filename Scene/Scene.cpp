@@ -35,7 +35,7 @@ bool RendererCompare(Object* oa, Object* ob) {
 };
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mDrawGizmos(false), mBvhDirty(true) {
+	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mLastBvhBuild(0), mDrawGizmos(false), mBvhDirty(true) {
 	mBvh = new ObjectBvh2();
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
@@ -838,6 +838,7 @@ ObjectBvh2* Scene::BVH() {
 		mBvh->Build(objs, mObjects.size());
 		delete[] objs;
 		mBvhDirty = false;
+		mLastBvhBuild = mInstance->FrameCount();
 		PROFILER_END;
 	}
 	return mBvh;

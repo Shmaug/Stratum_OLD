@@ -33,6 +33,7 @@ public:
 
 	inline float TotalTime() const { return mTotalTime; }
 	inline float DeltaTime() const { return mDeltaTime; }
+	inline uint64_t FrameCount() const { return mFrameCount; }
 
 	inline uint32_t MaxFramesInFlight() const { return mMaxFramesInFlight; }
 
