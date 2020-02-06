@@ -1,5 +1,7 @@
 #pragma kernel Raytrace
 
+#pragma multi_compile ACCUMULATE
+
 #define PASS_RAYTRACE (1u << 23)
 
 struct BvhNode {
@@ -11,10 +13,13 @@ struct BvhNode {
 	uint pad[3];
 };
 struct LeafNode {
+	float4x4 NodeToWorld;
 	float4x4 WorldToNode;
 	uint RootIndex;
-	uint pad[3];
+	uint MaterialIndex;
+	uint pad[2];
 };
+
 struct Ray {
 	float3 Origin;
 	float TMin;
@@ -23,11 +28,17 @@ struct Ray {
 	float3 InvDirection;
 };
 
+#include "disney.hlsli"
+
 [[vk::binding(0, 0)]] RWTexture2D<float4> OutputTexture : register(u0);
-[[vk::binding(1, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t0);
-[[vk::binding(2, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t1);
-[[vk::binding(3, 0)]] ByteAddressBuffer Vertices : register(t2);
-[[vk::binding(4, 0)]] ByteAddressBuffer Triangles : register(t3);
+[[vk::binding(1, 0)]] RWTexture2D<float4> PreviousTexture : register(u1);
+[[vk::binding(2, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t0);
+[[vk::binding(3, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t1);
+[[vk::binding(4, 0)]] ByteAddressBuffer Vertices : register(t2);
+[[vk::binding(5, 0)]] ByteAddressBuffer Triangles : register(t3);
+[[vk::binding(6, 0)]] StructuredBuffer<uint4> Lights : register(t4);
+[[vk::binding(7, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t5);
+[[vk::binding(8, 0)]] Texture2D<float4> NoiseTex : register(t6);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 InvViewProj;
@@ -38,7 +49,8 @@ struct Ray {
 	uint VertexStride;
 	uint IndexStride;
 	uint BvhRoot;
-
+	uint LightCount;
+	uint FrameIndex;
 	uint StereoEye;
 }
 
@@ -71,7 +83,7 @@ int IntersectSceneLeaf(Ray ray, bool any, uint nodeIndex, out float t, out float
 
 	Ray lray = ray;
 	lray.Origin = mul(leaf.WorldToNode, float4(ray.Origin, 1)).xyz;
-	lray.Direction = mul((float3x3)leaf.WorldToNode, ray.Direction);
+	lray.Direction = mul(float4(ray.Direction, 0), leaf.NodeToWorld).xyz;
 	lray.InvDirection = float3(1.0) / lray.Direction;
 
 	t = 1.#INF;
@@ -90,14 +102,6 @@ int IntersectSceneLeaf(Ray ray, bool any, uint nodeIndex, out float t, out float
 		BvhNode node = SceneBvh[ni];
 
 		if (node.RightOffset == 0) {
-			/*
-			float2 ct;
-			bool h = RayBox(lray, node.Min, node.Max, ct);
-			if (h && ct.x < t) {
-				t = ct.x;
-				hitIndex = ni;
-			}
-			/*/
 			for (uint o = 0; o < node.PrimitiveCount; ++o) {
 				uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * (node.StartIndex + o));
 				float3 v0 = asfloat(Vertices.Load3(addr.x));
@@ -115,7 +119,6 @@ int IntersectSceneLeaf(Ray ray, bool any, uint nodeIndex, out float t, out float
 					if (any) return hitIndex;
 				}
 			}
-			//*/
 		} else {
 			uint n0 = ni + 1;
 			uint n1 = ni + node.RightOffset;
@@ -176,35 +179,118 @@ bool IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary, 
 	return hit;
 }
 
-float3 Unproject(float2 uv) {
-	float4 unprojected = mul(InvViewProj, float4(uv * 2 - 1, 0, 1));
-	return normalize(unprojected.xyz / unprojected.w);
+void LoadVertex(uint prim, float2 bary, out float3 vertex, out float3 normal, out float4 tangent, out float2 uv) {
+	uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * prim);
+	float3 v0 = asfloat(Vertices.Load3(addr.x));
+	float3 v1 = asfloat(Vertices.Load3(addr.y));
+	float3 v2 = asfloat(Vertices.Load3(addr.z));
+	addr += 12;
+	float3 n0 = asfloat(Vertices.Load3(addr.x));
+	float3 n1 = asfloat(Vertices.Load3(addr.y));
+	float3 n2 = asfloat(Vertices.Load3(addr.z));
+	addr += 12;
+	float4 t0 = asfloat(Vertices.Load4(addr.x));
+	float4 t1 = asfloat(Vertices.Load4(addr.y));
+	float4 t2 = asfloat(Vertices.Load4(addr.z));
+	addr += 16;
+	float2 uv0 = asfloat(Vertices.Load2(addr.x));
+	float2 uv1 = asfloat(Vertices.Load2(addr.y));
+	float2 uv2 = asfloat(Vertices.Load2(addr.z));
+
+	vertex  = v0 + (v1 - v0) * bary.x + (v2 - v0) * bary.y;
+	normal  = n0 + (n1 - n0) * bary.x + (n2 - n0) * bary.y;
+	tangent = t0 + (t1 - t0) * bary.x + (t2 - t0) * bary.y;
+	uv      = uv0 + (uv1 - uv0) * bary.x + (uv2 - uv0) * bary.y;
+}
+float3 LoadVertex(uint prim, float2 bary) {
+	uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * prim);
+	float3 v0 = asfloat(Vertices.Load3(addr.x));
+	float3 v1 = asfloat(Vertices.Load3(addr.y));
+	float3 v2 = asfloat(Vertices.Load3(addr.z));
+	return v0 + (v1 - v0) * bary.x + (v2 - v0) * bary.y;
 }
 
-float3 hash31(float p) {
-	float3 p3 = frac(float3(p) * float3(.1031, .1030, .0973));
-	p3 += dot(p3, p3.yzx + 33.33);
-	return frac((p3.xxy + p3.yzz) * p3.zyx);
+float3 BRDF(uint index, float3 worldPos, float3 normal, DisneyMaterial material, inout Ray ray) {
+	float4 noise = NoiseTex.Load(uint3(index % 256, index / 256, 0));
+	
+	float3 bary = noise.yzw / dot(noise.yzw, 1);
+
+	uint4 lightIndex = Lights[(uint)(noise.r * (LightCount - 1) + .5)];
+	float3 lightPoint = LoadVertex(lightIndex.x, bary.xy);
+	lightPoint = mul(LeafNodes[lightIndex.z].NodeToWorld, float4(lightPoint, 1)).xyz;
+	float3 light = Materials[lightIndex.y].Emission;
+	
+	Ray lightRay;
+	lightRay.Origin = worldPos;
+	lightRay.Direction = lightPoint - worldPos;
+	float dist2 = dot(lightRay.Direction, lightRay.Direction);
+	float dist = sqrt(dist2);
+	lightRay.Direction /= dist;
+	lightRay.InvDirection = 1.0 / lightRay.Direction;
+	lightRay.TMin = .002;
+	lightRay.TMax = dist - .002;
+
+	float2 hb;
+	float ht;
+	uint hp, ho;
+	light *= 1 - IntersectScene(lightRay, true, PASS_RAYTRACE, ht, hb, hp, ho);
+
+	light *= saturate(dot(lightRay.Direction, normal)) / (1 + dist2);
+	
+	float pdf;
+	ray.Origin = worldPos + normal * .001;
+	float3 brdf = light * Disney_Sample(material, -ray.Direction, noise.xw, ray.Direction, pdf);
+
+	brdf += material.Emission;
+
+	return 2 * PI * brdf;
+}
+
+float3 Sample(inout Ray ray, uint sampleIndex, out float ndotl) {
+	float t;
+	float2 bary;
+	uint prim, object;
+	if (IntersectScene(ray, false, PASS_RAYTRACE, t, bary, prim, object)) {
+		float3 vertex;
+		float3 normal;
+		float4 tangent;
+		float2 uv;
+		LoadVertex(prim, bary, vertex, normal, tangent, uv);
+
+		LeafNode leaf = LeafNodes[object];
+		vertex = mul(leaf.NodeToWorld, float4(vertex, 1)).xyz;
+		normal = normalize(mul(float4(normal, 0), leaf.WorldToNode).xyz);
+		tangent = mul(tangent, leaf.WorldToNode);
+		DisneyMaterial material = Materials[leaf.MaterialIndex];
+
+		uint sampleIndex = FrameIndex * 2;
+		float3 eval = BRDF(sampleIndex, vertex, normal, material, ray);
+		ndotl = saturate(dot(normal, ray.Direction));
+		return eval;
+	}
+	ndotl = 0;
+	return 0;
 }
 
 [numthreads(8, 8, 1)]
 void Raytrace(uint3 index : SV_DispatchThreadID) {
-	float3 color = .2;
-	
-	float t;
-	float2 bary;
-
+	float4 unprojected = mul(InvViewProj, float4(index.xy * 2 / Resolution - 1, 0, 1));
 	Ray ray;
 	ray.Origin = CameraPosition;
-	ray.Direction = Unproject(index.xy / Resolution);
+	ray.Direction = normalize(unprojected.xyz / unprojected.w);
 	ray.InvDirection = 1.0 / ray.Direction;
 	ray.TMin = Near;
 	ray.TMax = Far;
 
-	uint prim, object;
-	if (IntersectScene(ray, false, PASS_RAYTRACE, t, bary, prim, object)) {
-		color = hash31(prim) * .05 + hash31(object) * .95;
-	}
+	float ndotl;
+	uint sampleIndex = (FrameIndex ^ index.x ^ index.y) % 0xFFFFFF;
 
-	OutputTexture[index.xy] = float4(color, 1);
+	float3 eval = Sample(ray, sampleIndex, ndotl);
+	//eval *= ndotl * Sample(ray, ++sampleIndex, ndotl);
+
+	#ifdef ACCUMULATE
+	float3 last = PreviousTexture[index.xy].rgb;
+	eval = FrameIndex == 0 ? eval : last + (eval - last) * 4 / (FrameIndex + 1);
+	#endif
+	OutputTexture[index.xy] = float4(eval, 1);
 }

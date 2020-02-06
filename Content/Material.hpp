@@ -35,6 +35,7 @@ public:
 	ENGINE_EXPORT Material(const std::string& name, std::shared_ptr<::Shader> shader);
 	ENGINE_EXPORT ~Material();
 
+	inline ::Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
 	ENGINE_EXPORT GraphicsShader* GetShader(PassType pass);
 
 	inline void PassMask(PassType p) { mPassMask = p; }
@@ -52,6 +53,10 @@ public:
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, Texture* param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, std::shared_ptr<Texture> param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
+
+	inline MaterialParameter GetParameter(const std::string& name) { return mParameters.at(name); }
+	inline std::variant<std::shared_ptr<Texture>, Texture*> GetParameter(const std::string& name, uint32_t index) { return mArrayParameters.at(name).at(index);  }
+
 	ENGINE_EXPORT void EnableKeyword(const std::string& kw);
 	ENGINE_EXPORT void DisableKeyword(const std::string& kw);
 
@@ -65,8 +70,6 @@ private:
 	friend class CommandBuffer;
 	ENGINE_EXPORT void SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
 	ENGINE_EXPORT void SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data);
-
-	inline ::Shader* Shader() const { return mShader.index() == 0 ? std::get<::Shader*>(mShader) : std::get<std::shared_ptr<::Shader>>(mShader).get(); };
 
 	ENGINE_EXPORT VariantData* GetData(PassType pass);
 

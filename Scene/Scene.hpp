@@ -65,6 +65,8 @@ public:
 
 	ENGINE_EXPORT ObjectBvh2* BVH();
 	inline void BvhDirty(Object* reason) { mBvhDirty = true; }
+	// frame id of the last bvh build
+	inline uint64_t LastBvhBuild() { return mLastBvhBuild; }
 
 private:
 	friend class Stratum;
@@ -80,6 +82,7 @@ private:
 	Mesh* mSkyboxCube;
 
 	ObjectBvh2* mBvh;
+	uint64_t mLastBvhBuild;
 	bool mBvhDirty;
 
 	float2 mShadowTexelSize;

@@ -51,6 +51,7 @@ public:
 
 	template<typename T>
 	inline void PushConstant(const std::string& name, const T& value) { mPushConstants.emplace(name, PushConstantValue(value)); }
+	inline PushConstantValue PushConstant(const std::string& name) { return mPushConstants.at(name); }
 
 	inline virtual bool Visible() override { return mVisible && Mesh() && mMaterial && EnabledHierarchy(); }
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }

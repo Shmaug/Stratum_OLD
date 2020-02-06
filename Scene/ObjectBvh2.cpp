@@ -10,7 +10,7 @@ void ObjectBvh2::Build(Object** objects, uint32_t objectCount) {
 
 	for (uint32_t i = 0; i < objectCount; i++) {
 		AABB aabb(objects[i]->Bounds());
-		aabb.mMin += 1e-3f;
+		aabb.mMin -= 1e-3f;
 		aabb.mMax += 1e-3f;
 		mPrimitives.push_back({ aabb, objects[i] });
 	}
