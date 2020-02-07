@@ -512,7 +512,7 @@ public:
 		vkCmdDispatch(*commandBuffer, (fd.mTarget->Width() + 7) / 8, (fd.mTarget->Height() + 7) / 8, 1);
 
 		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-
+		
 		mFrameIndex++;
 	}
 

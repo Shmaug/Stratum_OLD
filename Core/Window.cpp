@@ -213,12 +213,12 @@ void Window::Fullscreen(bool fs) {
         unsigned long status;
     } hints = {0};
 
-    hints.flags = MWM_HINTS_DECORATIONS;
-    hints.decorations = mFullscreen ? 0 : MWM_DECOR_ALL;
+    //hints.flags = MWM_HINTS_DECORATIONS;
+    //hints.decorations = mFullscreen ? 0 : MWM_DECOR_ALL;
 
-	xcb_intern_atom_cookie_t cookie = xcb_intern_atom(mXCBConnection, 0, 16, "_MOTIF_WM_HINTS");
-	xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(mXCBConnection, cookie, NULL);
-	xcb_change_property(mXCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, reply->atom, reply->atom, 32, sizeof(hints), &hints);
+	//xcb_intern_atom_cookie_t cookie = xcb_intern_atom(mXCBConnection, 0, 16, "_MOTIF_WM_HINTS");
+	//xcb_intern_atom_reply_t* reply = xcb_intern_atom_reply(mXCBConnection, cookie, NULL);
+	//xcb_change_property(mXCBConnection, XCB_PROP_MODE_REPLACE, mXCBWindow, reply->atom, reply->atom, 32, sizeof(hints), &hints);
 
 	#endif
 }

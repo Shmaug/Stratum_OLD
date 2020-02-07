@@ -73,7 +73,7 @@ v2f vsmain(uint id : SV_VertexId) {
 	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
 #endif
 	o.texcoord.xy = Glyphs[g].uv + Glyphs[g].uvsize * offsets[c];
-	o.texcoord.zw = abs((p - Bounds.xy) / Bounds.zw) - 1;
+	o.texcoord.zw = (p - Bounds.xy) / Bounds.zw;
 	return o;
 }
 
@@ -100,5 +100,5 @@ void fsmain(v2f i,
 	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
 	color = SampleFont(i.texcoord.xy) * Color;
 	#endif
-	color.a *= !any(i.texcoord.zw > 0);
+	color.a *= i.texcoord.z > 0 && i.texcoord.w > 0 && i.texcoord.z < 1 && i.texcoord.w < 1;
 }
