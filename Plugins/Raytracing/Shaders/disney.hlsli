@@ -18,77 +18,7 @@ struct DisneyMaterial {
     uint pad[3];
 };
 
-float3 GetOrthoVector(float3 n) {
-    float3 p;
-    if (abs(n.z) > 0) {
-        float k = sqrt(n.y * n.y + n.z * n.z);
-        p.x = 0; p.y = -n.z / k; p.z = n.y / k;
-    } else {
-        float k = sqrt(n.x * n.x + n.y * n.y);
-        p.x = n.y / k; p.y = -n.x / k; p.z = 0;
-    }
-    return normalize(p);
-}
-
-float3 Sample_MapToHemisphere(float2 sample, float3 n, float e) {
-    // Construct basis
-    float3 u = GetOrthoVector(n);
-    float3 v = cross(u, n);
-    u = cross(n, v);
-
-    // Calculate 2D sample
-    float r1 = sample.x;
-    float r2 = sample.y;
-
-    // Transform to spherical coordinates
-    float sinpsi = sin(2 * PI * r1);
-    float cospsi = cos(2 * PI * r1);
-    float costheta = pow(1.f - r2, 1.f / (e + 1.f));
-    float sintheta = sqrt(1.f - costheta * costheta);
-
-    return normalize(u * sintheta * cospsi + v * sintheta * sinpsi + n * costheta);
-}
-
-float2 Sample_MapToDisk(float2 sample) {
-    float r = sqrt(sample.x);
-    float theta = 2 * PI * sample.y;
-    return float2(r * cos(theta), r * sin(theta));
-}
-float2 Sample_MapToDiskConcentric(float2 sample) {
-    float2 offset = 2 * sample - 1;
-
-    if (offset.x == 0 && offset.y == 0) return 0;
-
-    float theta, r;
-
-    if (abs(offset.x) > abs(offset.y)) {
-        r = offset.x;
-        theta = PI / 4 * (offset.y / offset.x);
-    } else {
-        r = offset.y;
-        theta = PI / 2 * (1 - 0.5 * (offset.x / offset.y));
-    }
-
-    return float2(r * cos(theta), r * sin(theta));
-}
-float3 Sample_MapToSphere(float2 sample) {
-    float z = 1 - 2 * sample.x;
-    float r = sqrt(max(0, 1 - z * z));
-    float phi = 2 * PI * sample.y;
-    float x = cos(phi);
-    float y = sin(phi);
-    return float3(x, y, z);
-}
-float2 Sample_MapToPolygon(int n, float2 sample, float sample1) {
-    float theta = 2 * PI / n;
-    int edge = clamp((int)(sample1 * n), 0, n - 1);
-    float t = sqrt(sample.x);
-    float u = 1 - t;
-    float v = t * sample.y;
-    float2 v1 = float2(cos(theta * edge), sin(theta * edge));
-    float2 v2 = float2(cos(theta * (edge + 1)), sin(theta * (edge + 1)));
-    return u * v1 + v * v2;;
-}
+#include "sampling.hlsli"
 
 float SchlickFresnelReflectance(float u) {
     float m = clamp(1 - u, 0, 1);
