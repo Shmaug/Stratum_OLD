@@ -114,7 +114,7 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
   - Static functions for creating cubes and planes (`Mesh::CreateCube()` and `Mesh::CreatePlane()`)
 - `Font`
   - Represents a rasterized TrueType (*.ttf) font at a specific pixel size
-  - Can draw strings in the world or on the screen with `DrawWorldString()` or `DrawScreenString()`
+  - Can draw strings in the world or on the screen with `DrawString()` or `DrawString()`
 - `Texture`
   - Stores a texture on the GPU
   - Can compute mipmaps in the constructor

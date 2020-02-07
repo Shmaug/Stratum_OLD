@@ -7,6 +7,7 @@
 #include <Core/Instance.hpp>
 #include <Core/PluginManager.hpp>
 #include <Input/InputManager.hpp>
+#include <Scene/GUI.hpp>
 #include <Scene/Scene.hpp>
 #include <ThirdParty/json11.h>
 #include <Util/Util.hpp>
@@ -143,6 +144,7 @@ public:
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
 		Gizmos::Initialize(mInstance->Device(), mAssetManager);
+		GUI::Initialize(mInstance->Device(), mAssetManager);
 		mInputManager->RegisterInputDevice(mInstance->Window()->mInput);
 	}
 
@@ -185,6 +187,7 @@ public:
 	}
 
 	~Stratum() {
+		GUI::Destroy(mInstance->Device());
 		Gizmos::Destroy(mInstance->Device());
 		safe_delete(mScene);
 

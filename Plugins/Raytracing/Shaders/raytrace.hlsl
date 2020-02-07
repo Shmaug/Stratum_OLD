@@ -3,6 +3,7 @@
 #pragma multi_compile ACCUMULATE
 
 #define PASS_RAYTRACE (1u << 23)
+#define CMJ_DIM 16
 
 struct BvhNode {
 	float3 Min;
@@ -30,7 +31,6 @@ struct Ray {
 
 #include "disney.hlsli"
 
-#define CMJ_DIM 16
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> OutputTexture : register(u0);
 [[vk::binding(1, 0)]] RWTexture2D<float4> PreviousTexture : register(u1);
@@ -213,7 +213,7 @@ float3 LoadVertex(uint prim, float2 bary) {
 }
 
 float3 BRDF(float2 sample, float3 worldPos, float3 normal, DisneyMaterial material, inout Ray ray) {
-	float4 noise = NoiseTex.Load(uint3(asuint(sample), 0));
+	float4 noise = NoiseTex.Load(uint3(asuint(sample) % 256, 0));
 
 	float3 bary = noise.yzw / dot(noise.yzw, 1);
 
@@ -332,11 +332,7 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	ray.TMin = Near;
 	ray.TMax = Far;
 
-	uint dimension = 1;
-	uint rnd = NoiseTex.Load(uint3(index.xy, 0));
-	uint scramble = rnd * 0x1fe3434f * ((FrameIndex + 133 * rnd) / (CMJ_DIM * CMJ_DIM));
-	int idx = permute(FrameIndex % (CMJ_DIM % CMJ_DIM), CMJ_DIM * CMJ_DIM, 0xa399d265 * dimension * scramble);
-	float2 sample = cmj(idx, 16, dimension * scramble);
+	float2 sample = NoiseTex.Load(uint3((index.xy^FrameIndex + FrameIndex) % 256, 0))
 
 	float ndotl;
 	float3 brdf1 = SampleBRDF(ray, sample, ndotl);

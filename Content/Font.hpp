@@ -41,9 +41,9 @@ public:
 	ENGINE_EXPORT float Kerning(uint32_t from, uint32_t to) const;
 
 	/// Draws a string in the world
-	ENGINE_EXPORT void DrawWorldString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN);
+	ENGINE_EXPORT void DrawString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN, const float4& clipRect = float4(-1e10f, -1e10f, 1e20f, 1e20f));
 	/// Draws a string on the screen, where screenPos is in pixels and (0,0) is the bottom-left of the screen
-	ENGINE_EXPORT void DrawScreenString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN);
+	ENGINE_EXPORT void DrawString(CommandBuffer* commandBuffer, Camera* camera, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN, const float4& clipRect = float4(-1e10f, -1e10f, 1e20f, 1e20f));
 	
 	ENGINE_EXPORT uint32_t GenerateGlyphs(const std::string& str, float scale, AABB* aabb, std::vector<TextGlyph>& glyph, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN) const;
 
@@ -63,5 +63,7 @@ private:
 
 	FontGlyph mGlyphs[0xFF];
 	::Texture* mTexture;
+
+	std::unordered_map<std::string, std::pair<Buffer*, uint32_t>> mGlyphCache;
 };
 

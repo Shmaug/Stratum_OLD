@@ -1,6 +1,7 @@
 #include <Scene/Scene.hpp>
 #include <Scene/Renderer.hpp>
 #include <Scene/MeshRenderer.hpp>
+#include <Scene/GUI.hpp>
 #include <Core/Instance.hpp>
 #include <Util/Profiler.hpp>
 
