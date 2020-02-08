@@ -60,8 +60,11 @@ private:
 		float4x4 mViewProjection;
 		float4x4 mInvViewProjection;
 		float3 mCameraPosition;
-		Texture* mTarget;
-		Texture* mMetaTarget;
+		Texture* mPrimary;
+		Texture* mSecondary;
+		Texture* mMeta;
+		Texture* mResolveTmp;
+		Texture* mResolve;
 		Buffer* mNodes;
 		Buffer* mLeafNodes;
 		Buffer* mVertices;
@@ -175,14 +178,21 @@ private:
 						mat.Emission = mr->PushConstant("Emission").float3Value;
 						mat.Roughness = mr->PushConstant("Roughness").floatValue;
 						mat.Metallic = mr->PushConstant("Metallic").floatValue;
-						mat.ClearcoatGloss = .03f;
+						mat.ClearcoatGloss = 1;
 						mat.Specular = .5f;
 						mat.Transmission = 1 - mr->PushConstant("Color").float4Value.a;
 
-						if (mat.Emission.r + mat.Emission.g + mat.Emission.b > .001f) {
+						if (mat.Emission.r + mat.Emission.g + mat.Emission.b > 0) {
 							uint2 r = triangleRanges.at(mr->Mesh());
 							for (uint32_t j = r.x; j < r.y; j++)
 								lights.push_back(uint4(j, materials.size(), leafNodeIndex, 0));
+						}
+
+						if (mr->mName == "SuzanneSuzanne") {
+							mat.Subsurface = 1;
+						}
+						if (mr->mName == "ClearcoatClearcoat") {
+							mat.Clearcoat = 1;
 						}
 						
 						materials.push_back(mat);
@@ -254,8 +264,11 @@ public:
 	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mFrameIndex(0) { mEnabled = true; }
 	PLUGIN_EXPORT ~Raytracing() {
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
-			safe_delete(mFrameData[i].mTarget);
-			safe_delete(mFrameData[i].mMetaTarget);
+			safe_delete(mFrameData[i].mPrimary);
+			safe_delete(mFrameData[i].mSecondary);
+			safe_delete(mFrameData[i].mMeta);
+			safe_delete(mFrameData[i].mResolveTmp);
+			safe_delete(mFrameData[i].mResolve);
 			safe_delete(mFrameData[i].mNodes);
 			safe_delete(mFrameData[i].mLeafNodes);
 			safe_delete(mFrameData[i].mVertices);
@@ -435,8 +448,11 @@ public:
 
 		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
-			mFrameData[i].mTarget = nullptr;
-			mFrameData[i].mMetaTarget = nullptr;
+			mFrameData[i].mPrimary = nullptr;
+			mFrameData[i].mSecondary = nullptr;
+			mFrameData[i].mMeta = nullptr;
+			mFrameData[i].mResolveTmp = nullptr;
+			mFrameData[i].mResolve = nullptr;
 			mFrameData[i].mNodes = nullptr;
 			mFrameData[i].mLeafNodes = nullptr;
 			mFrameData[i].mVertices = nullptr;
@@ -458,25 +474,50 @@ public:
 		if (fd.mLastBuild <= mScene->LastBvhBuild())
 			Build(commandBuffer, fd);
 
-		if (fd.mTarget && (fd.mTarget->Width() != camera->FramebufferWidth() || fd.mTarget->Height() != camera->FramebufferHeight())) {
-			safe_delete(fd.mTarget);
-			safe_delete(fd.mMetaTarget);
+		VkPipelineStageFlags dstStage, srcStage;
+		VkImageMemoryBarrier barriers[4];
+
+		if (fd.mPrimary && (fd.mPrimary->Width() != camera->FramebufferWidth() || fd.mPrimary->Height() != camera->FramebufferHeight())) {
+			safe_delete(fd.mPrimary);
+			safe_delete(fd.mSecondary);
+			safe_delete(fd.mMeta);
+			safe_delete(fd.mResolveTmp);
+			safe_delete(fd.mResolve);
 		}
-		if (!fd.mTarget) {
-			fd.mTarget = new Texture("Raytrace", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+		if (!fd.mPrimary) {
+			fd.mPrimary = new Texture("Raytrace Primary", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
 				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
 				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-
-			fd.mMetaTarget = new Texture("Raytrace Meta", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+			fd.mSecondary = new Texture("Raytrace Secondary", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
 				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
 				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mMetaTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-		} else
-			mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			fd.mMeta = new Texture("Raytrace Meta", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mResolveTmp = new Texture("Raytrace Resolve", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mResolve = new Texture("Raytrace Resolve", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			
+			fd.mResolveTmp->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
+			barriers[0] = fd.mPrimary->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+			barriers[1] = fd.mSecondary->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+			barriers[2] = fd.mMeta->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+			barriers[3] = fd.mResolve->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+			vkCmdPipelineBarrier(*commandBuffer,
+				srcStage, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				4, barriers);
+		}
+
+		#pragma region raytrace
 		FrameData& pfd = mFrameData[(commandBuffer->Device()->FrameContextIndex() + (commandBuffer->Device()->MaxFramesInFlight()-1)) % commandBuffer->Device()->MaxFramesInFlight()];
-		bool accum = pfd.mTarget && pfd.mTarget->Width() == fd.mTarget->Width() && pfd.mTarget->Height() == fd.mTarget->Height();
+		bool accum = pfd.mPrimary && pfd.mPrimary->Width() == fd.mPrimary->Width() && pfd.mPrimary->Height() == fd.mPrimary->Height();
 
 		Shader* rt = mScene->AssetManager()->LoadShader("Shaders/raytrace.stm");
 		ComputeShader* trace = accum ? rt->GetCompute("Raytrace", { "ACCUMULATE" }) : rt->GetCompute("Raytrace", {});
@@ -485,7 +526,7 @@ public:
 		fd.mViewProjection = camera->ViewProjection();
 		fd.mInvViewProjection = inverse(camera->ViewProjection());
 		fd.mCameraPosition = camera->WorldPosition();
-		float2 res(fd.mTarget->Width(), fd.mTarget->Height());
+		float2 res(fd.mPrimary->Width(), fd.mPrimary->Height());
 		float near = camera->Near();
 		float far = camera->Far();
 		uint32_t vs = sizeof(StdVertex);
@@ -506,11 +547,13 @@ public:
 
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
 		VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
-		ds->CreateStorageTextureDescriptor(fd.mTarget, trace->mDescriptorBindings.at("OutputTexture").second.binding);
-		ds->CreateStorageTextureDescriptor(fd.mMetaTarget, trace->mDescriptorBindings.at("MetaTexture").second.binding);
+		ds->CreateStorageTextureDescriptor(fd.mPrimary, trace->mDescriptorBindings.at("OutputPrimary").second.binding);
+		ds->CreateStorageTextureDescriptor(fd.mSecondary, trace->mDescriptorBindings.at("OutputSecondary").second.binding);
+		ds->CreateStorageTextureDescriptor(fd.mMeta, trace->mDescriptorBindings.at("OutputMeta").second.binding);
 		if (accum) {
-			ds->CreateSampledTextureDescriptor(pfd.mTarget, trace->mDescriptorBindings.at("PreviousTexture").second.binding);
-			ds->CreateSampledTextureDescriptor(pfd.mMetaTarget, trace->mDescriptorBindings.at("PreviousMeta").second.binding);
+			ds->CreateSampledTextureDescriptor(pfd.mPrimary, trace->mDescriptorBindings.at("PreviousPrimary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateSampledTextureDescriptor(pfd.mSecondary, trace->mDescriptorBindings.at("PreviousSecondary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateSampledTextureDescriptor(pfd.mMeta, trace->mDescriptorBindings.at("PreviousMeta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		}
 		ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
 		ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
@@ -522,11 +565,77 @@ public:
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-		camera->SetStereo(commandBuffer, trace, EYE_LEFT);
-		vkCmdDispatch(*commandBuffer, (fd.mTarget->Width() + 7) / 8, (fd.mTarget->Height() + 7) / 8, 1);
+		vkCmdDispatch(*commandBuffer, (fd.mPrimary->Width() + 7) / 8, (fd.mPrimary->Height() + 7) / 8, 1);
+		#pragma endregion
 
-		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+		barriers[0] = fd.mPrimary->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		barriers[1] = fd.mSecondary->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		barriers[2] = fd.mMeta->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			3, barriers);
 
+		uint2 ires(camera->FramebufferWidth(), camera->FramebufferHeight());
+
+		#pragma region combine x
+		ComputeShader* combine = mScene->AssetManager()->LoadShader("Shaders/resolve.stm")->GetCompute("Combine", {"MULTI_COMBINE"});
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipeline);
+
+		ds = commandBuffer->Device()->GetTempDescriptorSet("Resolve", combine->mDescriptorSetLayouts[0]);
+		ds->CreateSampledTextureDescriptor(fd.mPrimary, combine->mDescriptorBindings.at("Primary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateSampledTextureDescriptor(fd.mSecondary, combine->mDescriptorBindings.at("Secondary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateSampledTextureDescriptor(fd.mMeta, combine->mDescriptorBindings.at("Meta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateStorageTextureDescriptor(fd.mResolveTmp, combine->mDescriptorBindings.at("Output").second.binding);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+		commandBuffer->PushConstant(combine, "InvViewProj", &fd.mInvViewProjection);
+		commandBuffer->PushConstant(combine, "Resolution", &ires);
+		commandBuffer->PushConstant(combine, "CameraPosition", &fd.mCameraPosition);
+		uint32_t axis = 0;
+		commandBuffer->PushConstant(combine, "BlurAxis", &axis);
+
+		vkCmdDispatch(*commandBuffer, (fd.mResolve->Width() + 7) / 8, (fd.mResolve->Height() + 7) / 8, 1);
+		#pragma endregion
+
+		barriers[0] = fd.mResolveTmp->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, barriers);
+		
+		#pragma region combine y
+		combine = mScene->AssetManager()->LoadShader("Shaders/resolve.stm")->GetCompute("Combine", {});
+		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipeline);
+
+		ds = commandBuffer->Device()->GetTempDescriptorSet("Resolve2", combine->mDescriptorSetLayouts[0]);
+		ds->CreateSampledTextureDescriptor(fd.mResolveTmp, combine->mDescriptorBindings.at("Primary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateSampledTextureDescriptor(fd.mMeta, combine->mDescriptorBindings.at("Meta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateStorageTextureDescriptor(fd.mResolve, combine->mDescriptorBindings.at("Output").second.binding);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+		commandBuffer->PushConstant(combine, "InvViewProj", &fd.mInvViewProjection);
+		commandBuffer->PushConstant(combine, "Resolution", &ires);
+		commandBuffer->PushConstant(combine, "CameraPosition", &fd.mCameraPosition);
+		axis = 1;
+		commandBuffer->PushConstant(combine, "BlurAxis", &axis);
+
+		vkCmdDispatch(*commandBuffer, (fd.mResolve->Width() + 7) / 8, (fd.mResolve->Height() + 7) / 8, 1);
+		#pragma endregion
+
+		barriers[0] = fd.mResolve->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		vkCmdPipelineBarrier(*commandBuffer,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, barriers);
 		mFrameIndex++;
 	}
 
@@ -549,7 +658,7 @@ public:
 		commandBuffer->PushConstant(shader, "TextureST", &tst);
 		commandBuffer->PushConstant(shader, "Exposure", &exposure);
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blit", shader->mDescriptorSetLayouts[0]);
-		ds->CreateSampledTextureDescriptor(fd.mTarget, shader->mDescriptorBindings.at("MainTexture").second.binding);
+		ds->CreateSampledTextureDescriptor(fd.mResolve, shader->mDescriptorBindings.at("Radiance").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, *ds, 0, nullptr);
 		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);

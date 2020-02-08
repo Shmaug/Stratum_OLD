@@ -33,18 +33,20 @@ struct Ray {
 
 #include "disney.hlsli"
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> OutputTexture : register(u0);
-[[vk::binding(1, 0)]] RWTexture2D<float4> MetaTexture : register(u1);
-[[vk::binding(2, 0)]] Texture2D<float4> PreviousTexture : register(t2);
-[[vk::binding(3, 0)]] Texture2D<float4> PreviousMeta : register(t3);
-[[vk::binding(4, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t4);
-[[vk::binding(5, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t5);
-[[vk::binding(6, 0)]] ByteAddressBuffer Vertices : register(t6);
-[[vk::binding(7, 0)]] ByteAddressBuffer Triangles : register(t7);
-[[vk::binding(8, 0)]] StructuredBuffer<uint4> Lights : register(t8);
-[[vk::binding(9, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t9);
-[[vk::binding(10, 0)]] Texture2D<float4> NoiseTex : register(t10);
-[[vk::binding(11, 0)]] SamplerState Sampler : register(s0);
+[[vk::binding(0, 0)]] RWTexture2D<float4> OutputPrimary : register(u0);
+[[vk::binding(1, 0)]] RWTexture2D<float4> OutputSecondary : register(u1);
+[[vk::binding(2, 0)]] RWTexture2D<float4> OutputMeta : register(u2);
+[[vk::binding(3, 0)]] Texture2D<float4> PreviousPrimary : register(t0);
+[[vk::binding(4, 0)]] Texture2D<float4> PreviousSecondary : register(t1);
+[[vk::binding(5, 0)]] Texture2D<float4> PreviousMeta : register(t2);
+[[vk::binding(6, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t3);
+[[vk::binding(7, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t4);
+[[vk::binding(8, 0)]] ByteAddressBuffer Vertices : register(t5);
+[[vk::binding(9, 0)]] ByteAddressBuffer Triangles : register(t6);
+[[vk::binding(10, 0)]] StructuredBuffer<uint4> Lights : register(t7);
+[[vk::binding(11, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t8);
+[[vk::binding(12, 0)]] Texture2D<float4> NoiseTex : register(t9);
+[[vk::binding(13, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 LastViewProjection;
@@ -229,7 +231,7 @@ void LoadVertex(uint prim, float2 bary, out float3 normal, out float4 tangent, o
 	uv      = uv0 + (uv1 - uv0) * bary.x + (uv2 - uv0) * bary.y;
 }
 
-float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughput, inout float pdf, out float t, out float3 normal) {
+float3 ShadeSurface(inout Ray ray, inout RandomSampler rng, inout float3 throughput, inout float pdf, out float t, out float3 normal) {
 	float2 bary;
 	uint prim, object;
 	if (IntersectScene(ray, false, PASS_RAYTRACE, t, bary, prim, object)) {
@@ -242,15 +244,17 @@ float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughpu
 
 		LeafNode leaf = LeafNodes[object];
 		normal = normalize(mul(float4(normal, 0), leaf.WorldToNode).xyz);
-		tangent = mul(tangent, leaf.WorldToNode);
+		float3 tan = mul(tangent, leaf.WorldToNode).xyz;
 		DisneyMaterial material = Materials[leaf.MaterialIndex];
-
-		float3 tan0 = GetOrthoVector(normal);
-		float3 tan1 = cross(normal, tan0);
+		
+		tan = normalize(tan - normal * dot(normal, tan));
+		if (dot(tan, tan) < .001) tan = GetOrthoVector(normal);
+		float3 bitan = cross(normal, tan.xyz);
 		float3x3 tangentToWorld = float3x3(
-			tan0.x, normal.x, tan1.x,
-			tan0.y, normal.y, tan1.y,
-			tan0.z, normal.z, tan1.z);
+			tan.x, normal.x, bitan.x,
+			tan.y, normal.y, bitan.y,
+			tan.z, normal.z, bitan.z);
+
 		float3 wi = -ray.Direction;
 
 		// Sample BRDF
@@ -266,7 +270,7 @@ float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughpu
 			float3 v2 = mul(leaf.NodeToWorld, float4(asfloat(Vertices.Load3(addr.z)), 1)).xyz;
 
 			float denom = abs(dot(normal, wi)) * .5 * cross(v1 - v0, v2 - v0);
-			float bxdflightpdf = denom > 0 ? (t*t / denom / LightCount) : 0.f;
+			float bxdflightpdf = denom > 0 ? (t*t / (denom * LightCount)) : 0.f;
 			float weight = BalanceHeuristic(1, pdf, 1, bxdflightpdf);
 			
 			float3 radiance = throughput * material.Emission * weight;
@@ -335,21 +339,22 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	float3 throughput = 1;
 	float pdf = 1;
 	float pdfaccum = 0;
-	float3 radiance = SampleBRDF(ray, rng, throughput, pdf, nt.w, nt.xyz);
-	radiance += SampleBRDF(ray, rng, throughput, pdf, nt1.w, nt1.xyz);
-
-	float4 eval = float4(radiance, 1);
+	float4 primary = float4(ShadeSurface(ray, rng, throughput, pdf, nt.w, nt.xyz), 1);
+	float4 secondary = float4(ShadeSurface(ray, rng, throughput, pdf, nt1.w, nt1.xyz), 1);
 
 	float sampleNumber = 0;
 	#ifdef ACCUMULATE
 	float3 worldPos = CameraPosition - LastCameraPosition + rd * nt.w;
 	float4 lc = mul(LastViewProjection, float4(worldPos, 1));
-	float2 lastUV = .5 + .5 * lc.xy / lc.w;
-	float4 last  = PreviousTexture.SampleLevel(Sampler, lastUV + .5/Resolution, 0);
-	float4 lastMeta = PreviousMeta.SampleLevel(Sampler, lastUV + .5/Resolution, 0);
-	if (lastUV.x > 0 && lastUV.y > 0 && lastUV.x < 1 && lastUV.y < 1 && abs(length(worldPos) - lastMeta.w) < .0001 && dot(lastMeta.xyz, nt.xyz) > .999)
-		eval += last;
+	float2 lastUV = .5 + .5 * lc.xy / lc.w + .5 / Resolution;
+	float4 lastMeta = PreviousMeta.SampleLevel(Sampler, lastUV, 0);
+	if (lastUV.x > 0 && lastUV.y > 0 && lastUV.x < 1 && lastUV.y < 1 && abs(length(worldPos) - lastMeta.w) < .0001 && dot(lastMeta.xyz, nt.xyz) > .999) {
+		primary += PreviousPrimary.SampleLevel(Sampler, lastUV, 0);
+		secondary += PreviousSecondary.SampleLevel(Sampler, lastUV, 0);
+	}
 	#endif
-	OutputTexture[index.xy] = eval;
-	MetaTexture[index.xy] = nt;
+
+	OutputPrimary[index.xy] = primary;
+	OutputSecondary[index.xy] = secondary;
+	OutputMeta[index.xy] = nt;
 }

@@ -71,7 +71,7 @@ float Disney_GetPdf(DisneyMaterial mat, float3 wi, float3 wo) {
     float r_pdf = GTR2_Aniso(ndotwh, wh.x, wh.z, ax, ay) * ndotwh / (4 * hdotwo);
     float c_pdf = GTR1(ndotwh, lerp(0.1, 0.001, mat.ClearcoatGloss)) * ndotwh / (4 * hdotwo);
 
-    float3 cd_lin = pow(mat.BaseColor, 2.2);
+    float3 cd_lin = mat.BaseColor;// pow(mat.BaseColor, 2.2);
     // Luminance approximmation
     float cd_lum = dot(cd_lin, float3(0.3, 0.6, 0.1));
 
@@ -95,7 +95,7 @@ float3 Disney_Evaluate(DisneyMaterial mat, float3 wi, float3 wo) {
     float ndoth = abs(h.y);
     float hdotwo = abs(dot(h, wo));
 
-    float3 cd_lin = pow(mat.BaseColor, 2.2);
+    float3 cd_lin = mat.BaseColor;// pow(mat.BaseColor, 2.2);
     // Luminance approximmation
     float cd_lum = dot(cd_lin, float3(0.3, 0.6, 0.1));
 
@@ -161,7 +161,7 @@ float3 Disney_Sample(DisneyMaterial mat, float3 wi, float2 sample, out float3 wo
         sample.x -= (mat.Clearcoat);
         sample.x /= (1 - mat.Clearcoat);
 
-        float3 cd_lin = pow(mat.BaseColor, 2.2);
+        float3 cd_lin = mat.BaseColor;// pow(mat.BaseColor, 2.2);
         // Luminance approximmation
         float cd_lum = dot(cd_lin, float3(0.3, 0.6, 0.1));
 

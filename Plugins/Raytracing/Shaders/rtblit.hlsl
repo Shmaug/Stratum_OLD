@@ -8,8 +8,8 @@
 
 #pragma static_sampler Sampler
 
-[[vk::binding(0, 0)]] Texture2D<float4> MainTexture : register(t0);
-[[vk::binding(1, 0)]] SamplerState Sampler : register(s0);
+[[vk::binding(0, 0)]] Texture2D<float4> Radiance : register(t0);
+[[vk::binding(3, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4 ScaleTranslate;
@@ -62,9 +62,7 @@ void fsmain(v2f i,
 	out float4 depthNormal : SV_Target1) {
 	depthNormal = 0;
 
-	float4 s = MainTexture.SampleLevel(Sampler, i.texcoord, 0);
-
-	float3 radiance = Exposure * s.rgb / s.a;
+	float3 radiance = Exposure * Radiance.SampleLevel(Sampler, i.texcoord, 0).rgb;
 	radiance = mul(ACESInputMat, radiance);
 	radiance = RRTAndODTFit(radiance);
 	radiance = mul(ACESOutputMat, radiance);
