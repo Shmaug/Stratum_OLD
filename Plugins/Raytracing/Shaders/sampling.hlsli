@@ -64,6 +64,12 @@ float2 SampleRNG(inout RandomSampler rng) {
 	return s;
 }
 
+float BalanceHeuristic(int nf, float fpdf, int ng, float gpdf) {
+	float f = nf * fpdf;
+	float g = ng * gpdf;
+	return f / (f + g);
+}
+
 float3 GetOrthoVector(float3 n) {
 	float3 p;
 	if (abs(n.z) > 0) {

@@ -1,9 +1,11 @@
 #pragma kernel Raytrace
 
 #pragma multi_compile ACCUMULATE
+#pragma static_sampler Sampler maxAnisotropy=0 maxLod=0
 
 #define PASS_RAYTRACE (1u << 23)
 #define EPSILON 0.001
+#define MAX_RADIANCE 3
 
 struct BvhNode {
 	float3 Min;
@@ -32,18 +34,23 @@ struct Ray {
 #include "disney.hlsli"
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> OutputTexture : register(u0);
-[[vk::binding(1, 0)]] RWTexture2D<float4> PreviousTexture : register(u1);
-[[vk::binding(2, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t0);
-[[vk::binding(3, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t1);
-[[vk::binding(4, 0)]] ByteAddressBuffer Vertices : register(t2);
-[[vk::binding(5, 0)]] ByteAddressBuffer Triangles : register(t3);
-[[vk::binding(6, 0)]] StructuredBuffer<uint4> Lights : register(t4);
-[[vk::binding(7, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t5);
-[[vk::binding(8, 0)]] Texture2D<float4> NoiseTex : register(t6);
+[[vk::binding(1, 0)]] RWTexture2D<float4> MetaTexture : register(u1);
+[[vk::binding(2, 0)]] Texture2D<float4> PreviousTexture : register(t2);
+[[vk::binding(3, 0)]] Texture2D<float4> PreviousMeta : register(t3);
+[[vk::binding(4, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t4);
+[[vk::binding(5, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t5);
+[[vk::binding(6, 0)]] ByteAddressBuffer Vertices : register(t6);
+[[vk::binding(7, 0)]] ByteAddressBuffer Triangles : register(t7);
+[[vk::binding(8, 0)]] StructuredBuffer<uint4> Lights : register(t8);
+[[vk::binding(9, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t9);
+[[vk::binding(10, 0)]] Texture2D<float4> NoiseTex : register(t10);
+[[vk::binding(11, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4x4 LastViewProjection;
 	float4x4 InvViewProj;
 	float3 CameraPosition;
+	float3 LastCameraPosition;
 	float2 Resolution;
 	float Near;
 	float Far;
@@ -179,11 +186,27 @@ bool IntersectScene(Ray ray, bool any, uint mask, out float t, out float2 bary, 
 	}
 	return hit;
 }
-bool IntersectScene(Ray ray, uint mask) {
-	float2 b;
-	float t;
-	uint p, o;
-	return IntersectScene(ray, true, mask, t, b, p, o);
+
+float3 AreaLight_Sample(uint light, float2 sample, float3 p, float3 n, out float3 wo, out float pdf) {
+	uint4 li = Lights[light];
+	uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * li.x);
+	float3 v0 = mul(LeafNodes[li.z].NodeToWorld, float4(asfloat(Vertices.Load3(addr.x)), 1)).xyz;
+	float3 v1 = mul(LeafNodes[li.z].NodeToWorld, float4(asfloat(Vertices.Load3(addr.y)), 1)).xyz;
+	float3 v2 = mul(LeafNodes[li.z].NodeToWorld, float4(asfloat(Vertices.Load3(addr.z)), 1)).xyz;
+
+	float2 bary = float2(1 - sample.y, sample.y) * sqrt(sample.x);
+	float3 lp = v0 + (v1 - v0) * bary.x + (v2 - v0) * bary.y;
+
+	wo = lp - p;
+	float nv = dot(n, normalize(wo));
+	if (nv <= 0) { pdf = 0; return 0; }
+
+	float3 ke = Materials[li.y].Emission;
+
+	float d2 = dot(wo, wo);
+	float d = nv * .5 * cross(v1 - v0, v2 - v0);
+	pdf = d > 0 ? d2 / d : 0;
+	return d2 > 0 ? ke * nv / d2 : 0;
 }
 
 void LoadVertex(uint prim, float2 bary, out float3 normal, out float4 tangent, out float2 uv) {
@@ -205,22 +228,14 @@ void LoadVertex(uint prim, float2 bary, out float3 normal, out float4 tangent, o
 	tangent = t0 + (t1 - t0) * bary.x + (t2 - t0) * bary.y;
 	uv      = uv0 + (uv1 - uv0) * bary.x + (uv2 - uv0) * bary.y;
 }
-float3 LoadVertex(uint prim, float2 bary) {
-	uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * prim);
-	float3 v0 = asfloat(Vertices.Load3(addr.x));
-	float3 v1 = asfloat(Vertices.Load3(addr.y));
-	float3 v2 = asfloat(Vertices.Load3(addr.z));
-	return v0 + (v1 - v0) * bary.x + (v2 - v0) * bary.y;
-}
 
-float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughput) {
-	float t;
+float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughput, inout float pdf, out float t, out float3 normal) {
 	float2 bary;
 	uint prim, object;
 	if (IntersectScene(ray, false, PASS_RAYTRACE, t, bary, prim, object)) {
-		float3 normal;
 		float4 tangent;
 		float2 uv;
+		float area;
 		LoadVertex(prim, bary, normal, tangent, uv);
 
 		float3 worldPos = ray.Origin + ray.Direction * t * (1 - EPSILON);
@@ -230,35 +245,69 @@ float3 SampleBRDF(inout Ray ray, inout RandomSampler rng, inout float3 throughpu
 		tangent = mul(tangent, leaf.WorldToNode);
 		DisneyMaterial material = Materials[leaf.MaterialIndex];
 
-
-		// Sample light
-		float2 rng1 = SampleRNG(rng);
-		float2 rng2 = SampleRNG(rng);
-		float3 bary = float3(rng1.xy, rng2.x);
-		bary /= bary.x + bary.y + bary.z;
-
-		uint4 lightIndex = Lights[(uint)(rng2.y * (LightCount - 1) + .5)];
-		float3 lightPoint = LoadVertex(lightIndex.x, bary.xy);
-		lightPoint = mul(LeafNodes[lightIndex.z].NodeToWorld, float4(lightPoint, 1)).xyz;
-		float3 light = Materials[lightIndex.y].Emission;
-
-		Ray lightRay;
-		lightRay.Origin = worldPos;
-		lightRay.Direction = lightPoint - worldPos;
-		lightRay.InvDirection = 1.0 / lightRay.Direction;
-		lightRay.TMin = EPSILON;
-		lightRay.TMax = (1 - EPSILON);
-
-		light *= 1 - IntersectScene(lightRay, PASS_RAYTRACE);
-		light *= abs(dot(normalize(lightRay.Direction), normal)) / (1 + dot(lightRay.Direction, lightRay.Direction));
-		
-		ray.Origin = worldPos;
+		float3 tan0 = GetOrthoVector(normal);
+		float3 tan1 = cross(normal, tan0);
+		float3x3 tangentToWorld = float3x3(
+			tan0.x, normal.x, tan1.x,
+			tan0.y, normal.y, tan1.y,
+			tan0.z, normal.z, tan1.z);
+		float3 wi = -ray.Direction;
 
 		// Sample BRDF
-		float pdf;
-		float3 brdf = Disney_Sample(material, ray.Direction, SampleRNG(rng), ray.Direction, pdf);
-		throughput *= abs(dot(normal, ray.Direction)) * brdf;
-		return material.Emission + light * brdf;
+		float3 wi_t = mul(wi, tangentToWorld);
+		float3 wo_t;
+		float brdfpdf;
+		float3 brdf = Disney_Sample(material, wi_t, SampleRNG(rng), wo_t, brdfpdf);
+
+		if (any(material.Emission)) {
+			uint3 addr = VertexStride * Triangles.Load3(3 * IndexStride * prim);
+			float3 v0 = mul(leaf.NodeToWorld, float4(asfloat(Vertices.Load3(addr.x)), 1)).xyz;
+			float3 v1 = mul(leaf.NodeToWorld, float4(asfloat(Vertices.Load3(addr.y)), 1)).xyz;
+			float3 v2 = mul(leaf.NodeToWorld, float4(asfloat(Vertices.Load3(addr.z)), 1)).xyz;
+
+			float denom = abs(dot(normal, wi)) * .5 * cross(v1 - v0, v2 - v0);
+			float bxdflightpdf = denom > 0 ? (t*t / denom / LightCount) : 0.f;
+			float weight = BalanceHeuristic(1, pdf, 1, bxdflightpdf);
+			
+			float3 radiance = throughput * material.Emission * weight;
+			throughput = 0;
+			return radiance;
+		}
+
+		float3 radiance = 0;
+
+		// Sample light
+		if (LightCount) {
+			uint lightIndex = min((uint)(SampleRNG(rng).x * LightCount), LightCount - 1);
+			float lightpdf;
+			float3 lwo;
+			float3 le = AreaLight_Sample(lightIndex, SampleRNG(rng), worldPos, normal, lwo, lightpdf);
+
+			Ray lightRay;
+			lightRay.Origin = worldPos;
+			lightRay.Direction = lwo;
+			lightRay.InvDirection = 1.0 / lightRay.Direction;
+			lightRay.TMin = EPSILON;
+			lightRay.TMax = 1 - EPSILON;
+			float3 ltb;
+			uint2 lid;
+			if (!IntersectScene(lightRay, true, PASS_RAYTRACE, ltb.x, ltb.yz, lid.x, lid.y)) {
+				float weight = BalanceHeuristic(1, pdf, 1, lightpdf);
+				lwo = normalize(lwo);
+				float nwo = abs(dot(lwo, normal));
+				radiance = le * nwo * Disney_Evaluate(material, wi, lwo) * throughput * weight;
+			}
+		}
+		
+		// Next bounce
+		ray.Origin = worldPos;
+		ray.Direction = normalize(mul(tangentToWorld, wo_t));
+		ray.InvDirection = 1 / ray.Direction;
+
+		throughput *= abs(dot(normal, ray.Direction)) * brdf / brdfpdf;
+		pdf = brdfpdf;
+
+		return clamp(radiance, 0, MAX_RADIANCE);
 	}
 	throughput = 0;
 	return 0;
@@ -270,29 +319,37 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	Ray ray;
 	ray.Origin = CameraPosition;
 	ray.Direction = normalize(unprojected.xyz / unprojected.w);
-	ray.InvDirection = 1.0 / ray.Direction;
+	ray.InvDirection = 1 / ray.Direction;
 	ray.TMin = Near;
 	ray.TMax = Far;
 
-	uint rnd = asuint(NoiseTex.Load(uint3(index.xy % 256, 0)).r);
+	float3 rd = ray.Direction;
 
+	uint rnd = asuint(NoiseTex.Load(uint3(index.xy % 256, 0)).r);
 	RandomSampler rng;
 	rng.index = FrameIndex % (CMJ_DIM * CMJ_DIM);
 	rng.dimension = 1;
 	rng.scramble = rnd * 0x1fe3434f * ((FrameIndex + 133 * rnd) / (CMJ_DIM * CMJ_DIM));
 
+	float4 nt, nt1;
 	float3 throughput = 1;
-	float3 brdf = 0;
-	//for (uint i = 0; i < 4; i++)
-		brdf += throughput * SampleBRDF(ray, rng, throughput);
+	float pdf = 1;
+	float pdfaccum = 0;
+	float3 radiance = SampleBRDF(ray, rng, throughput, pdf, nt.w, nt.xyz);
+	radiance += SampleBRDF(ray, rng, throughput, pdf, nt1.w, nt1.xyz);
 
-	float3 eval = 2 * PI * brdf;
+	float4 eval = float4(radiance, 1);
 
-	eval = clamp(eval, 0, 1);
-
+	float sampleNumber = 0;
 	#ifdef ACCUMULATE
-	float3 last = PreviousTexture[index.xy].rgb;
-	eval = FrameIndex == 0 ? eval : (eval + last*(FrameIndex-1)) / FrameIndex;
+	float3 worldPos = CameraPosition - LastCameraPosition + rd * nt.w;
+	float4 lc = mul(LastViewProjection, float4(worldPos, 1));
+	float2 lastUV = .5 + .5 * lc.xy / lc.w;
+	float4 last  = PreviousTexture.SampleLevel(Sampler, lastUV + .5/Resolution, 0);
+	float4 lastMeta = PreviousMeta.SampleLevel(Sampler, lastUV + .5/Resolution, 0);
+	if (lastUV.x > 0 && lastUV.y > 0 && lastUV.x < 1 && lastUV.y < 1 && abs(length(worldPos) - lastMeta.w) < .0001 && dot(lastMeta.xyz, nt.xyz) > .999)
+		eval += last;
 	#endif
-	OutputTexture[index.xy] = float4(eval, 1);
+	OutputTexture[index.xy] = eval;
+	MetaTexture[index.xy] = nt;
 }

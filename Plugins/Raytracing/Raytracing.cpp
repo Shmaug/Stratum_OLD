@@ -57,7 +57,11 @@ private:
 	uint32_t mFrameIndex;
 
 	struct FrameData {
+		float4x4 mViewProjection;
+		float4x4 mInvViewProjection;
+		float3 mCameraPosition;
 		Texture* mTarget;
+		Texture* mMetaTarget;
 		Buffer* mNodes;
 		Buffer* mLeafNodes;
 		Buffer* mVertices;
@@ -67,8 +71,6 @@ private:
 		uint32_t mBvhBase;
 		uint32_t mLightCount;
 		uint64_t mLastBuild;
-		float4x4 mInvViewProjection;
-		float3 mCameraPosition;
 		unordered_map<Mesh*, uint32_t> mMeshes; // Mesh, RootIndex
 	};
 	FrameData* mFrameData;
@@ -249,10 +251,11 @@ private:
 public:
 	inline int Priority() override { return 10000; }
 
-	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mFrameIndex(1) { mEnabled = true; }
+	PLUGIN_EXPORT Raytracing() : mScene(nullptr), mFrameIndex(0) { mEnabled = true; }
 	PLUGIN_EXPORT ~Raytracing() {
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(mFrameData[i].mTarget);
+			safe_delete(mFrameData[i].mMetaTarget);
 			safe_delete(mFrameData[i].mNodes);
 			safe_delete(mFrameData[i].mLeafNodes);
 			safe_delete(mFrameData[i].mVertices);
@@ -433,6 +436,7 @@ public:
 		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			mFrameData[i].mTarget = nullptr;
+			mFrameData[i].mMetaTarget = nullptr;
 			mFrameData[i].mNodes = nullptr;
 			mFrameData[i].mLeafNodes = nullptr;
 			mFrameData[i].mVertices = nullptr;
@@ -451,19 +455,25 @@ public:
 		if (pass != PASS_MAIN) return;
 
 		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
-		if (fd.mLastBuild <= mScene->LastBvhBuild()) {
+		if (fd.mLastBuild <= mScene->LastBvhBuild())
 			Build(commandBuffer, fd);
-			mFrameIndex = 0;
-		}
 
-		if (fd.mTarget && (fd.mTarget->Width() != camera->FramebufferWidth() || fd.mTarget->Height() != camera->FramebufferHeight()))
+		if (fd.mTarget && (fd.mTarget->Width() != camera->FramebufferWidth() || fd.mTarget->Height() != camera->FramebufferHeight())) {
 			safe_delete(fd.mTarget);
+			safe_delete(fd.mMetaTarget);
+		}
 		if (!fd.mTarget) {
 			fd.mTarget = new Texture("Raytrace", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
-				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
 				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-		}
+
+			fd.mMetaTarget = new Texture("Raytrace Meta", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
+				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mMetaTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		} else
+			mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
 		FrameData& pfd = mFrameData[(commandBuffer->Device()->FrameContextIndex() + (commandBuffer->Device()->MaxFramesInFlight()-1)) % commandBuffer->Device()->MaxFramesInFlight()];
 		bool accum = pfd.mTarget && pfd.mTarget->Width() == fd.mTarget->Width() && pfd.mTarget->Height() == fd.mTarget->Height();
@@ -472,6 +482,7 @@ public:
 		ComputeShader* trace = accum ? rt->GetCompute("Raytrace", { "ACCUMULATE" }) : rt->GetCompute("Raytrace", {});
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, trace->mPipeline);
 
+		fd.mViewProjection = camera->ViewProjection();
 		fd.mInvViewProjection = inverse(camera->ViewProjection());
 		fd.mCameraPosition = camera->WorldPosition();
 		float2 res(fd.mTarget->Width(), fd.mTarget->Height());
@@ -480,9 +491,8 @@ public:
 		uint32_t vs = sizeof(StdVertex);
 		uint32_t is = sizeof(uint32_t);
 
-		if (accum && (pfd.mCameraPosition != fd.mCameraPosition || pfd.mInvViewProjection != fd.mInvViewProjection))
-			mFrameIndex = 0;
-
+		commandBuffer->PushConstant(trace, "LastViewProjection", &pfd.mViewProjection);
+		commandBuffer->PushConstant(trace, "LastCameraPosition", &pfd.mCameraPosition);
 		commandBuffer->PushConstant(trace, "InvViewProj", &fd.mInvViewProjection);
 		commandBuffer->PushConstant(trace, "Resolution", &res);
 		commandBuffer->PushConstant(trace, "Near", &near);
@@ -497,7 +507,11 @@ public:
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
 		VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
 		ds->CreateStorageTextureDescriptor(fd.mTarget, trace->mDescriptorBindings.at("OutputTexture").second.binding);
-		if (accum) ds->CreateStorageTextureDescriptor(pfd.mTarget, trace->mDescriptorBindings.at("PreviousTexture").second.binding);
+		ds->CreateStorageTextureDescriptor(fd.mMetaTarget, trace->mDescriptorBindings.at("MetaTexture").second.binding);
+		if (accum) {
+			ds->CreateSampledTextureDescriptor(pfd.mTarget, trace->mDescriptorBindings.at("PreviousTexture").second.binding);
+			ds->CreateSampledTextureDescriptor(pfd.mMetaTarget, trace->mDescriptorBindings.at("PreviousMeta").second.binding);
+		}
 		ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
 		ds->CreateStorageBufferDescriptor(fd.mLeafNodes, 0, fd.mLeafNodes->Size(), trace->mDescriptorBindings.at("LeafNodes").second.binding);
 		ds->CreateStorageBufferDescriptor(fd.mVertices, 0, fd.mVertices->Size(), trace->mDescriptorBindings.at("Vertices").second.binding);
@@ -512,40 +526,33 @@ public:
 		vkCmdDispatch(*commandBuffer, (fd.mTarget->Width() + 7) / 8, (fd.mTarget->Height() + 7) / 8, 1);
 
 		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
-		
+
 		mFrameIndex++;
 	}
 
 	PLUGIN_EXPORT void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
 		if (pass != PASS_MAIN) return;
 
-		GraphicsShader* shader = mScene->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE", "TEXTURED" });
+		GraphicsShader* shader = mScene->AssetManager()->LoadShader("Shaders/rtblit.stm")->GetGraphics(PASS_MAIN, {});
 		if (!shader) return;
 
 		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr);
 		if (!layout) return;
 
-		float2 s((float)camera->FramebufferWidth(), (float)camera->FramebufferHeight());
-		float4 b(0, 0, s);
-		float4 st(s, 0, 0);
+		float4 st(1, 1, 0, 0);
 		float4 tst(1, -1, 0, 1);
-		float4 white = 1;
+		float exposure = .4f;
 
 		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
 
-		commandBuffer->PushConstant(shader, "Color", &white);
-		commandBuffer->PushConstant(shader, "Bounds", &b);
-		commandBuffer->PushConstant(shader, "ScreenSize", &s);
 		commandBuffer->PushConstant(shader, "ScaleTranslate", &st);
 		commandBuffer->PushConstant(shader, "TextureST", &tst);
-		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blit", shader->mDescriptorSetLayouts[PER_OBJECT]);
+		commandBuffer->PushConstant(shader, "Exposure", &exposure);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blit", shader->mDescriptorSetLayouts[0]);
 		ds->CreateSampledTextureDescriptor(fd.mTarget, shader->mDescriptorBindings.at("MainTexture").second.binding);
 		ds->FlushWrites();
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, *ds, 0, nullptr);
 		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
-	}
-	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
-		mFrameData[commandBuffer->Device()->FrameContextIndex()].mTarget->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 	}
 };
 
