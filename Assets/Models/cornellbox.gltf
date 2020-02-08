@@ -165,9 +165,9 @@
         },
         {
             "emissiveFactor" : [
-                2,
-                2,
-                2
+                50.0,
+                50.0,
+                50.0
             ],
             "name" : "Light",
             "pbrMetallicRoughness" : {}
