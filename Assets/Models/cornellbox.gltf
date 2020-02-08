@@ -35,7 +35,7 @@
         },
         {
             "mesh" : 1,
-            "name" : "GlassSphere",
+            "name" : "Clearcoat",
             "rotation" : [
                 1,
                 0,
@@ -43,9 +43,9 @@
                 -1.3435885648505064e-07
             ],
             "translation" : [
-                -0.5521056056022644,
-                0.34126386046409607,
-                0.016033530235290527
+                -0.2846468985080719,
+                0.33497005701065063,
+                0.08135119080543518
             ]
         },
         {
@@ -76,9 +76,9 @@
             "mesh" : 3,
             "name" : "Sphere",
             "translation" : [
-                0.007981967180967331,
+                0.2915034890174866,
                 0.22863471508026123,
-                0.8916647434234619
+                0.9213096499443054
             ]
         },
         {
@@ -91,9 +91,9 @@
                 0.23200470209121704
             ],
             "translation" : [
-                -0.7746350169181824,
+                0.18311798572540283,
                 0.17104077339172363,
-                -0.6434687972068787
+                -0.6631598472595215
             ]
         }
     ],
@@ -102,26 +102,26 @@
             "name" : "Box",
             "pbrMetallicRoughness" : {
                 "baseColorFactor" : [
-                    1,
-                    0.7266243696212769,
-                    0.47044065594673157,
+                    0.548852264881134,
+                    0.26805469393730164,
+                    0.07707208395004272,
                     1
                 ],
                 "metallicFactor" : 0,
-                "roughnessFactor" : 1
+                "roughnessFactor" : 0.800000011920929
             }
         },
         {
-            "name" : "Glass",
+            "name" : "Sphere",
             "pbrMetallicRoughness" : {
                 "baseColorFactor" : [
-                    0.9331069588661194,
-                    1,
-                    0.9331069588661194,
+                    0.5382252335548401,
+                    0.247404545545578,
+                    0.02199922502040863,
                     1
                 ],
-                "metallicFactor" : 0,
-                "roughnessFactor" : 0
+                "metallicFactor" : 1,
+                "roughnessFactor" : 0.9256198406219482
             }
         },
         {
@@ -165,37 +165,37 @@
         },
         {
             "emissiveFactor" : [
-                50.0,
-                50.0,
-                50.0
+                15.0,
+                15.0,
+                15.0
             ],
             "name" : "Light",
             "pbrMetallicRoughness" : {}
         },
         {
-            "name" : "Metal",
+            "name" : "ShinySphere",
             "pbrMetallicRoughness" : {
                 "baseColorFactor" : [
-                    0.29086413979530334,
-                    0.29086413979530334,
-                    0.29086413979530334,
+                    0.6382718682289124,
+                    0.6382718682289124,
+                    0.6382718682289124,
                     1
                 ],
                 "metallicFactor" : 1,
-                "roughnessFactor" : 0.32727277278900146
+                "roughnessFactor" : 0
             }
         },
         {
             "name" : "Suzanne",
             "pbrMetallicRoughness" : {
                 "baseColorFactor" : [
-                    1,
-                    1,
-                    1,
+                    0.0876377522945404,
+                    0.467201828956604,
+                    0.06406788527965546,
                     1
                 ],
-                "metallicFactor" : 1,
-                "roughnessFactor" : 0.20000000298023224
+                "metallicFactor" : 0,
+                "roughnessFactor" : 0.671074390411377
             }
         }
     ],
@@ -216,7 +216,7 @@
             ]
         },
         {
-            "name" : "GlassSphere",
+            "name" : "Clearcoat",
             "primitives" : [
                 {
                     "attributes" : {
@@ -231,7 +231,7 @@
             ]
         },
         {
-            "name" : "Box",
+            "name" : "Room",
             "primitives" : [
                 {
                     "attributes" : {
@@ -390,7 +390,7 @@
         {
             "bufferView" : 10,
             "componentType" : 5126,
-            "count" : 25,
+            "count" : 26,
             "max" : [
                 3.687523603439331,
                 0,
@@ -406,19 +406,19 @@
         {
             "bufferView" : 11,
             "componentType" : 5126,
-            "count" : 25,
+            "count" : 26,
             "type" : "VEC3"
         },
         {
             "bufferView" : 12,
             "componentType" : 5126,
-            "count" : 25,
+            "count" : 26,
             "type" : "VEC4"
         },
         {
             "bufferView" : 13,
             "componentType" : 5126,
-            "count" : 25,
+            "count" : 26,
             "type" : "VEC2"
         },
         {
@@ -669,33 +669,28 @@
         },
         {
             "buffer" : 0,
-            "byteLength" : 300,
+            "byteLength" : 312,
             "byteOffset" : 376344
         },
         {
             "buffer" : 0,
-            "byteLength" : 300,
-            "byteOffset" : 376644
+            "byteLength" : 312,
+            "byteOffset" : 376656
         },
         {
             "buffer" : 0,
-            "byteLength" : 400,
-            "byteOffset" : 376944
+            "byteLength" : 416,
+            "byteOffset" : 376968
         },
         {
             "buffer" : 0,
-            "byteLength" : 200,
-            "byteOffset" : 377344
+            "byteLength" : 208,
+            "byteOffset" : 377384
         },
         {
             "buffer" : 0,
             "byteLength" : 84,
-            "byteOffset" : 377544
-        },
-        {
-            "buffer" : 0,
-            "byteLength" : 48,
-            "byteOffset" : 377628
+            "byteOffset" : 377592
         },
         {
             "buffer" : 0,
@@ -704,23 +699,23 @@
         },
         {
             "buffer" : 0,
-            "byteLength" : 64,
+            "byteLength" : 48,
             "byteOffset" : 377724
         },
         {
             "buffer" : 0,
+            "byteLength" : 64,
+            "byteOffset" : 377772
+        },
+        {
+            "buffer" : 0,
             "byteLength" : 32,
-            "byteOffset" : 377788
+            "byteOffset" : 377836
         },
         {
             "buffer" : 0,
             "byteLength" : 12,
-            "byteOffset" : 377820
-        },
-        {
-            "buffer" : 0,
-            "byteLength" : 48,
-            "byteOffset" : 377832
+            "byteOffset" : 377868
         },
         {
             "buffer" : 0,
@@ -729,18 +724,18 @@
         },
         {
             "buffer" : 0,
-            "byteLength" : 64,
+            "byteLength" : 48,
             "byteOffset" : 377928
         },
         {
             "buffer" : 0,
-            "byteLength" : 32,
-            "byteOffset" : 377992
+            "byteLength" : 64,
+            "byteOffset" : 377976
         },
         {
             "buffer" : 0,
-            "byteLength" : 48,
-            "byteOffset" : 378024
+            "byteLength" : 32,
+            "byteOffset" : 378040
         },
         {
             "buffer" : 0,
@@ -749,68 +744,73 @@
         },
         {
             "buffer" : 0,
-            "byteLength" : 64,
+            "byteLength" : 48,
             "byteOffset" : 378120
         },
         {
             "buffer" : 0,
+            "byteLength" : 64,
+            "byteOffset" : 378168
+        },
+        {
+            "buffer" : 0,
             "byteLength" : 32,
-            "byteOffset" : 378184
+            "byteOffset" : 378232
         },
         {
             "buffer" : 0,
             "byteLength" : 75636,
-            "byteOffset" : 378216
+            "byteOffset" : 378264
         },
         {
             "buffer" : 0,
             "byteLength" : 75636,
-            "byteOffset" : 453852
+            "byteOffset" : 453900
         },
         {
             "buffer" : 0,
             "byteLength" : 100848,
-            "byteOffset" : 529488
+            "byteOffset" : 529536
         },
         {
             "buffer" : 0,
             "byteLength" : 50424,
-            "byteOffset" : 630336
+            "byteOffset" : 630384
         },
         {
             "buffer" : 0,
             "byteLength" : 72576,
-            "byteOffset" : 680760
+            "byteOffset" : 680808
         },
         {
             "buffer" : 0,
             "byteLength" : 124644,
-            "byteOffset" : 753336
+            "byteOffset" : 753384
         },
         {
             "buffer" : 0,
             "byteLength" : 124644,
-            "byteOffset" : 877980
+            "byteOffset" : 878028
         },
         {
             "buffer" : 0,
             "byteLength" : 166192,
-            "byteOffset" : 1002624
+            "byteOffset" : 1002672
         },
         {
             "buffer" : 0,
             "byteLength" : 83096,
-            "byteOffset" : 1168816
+            "byteOffset" : 1168864
         },
         {
             "buffer" : 0,
             "byteLength" : 94464,
-            "byteOffset" : 1251912
+            "byteOffset" : 1251960
         }
     ],
     "buffers" : [
         {
-            "byteLength" : 1346376,
+            "byteLength" : 1346424,
             "uri" : "cornellbox.bin"
         }
     ]
