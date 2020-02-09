@@ -117,7 +117,6 @@ float fsdepth(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
-	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
 
 	float3 view = ComputeView(i.worldPos.xyz, i.screenPos);
 
@@ -161,4 +160,6 @@ void fsmain(v2f i,
 	#endif
 
 	color = float4(eval, col.a);
+
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, color.a);
 }

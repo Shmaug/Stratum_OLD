@@ -97,8 +97,9 @@ void fsmain(v2f i,
 	depthNormal = 0;
 	color = MainTexture.SampleLevel(Sampler, i.texcoord.xy, 0) * Color;
 	#else
-	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, 1);
 	color = SampleFont(i.texcoord.xy) * Color;
 	#endif
 	color.a *= i.texcoord.z > 0 && i.texcoord.w > 0 && i.texcoord.z < 1 && i.texcoord.w < 1;
+	depthNormal.a = color.a;
 }

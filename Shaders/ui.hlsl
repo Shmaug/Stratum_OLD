@@ -72,10 +72,10 @@ v2f vsmain(uint index : SV_VertexID) {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
-#ifdef SCREEN_SPACE
+	#ifdef SCREEN_SPACE
 	depthNormal = 0;
 	#else
-	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, 1);
 	#endif
 	#ifdef TEXTURED
 	color = MainTexture.SampleLevel(Sampler, i.texcoord.xy, 0) * Color;
@@ -83,4 +83,5 @@ void fsmain(v2f i,
 	color = Color;
 	#endif
 	color.a *= i.texcoord.z > 0 && i.texcoord.w > 0 && i.texcoord.z < 1 && i.texcoord.w < 1;
+	depthNormal.a = color.a;
 }

@@ -190,8 +190,6 @@ Font::Font(const string& name, Device* device, const string& filename, float pix
 		stbtt_FreeBitmap(g.data, font.userdata);
 }
 Font::~Font() {
-	for (auto& i : mGlyphCache)
-		safe_delete(i.second.first);
 	safe_delete(mTexture)
 }
 
@@ -299,79 +297,4 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 		*aabb = AABB(float3(mn, 0), float3(mx, 0));
 	}
 	return glyphCount;
-}
-
-void Font::DrawString(CommandBuffer* commandBuffer, Camera* camera, const string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const float4& clipRect) {
-	if (str.length() == 0) return;
-
-	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
-	if (!shader) return;
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr);
-	if (!layout) return;
-
-	Buffer* glyphBuffer;
-	char hashstr[256];
-	sprintf(hashstr, "%s%f%d%d", str.c_str(), scale, horizontalAnchor, verticalAnchor);
-	if (mGlyphCache.count(hashstr)){
-		auto& b = mGlyphCache.at(hashstr);
-		b.second = 8;
-		glyphBuffer = b.first;
-	}else{
-		vector<TextGlyph> glyphs(str.length());
-		uint32_t glyphCount = GenerateGlyphs(str, scale, nullptr, glyphs, horizontalAnchor, verticalAnchor);
-		if (glyphCount == 0) return;
-		glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-		glyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-		mGlyphCache.emplace(hashstr, make_pair(glyphBuffer, 8u));
-	}
-
-	DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
-	descriptorSet->CreateSampledTextureDescriptor(mTexture, BINDING_START + 0);
-	descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
-	descriptorSet->FlushWrites();
-
-	float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
-
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *descriptorSet, 0, nullptr);
-	commandBuffer->PushConstant(shader, "Color", &color);
-	commandBuffer->PushConstant(shader, "Offset", &screenPos);
-	commandBuffer->PushConstant(shader, "ScreenSize", &s);
-	commandBuffer->PushConstant(shader, "Bounds", &clipRect);
-	vkCmdDraw(*commandBuffer, (glyphBuffer->Size()/sizeof(TextGlyph)) * 6, 1, 0, 0);
-}
-void Font::DrawString(CommandBuffer* commandBuffer, Camera* camera, const string& str, const float4& color, const float4x4& objectToWorld, const float2& offset, float scale, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const float4& clipRect) {
-	if (str.length() == 0) return;
-
-	GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(PASS_MAIN, {});
-	if (!shader) return;
-	VkPipelineLayout layout = commandBuffer->BindShader(shader, PASS_MAIN, nullptr, camera);
-	if (!layout) return;
-
-	Buffer* glyphBuffer;
-	char hashstr[256];
-	sprintf(hashstr, "%s%f%d%d", str.c_str(), scale, horizontalAnchor, verticalAnchor);
-	if (mGlyphCache.count(hashstr)){
-		auto& b = mGlyphCache.at(hashstr);
-		b.second = 8;
-		glyphBuffer = b.first;
-	}else{
-		vector<TextGlyph> glyphs(str.length());
-		uint32_t glyphCount = GenerateGlyphs(str, scale, nullptr, glyphs, horizontalAnchor, verticalAnchor);
-		if (glyphCount == 0) return;
-		glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-		glyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-		mGlyphCache.emplace(hashstr, make_pair(glyphBuffer, 8u));
-	}
-
-	DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
-	descriptorSet->CreateSampledTextureDescriptor(mTexture, BINDING_START + 0);
-	descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
-	descriptorSet->FlushWrites();
-
-	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *descriptorSet, 0, nullptr);
-	commandBuffer->PushConstant(shader, "ObjectToWorld", &objectToWorld);
-	commandBuffer->PushConstant(shader, "Color", &color);
-	commandBuffer->PushConstant(shader, "Offset", &offset);
-	commandBuffer->PushConstant(shader, "Bounds", &clipRect);
-	vkCmdDraw(*commandBuffer, (glyphBuffer->Size()/sizeof(TextGlyph)) * 6, 1, 0, 0);
 }

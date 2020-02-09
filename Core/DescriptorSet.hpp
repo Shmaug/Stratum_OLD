@@ -31,6 +31,8 @@ public:
 	inline operator VkDescriptorSet() const { return mDescriptorSet; }
 
 private:
+	std::unordered_map<uint64_t, VkWriteDescriptorSet> mCurrent;
+
 	std::vector<VkWriteDescriptorSet> mPending;
 	std::queue<VkDescriptorBufferInfo*> mBufferInfoPool;
 	std::queue<VkDescriptorImageInfo*> mImageInfoPool;

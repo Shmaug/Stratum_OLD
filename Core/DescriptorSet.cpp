@@ -16,6 +16,11 @@ DescriptorSet::DescriptorSet(const string& name, Device* device, VkDescriptorSet
 	mDevice->SetObjectName(mDescriptorSet, name, VK_OBJECT_TYPE_DESCRIPTOR_SET);
 }
 DescriptorSet::~DescriptorSet() {
+	for (auto c : mCurrent) {
+		safe_delete(c.second.pImageInfo);
+		safe_delete(c.second.pBufferInfo);
+	}
+
 	for (VkDescriptorBufferInfo*& d : mPendingBuffers)
 		safe_delete(d);
 	while (!mBufferInfoPool.empty()) {
@@ -33,6 +38,15 @@ DescriptorSet::~DescriptorSet() {
 }
 
 void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
+	uint64_t idx = (uint64_t)binding | ((uint64_t)index << 32);
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
+			c.pBufferInfo->buffer == *buffer &&
+			c.pBufferInfo->offset == offset &&
+			c.pBufferInfo->range == range) return;
+	}
+
 	VkDescriptorBufferInfo* info;
 	if (mBufferInfoPool.empty())
 		info = new VkDescriptorBufferInfo();
@@ -55,8 +69,16 @@ void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index
 	mPending.push_back(write);
 	mPendingBuffers.push_back(info);
 }
-
 void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER &&
+			c.pBufferInfo->buffer == *buffer &&
+			c.pBufferInfo->offset == offset &&
+			c.pBufferInfo->range == range) return;
+	}
+
 	VkDescriptorBufferInfo* info;
 	if (mBufferInfoPool.empty())
 		info = new VkDescriptorBufferInfo();
@@ -81,6 +103,15 @@ void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize o
 }
 
 void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER &&
+			c.pBufferInfo->buffer == *buffer &&
+			c.pBufferInfo->offset == offset &&
+			c.pBufferInfo->range == range) return;
+	}
+
 	VkDescriptorBufferInfo* info;
 	if (mBufferInfoPool.empty())
 		info = new VkDescriptorBufferInfo();
@@ -105,6 +136,14 @@ void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize o
 }
 
 void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE &&
+			c.pImageInfo->imageLayout == layout &&
+			c.pImageInfo->imageView == texture->View()) return;
+	}
+
 	VkDescriptorImageInfo* info;
 	if (mImageInfoPool.empty())
 		info = new VkDescriptorImageInfo();
@@ -128,6 +167,14 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t bi
 	mPendingImages.push_back(info);
 }
 void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t index, uint32_t binding, VkImageLayout layout) {
+	uint64_t idx = (uint64_t)binding | ((uint64_t)index << 32);
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE &&
+			c.pImageInfo->imageLayout == layout &&
+			c.pImageInfo->imageView == texture->View()) return;
+	}
+
 	VkDescriptorImageInfo* info;
 	if (mImageInfoPool.empty())
 		info = new VkDescriptorImageInfo();
@@ -151,6 +198,14 @@ void DescriptorSet::CreateStorageTextureDescriptor(Texture* texture, uint32_t in
 	mPendingImages.push_back(info);
 }
 void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
+			c.pImageInfo->imageLayout == layout &&
+			c.pImageInfo->imageView == texture->View()) return;
+	}
+
 	VkDescriptorImageInfo* info;
 	if (mImageInfoPool.empty())
 		info = new VkDescriptorImageInfo();
@@ -174,6 +229,14 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t bi
 	mPendingImages.push_back(info);
 }
 void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t index, uint32_t binding, VkImageLayout layout) {
+	uint64_t idx = (uint64_t)binding | ((uint64_t)index << 32);
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE &&
+			c.pImageInfo->imageLayout == layout &&
+			c.pImageInfo->imageView == texture->View()) return;
+	}
+
 	VkDescriptorImageInfo* info;
 	if (mImageInfoPool.empty())
 		info = new VkDescriptorImageInfo();
@@ -198,6 +261,12 @@ void DescriptorSet::CreateSampledTextureDescriptor(Texture* texture, uint32_t in
 }
 
 void DescriptorSet::CreateSamplerDescriptor(Sampler* sampler, uint32_t binding) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER && c.pImageInfo->sampler == *sampler) return;
+	}
+
 	VkDescriptorImageInfo* info;
 	if (mImageInfoPool.empty())
 		info = new VkDescriptorImageInfo();
@@ -222,12 +291,35 @@ void DescriptorSet::CreateSamplerDescriptor(Sampler* sampler, uint32_t binding) 
 }
 
 void DescriptorSet::FlushWrites() {
+	if (mPending.empty()) return;
+
 	vkUpdateDescriptorSets(*mDevice, (uint32_t)mPending.size(), mPending.data(), 0, nullptr);
+
+	for (VkWriteDescriptorSet i : mPending) {
+		uint64_t idx = (uint64_t)i.dstBinding | ((uint64_t)i.dstArrayElement << 32);
+		if (mCurrent.count(idx)) {
+			VkWriteDescriptorSet c = mCurrent.at(idx);
+			safe_delete(c.pImageInfo);
+			safe_delete(c.pBufferInfo);
+		}
+		VkWriteDescriptorSet& c = mCurrent[idx];
+		c = i;
+		if (i.pBufferInfo) {
+			VkDescriptorBufferInfo* b = new VkDescriptorBufferInfo();
+			memcpy(b, i.pBufferInfo, sizeof(VkDescriptorBufferInfo));
+			c.pBufferInfo = b;
+		}
+		if (i.pImageInfo) {
+			VkDescriptorImageInfo* b = new VkDescriptorImageInfo();
+			memcpy(b, i.pImageInfo, sizeof(VkDescriptorImageInfo));
+			c.pImageInfo = b;
+		}
+	}
+
+	for (VkDescriptorBufferInfo* d : mPendingBuffers) mBufferInfoPool.push(d);
+	for (VkDescriptorImageInfo* d : mPendingImages) mImageInfoPool.push(d);
+	
 	mPending.clear();
-	for (VkDescriptorBufferInfo* d : mPendingBuffers)
-		mBufferInfoPool.push(d);
-	for (VkDescriptorImageInfo* d : mPendingImages)
-		mImageInfoPool.push(d);
 	mPendingImages.clear();
 	mPendingBuffers.clear();
 }

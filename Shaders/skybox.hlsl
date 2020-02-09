@@ -107,8 +107,6 @@ void fsmain(
 	in float3 viewRay : TEXCOORD1,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
-	depthNormal = float4(0, 0, 0, 1);
-
 	float3 ray = normalize(viewRay);
 
 #ifdef ENABLE_SCATTERING
@@ -168,4 +166,6 @@ void fsmain(
 #else
 	color = float4(AmbientLight, 1);
 #endif
+
+	depthNormal = 1;
 }

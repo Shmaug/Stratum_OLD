@@ -54,18 +54,16 @@ void Camera::CreateDescriptorSet() {
 	mViewport.maxDepth = 1.f;
 }
 
-Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
+Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
 	mMatricesDirty(true),
 	mDeleteFramebuffer(true),
-	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
 	mRenderPriority(100), mStereoMode(STEREO_NONE) {
 
-	vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
-	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
+	vector<VkFormat> colorFormats{ renderFormat, VK_FORMAT_R16G16B16A16_SFLOAT };
 	mFramebuffer = new ::Framebuffer(name, mDevice, 1600, 900, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
@@ -73,12 +71,11 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 
 	CreateDescriptorSet();
 }
-Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount, bool renderDepthNormals)
+Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
 	mMatricesDirty(true),
 	mFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
-	mRenderDepthNormals(renderDepthNormals),
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
@@ -86,9 +83,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 
 	mTargetWindow->mTargetCamera = this;
 
-	vector<VkFormat> colorFormats;
-	colorFormats.push_back(targetWindow->Format().format);
-	if (renderDepthNormals) colorFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
+	vector<VkFormat> colorFormats{ targetWindow->Format().format, VK_FORMAT_R16G16B16A16_SFLOAT };
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
@@ -97,15 +92,14 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, ::Framebuffer* framebuffer)
-		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr),
-	mMatricesDirty(true),
+		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr), mMatricesDirty(true),
 	mFramebuffer(framebuffer),
 	mDeleteFramebuffer(false),
-	mRenderDepthNormals(false),
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
 	mNear(.03f), mFar(500.f),
 	mRenderPriority(100), mStereoMode(STEREO_NONE) {
+
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
 	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
 	CreateDescriptorSet();
@@ -184,11 +178,11 @@ void Camera::Resolve(CommandBuffer* commandBuffer) {
 			if (buffers[i] && (buffers[i]->Width() != mFramebuffer->Width() || buffers[i]->Height() != mFramebuffer->Height()))
 				safe_delete(buffers[i]);
 			if (!buffers[i]) {
-				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(0)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(i)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 			} else
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
-			mFramebuffer->ResolveColor(commandBuffer, 0, buffers[i]->Image());
+			mFramebuffer->ResolveColor(commandBuffer, i, buffers[i]->Image());
 			buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		}
 		END_CMD_REGION(commandBuffer);
