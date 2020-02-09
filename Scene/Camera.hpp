@@ -23,8 +23,8 @@ enum StereoMode {
 
 class Camera : public virtual Object {
 public:
-	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
-	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_8_BIT, bool renderDepthNormals = true);
+	ENGINE_EXPORT Camera(const std::string& name, Window* targetWindow, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT);
+	ENGINE_EXPORT Camera(const std::string& name, ::Device* device, VkFormat renderFormat = VK_FORMAT_R8G8B8A8_UNORM, VkFormat depthFormat = VK_FORMAT_D32_SFLOAT, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT);
 	ENGINE_EXPORT Camera(const std::string& name, ::Framebuffer* framebuffer);
 	ENGINE_EXPORT virtual ~Camera();
 
@@ -125,8 +125,6 @@ private:
 	uint32_t mRenderPriority;
 
 	::StereoMode mStereoMode;
-
-	bool mRenderDepthNormals;
 
 	bool mOrthographic;
 	float mOrthographicSize;

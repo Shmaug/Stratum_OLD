@@ -67,6 +67,6 @@ v2f vsmain(
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1 ) {
-	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
 	color = MainTexture[i.textureIndex].Sample(Sampler, i.texcoord) * i.color;
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, color.a);
 }

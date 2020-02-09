@@ -16,3 +16,6 @@ if(WIN32)
 else()
 	target_link_libraries(DicomVis PUBLIC "libz.so" "libofstd.so" "liboflog.so" "libdcmdata.so" "libdcmimgle.so")
 endif()
+
+add_shader_target(DicomShaders "Shaders/")
+add_dependencies(DicomVis DicomShaders)

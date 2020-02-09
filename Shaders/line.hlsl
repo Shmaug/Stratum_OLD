@@ -54,11 +54,11 @@ v2f vsmain(uint index : SV_VertexID) {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
-#ifdef SCREEN_SPACE
-	depthNormal = 0;
-#else
-	depthNormal = float4(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz)), i.worldPos.w);
-#endif
 	color = Color;
 	color.a *= !any(i.canvasPos > 0);
+#ifdef SCREEN_SPACE
+	depthNormal = float4(0, 0, 0, color.a);
+#else
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, color.a);
+#endif
 }
