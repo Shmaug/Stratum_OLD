@@ -3,7 +3,6 @@
 
 #pragma render_queue 5000
 #pragma cull false
-#pragma zwrite false
 #pragma blend alpha
 
 #pragma static_sampler Sampler
@@ -34,6 +33,7 @@ struct Glyph {
 	float2 Offset;
 	float4 Bounds;
 	float2 ScreenSize;
+	float Depth;
 }
 
 #include "include/util.hlsli"
@@ -63,7 +63,7 @@ v2f vsmain(uint id : SV_VertexId) {
 
 	v2f o;
 #ifdef SCREEN_SPACE
-	o.position = float4((p / ScreenSize) * 2 - 1, .01, 1);
+	o.position = float4((p / ScreenSize) * 2 - 1, Depth, 1);
 	o.position.y = -o.position.y;
 #else
 	float4x4 ct = float4x4(1,0,0,-Camera.Position.x, 0,1,0,-Camera.Position.y, 0,0,1,-Camera.Position.z, 0,0,0,1);

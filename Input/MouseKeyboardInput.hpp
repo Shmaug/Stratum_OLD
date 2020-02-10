@@ -242,6 +242,9 @@ public:
 	ENGINE_EXPORT void LockMouse(bool l);
 	inline bool LockMouse() const { return mLockMouse; }
 
+	inline uint32_t WindowWidth() const { return mWindowWidth; }
+	inline uint32_t WindowHeight() const { return mWindowHeight; }
+
 	inline bool KeyDownFirst(KeyCode key) { return mCurrent.mKeys[key] && !mLast.mKeys[key]; }
 	inline bool KeyUpFirst(KeyCode key) { return mLast.mKeys[key] && !mCurrent.mKeys[key]; }
 	inline bool KeyDown(KeyCode key) { return mCurrent.mKeys[key]; }
@@ -268,4 +271,7 @@ private:
 	State mCurrent;
 	State mLast;
 	bool mLockMouse;
+
+	uint32_t mWindowWidth;
+	uint32_t mWindowHeight;
 };
