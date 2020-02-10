@@ -244,7 +244,7 @@ void Instance::HandleMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 			RECT cr;
 			GetClientRect(mWindow->mHwnd, &cr);
 			mWindow->mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
-			mWindow->mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+			mWindow->mClientRect.extent = { (uint32_t)((int32_t)cr.right - (int32_t)cr.left), (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top) };
 		}
 		break;
 	}
@@ -365,6 +365,8 @@ bool Instance::PollEvents() {
 	
 
 	mWindowInput->mCurrent.mCursorDelta = mWindowInput->mCurrent.mCursorPos - mWindowInput->mLast.mCursorPos;
+	mWindowInput->mWindowWidth = mWindow->mClientRect.extent.width;
+	mWindowInput->mWindowHeight = mWindow->mClientRect.extent.height;
 	return !mDestroyPending;
 
 	#elif defined(WINDOWS)
@@ -463,6 +465,8 @@ bool Instance::PollEvents() {
 		float2 uv = mWindowInput->mCurrent.mCursorPos / float2((float)mWindow->mSwapchainSize.width, (float)mWindow->mSwapchainSize.height);
 		mWindowInput->mMousePointer.mWorldRay = mWindow->mTargetCamera->ScreenToWorldRay(uv);
 	}
+	mWindowInput->mWindowWidth = mWindow->mClientRect.extent.width;
+	mWindowInput->mWindowHeight = mWindow->mClientRect.extent.height;
 
 	return true;
 	#endif

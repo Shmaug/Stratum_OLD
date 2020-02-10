@@ -103,7 +103,7 @@ Window::Window(Instance* instance, const string& title, MouseKeyboardInput* inpu
 	RECT cr;
 	GetClientRect(mHwnd, &cr);
 	mClientRect.offset = { (int32_t)cr.top, (int32_t)cr.left };
-	mClientRect.extent = { (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top), (uint32_t)((int32_t)cr.right - (int32_t)cr.left) };
+	mClientRect.extent = { (uint32_t)((int32_t)cr.right - (int32_t)cr.left), (uint32_t)((int32_t)cr.bottom - (int32_t)cr.top) };
 	#endif
 }
 Window::~Window() {
