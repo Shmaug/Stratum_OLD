@@ -278,7 +278,7 @@ uint32_t Font::GenerateGlyphs(const string& str, float scale, AABB* aabb, std::v
 		verticalOffset = -p.y  * scale;
 		break;
 	case TEXT_ANCHOR_MID:
-		verticalOffset = (lc * (-mDescender - (mAscender - mDescender) * .5f)+ (lc - 1) * mLineSpace) * scale * .5f;
+		verticalOffset = (lc * (-mDescender - (mAscender - mDescender) * .5f) + (lc - 1) * mLineSpace) * scale * .5f;
 		break;
 	case TEXT_ANCHOR_MAX:
 		verticalOffset = 0;

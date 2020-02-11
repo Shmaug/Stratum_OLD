@@ -159,6 +159,10 @@ void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* ca
 	}
 }
 
+bool SkinnedMeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
+	return false;
+}
+
 void SkinnedMeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	if (mRig.size()){
 		for (auto b : mRig) {

@@ -121,14 +121,15 @@ void CameraControl::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	PROFILER_END;
 }
 
-void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
+void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
 	if (mShowPerformance) {
-		char tmpText[64];
-
 		Font* sem11 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 11);
 		Font* sem16 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 16);
 		Font* reg14 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 14);
+		Font* bld16 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 16);
+
+		char tmpText[64];
 
 		float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
 
@@ -148,20 +149,20 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 		for (uint32_t i = 0; i < pointCount; i++)
 			points[i].y /= m;
 
-		GUI::Rect(commandBuffer, camera, float2(0, 0), float2(s.x, graphHeight), float4(.1f, .1f, .1f, 1));
-		GUI::Rect(commandBuffer, camera, float2(0, graphHeight - 1), float2(s.x, 2), float4(.2f, .2f, .2f, 1));
+		GUI::Rect(fRect2D(0, 0, s.x, graphHeight), float4(.1f, .1f, .1f, 1));
+		GUI::Rect(fRect2D(0, graphHeight - 1, s.x, 2), float4(.2f, .2f, .2f, 1));
 
 		snprintf(tmpText, 64, "%.1fms", m);
-		sem11->DrawString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight - 10), 11.f);
+		GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight - 10), 11.f);
 
 		for (float i = 1; i < 3; i++) {
 			float x = m * i / 3.f;
 			snprintf(tmpText, 32, "%.1fms", x);
-			GUI::Rect(commandBuffer, camera, float2(0, graphHeight * (i / 3.f) - 1), float2(s.x, 1), float4(.2f, .2f, .2f, 1));
-			sem11->DrawString(commandBuffer, camera, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
+			GUI::Rect(fRect2D(0, graphHeight * (i / 3.f) - 1, s.x, 1), float4(.2f, .2f, .2f, 1));
+			GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 		}
 
-		GUI::DrawScreenLine(commandBuffer, camera, points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
+		GUI::DrawScreenLine(points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
 
 		if (mSnapshotPerformance) {
 			float2 c = mInput->CursorPos();
@@ -169,7 +170,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 
 			if (c.y < 100) {
 				uint32_t hvr = (uint32_t)((c.x / s.x) * (PROFILER_FRAME_COUNT - 2) + .5f);
-				GUI::Rect(commandBuffer, camera, float2(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), float4(1, 1, 1, .15f));
+				GUI::Rect(fRect2D(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0, 1, graphHeight), float4(1, 1, 1, .15f));
 				if (mInput->KeyDown(MOUSE_LEFT))
 					mSelectedFrame = hvr;
 			}
@@ -179,7 +180,7 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 				float sampleHeight = 20;
 
 				// selection line
-				GUI::Rect(commandBuffer, camera, float2(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), 1);
+				GUI::Rect(fRect2D(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0, 1, graphHeight), 1);
 
 				float id = 1.f / (float)mProfilerFrames[mSelectedFrame].mDuration.count();
 
@@ -198,8 +199,8 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 						col.rgb = 1;
 					}
 
-					GUI::Rect(commandBuffer, camera, pos, size, col);
-					GUI::Rect(commandBuffer, camera, pos + 1, size - 2, float4(.3f, .9f, .3f, 1));
+					GUI::Rect(fRect2D(pos, size), col);
+					GUI::Rect(fRect2D(pos + 1, size - 2), float4(.3f, .9f, .3f, 1));
 
 					for (auto it = p.first->mChildren.begin(); it != p.first->mChildren.end(); it++)
 						samples.push(make_pair(&*it, p.second + 1));
@@ -207,8 +208,8 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 
 				if (selected) {
 					snprintf(tmpText, 64, "%s: %.2fms\n", selected->mLabel, selected->mDuration.count() * 1e-6f);
-					GUI::Rect(commandBuffer, camera, float2(0, graphHeight), float2(s.x, 20), float4(0,0,0,.8f));
-					reg14->DrawString(commandBuffer, camera, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
+					GUI::Rect(fRect2D(0, graphHeight, s.x, 20), float4(0,0,0,.8f));
+					GUI::DrawString(reg14, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
 				}
 			}
 
@@ -216,6 +217,6 @@ void CameraControl::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera
 		#endif
 
 		snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
-		sem16->DrawString(commandBuffer, camera, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+		GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 	}
 }

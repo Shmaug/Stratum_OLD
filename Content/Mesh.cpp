@@ -106,6 +106,14 @@ uint32_t GetDepth(aiNode* node) {
 	}
 	return d;
 }
+float4x4 ConvertMatrix(const aiMatrix4x4& m) {
+	return float4x4(
+		m.a1, m.b1, m.c1, m.d1,
+		m.a2, m.b2, m.c2, m.d2,
+		m.a3, m.b3, m.c3, m.d3,
+		m.a4, m.b4, m.c4, m.d4
+	);
+}
 
 Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, Bone*>& boneMap, float scale) {
 	if (node == root) return nullptr;
@@ -264,8 +272,9 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 			Bone* bone = AddBone(rig, node, scene, root, boneMap, scale);
 			if (!bone) continue;
 			BoneTransform bt;
-			bt.FromMatrix(ConvertMatrix(b.second->mOffsetMatrix), scale);
-			bone->mInverseBind = inverse(bt.ToMatrix());
+			ConvertMatrix(b.second->mOffsetMatrix).Decompose(&bt.mPosition, &bt.mRotation, &bt.mScale);
+			bt.mPosition *= scale;
+			bone->mInverseBind = inverse(float4x4::TRS(bt.mPosition, bt.mRotation, bt.mScale));
 			bonesByName.emplace(b.second->mName.C_Str(), bone->mBoneIndex);
 		}
 
@@ -275,7 +284,8 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 			root = root->mParent;
 		}
 		BoneTransform roott;
-		roott.FromMatrix(rootTransform, scale);
+		rootTransform.Decompose(&roott.mPosition, &roott.mRotation, &roott.mScale);
+		roott.mPosition *= scale;
 
 		for (auto& b : rig) {
 			if (!b->Parent()) {
@@ -293,7 +303,8 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 
 		for (uint32_t i = 0; i < scene->mNumAnimations; i++) {
 			const aiAnimation* anim = scene->mAnimations[i];
-			mAnimations.emplace(anim->mName.C_Str(), new Animation(anim, bonesByName, scale));
+			throw;
+			//mAnimations.emplace(anim->mName.C_Str(), new Animation(anim, bonesByName, scale));
 		}
 
 		vector<VertexWeight> vertexWeights(vertices.size());
