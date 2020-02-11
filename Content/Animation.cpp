@@ -50,14 +50,14 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 
 float AnimationChannel::Sample(float t) const {
 	if (mKeyframes.size() == 0) return 0;
-	if (mKeyframes.size() == 1) return mKeyframes[0].mTime;
+	if (mKeyframes.size() == 1) return mKeyframes[0].mValue;
 
 	float length = mKeyframes.back().mTime - mKeyframes[0].mTime;
 	float ts = mKeyframes[0].mTime - t;
-	float tl = t - length;
+	float tl = t - mKeyframes.back().mValue;
 	float offset = 0;
 	if (tl > 0) {
-		switch (mExtrapolateIn) {
+		switch (mExtrapolateOut) {
 		case EXTRAPOLATE_CONSTANT:
 			return mKeyframes.back().mValue;
 		case EXTRAPOLATE_LINEAR:
@@ -66,7 +66,7 @@ float AnimationChannel::Sample(float t) const {
 			t = fmodf(tl, length);
 			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
-			offset += mKeyframes.back().mValue * (floorf(tl / length) + 1);
+			offset += (mKeyframes.back().mValue - mKeyframes[0].mValue) * (floorf(tl / length) + 1);
 			t = fmodf(tl, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:
@@ -81,12 +81,12 @@ float AnimationChannel::Sample(float t) const {
 		case EXTRAPOLATE_CONSTANT:
 			return mKeyframes[0].mValue;
 		case EXTRAPOLATE_LINEAR:
-			return mKeyframes[0].mValue - mKeyframes[0].mTangentIn * ts;
+			return mKeyframes[0].mValue - mKeyframes[0].mTangentOut * ts;
 		case EXTRAPOLATE_CYCLE:
 			t = fmodf(ts, length);
 			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
-			offset += mKeyframes[0].mValue * (floorf(ts / length) + 1);
+			offset += (mKeyframes[0].mValue - mKeyframes.back().mValue) * floorf(ts / length);
 			t = fmodf(ts, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:
@@ -107,18 +107,18 @@ float AnimationChannel::Sample(float t) const {
 
 	float4 c = mCoefficients[i];
 	float u = (t - mKeyframes[i].mTime) / (mKeyframes[i + 1].mTime - mKeyframes[i].mTime);
-	return c.x + u * (c.y + u * (c.z + u * c.w));
+	return lerp(mKeyframes[i].mValue, mKeyframes[i + 1].mValue, u) + offset;// c.x + u * (c.y + u * (c.z + u * c.w)) + offset;
 }
 
 Animation::Animation(const unordered_map<uint32_t, AnimationChannel>& channels, float start, float end)
 	: mChannels(channels), mTimeStart(start), mTimeEnd(end) {}
 
 void Animation::Sample(float t, AnimationRig& rig) const {
-	rig[0]->LocalPosition(mChannels.at(0).Sample(t), mChannels.at(1).Sample(t), mChannels.at(2).Sample(t));
-	for (uint32_t i = 3; i < rig.size(); i+=3) {
-		quaternion r(float3(mChannels.at(i).Sample(t), mChannels.at(i+1).Sample(t), -mChannels.at(i+2).Sample(t)));
+	rig[0]->LocalPosition(mChannels.at(0).Sample(t), mChannels.at(1).Sample(t), -mChannels.at(2).Sample(t));
+	for (uint32_t i = 1; i < rig.size(); i++) {
+		quaternion r(float3(mChannels.at(3 * i + 0).Sample(t), mChannels.at(3 * i + 1).Sample(t), mChannels.at(3 * i + 2).Sample(t)));
 		r.x = -r.x;
 		r.y = -r.y;
-		rig[i/3]->LocalRotation(r);
+		rig[i]->LocalRotation(r);
 	}
 }

@@ -314,6 +314,7 @@ bool GUI::Button(Font* font, const string& text, float textScale, const fRect2D&
 	bool hvr = screenRect.Contains(c);
 	bool clk = hvr && i->KeyDown(MOUSE_LEFT);
 
+	if (hvr) i->mMousePointer.mGuiHitT = 0.f;
 	if (clk) mHotControl = controlId;
 	
 	if (color.a > 0) {
@@ -407,7 +408,7 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 	
 	float scrollAmount = 0;
 	if (mControlData.count(controlId)) {
-		auto& v = mControlData.at(controlId);
+		const auto& v = mControlData.at(controlId);
 		if (v.index() == 0) scrollAmount = get<float>(v);
 	}
 
@@ -415,11 +416,13 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 		MouseKeyboardInput* i = mInputManager->GetFirst<MouseKeyboardInput>();
 		float2 c = i->CursorPos();
 		c.y = i->WindowHeight() - c.y;
-		if (layoutRect.Contains(c))
+		if (layoutRect.Contains(c)) {
 			scrollAmount -= i->ScrollDelta() * 60;
+			i->mMousePointer.mGuiHitT = 0.f;
+		}
 	}
 
-	float scrollMax = max(0.f, contentSize - size);
+	float scrollMax = max(0.f, contentSize - layoutRect.mExtent.y);
 	scrollAmount = clamp(scrollAmount, 0.f, scrollMax);
 
 	mControlData[controlId] = scrollAmount;
@@ -427,24 +430,17 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 	fRect2D contentRect = layoutRect;
 	contentRect.mOffset += insidePadding;
 	contentRect.mExtent -= insidePadding * 2;
-
 	switch (l.mAxis) {
 	case LAYOUT_HORIZONTAL:
-		contentRect.mOffset.x += insidePadding - scrollAmount;
-		contentRect.mExtent.x += contentSize - insidePadding * 2;
+		contentRect.mOffset.x -= scrollAmount + (layoutRect.mExtent.x - contentSize);
+		contentRect.mExtent.x = contentSize - insidePadding * 2;
 		break;
 	case LAYOUT_VERTICAL:
-		contentRect.mOffset.y -= insidePadding - scrollAmount;
-		contentRect.mExtent.y += contentSize - insidePadding * 2;
+		contentRect.mOffset.y += (layoutRect.mExtent.y - contentSize) + scrollAmount;
+		contentRect.mExtent.y = contentSize - insidePadding * 2;
 		break;
 	}
 	
-	fRect2D clipRect = contentRect;
-
-	float2 dc = max(0, l.mClipRect.mOffset - layoutRect.mOffset);
-	clipRect.mOffset += dc;
-	clipRect.mExtent = dc - max(0, layoutRect.mOffset - (l.mClipRect.mOffset + l.mClipRect.mExtent));
-
 	// scroll bar slider
 	if (scrollMax > 0) {
 		fRect2D slider;
@@ -452,9 +448,9 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 
 		switch (l.mAxis) {
 		case LAYOUT_HORIZONTAL:
-			slider.mExtent = float2(20, 6);
-			slider.mOffset = float2((layoutRect.mExtent.x - slider.mExtent.x) * (1 - scrollAmount / scrollMax), 0);
-			sliderbg.mOffset = 0;
+			slider.mExtent = float2(20 * layoutRect.mExtent.x * (layoutRect.mExtent.x / contentSize), 6);
+			slider.mOffset = layoutRect.mOffset + float2((layoutRect.mExtent.x - slider.mExtent.x) * (scrollAmount / scrollMax), 0);
+			sliderbg.mOffset = layoutRect.mOffset;
 			sliderbg.mExtent = float2(layoutRect.mExtent.x, slider.mExtent.y);
 
 			layoutRect.mOffset.y += slider.mExtent.y;
@@ -464,21 +460,20 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 			break;
 
 		case LAYOUT_VERTICAL:
-			slider.mExtent = float2(6, 20);
-			slider.mOffset = float2(layoutRect.mExtent.x - slider.mExtent.x, (clipRect.mExtent.y - slider.mExtent.y) * (1 - scrollAmount / scrollMax));
-			sliderbg.mOffset = float2(layoutRect.mExtent.x - slider.mExtent.x, 0);
+			slider.mExtent = float2(6, layoutRect.mExtent.y * (layoutRect.mExtent.y / contentSize));
+			slider.mOffset = layoutRect.mOffset + float2(layoutRect.mExtent.x - slider.mExtent.x, (layoutRect.mExtent.y - slider.mExtent.y) * (1 - scrollAmount / scrollMax));
+			sliderbg.mOffset = layoutRect.mOffset + float2(layoutRect.mExtent.x - slider.mExtent.x, 0);
 			sliderbg.mExtent = float2(slider.mExtent.x, layoutRect.mExtent.y);
 
-			layoutRect.mExtent.x -= slider.mExtent.x;
 			layoutRect.mExtent.x -= slider.mExtent.x;
 			break;
 		}
 
-		GUI::Rect(slider, float4(.4f, .4f, .4f, 1));
 		GUI::Rect(sliderbg, float4(.4f, .4f, .4f, 1));
+		GUI::Rect(slider, float4(.8f, .8f, .8f, 1));
 	}
 
-	mLayoutStack.push({ l.mTransform, l.mScreenSpace, l.mAxis, contentRect, clipRect, l.mAxis == LAYOUT_VERTICAL ? contentRect.mExtent.y : 0 });
+	mLayoutStack.push({ l.mTransform, l.mScreenSpace, l.mAxis, contentRect, layoutRect, 0 });
 }
 void GUI::EndLayout() {
 	mLayoutStack.pop();

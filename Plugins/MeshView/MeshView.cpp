@@ -112,7 +112,6 @@ private:
 					r.x = -r.x;
 					r.y = -r.y;
 					j->LocalRotation(r);
-
 					continue;
 				}
 				if (token == "balljoint") {
@@ -138,6 +137,9 @@ private:
 		unordered_map<uint32_t, AnimationChannel> channels;
 		uint32_t cur = 0;
 
+		AnimationExtrapolate exIn = EXTRAPOLATE_CYCLE;
+		AnimationExtrapolate exOut = EXTRAPOLATE_CYCLE;
+
 		string token;
 		if (!t.Next(token) || token != "animation") THROW_INVALID_ANIM;
 		if (!t.Next(token)) THROW_INVALID_ANIM;
@@ -150,58 +152,53 @@ private:
 				if (!t.Next(cc)) THROW_INVALID_ANIM;
 			} else if (token == "channel") {
 				if (!t.Next(token)) THROW_INVALID_ANIM;
+			} else if (token == "extrapolate") {
+				if (!t.Next(token)) THROW_INVALID_ANIM;
+				if (token == "constant") exIn = EXTRAPOLATE_CONSTANT;
+				else if (token == "linear") exIn = EXTRAPOLATE_LINEAR;
+				else if (token == "cycle") exIn = EXTRAPOLATE_CYCLE;
+				else if (token == "cycle_offset") exIn = EXTRAPOLATE_CYCLE_OFFSET;
+				else if (token == "bounce") exIn = EXTRAPOLATE_BOUNCE;
+				else THROW_INVALID_ANIM;
 
-				AnimationExtrapolate exIn = EXTRAPOLATE_CYCLE;
-				AnimationExtrapolate exOut = EXTRAPOLATE_CYCLE;
-
-				if (token == "extrapolate") {
+				if (!t.Next(token)) THROW_INVALID_ANIM;
+				if (token == "constant") exOut = EXTRAPOLATE_CONSTANT;
+				else if (token == "linear") exOut = EXTRAPOLATE_LINEAR;
+				else if (token == "cycle") exOut = EXTRAPOLATE_CYCLE;
+				else if (token == "cycle_offset") exOut = EXTRAPOLATE_CYCLE_OFFSET;
+				else if (token == "bounce") exOut = EXTRAPOLATE_BOUNCE;
+				else THROW_INVALID_ANIM;
+			} else if (token == "keys") {
+				vector<AnimationKeyframe> keys;
+				uint32_t kc;
+				if (!t.Next(kc)) THROW_INVALID_ANIM;
+				keys.resize(kc);
+				if (!t.Next(token)) THROW_INVALID_ANIM;
+				for (uint32_t i = 0; i < kc; i++) {
+					if (!t.Next(keys[i].mTime)) THROW_INVALID_ANIM;
+					if (!t.Next(keys[i].mValue)) THROW_INVALID_ANIM;
 					if (!t.Next(token)) THROW_INVALID_ANIM;
-					if (token == "constant") exIn = EXTRAPOLATE_CONSTANT;
-					else if (token == "linear") exIn = EXTRAPOLATE_LINEAR;
-					else if (token == "cycle") exIn = EXTRAPOLATE_CYCLE;
-					else if (token == "cycle_offset") exIn = EXTRAPOLATE_CYCLE_OFFSET;
-					else if (token == "bounce") exIn = EXTRAPOLATE_BOUNCE;
-					else THROW_INVALID_ANIM;
 
-					if (!t.Next(token)) THROW_INVALID_ANIM;
-					if (token == "constant") exOut = EXTRAPOLATE_CONSTANT;
-					else if (token == "linear") exOut = EXTRAPOLATE_LINEAR;
-					else if (token == "cycle") exOut = EXTRAPOLATE_CYCLE;
-					else if (token == "cycle_offset") exOut = EXTRAPOLATE_CYCLE_OFFSET;
-					else if (token == "bounce") exOut = EXTRAPOLATE_BOUNCE;
-					else THROW_INVALID_ANIM;
-				} else if (token == "keys") {
-					vector<AnimationKeyframe> keys;
-					uint32_t kc;
-					if (!t.Next(kc)) THROW_INVALID_ANIM;
-					keys.resize(kc);
-					if (!t.Next(token)) THROW_INVALID_ANIM;
-					for (uint32_t i = 0; i < kc; i++) {
-						if (!t.Next(keys[i].mTime)) THROW_INVALID_ANIM;
-						if (!t.Next(keys[i].mValue)) THROW_INVALID_ANIM;
-						if (!t.Next(token)) THROW_INVALID_ANIM;
-
-						if (token == "flat") keys[i].mTangentModeIn = ANIMATION_TANGENT_FLAT;
-						else if (token == "linear") keys[i].mTangentModeIn = ANIMATION_TANGENT_LINEAR;
-						else if (token == "smooth") keys[i].mTangentModeIn = ANIMATION_TANGENT_SMOOTH;
-						else {
-							keys[i].mTangentIn = atof(token.c_str());
-							keys[i].mTangentModeIn = ANIMATION_TANGENT_MANUAL;
-						}
-
-						if (token == "flat") keys[i].mTangentModeOut = ANIMATION_TANGENT_FLAT;
-						else if (token == "linear") keys[i].mTangentModeOut = ANIMATION_TANGENT_LINEAR;
-						else if (token == "smooth") keys[i].mTangentModeOut = ANIMATION_TANGENT_SMOOTH;
-						else {
-							keys[i].mTangentOut = atof(token.c_str());
-							keys[i].mTangentModeOut = ANIMATION_TANGENT_MANUAL;
-						}
+					if (token == "flat") keys[i].mTangentModeIn = ANIMATION_TANGENT_FLAT;
+					else if (token == "linear") keys[i].mTangentModeIn = ANIMATION_TANGENT_LINEAR;
+					else if (token == "smooth") keys[i].mTangentModeIn = ANIMATION_TANGENT_SMOOTH;
+					else {
+						keys[i].mTangentIn = atof(token.c_str());
+						keys[i].mTangentModeIn = ANIMATION_TANGENT_MANUAL;
 					}
 
-					channels[cur] = AnimationChannel(keys, exIn, exOut);
+					if (!t.Next(token)) THROW_INVALID_ANIM;
 
-					continue;
+					if (token == "flat") keys[i].mTangentModeOut = ANIMATION_TANGENT_FLAT;
+					else if (token == "linear") keys[i].mTangentModeOut = ANIMATION_TANGENT_LINEAR;
+					else if (token == "smooth") keys[i].mTangentModeOut = ANIMATION_TANGENT_SMOOTH;
+					else {
+						keys[i].mTangentOut = atof(token.c_str());
+						keys[i].mTangentModeOut = ANIMATION_TANGENT_MANUAL;
+					}
 				}
+				channels[cur] = AnimationChannel(keys, exIn, exOut);
+				cur++;
 			}
 		}
 

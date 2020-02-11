@@ -30,7 +30,9 @@ void MouseKeyboardInput::LockMouse(bool l) {
 void MouseKeyboardInput::NextFrame() {
 	mMousePointer.mLastWorldRay = mMousePointer.mWorldRay;
 	mMousePointer.mLastAxis = mMousePointer.mAxis;
+	mMousePointer.mLastGuiHitT = mMousePointer.mGuiHitT;
 	mLast = mCurrent;
 	mCurrent.mScrollDelta = 0;
 	mCurrent.mCursorDelta = 0;
+	mMousePointer.mGuiHitT = -1.f;
 }
