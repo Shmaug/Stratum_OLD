@@ -68,6 +68,38 @@ namespace fs = std::filesystem;
 #define safe_delete(x) if (x != nullptr) { delete x; x = nullptr; }
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
 
+struct fRect2D {
+	union {
+		struct {
+			float2 mOffset;
+			float2 mExtent;
+		};
+		float4 xyzw;
+	};
+
+	inline fRect2D() : mOffset(0), mExtent(0) {};
+	inline fRect2D(const float2& offset, const float2& extent) : mOffset(offset), mExtent(extent) {};
+	inline fRect2D(float ox, float oy, float ex, float ey) : mOffset(float2(ox, oy)), mExtent(ex, ey) {};
+
+	inline fRect2D& operator=(const fRect2D & rhs) {
+		xyzw = rhs.xyzw;
+		return *this;
+	}
+
+	inline bool Intersects(const fRect2D& p) const {
+		return !(
+			mOffset.x + mExtent.x < p.mOffset.x ||
+			mOffset.y  + mExtent.y < p.mOffset.y ||
+			mOffset.x > p.mOffset.x + p.mExtent.x ||
+			mOffset.y > p.mOffset.y + p.mExtent.y);
+	}
+	inline bool Contains(const float2& p) const {
+		return 
+			p.x > mOffset.x && p.y > mOffset.y &&
+			p.x < mOffset.x + mExtent.x && p.y < mOffset.y + mExtent.y;
+	}
+};
+
 /// Corresponds to a LayerMask as well (see Renderer.hpp)
 enum PassType {
 	PASS_MAIN = 1 << 24,

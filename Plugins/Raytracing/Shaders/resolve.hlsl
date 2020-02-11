@@ -6,7 +6,7 @@
 #define NORMAL_WEIGHT   3
 #define PLANE_WEIGHT    5
 
-#define BLUR_RADIUS 2
+#define BLUR_RADIUS 1
 // 1 / (Radius * .5)
 #define FILTER_INVSIGMA (1/(.5*BLUR_RADIUS))
 

@@ -2183,6 +2183,22 @@ struct float4x4 {
 		v[2][2] = 1 - 2 * (q2.x + q2.y);
 	}
 
+	inline void Decompose(float3* position, quaternion* rotation, float3* scale) {
+		if (position) *position = v[3].xyz;
+		if (scale) {
+			scale->x = length(v[0].xyz);
+			scale->y = length(v[1].xyz);
+			scale->z = length(v[2].xyz);
+		}
+		if (rotation) {
+			rotation->x = v[2].y - v[1].z;
+			rotation->y = v[0].z - v[2].x;
+			rotation->z = v[1].x - v[0].y;
+			rotation->w = sqrtf(1.f + v[0].x + v[1].y + v[2].z) * .5f;
+			rotation->xyz /= 4.f * rotation->w;
+		}
+	}
+
 	inline static float4x4 Look(const float3& p, const float3& fwd, const float3& up) {
 		float3 f[3];
 		f[0] = normalize(cross(up, fwd));

@@ -95,6 +95,7 @@ void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	};
 
 	TriangleBvh2* bvh = Mesh()->BVH();
+	if (!bvh) return;
 
 	for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
 		if (bvh->Nodes()[ni].mRightOffset == 0) {
