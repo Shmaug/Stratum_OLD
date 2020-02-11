@@ -149,13 +149,15 @@ public:
 			}
 		}
 
-		mZoom = clamp(mZoom - mInput->ScrollDelta() * .2f, -1.f, 5.f);
-		mMainCamera->LocalPosition(0, 1.6f, -mZoom);
+		if (mInput->GetPointer(0)->mLastGuiHitT < 0) {
+			mZoom = clamp(mZoom - mInput->ScrollDelta() * .2f, -1.f, 5.f);
+			mMainCamera->LocalPosition(0, 1.6f, -mZoom);
 
-		if (mInput->KeyDown(MOUSE_LEFT)) {
-			float3 axis = mMainCamera->WorldRotation() * float3(0, 1, 0) * mInput->CursorDelta().x + mMainCamera->WorldRotation() * float3(1, 0, 0) * mInput->CursorDelta().y;
-			if (dot(axis, axis) > .001f)
-				mVolumeRotation = quaternion(length(axis) * .003f, -normalize(axis)) * mVolumeRotation;
+			if (mInput->KeyDown(MOUSE_LEFT)) {
+				float3 axis = mMainCamera->WorldRotation() * float3(0, 1, 0) * mInput->CursorDelta().x + mMainCamera->WorldRotation() * float3(1, 0, 0) * mInput->CursorDelta().y;
+				if (dot(axis, axis) > .001f)
+					mVolumeRotation = quaternion(length(axis) * .003f, -normalize(axis)) * mVolumeRotation;
+			}
 		}
 
 		// count fps
@@ -181,11 +183,14 @@ public:
 		
 		if (mShowPerformance) {
 			char tmpText[64];
+			snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 
-			float graphHeight = 100;
 
 			#ifdef PROFILER_ENABLE
 			const uint32_t pointCount = PROFILER_FRAME_COUNT - 1;
+			
+			float graphHeight = 100;
 
 			float2 points[pointCount];
 			float m = 0;
@@ -198,8 +203,8 @@ public:
 			for (uint32_t i = 0; i < pointCount; i++)
 				points[i].y /= m;
 
-			GUI::Rect(float2(0, 0), float2(s.x, graphHeight), float4(.1f, .1f, .1f, 1));
-			GUI::Rect(float2(0, graphHeight - 1), float2(s.x, 2), float4(.2f, .2f, .2f, 1));
+			GUI::Rect(fRect2D(0, 0, s.x, graphHeight), float4(.1f, .1f, .1f, 1));
+			GUI::Rect(fRect2D(0, graphHeight - 1, s.x, 2), float4(.2f, .2f, .2f, 1));
 
 			snprintf(tmpText, 64, "%.1fms", m);
 			GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight - 10), 11.f);
@@ -207,7 +212,7 @@ public:
 			for (float i = 1; i < 3; i++) {
 				float x = m * i / 3.f;
 				snprintf(tmpText, 32, "%.1fms", x);
-				GUI::Rect(float2(0, graphHeight * (i / 3.f) - 1), float2(s.x, 1), float4(.2f, .2f, .2f, 1));
+				GUI::Rect(fRect2D(0, graphHeight * (i / 3.f) - 1, s.x, 1), float4(.2f, .2f, .2f, 1));
 				GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 			}
 
@@ -216,7 +221,7 @@ public:
 			if (mSnapshotPerformance) {
 				if (c.y < 100) {
 					uint32_t hvr = (uint32_t)((c.x / s.x) * (PROFILER_FRAME_COUNT - 2) + .5f);
-					GUI::Rect(float2(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), float4(1, 1, 1, .15f));
+					GUI::Rect(fRect2D(s.x * hvr / (PROFILER_FRAME_COUNT - 2), 0, 1, graphHeight), float4(1, 1, 1, .15f));
 					if (mInput->KeyDown(MOUSE_LEFT))
 						mSelectedFrame = hvr;
 				}
@@ -226,7 +231,7 @@ public:
 					float sampleHeight = 20;
 
 					// selection line
-					GUI::Rect(float2(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0), float2(1, graphHeight), 1);
+					GUI::Rect(fRect2D(s.x * mSelectedFrame / (PROFILER_FRAME_COUNT - 2), 0, 1, graphHeight), 1);
 
 					float id = 1.f / (float)mProfilerFrames[mSelectedFrame].mDuration.count();
 
@@ -245,8 +250,8 @@ public:
 							col.rgb = 1;
 						}
 
-						GUI::Rect(pos, size, col);
-						GUI::Rect(pos + 1, size - 2, float4(.3f, .9f, .3f, 1));
+						GUI::Rect(fRect2D(pos, size), col);
+						GUI::Rect(fRect2D(pos + 1, size - 2), float4(.3f, .9f, .3f, 1));
 
 						for (auto it = p.first->mChildren.begin(); it != p.first->mChildren.end(); it++)
 							samples.push(make_pair(&*it, p.second + 1));
@@ -254,37 +259,28 @@ public:
 
 					if (selected) {
 						snprintf(tmpText, 64, "%s: %.2fms\n", selected->mLabel, selected->mDuration.count() * 1e-6f);
-						GUI::Rect(float2(0, graphHeight), float2(s.x, 20), float4(0,0,0,.8f));
+						GUI::Rect(fRect2D(0, graphHeight, s.x, 20), float4(0,0,0,.8f));
 						GUI::DrawString(reg14, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
 					}
 				}
 
 			}
 			#endif
-
-			snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
-			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 		}
 
-		float2 panelSize(300, 400);
-		float2 panelPos(10, s.y * .5f - panelSize.y * .5f);
+		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 200, 300, 400), float4(.3f, .3f, .3f, 1), 10);
 
-		float2 scrollViewSize(panelSize.x - 10, panelSize.y - 70);
-		float2 scrollViewPos(panelPos.x+5, panelPos.y+35);
+		GUI::LayoutLabel(bld24, "Load DICOM", 24, 0, 1);
 
-		GUI::Rect(panelPos-2, panelSize+4, float4(.3f, .3f, .3f, 1)); // outline
-		GUI::Rect(panelPos, panelSize, float4(.2f, .2f, .2f, 1)); // background
-		GUI::Label(bld24, "Load DICOM", 24, panelPos+float2(0, panelSize.y-35), float2(panelSize.x, 30), 0, 1);
-		GUI::Rect(panelPos + float2(0, panelSize.y - 30), float2(panelSize.x, 1), 1); // separator
+		GUI::LayoutSeparator(.5f, 1);
 
-		GUI::BeginScrollLayout("FolderScroll", LAYOUT_VERTICAL,); // scroll view
-
-		float y = scrollViewSize.y + mFolderScrollAmount - 24;
-		for (const fs::path& p : mDicomFolders) {
-			if (GUI::Button(sem16, p.stem().string(), 16, scrollViewPos+float2(0, y), float2(scrollViewSize.x, 20), float4(.3f, .3f, .3f, 1), 1, TEXT_ANCHOR_MIN, TEXT_ANCHOR_MID, float4(scrollViewPos, scrollViewSize)))
+		GUI::BeginScrollSubLayout(300, 500, float4(.2f, .2f, .2f, 1), 5);
+		for (const fs::path& p : mDicomFolders)
+			if (GUI::LayoutButton(sem16, p.stem().string(), 16, float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
 				LoadVolume(commandBuffer, p);
-			y -= 20;
-		}
+		GUI::EndLayout();
+
+		GUI::EndLayout();
 	}
 
 	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {

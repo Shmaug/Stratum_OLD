@@ -12,6 +12,8 @@ public:
 	InputDevice* mDevice;
 	Ray mWorldRay;
 	Ray mLastWorldRay;
+	float mGuiHitT;
+	float mLastGuiHitT;
 	std::unordered_map<uint32_t, float> mAxis;
 	std::unordered_map<uint32_t, float> mLastAxis;
 };

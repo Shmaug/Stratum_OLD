@@ -259,6 +259,7 @@ public:
 	ENGINE_EXPORT void NextFrame() override;
 
 private:
+	friend class GUI;
 	friend class Window;
 	friend class Instance;
 	struct State {
