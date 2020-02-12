@@ -216,7 +216,7 @@ public:
 				GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 			}
 
-			GUI::DrawScreenLine(points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
+			GUI::DrawScreenLine(points, pointCount, 1.5f, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
 
 			if (mSnapshotPerformance) {
 				if (c.y < 100) {
@@ -270,13 +270,13 @@ public:
 
 		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 200, 300, 400), float4(.3f, .3f, .3f, 1), 10);
 
-		GUI::LayoutLabel(bld24, "Load DICOM", 24, 0, 1);
+		GUI::LayoutLabel(bld24, "Load DICOM", 24, 30, 0, 1);
 
 		GUI::LayoutSeparator(.5f, 1);
 
-		GUI::BeginScrollSubLayout(300, 500, float4(.2f, .2f, .2f, 1), 5);
+		GUI::BeginScrollSubLayout(300, mDicomFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
 		for (const fs::path& p : mDicomFolders)
-			if (GUI::LayoutButton(sem16, p.stem().string(), 16, float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
+			if (GUI::LayoutButton(sem16, p.stem().string(), 16, 24, float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
 				LoadVolume(commandBuffer, p);
 		GUI::EndLayout();
 
