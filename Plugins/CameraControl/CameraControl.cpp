@@ -74,31 +74,33 @@ void CameraControl::Update() {
 		}
 	}
 
-	#pragma region Camera control
-	if (mInput->KeyDown(MOUSE_MIDDLE)) {
-		float3 md = mInput->CursorDelta();
-		if (mInput->KeyDown(KEY_LSHIFT)) {
-			md.x = -md.x;
-			md = md * .0005f * mCameraDistance;
-		} else
-			md = float3(md.y, md.x, 0) * .005f;
+	if (mInput->GetPointer(0)->mLastGuiHitT < 0){
+		#pragma region Camera control
+		if (mInput->KeyDown(MOUSE_MIDDLE)) {
+			float3 md = mInput->CursorDelta();
+			if (mInput->KeyDown(KEY_LSHIFT)) {
+				md.x = -md.x;
+				md = md * .0005f * mCameraDistance;
+			} else
+				md = float3(md.y, md.x, 0) * .005f;
 
-		if (mInput->KeyDown(KEY_LSHIFT))
-			// translate camera
-			mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
-		else {
-			mCameraEuler += md;
-			mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
-			// rotate camera
+			if (mInput->KeyDown(KEY_LSHIFT))
+				// translate camera
+				mCameraPivot->LocalPosition(mCameraPivot->LocalPosition() + mCameraPivot->LocalRotation() * md);
+			else {
+				mCameraEuler += md;
+				mCameraEuler.x = clamp(mCameraEuler.x, -PI * .5f, PI * .5f);
+				// rotate camera
+			}
+			mCameraPivot->LocalRotation(quaternion(mCameraEuler));
 		}
-		mCameraPivot->LocalRotation(quaternion(mCameraEuler));
-	}
-	mCameraDistance *= 1.0f - .2f * mInput->ScrollDelta();
-	mCameraDistance = max(.01f, mCameraDistance);
+		mCameraDistance *= 1.0f - .2f * mInput->ScrollDelta();
+		mCameraDistance = max(.01f, mCameraDistance);
 
-	for (uint32_t i = 0; i < mCameras.size(); i++)
-		mCameras[i]->LocalPosition(0, 0, -mCameraDistance);
-	#pragma endregion
+		for (uint32_t i = 0; i < mCameras.size(); i++)
+			mCameras[i]->LocalPosition(0, 0, -mCameraDistance);
+		#pragma endregion
+	}
 
 	// count fps
 	mFrameTimeAccum += mScene->Instance()->DeltaTime();

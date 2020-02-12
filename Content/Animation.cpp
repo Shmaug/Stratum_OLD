@@ -8,6 +8,8 @@ using namespace std;
 AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, AnimationExtrapolate in, AnimationExtrapolate out)
 	: mKeyframes(keyframes), mExtrapolateIn(in), mExtrapolateOut(out) {
 	
+	if (!mKeyframes.size()) return;
+
 	// compute tangents
 	for (uint32_t i = 0; i < mKeyframes.size(); i++) {
 		switch (mKeyframes[i].mTangentModeIn) {
@@ -20,6 +22,7 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 			if (i > 0) mKeyframes[i].mTangentIn = (mKeyframes[i].mValue - mKeyframes[i-1].mValue) / (mKeyframes[i].mTime - mKeyframes[i - 1].mTime);
 			break;
 		}
+
 		switch (mKeyframes[i].mTangentModeOut) {
 		case ANIMATION_TANGENT_SMOOTH:
 			if (i > 0 && i < mKeyframes.size() - 1) {
@@ -32,6 +35,10 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 		}
 	}
 
+	mKeyframes[0].mTangentIn = mKeyframes[0].mTangentOut;
+
+	mKeyframes[mKeyframes.size() - 1].mTangentOut = mKeyframes[mKeyframes.size() - 1].mTangentIn;
+	
 	// compute curve
 	mCoefficients.resize(mKeyframes.size());
 	memset(mCoefficients.data(), 0, sizeof(float4) * mCoefficients.size());
@@ -42,8 +49,8 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 		mCoefficients[i].y = mKeyframes[i].mTangentOut;
 
 		if (i < mKeyframes.size() - 1) {
-			mCoefficients[i].z = mKeyframes[i + 1].mTangentIn + mKeyframes[i].mTangentOut + 3 * (mKeyframes[i + 1].mValue + mCoefficients[i].x + mCoefficients[i].y);
-			mCoefficients[i].w = mKeyframes[i + 1].mValue - mCoefficients[i].x - mCoefficients[i].y - mCoefficients[i].z;
+			mCoefficients[i].z = 3*(mKeyframes[i + 1].mValue - mKeyframes[i].mValue) - 2 * mKeyframes[i].mTangentOut - mKeyframes[i+1].mTangentIn;
+			mCoefficients[i].w = mKeyframes[i + 1].mValue - mKeyframes[i].mValue - mKeyframes[i].mTangentOut - mCoefficients[i].z;
 		}
 	}
 }
@@ -52,21 +59,25 @@ float AnimationChannel::Sample(float t) const {
 	if (mKeyframes.size() == 0) return 0;
 	if (mKeyframes.size() == 1) return mKeyframes[0].mValue;
 
-	float length = mKeyframes.back().mTime - mKeyframes[0].mTime;
-	float ts = mKeyframes[0].mTime - t;
-	float tl = t - mKeyframes.back().mValue;
+	const AnimationKeyframe& first = mKeyframes[0];
+	const AnimationKeyframe& last = mKeyframes[mKeyframes.size() - 1];
+
+	float length = last.mTime - first.mTime;
+	float ts = first.mTime - t;
+	float tl = t - last.mTime;
 	float offset = 0;
+	
 	if (tl > 0) {
 		switch (mExtrapolateOut) {
 		case EXTRAPOLATE_CONSTANT:
-			return mKeyframes.back().mValue;
+			return last.mValue;
 		case EXTRAPOLATE_LINEAR:
-			return mKeyframes.back().mValue + mKeyframes.back().mTangentIn * tl;
+			return last.mValue + last.mTangentOut * tl;
 		case EXTRAPOLATE_CYCLE:
 			t = fmodf(tl, length);
 			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
-			offset += (mKeyframes.back().mValue - mKeyframes[0].mValue) * (floorf(tl / length) + 1);
+			offset += (last.mValue - first.mValue) * (floorf(tl / length) + 1);
 			t = fmodf(tl, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:
@@ -74,19 +85,19 @@ float AnimationChannel::Sample(float t) const {
 			if (t > length) t = 2 * length - t;
 			break;
 		}
-		t += mKeyframes[0].mTime; // looping anims loop back to key 0
+		t += first.mTime;
 	}
 	if (ts > 0) {
 		switch (mExtrapolateIn) {
 		case EXTRAPOLATE_CONSTANT:
-			return mKeyframes[0].mValue;
+			return first.mValue;
 		case EXTRAPOLATE_LINEAR:
-			return mKeyframes[0].mValue - mKeyframes[0].mTangentOut * ts;
+			return first.mValue - first.mTangentIn * ts;
 		case EXTRAPOLATE_CYCLE:
 			t = fmodf(ts, length);
 			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
-			offset += (mKeyframes[0].mValue - mKeyframes.back().mValue) * floorf(ts / length);
+			offset += (first.mValue - last.mValue) * (floorf(ts / length) + 1);
 			t = fmodf(ts, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:
@@ -94,7 +105,7 @@ float AnimationChannel::Sample(float t) const {
 			if (t > length) t = 2 * length - t;
 			break;
 		}
-		t = mKeyframes.back().mTime - t; // looping anims loop back to last key
+		t = last.mTime - t; // looping anims loop back to last key
 	}
 
 	// find the first key after t
@@ -105,9 +116,9 @@ float AnimationChannel::Sample(float t) const {
 			break;
 		}
 
-	float4 c = mCoefficients[i];
 	float u = (t - mKeyframes[i].mTime) / (mKeyframes[i + 1].mTime - mKeyframes[i].mTime);
-	return lerp(mKeyframes[i].mValue, mKeyframes[i + 1].mValue, u) + offset;// c.x + u * (c.y + u * (c.z + u * c.w)) + offset;
+	float4 c = mCoefficients[i];
+	return u*u*u*c.w + u*u*c.z + u*c.y + c.x + offset;
 }
 
 Animation::Animation(const unordered_map<uint32_t, AnimationChannel>& channels, float start, float end)
@@ -116,7 +127,7 @@ Animation::Animation(const unordered_map<uint32_t, AnimationChannel>& channels, 
 void Animation::Sample(float t, AnimationRig& rig) const {
 	rig[0]->LocalPosition(mChannels.at(0).Sample(t), mChannels.at(1).Sample(t), -mChannels.at(2).Sample(t));
 	for (uint32_t i = 1; i < rig.size(); i++) {
-		quaternion r(float3(mChannels.at(3 * i + 0).Sample(t), mChannels.at(3 * i + 1).Sample(t), mChannels.at(3 * i + 2).Sample(t)));
+		quaternion r(float3(mChannels.at(3 * i + 2).Sample(t), mChannels.at(3 * i + 1).Sample(t), mChannels.at(3 * i + 0).Sample(t)));
 		r.x = -r.x;
 		r.y = -r.y;
 		rig[i]->LocalRotation(r);

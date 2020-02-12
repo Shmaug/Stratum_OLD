@@ -9,7 +9,6 @@ using namespace std;
 uint32_t GUI::mHotControl = -1u;
 uint32_t GUI::mNextControlId = 0;
 float GUI::mCurrentDepth = START_DEPTH;
-unordered_map<size_t, pair<Buffer*, uint32_t>> GUI::mGlyphCache;
 InputManager* GUI::mInputManager;
 vector<Texture*> GUI::mTextureArray;
 unordered_map<Texture*, uint32_t> GUI::mTextureMap;
@@ -20,15 +19,24 @@ vector<float2> GUI::mLinePoints;
 vector<GUI::GuiString> GUI::mScreenStrings;
 vector<GUI::GuiString> GUI::mWorldStrings;
 unordered_map<uint32_t, std::variant<float, std::string>> GUI::mControlData;
-
 stack<GUI::GuiLayout> GUI::mLayoutStack;
+
+GUI::BufferCache* GUI::mCaches;
+
 
 void GUI::Initialize(Device* device, AssetManager* assetManager) {
 	mHotControl = -1;
+	mCaches = new BufferCache[device->MaxFramesInFlight()];
+	//memset(mCaches, 0, sizeof(BufferCache) * device->MaxFramesInFlight());
 }
 void GUI::Destroy(Device* device){
-	for (auto& i : mGlyphCache)
-		safe_delete(i.second.first);
+	for (uint32_t i = 0; i < device->MaxFramesInFlight(); i++){
+		for (auto& j : mCaches[i].mGlyphCache)
+			safe_delete(j.second.first);
+		for (auto& j : mCaches[i].mGlyphBufferCache)
+			safe_delete(j.first);
+	}
+	safe_delete_array(mCaches);
 }
 
 void GUI::PreFrame(Scene* scene) {
@@ -47,10 +55,22 @@ void GUI::PreFrame(Scene* scene) {
 
 	mInputManager = scene->InputManager();
 
-	for (auto it = mGlyphCache.begin(); it != mGlyphCache.end();) {
+	BufferCache& c = mCaches[scene->Instance()->Device()->FrameContextIndex()];
+
+	for (auto it = c.mGlyphBufferCache.begin(); it != c.mGlyphBufferCache.end();) {
+		if (it->second == 1) {
+			safe_delete(it->first);
+			it = c.mGlyphBufferCache.erase(it);
+		} else {
+			it->second--;
+			it++;
+		}
+	}
+
+	for (auto it = c.mGlyphCache.begin(); it != c.mGlyphCache.end();) {
 		if (it->second.second == 1) {
-			safe_delete(it->second.first);
-			it = mGlyphCache.erase(it);
+			c.mGlyphBufferCache.push_back(make_pair(it->second.first, 8u));
+			it = c.mGlyphCache.erase(it);
 		} else {
 			it->second.second--;
 			it++;
@@ -58,6 +78,8 @@ void GUI::PreFrame(Scene* scene) {
 	}
 }
 void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
+	BufferCache& bc = mCaches[commandBuffer->Device()->FrameContextIndex()];
+	
 	if (mWorldRects.size()) {
 		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(pass, {});
 		if (!shader) return;
@@ -83,14 +105,14 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		commandBuffer->PushConstant(shader, "ScreenSize", &s);
 
 		for (const GuiString& s : mWorldStrings) {
-			Buffer* glyphBuffer;
+			Buffer* glyphBuffer = nullptr;
 			char hashstr[256];
 			sprintf(hashstr, "%s%f%d%d", s.mString.c_str(), s.mScale, s.mHorizontalAnchor, s.mVerticalAnchor);
 			size_t key = 0;
 			hash_combine(key, s.mFont);
 			hash_combine(key, string(hashstr));
-			if (mGlyphCache.count(key)) {
-				auto& b = mGlyphCache.at(key);
+			if (bc.mGlyphCache.count(key)) {
+				auto& b = bc.mGlyphCache.at(key);
 				b.second = 8;
 				glyphBuffer = b.first;
 			}
@@ -98,9 +120,21 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 				vector<TextGlyph> glyphs(s.mString.length());
 				uint32_t glyphCount = s.mFont->GenerateGlyphs(s.mString, s.mScale, nullptr, glyphs, s.mHorizontalAnchor, s.mVerticalAnchor);
 				if (glyphCount == 0) return;
-				glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				
+				for (auto it = bc.mGlyphBufferCache.begin(); it != bc.mGlyphBufferCache.end();) {
+					if (it->first->Size() == glyphCount * sizeof(TextGlyph)) {
+						glyphBuffer = it->first;
+						bc.mGlyphBufferCache.erase(it);
+						break;
+					}
+					it++;
+				}
+				if (!glyphBuffer)
+					glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				
 				glyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-				mGlyphCache.emplace(key, make_pair(glyphBuffer, 8u));
+				
+				bc.mGlyphCache.emplace(key, make_pair(glyphBuffer, 8u));
 			}
 
 			DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(s.mFont->mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
@@ -145,24 +179,34 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		commandBuffer->PushConstant(shader, "ScreenSize", &s);
 
 		for (const GuiString& s : mScreenStrings) {
-			Buffer* glyphBuffer;
+			Buffer* glyphBuffer = nullptr;
 			char hashstr[256];
 			sprintf(hashstr, "%s%f%d%d", s.mString.c_str(), s.mScale, s.mHorizontalAnchor, s.mVerticalAnchor);
 			size_t key = 0;
 			hash_combine(key, s.mFont);
 			hash_combine(key, string(hashstr));
-			if (mGlyphCache.count(key)) {
-				auto& b = mGlyphCache.at(key);
+			if (bc.mGlyphCache.count(key)) {
+				auto& b = bc.mGlyphCache.at(key);
 				b.second = 8u;
 				glyphBuffer = b.first;
-			}
-			else {
+			} else {
 				vector<TextGlyph> glyphs(s.mString.length());
 				uint32_t glyphCount = s.mFont->GenerateGlyphs(s.mString, s.mScale, nullptr, glyphs, s.mHorizontalAnchor, s.mVerticalAnchor);
 				if (glyphCount == 0) return;
-				glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+				for (auto it = bc.mGlyphBufferCache.begin(); it != bc.mGlyphBufferCache.end();) {
+					if (it->first->Size() == glyphCount * sizeof(TextGlyph)) {
+						glyphBuffer = it->first;
+						bc.mGlyphBufferCache.erase(it);
+						break;
+					}
+					it++;
+				}
+				if (!glyphBuffer)
+					glyphBuffer = new Buffer("Glyph Buffer", commandBuffer->Device(), glyphCount * sizeof(TextGlyph), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+				
 				glyphBuffer->Upload(glyphs.data(), glyphCount * sizeof(TextGlyph));
-				mGlyphCache.emplace(key, make_pair(glyphBuffer, 8u));
+				bc.mGlyphCache.emplace(key, make_pair(glyphBuffer, 8u));
 			}
 
 			DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(s.mFont->mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
@@ -366,14 +410,13 @@ fRect2D GUI::GuiLayout::Get(float size, float padding) {
 	return layoutRect;
 }
 
-void GUI::BeginScreenLayout(LayoutAxis axis, const fRect2D& screenRect, const float4& backgroundColor, float insidePadding) {
+fRect2D GUI::BeginScreenLayout(LayoutAxis axis, const fRect2D& screenRect, const float4& backgroundColor, float insidePadding) {
 	fRect2D layoutRect(screenRect.mOffset + insidePadding, screenRect.mExtent - insidePadding * 2);
 	mLayoutStack.push({ float4x4(1), true, axis, layoutRect, layoutRect, 0 });
-	mNextControlId = 0;
 	if (backgroundColor.a > 0) Rect(screenRect, backgroundColor);
+	return layoutRect;
 }
-
-void GUI::BeginSubLayout(LayoutAxis axis, float size, const float4& backgroundColor, float insidePadding, float padding) {
+fRect2D GUI::BeginSubLayout(LayoutAxis axis, float size, const float4& backgroundColor, float insidePadding, float padding) {
 	GuiLayout& l = mLayoutStack.top();
 	fRect2D layoutRect = l.Get(size, padding);
 
@@ -387,14 +430,11 @@ void GUI::BeginSubLayout(LayoutAxis axis, float size, const float4& backgroundCo
 	layoutRect.mOffset += insidePadding;
 	layoutRect.mExtent -= insidePadding * 2;
 
-	fRect2D clipRect = layoutRect;
-	float2 dc = max(0, l.mClipRect.mOffset - layoutRect.mOffset);
-	clipRect.mOffset += dc;
-	clipRect.mExtent = dc - max(0, layoutRect.mOffset - (l.mClipRect.mOffset + l.mClipRect.mExtent));
+	mLayoutStack.push({ l.mTransform, l.mScreenSpace, axis, layoutRect, l.mClipRect, 0 });
 
-	mLayoutStack.push({ l.mTransform, l.mScreenSpace, axis, layoutRect, clipRect, axis == LAYOUT_VERTICAL ? layoutRect.mExtent.y : 0 });
+	return layoutRect;
 }
-void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& backgroundColor, float insidePadding, float padding) {
+fRect2D GUI::BeginScrollSubLayout(float size, float contentSize, const float4& backgroundColor, float insidePadding, float padding) {
 	GuiLayout& l = mLayoutStack.top();
 	fRect2D layoutRect = l.Get(size, padding);
 	uint32_t controlId = mNextControlId++;
@@ -474,6 +514,8 @@ void GUI::BeginScrollSubLayout(float size, float contentSize, const float4& back
 	}
 
 	mLayoutStack.push({ l.mTransform, l.mScreenSpace, l.mAxis, contentRect, layoutRect, 0 });
+
+	return contentRect;
 }
 void GUI::EndLayout() {
 	mLayoutStack.pop();
@@ -486,9 +528,9 @@ void GUI::LayoutSeparator(float thickness, const float4& color, float padding) {
 	GuiLayout& l = mLayoutStack.top();
 	GUI::Rect(l.Get(thickness, padding), color, l.mClipRect);
 }
-void GUI::LayoutLabel(Font* font, const string& text, float textHeight, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
+void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
 	GuiLayout& l = mLayoutStack.top();
-	fRect2D layoutRect = l.Get(textHeight + 4, padding);
+	fRect2D layoutRect = l.Get(labelSize, padding);
 
 	TextAnchor horizontalAnchor = textAnchor;
 	TextAnchor verticalAnchor = textAnchor;
@@ -504,9 +546,9 @@ void GUI::LayoutLabel(Font* font, const string& text, float textHeight, const fl
 
 	Label(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
 }
-bool GUI::LayoutButton(Font* font, const string& text, float textHeight, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
+bool GUI::LayoutButton(Font* font, const string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
 	GuiLayout& l = mLayoutStack.top();
-	fRect2D layoutRect = l.Get(textHeight + 4, padding);
+	fRect2D layoutRect = l.Get(buttonSize, padding);
 
 	TextAnchor horizontalAnchor = textAnchor;
 	TextAnchor verticalAnchor = textAnchor;

@@ -71,18 +71,19 @@ struct AnimationKeyframe {
 };
 class AnimationChannel {
 public:
-	AnimationExtrapolate mExtrapolateIn;
-	AnimationExtrapolate mExtrapolateOut;
-
 	inline AnimationChannel() : mExtrapolateIn(EXTRAPOLATE_CONSTANT), mExtrapolateOut(EXTRAPOLATE_CONSTANT) {};
 	ENGINE_EXPORT AnimationChannel(const std::vector<AnimationKeyframe>& keyframes, AnimationExtrapolate in, AnimationExtrapolate out);
 	ENGINE_EXPORT float Sample(float t) const;
 
+	inline AnimationExtrapolate ExtrapolateIn() const { return mExtrapolateIn; }
+	inline AnimationExtrapolate ExtrapolateOut() const { return mExtrapolateOut; }
 	inline uint32_t KeyframeCount() const { return mKeyframes.size(); }
 	inline AnimationKeyframe Keyframe(uint32_t index) const { return mKeyframes[index]; }
 	inline float4 CurveCoefficient(uint32_t index) const { return mCoefficients[index]; }
 
 private:
+	AnimationExtrapolate mExtrapolateIn;
+	AnimationExtrapolate mExtrapolateOut;
 	std::vector<float4> mCoefficients;
 	std::vector<AnimationKeyframe> mKeyframes;
 };
@@ -91,8 +92,9 @@ class Animation {
 public:
 	ENGINE_EXPORT Animation(const std::unordered_map<uint32_t, AnimationChannel>& channels, float start, float end);
 
-	const float TimeStart() const { return mTimeStart; }
-	const float TimeEnd() const { return mTimeEnd; }
+	inline const float TimeStart() const { return mTimeStart; }
+	inline const float TimeEnd() const { return mTimeEnd; }
+	inline const std::unordered_map<uint32_t, AnimationChannel>& Channels() const { return mChannels; }
 
 	ENGINE_EXPORT void Sample(float t, AnimationRig& rig) const;
 
