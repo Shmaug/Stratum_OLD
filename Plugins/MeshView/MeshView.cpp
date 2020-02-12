@@ -1,6 +1,6 @@
 #include <Scene/MeshRenderer.hpp>
 #include <Scene/SkinnedMeshRenderer.hpp>
-#include <Scene/Gui.hpp>
+#include <Scene/GUI.hpp>
 #include <Util/Profiler.hpp>
 #include <Util/Tokenizer.hpp>
 
@@ -21,17 +21,6 @@ public:
 	float3 mRotMax;
 
 	inline SkelJoint(const std::string& name, uint32_t index) : Bone(name, index), Object(name), mRotMin(-1e10f), mRotMax(1e10f) {};
-
-	PLUGIN_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override {
-		MouseKeyboardInput* input = Scene()->InputManager()->GetFirst<MouseKeyboardInput>();
-
-		quaternion r = WorldRotation();
-		if (Gizmos::RotationHandle(mName + to_string(mBoneIndex), input->GetPointer(0), WorldPosition(), r, .1f))
-			LocalRotation(Parent() ? inverse(Parent()->WorldRotation()) * r : r);
-
-		float3 center = (ObjectToWorld() * float4(mBox.Center(), 1.f)).xyz;
-		Gizmos::DrawWireCube(center, mBox.Extents(), WorldRotation(), float4(1,1,1,.2f));
-	}
 };
 
 class MeshView : public EnginePlugin {
@@ -40,13 +29,14 @@ private:
 	vector<Object*> mObjects;
 	Object* mSelected;
 
+	uint32_t mCurrentBone;
 	shared_ptr<Animation> mWaspWalk;
+	float mAnimTime;
+	bool mPlayAnimation;
+	bool mLoopAnimation;
 
 	SkinnedMeshRenderer* mWasp;
 	SkinnedMeshRenderer* mHead;
-
-	float mWaspT;
-	float mHeadBlend;
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string& name, float scale) {
 		shared_ptr<SkelJoint> j = make_shared<SkelJoint>(name, destRig.size());
@@ -400,7 +390,8 @@ private:
 
 public:
 	PLUGIN_EXPORT MeshView() 
-		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mHeadBlend(0.f), mWaspT(0.f), mHead(nullptr), mWasp(nullptr) {
+		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mAnimTime(0.f), mHead(nullptr), mWasp(nullptr),
+		mCurrentBone(0xFFFFFFFF), mPlayAnimation(false), mLoopAnimation(true) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~MeshView() {
@@ -467,15 +458,15 @@ public:
 
 	PLUGIN_EXPORT void Update() override {
 		if (mHead) {
-			if (mInput->KeyDown(KEY_RIGHT)) mHeadBlend += 2.f * mScene->Instance()->DeltaTime();
-			if (mInput->KeyDown(KEY_LEFT))  mHeadBlend -= 2.f * mScene->Instance()->DeltaTime();
-			mHeadBlend = clamp(mHeadBlend, 0.f, 1.f);
-			mHead->ShapeKey("head1", mHeadBlend);
-			mHead->ShapeKey("head2", 1.f - mHeadBlend);
+			mAnimTime = clamp(mAnimTime, 0.f, 1.f);
+			mHead->ShapeKey("head1", mAnimTime);
+			mHead->ShapeKey("head2", 1.f - mAnimTime);
 		}
 		if (mWasp) {
-			mWaspWalk->Sample(mWaspT, mWasp->Rig());
-			mWaspT += mScene->Instance()->DeltaTime();
+			if (mPlayAnimation) mAnimTime += mScene->Instance()->DeltaTime();
+			if (mLoopAnimation) if (mAnimTime > mWaspWalk->TimeEnd()) mAnimTime -= (mWaspWalk->TimeStart() + mWaspWalk->TimeEnd());
+			
+			mWaspWalk->Sample(mAnimTime, mWasp->Rig());
 		}
 	}
 
@@ -488,10 +479,10 @@ public:
 	
 		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, camera->FramebufferHeight()/2 - 200, 250, 400), float4(.2f, .2f, .2f, 1), 10);
 
-		GUI::LayoutLabel(bld24, "MeshView", 24.f, 0, 1, 4);
+		GUI::LayoutLabel(bld24, "MeshView", 24, 20, 0, 1, 4);
 		GUI::LayoutSeparator(1, .5f);
 
-		if (GUI::LayoutButton(sem16, "Wasp", 16.f, .5f, 1)) {
+		if (GUI::LayoutButton(sem16, "Wasp", 16, 20, .5f, 1)) {
 			if (mHead) mHead->mVisible = false;
 			if (mWasp) { mWasp->mVisible = true; return; }
 
@@ -518,7 +509,7 @@ public:
 
 			mWaspWalk = LoadAnim("Assets/Models/wasp/wasp_walk.anim");
 		}
-		if (GUI::LayoutButton(sem16, "Head", 16.f, .5f, 1)) {
+		if (GUI::LayoutButton(sem16, "Head", 16, 20, .5f, 1)) {
 			if (mWasp) mWasp->mVisible = false;
 			if (mHead) { mHead->mVisible = true; return; }
 
@@ -552,6 +543,143 @@ public:
 		}
 
 		GUI::EndLayout();
+
+		if (mWaspWalk){
+			fRect2D r = GUI::BeginScreenLayout(LAYOUT_HORIZONTAL, fRect2D(0, 0, camera->FramebufferWidth(), 200), float4(.2f, .2f, .2f, 1), 2);
+			
+			GUI::LayoutSpace(10);
+
+			GUI::BeginSubLayout(LAYOUT_VERTICAL, 150, 0, 0, 0);
+			GUI::BeginScrollSubLayout(196, mWasp->Rig().size() * 24, float4(.2f, .2f, .2f, 1), 0, 2);
+			
+			for (Bone* b : mWasp->Rig())
+				if (GUI::LayoutButton(sem16, "Bone " + to_string(b->mBoneIndex), 16, 20, mCurrentBone == b->mBoneIndex ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1, 2))
+					mCurrentBone = b->mBoneIndex;
+			GUI::EndLayout();
+			GUI::EndLayout();
+
+			GUI::LayoutSpace(2);
+
+			r = GUI::BeginSubLayout(LAYOUT_VERTICAL, r.mExtent.x - 162, float4(.2f, .2f, .2f, 1), 0);
+			GUI::BeginSubLayout(LAYOUT_HORIZONTAL, 24, float4(.2f, .2f, .2f, 1), 0);
+			if (GUI::LayoutButton(sem16, mPlayAnimation ? "Stop" : "Play", 16, 80, float4(.25f, .25f, .25f, 1), 1, 2))
+				mPlayAnimation = !mPlayAnimation;
+			if (GUI::LayoutButton(sem16, "Loop", 16, 80, mLoopAnimation ?  float4(.4f, .4f, .4f, 1) : float4(.25f, .25f, .25f, 1), 1, 2))
+				mLoopAnimation = !mLoopAnimation;
+
+			static const float4 channelColorsLight[3]{
+				float4(1, .75f, .75f, 1),
+				float4(.75f, 1, .75f, 1),
+				float4(.75f, .75f, 1, 1),
+			};
+			static const float4 channelColors[3]{
+				float4(1, .5f, .5f, 1),
+				float4(.5f, 1, .5f, 1),
+				float4(.5f, .5f, 1, 1),
+			};
+			static const float4 channelColorsDark[3]{
+				float4(1, .25f, .25f, 1),
+				float4(.25f, 1, .25f, 1),
+				float4(.25f, .5f, 1, 1),
+			};
+
+			for (uint32_t j = 0; j < 3; j++) {
+				if (mWaspWalk->Channels().count(mCurrentBone*3)) {
+					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3);
+					string e = "";
+					switch (c.ExtrapolateIn()){
+						case EXTRAPOLATE_CONSTANT: 		e = "Constant"; break;
+						case EXTRAPOLATE_LINEAR: 		e = "Linear"; break;
+						case EXTRAPOLATE_CYCLE: 		e = "Cycle"; break;
+						case EXTRAPOLATE_CYCLE_OFFSET: 	e = "Cycle Offset"; break;
+						case EXTRAPOLATE_BOUNCE: 		e = "Bounce"; break;
+					}
+					switch (c.ExtrapolateOut()){
+						case EXTRAPOLATE_CONSTANT: 		e += "/Constant"; break;
+						case EXTRAPOLATE_LINEAR: 		e += "/Linear"; break;
+						case EXTRAPOLATE_CYCLE: 		e += "/Cycle"; break;
+						case EXTRAPOLATE_CYCLE_OFFSET: 	e += "/Cycle Offset"; break;
+						case EXTRAPOLATE_BOUNCE: 		e += "/Bounce"; break;
+					}
+					GUI::LayoutLabel(sem16, e, 16, 120, 0, channelColorsLight[j], 2);
+				}
+			}
+			GUI::EndLayout();
+			GUI::EndLayout();
+
+			r.mExtent.y -= 24;
+			GUI::Rect(r, float4(.1f, .1f, .1f, 1));
+
+			float tmx = mWaspWalk->TimeEnd();
+			float tmn = mWaspWalk->TimeStart();
+			float vmx = 0;
+			float vmn = 0;
+
+			// compute curve window
+			for (uint32_t j = 0; j < 3; j++) {
+				if (mWaspWalk->Channels().count(mCurrentBone*3 + j)) {
+					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3 + j);
+					for (uint32_t i = 0; i < c.KeyframeCount(); i++){
+						tmx = fmaxf(tmx, c.Keyframe(i).mTime);
+						tmn = fminf(tmn, c.Keyframe(i).mTime);
+						vmx = fmaxf(vmx, c.Keyframe(i).mValue);
+						vmn = fminf(vmn, c.Keyframe(i).mValue);
+					}
+					tmx += (tmx - tmn) * .1f;
+					tmn -= (tmx - tmn) * .1f;
+					vmx += (vmx - vmn) * .1f;
+					vmn -= (vmx - vmn) * .1f;
+				}
+			}
+
+			// animation window background
+			fRect2D bgrect(r.mOffset + float2(r.mExtent.x * (mWaspWalk->TimeStart() - tmn) / (tmx - tmn), 0), float2(r.mExtent.x * (mWaspWalk->TimeEnd()) / (tmx - tmn), r.mExtent.y));
+			GUI::Rect(bgrect, float4(.15f, .15f, .15f, 1));
+			GUI::Rect(fRect2D(bgrect.mOffset, float2(1, r.mExtent.y)), float4(1, 1, 1, 1));
+			GUI::Rect(fRect2D(bgrect.mOffset + float2(bgrect.mExtent.x, 0), float2(1, r.mExtent.y)), float4(1, 1, 1, 1));
+			// center line
+			GUI::Rect(fRect2D(r.mOffset + float2(0, r.mExtent.y * .5f), float2(r.mExtent.x, 1)), float4(1, 1, 1, .3f));
+
+			for (uint32_t j = 0; j < 3; j++) {
+				if (mWaspWalk->Channels().count(mCurrentBone*3 + j)) {
+					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3 + j);
+					// boxes and tangents
+					for (uint32_t i = 0; i < c.KeyframeCount(); i++){
+						float2 p(c.Keyframe(i).mTime, c.Keyframe(i).mValue);
+						p.x = (p.x - tmn) / (tmx - tmn);
+						p.y = (p.y - vmn) / (vmx - vmn);
+						
+						float2 tangents[3];
+						tangents[0] = -normalize(float2(1, c.Keyframe(i).mTangentIn)) * .25f;
+						tangents[1] = 0;
+						tangents[2] =  normalize(float2(1, c.Keyframe(i).mTangentOut)) * .25f;
+						GUI::DrawScreenLine(tangents, 3, r.mOffset + p*r.mExtent, r.mExtent / float2(tmx - tmn, vmx - vmn), channelColors[j]);
+					}
+					
+					vector<float2> points;
+					for (float t = tmn; t < tmx; t += (tmx - tmn) / 2048.f){
+						float2 tp(t, c.Sample(t));
+						tp.x = (tp.x - tmn) / (tmx - tmn);
+						tp.y = (tp.y - vmn) / (vmx - vmn);
+						points.push_back(tp);
+					}
+					if (points.size()) GUI::DrawScreenLine(points.data(), points.size(), r.mOffset, r.mExtent, channelColorsDark[j]);
+				}
+			}
+			
+			// scrub animation
+			if (!mPlayAnimation) {
+				float2 c = mInput->CursorPos();
+				c.y = mInput->WindowHeight() - c.y;
+				if (r.Contains(c) && mInput->KeyDown(MOUSE_LEFT))
+					mAnimTime = tmn + (tmx - tmn) * (c.x - r.mOffset.x) / r.mExtent.x;
+			}
+			// scrub bar
+			GUI::Rect(fRect2D(r.mOffset.x + r.mExtent.x * (mAnimTime - tmn) / (tmx - tmn), r.mOffset.y, 1, r.mExtent.y), float4(1, 1, 1, .2f));
+
+			GUI::EndLayout();
+		}
+
 	}
 	
 	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
@@ -610,6 +738,19 @@ public:
 
 			if (hover && change)
 				mSelected = light;
+		}
+
+		if (mCurrentBone < mWasp->Rig().size()) {
+			Bone* b = mWasp->Rig()[mCurrentBone];
+			if (mCurrentBone == 0) {
+				float3 r = b->WorldPosition();
+				if (Gizmos::PositionHandle("Channel Position", mInput->GetPointer(0), b->WorldPosition(), r, .1f))
+					b->LocalPosition(b->Parent() ? (b->Parent()->WorldToObject() * float4(r, 1)).xyz : r);
+			} else {
+				quaternion r = b->WorldRotation();
+				if (Gizmos::RotationHandle("Channel Rotation", mInput->GetPointer(0), b->WorldPosition(), r, .1f))
+					b->LocalRotation(b->Parent() ? inverse(b->Parent()->WorldRotation()) * r : r);
+			}
 		}
 	}
 };

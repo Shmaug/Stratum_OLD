@@ -106,7 +106,7 @@ public:
 		mScene->Environment()->EnableScattering(false);
 		mScene->Environment()->AmbientLight(.6f);
 
-		for (const auto& p : fs::recursive_directory_iterator("E:/Data/larry colon"))
+		for (const auto& p : fs::recursive_directory_iterator("/home/tjhedstr/data/dicoms"))
 			if (p.path().extension().string() == ".dcm")
 				mDicomFolders.emplace(p.path().parent_path());
 

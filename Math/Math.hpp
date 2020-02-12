@@ -2058,24 +2058,28 @@ struct quaternion {
 		xyz = axis * sinf(angle);
 		w = cosf(angle);
 	};
-	inline quaternion(const float3& v1, const float3& v2){
+	inline quaternion() : quaternion(0, 0, 0, 1) {};
+
+	inline static quaternion FromTo(const float3& v1, const float3& v2){
 		float d = dot(v1, v2);
 		if (d < -0.999999f) {
 			float3 tmp = cross(float3(1, 0, 0), v1);
 			if (dot(tmp, tmp) < 1e-5f) tmp = cross(float3(0, 1, 0), v1);
-			xyz = normalize(tmp) * sinf(PI / 2);
-			w = cosf(PI / 2);
+			quaternion r;
+			r.xyz = normalize(tmp) * sinf(PI / 2);
+			r.w = cosf(PI / 2);
+			return r;
 		} else if (d > 0.999999f) {
-			xyz = 0;
-			w = 1;
+			return quaternion(0,0,0,1);
 		} else {
-			xyz = cross(v1, v2);
-			w = 1 + d;
-			xyzw /= length(xyzw);
+			quaternion r;
+			r.xyz = cross(v1, v2);
+			r.w = 1 + d;
+			r.xyzw /= length(r.xyzw);
+			return r;
 		}
 	}
 
-	inline quaternion() : quaternion(0, 0, 0, 1) {};
 
 	inline float3 forward() const {
 		return 2 * z * xyz + float3(0, 0, w * w - dot(xyz, xyz)) + 2 * w * float3(y, -x, 0);
@@ -2240,6 +2244,44 @@ struct float4x4 {
 		r[2][2] = df;
 		r[3][2] = -near * df;
 		return r;
+	}
+
+	inline static float4x4 Translate(const float3& t) {
+		float4x4 m(1);
+		m.v[3].xyz = t;
+		return m;
+	}
+	inline static float4x4 Scale(const float3& t) {
+		float4x4 m(1);
+		rpt3(i) m.v[i] *= t.v[i];
+		return m;
+	}
+	inline static float4x4 RotateX(float r) {
+		float c = cosf(r);
+		float s = sinf(r);
+		return float4x4(
+			1, 0, 0, 0,
+			0, c, -s, 0,
+			0, s, c, 0,
+			0, 0, 0, 1 );
+	}
+	inline static float4x4 RotateY(float r) {
+		float c = cosf(r);
+		float s = sinf(r);
+		return float4x4(
+			c, 0, s, 0,
+			0, 0, 0, 0,
+			-s, 0, c, 0,
+			0, 0, 0, 1 );
+	}
+	inline static float4x4 RotateZ(float r) {
+		float c = cosf(r);
+		float s = sinf(r);
+		return float4x4(
+			c, -s, 0, 0,
+			s, c, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 1 );
 	}
 
 	inline static float4x4 TRS(const float3& t, const quaternion& r, const float3& s) {

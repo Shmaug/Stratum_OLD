@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stack>
+#include <forward_list>
 
 #include <Content/Font.hpp>
 #include <Core/CommandBuffer.hpp>
@@ -82,7 +83,11 @@ private:
 	static float mCurrentDepth;
 
 	// mGlyphCache[hash] = (buffer, lifetime)
-	static std::unordered_map<std::size_t, std::pair<Buffer*, uint32_t>> mGlyphCache;
+	struct BufferCache{
+		std::unordered_map<std::size_t, std::pair<Buffer*, uint32_t>> mGlyphCache;
+	 	std::list<std::pair<Buffer*, uint32_t>> mGlyphBufferCache;
+	};
+	static BufferCache* mCaches;
 
 	static InputManager* mInputManager;
 
@@ -96,16 +101,16 @@ private:
 	ENGINE_EXPORT static void Destroy(Device* device);
 
 public:
-	ENGINE_EXPORT static void BeginScreenLayout(LayoutAxis axis, const fRect2D& screenRect, const float4& backgroundColor, float insidePadding = 2.f);
+	ENGINE_EXPORT static fRect2D BeginScreenLayout(LayoutAxis axis, const fRect2D& screenRect, const float4& backgroundColor, float insidePadding = 2.f);
 
-	ENGINE_EXPORT static void BeginSubLayout(LayoutAxis axis, float size, const float4& backgroundColor, float insidePadding = 2.f, float padding = 2.f);
-	ENGINE_EXPORT static void BeginScrollSubLayout(float size, float contentSize, const float4& backgroundColor, float insidePadding = 2.f, float padding = 2.f);
+	ENGINE_EXPORT static fRect2D BeginSubLayout(LayoutAxis axis, float size, const float4& backgroundColor, float insidePadding = 2.f, float padding = 2.f);
+	ENGINE_EXPORT static fRect2D BeginScrollSubLayout(float size, float contentSize, const float4& backgroundColor, float insidePadding = 2.f, float padding = 2.f);
 	ENGINE_EXPORT static void EndLayout();
 
 	ENGINE_EXPORT static void LayoutSpace(float size);
 	ENGINE_EXPORT static void LayoutSeparator(float thickness, const float4& color, float padding = 2.f);
-	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
-	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
+	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
+	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
 
 
 	/// Draws a string in the world

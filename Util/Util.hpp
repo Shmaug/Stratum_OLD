@@ -41,7 +41,7 @@ namespace fs = std::experimental::filesystem;
 namespace fs = std::filesystem;
 #endif
 
-#define PRINT_VK_ALLOCATIONS
+//#define PRINT_VK_ALLOCATIONS
 
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
@@ -69,20 +69,16 @@ namespace fs = std::filesystem;
 #define safe_delete_array(x) if (x != nullptr) { delete[] x; x = nullptr; }
 
 struct fRect2D {
-	union {
-		struct {
-			float2 mOffset;
-			float2 mExtent;
-		};
-		float4 xyzw;
-	};
+	float2 mOffset;
+	float2 mExtent;
 
 	inline fRect2D() : mOffset(0), mExtent(0) {};
 	inline fRect2D(const float2& offset, const float2& extent) : mOffset(offset), mExtent(extent) {};
 	inline fRect2D(float ox, float oy, float ex, float ey) : mOffset(float2(ox, oy)), mExtent(ex, ey) {};
 
 	inline fRect2D& operator=(const fRect2D & rhs) {
-		xyzw = rhs.xyzw;
+		mOffset = rhs.mOffset;
+		mExtent = rhs.mExtent;
 		return *this;
 	}
 
