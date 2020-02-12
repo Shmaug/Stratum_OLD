@@ -1,6 +1,7 @@
 animation {
   range 0.000000 4.000000
   numchannels 72
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -20,6 +21,8 @@ animation {
       2.000000 -0.450000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -38,6 +41,8 @@ animation {
       0.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -68,6 +73,8 @@ animation {
       2.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -96,6 +103,8 @@ animation {
       2.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -114,6 +123,8 @@ animation {
       0.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -132,6 +143,8 @@ animation {
       0.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -150,6 +163,8 @@ animation {
       0.000000 0.000000 smooth smooth
     }
   }
+
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -168,6 +183,7 @@ animation {
       0.000000 0.000000 smooth smooth
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -198,6 +214,7 @@ animation {
       2.000000 1.463294 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -228,6 +245,7 @@ animation {
       2.000000 -1.193148 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -258,6 +276,7 @@ animation {
       2.500000 2.089619 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -288,6 +307,7 @@ animation {
       2.500000 -1.570796 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -318,6 +338,7 @@ animation {
       3.000000 2.205473 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -348,6 +369,7 @@ animation {
       3.000000 -1.823475 linear linear
     }
   }
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -366,6 +388,7 @@ animation {
       0.000000 0.349066 smooth smooth
     }
   }
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -384,6 +407,7 @@ animation {
       0.000000 0.436332 smooth smooth
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -414,6 +438,7 @@ animation {
       3.000000 -1.468208 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -444,6 +469,7 @@ animation {
       3.000000 1.193148 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -474,6 +500,7 @@ animation {
       3.500000 -2.089619 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -504,6 +531,7 @@ animation {
       3.500000 1.570796 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -534,6 +562,7 @@ animation {
       4.000000 -2.205473 linear linear
     }
   }
+
   channel {
     extrapolate cycle cycle
     keys 5 {
@@ -564,6 +593,7 @@ animation {
       4.000000 1.823475 linear linear
     }
   }
+
   channel {
     extrapolate constant constant
     keys 1 {
@@ -582,6 +612,7 @@ animation {
       0.000000 -0.436332 smooth smooth
     }
   }
+
   channel {
     extrapolate constant constant
     keys 1 {

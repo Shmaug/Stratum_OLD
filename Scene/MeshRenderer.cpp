@@ -73,34 +73,4 @@ bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
 	return m->Intersect(r, t, any);
 }
 
-void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	static const float3 colors[13]{
-		float3(1.0, 1.0, 1.0),
-
-		float3(1.0, 0.1, 0.1),
-		float3(0.1, 1.0, 0.1),
-		float3(0.1, 0.1, 1.0),
-
-		float3(0.1, 1.0, 1.0),
-		float3(1.0, 0.1, 1.0),
-		float3(1.0, 1.0, 0.1),
-
-		float3(1.0, 0.5, 0.75),
-		float3(0.5, 1.0, 0.75),
-		float3(0.5, 0.75, 1.0),
-
-		float3(0.75, 1.0, 0.5),
-		float3(0.75, 0.5, 1.0),
-		float3(1.0, 0.75, 0.5),
-	};
-
-	TriangleBvh2* bvh = Mesh()->BVH();
-	if (!bvh) return;
-
-	for (uint32_t ni = 0; ni < bvh->Nodes().size(); ni++) {
-		if (bvh->Nodes()[ni].mRightOffset == 0) {
-			AABB box = bvh->Nodes()[ni].mBounds;
-			Gizmos::DrawWireCube((ObjectToWorld() * float4(box.Center(), 1.f)).xyz, box.Extents() * WorldScale(), WorldRotation(), float4(colors[ni % 13], .2f));
-		}
-	}
-};
+void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
