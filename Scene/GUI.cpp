@@ -241,6 +241,7 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		commandBuffer->PushConstant(shader, "ScreenSize", &sz.z);
 
 		for (const GuiLine& l : mScreenLines) {
+			vkCmdSetLineWidth(*commandBuffer, l.mThickness);
 			commandBuffer->PushConstant(shader, "Color", &l.mColor);
 			commandBuffer->PushConstant(shader, "ScaleTranslate", &l.mScaleTranslate);
 			commandBuffer->PushConstant(shader, "Bounds", &l.mBounds);
@@ -250,13 +251,14 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	}
 }
 
-void GUI::DrawScreenLine(const float2* points, size_t pointCount, const float2& offset, const float2& scale, const float4& color) {
+void GUI::DrawScreenLine(const float2* points, size_t pointCount, float thickness, const float2& offset, const float2& scale, const float4& color) {
 	GuiLine l;
 	l.mColor = color;
 	l.mScaleTranslate = float4(scale, offset);
 	l.mBounds = fRect2D(0, 0, 1e10f, 1e10f);
 	l.mCount = pointCount;
 	l.mIndex = mLinePoints.size();
+	l.mThickness = thickness;
 	l.mDepth = mCurrentDepth;
 	mScreenLines.push_back(l);
 

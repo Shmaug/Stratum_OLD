@@ -114,6 +114,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.fillModeNonSolid = VK_TRUE;
+	deviceFeatures.wideLines = VK_TRUE;
 	deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
 	deviceFeatures.sparseBinding = VK_TRUE;
 

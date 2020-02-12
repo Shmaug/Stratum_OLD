@@ -38,6 +38,7 @@ private:
 		fRect2D mBounds;
 		uint32_t mIndex;
 		uint32_t mCount;
+		float mThickness;
 		float mDepth;
 	};
 	struct GuiString {
@@ -138,5 +139,5 @@ public:
 	ENGINE_EXPORT static bool Button(Font* font, const std::string& text, float textScale, const float4x4& transform, const fRect2D& rect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor = TEXT_ANCHOR_MID, TextAnchor verticalAnchor = TEXT_ANCHOR_MID, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 
 
-	ENGINE_EXPORT static void DrawScreenLine(const float2* points, size_t pointCount, const float2& offset, const float2& scale, const float4& color);
+	ENGINE_EXPORT static void DrawScreenLine(const float2* points, size_t pointCount, float thickness, const float2& offset, const float2& scale, const float4& color);
 };

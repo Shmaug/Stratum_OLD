@@ -126,8 +126,9 @@ Animation::Animation(const unordered_map<uint32_t, AnimationChannel>& channels, 
 
 void Animation::Sample(float t, AnimationRig& rig) const {
 	rig[0]->LocalPosition(mChannels.at(0).Sample(t), mChannels.at(1).Sample(t), -mChannels.at(2).Sample(t));
-	for (uint32_t i = 1; i < rig.size(); i++) {
-		quaternion r(float3(mChannels.at(3 * i + 2).Sample(t), mChannels.at(3 * i + 1).Sample(t), mChannels.at(3 * i + 0).Sample(t)));
+	for (uint32_t i = 0; i < rig.size(); i++) {
+		float3 euler(mChannels.at(3 * i + 3).Sample(t), mChannels.at(3 * i + 4).Sample(t), mChannels.at(3 * i + 5).Sample(t));
+		quaternion r(euler);
 		r.x = -r.x;
 		r.y = -r.y;
 		rig[i]->LocalRotation(r);

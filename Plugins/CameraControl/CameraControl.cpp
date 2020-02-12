@@ -164,7 +164,7 @@ void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera,
 			GUI::DrawString(sem11, tmpText, float4(.6f, .6f, .6f, 1.f), float2(2, graphHeight * (i / 3.f) + 2), 11.f);
 		}
 
-		GUI::DrawScreenLine(points, pointCount, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
+		GUI::DrawScreenLine(points, pointCount, 1.5f, 0, float2(s.x, graphHeight), float4(.2f, 1.f, .2f, 1.f));
 
 		if (mSnapshotPerformance) {
 			float2 c = mInput->CursorPos();
