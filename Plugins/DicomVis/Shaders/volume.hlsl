@@ -1,7 +1,7 @@
 #pragma kernel PreProcess
 #pragma kernel Draw
 
-#pragma multi_compile READ_RAW READ_MASK READ_RAW_MASK
+#pragma multi_compile READ_MASK
 
 #pragma static_sampler Sampler max_lod=0
 
@@ -15,7 +15,7 @@
 [[vk::binding(4, 0)]] RWTexture2D<float4> RenderTarget : register(u5);
 [[vk::binding(5, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
 
-[[vk::binding(6, 0)]] Texture3D<float> BakedVolumeS : register(t0);
+[[vk::binding(6, 0)]] Texture3D<float2> BakedVolumeS : register(t0);
 [[vk::binding(7, 0)]] Texture3D<float3> BakedOpticalDensityS : register(t1);
 
 [[vk::binding(8, 0)]] Texture2D<float4> NoiseTex : register(t2);
@@ -80,31 +80,28 @@ float3 RGBtoHCV(float3 rgb) {
 }
 
 float3 Sample(float3 p) {
-	float s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	return Density * HSVtoRGB(float3(.75 - s * .5, .75, 1)) * max(0, s - Threshold) * InvThreshold;
+	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	s.r *= s.g;
+	return Density * HSVtoRGB(float3(.75 - s.r * .5, .75, 1)) * max(0, s.r - Threshold) * InvThreshold;
 }
 float3 SampleFast(uint3 p) {
-	float s = BakedVolume[p];
-	return Density * HSVtoRGB(float3(.75 - s * .5, .75, 1)) * max(0, s - Threshold) * InvThreshold;
+	float2 s = BakedVolume[p];
+	s.r *= s.g;
+	return Density * HSVtoRGB(float3(.75 - s.r * .5, .75, 1)) * max(0, s.r - Threshold) * InvThreshold;
 }
 
 float HenyeyGreenstein(float angle, float g) {
 	return (1 - g * g) / (pow(1 + g * g - 2 * g * angle, 1.5) * 4 * PI);
 }
 
-
 [numthreads(4, 4, 4)]
 void PreProcess(uint3 index : SV_DispatchThreadID) {
-	#if defined(READ_RAW)
-	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], 1);
-	AllMemoryBarrierWithGroupSync();
-	#elif defined(READ_MASK)
-	BakedVolume[index.xyz] = float2(BakedVolume[index.xyz].r, RawMask[index.xyz]);
-	AllMemoryBarrierWithGroupSync();
-	#elif defined(READ_RAW_MASK)
+	#if defined(READ_MASK)
 	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], RawMask[index.xyz]);
-	AllMemoryBarrierWithGroupSync();
+	#else
+	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], 1);
 	#endif
+	AllMemoryBarrierWithGroupSync();
 
 	float3 ld = WorldToVolumeV(LightDirection);
 	float scaledLightStep = StepSize * length(ld / InvVolumeScale);
@@ -155,7 +152,7 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		float3 sp = ro + rd * t;
 
 		float3 localDensity = Sample(sp);
-		float3 densityPA = BakedOpticalDensityS[(uint3)(sp * VolumeResolution + .5)];
+		float3 densityPA = BakedOpticalDensityS[(uint3)(sp * VolumeResolution + .5)].rgb;
 		
 		opticalDensity += (localDensity + prevDensity) * scaledStep;
 		prevDensity = localDensity;

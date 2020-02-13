@@ -54,7 +54,7 @@ private:
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawVolumeNew(false) {
+		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~DicomVis() {
@@ -325,17 +325,14 @@ public:
 
 		#pragma region pre-process
 		set<string> kw;
-		if (mRawVolumeNew && !mRawMaskNew) kw.emplace("READ_RAW");
-		if (!mRawVolumeNew && mRawMaskNew) kw.emplace("READ_MASK");
-		if (mRawVolumeNew && mRawMaskNew) kw.emplace("READ_RAW_MASK");
+		if (mRawMask) kw.emplace("READ_MASK");
 		ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("PreProcess", kw);
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
 		
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("PreProcess", process->mDescriptorSetLayouts[0]);
-		if (mRawVolumeNew) {
-			ds->CreateStorageTextureDescriptor(mRawVolume, process->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			fd.mImagesNew = false;
-		}
+		ds->CreateStorageTextureDescriptor(mRawVolume, process->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		if (mRawMask)
+			ds->CreateStorageTextureDescriptor(mRawMask, process->mDescriptorBindings.at("RawMask").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateStorageTextureDescriptor(fd.mBakedVolume, process->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateStorageTextureDescriptor(fd.mOpticalDensity, process->mDescriptorBindings.at("BakedOpticalDensity").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->FlushWrites();
