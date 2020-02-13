@@ -1,22 +1,25 @@
 #pragma kernel PreProcess
 #pragma kernel Draw
 
+#pragma multi_compile READ_RAW READ_MASK READ_RAW_MASK
+
 #pragma static_sampler Sampler max_lod=0
 
 #define PI 3.1415926535897932
 
 [[vk::binding(0, 0)]] RWTexture3D<float> RawVolume : register(u0);
-[[vk::binding(1, 0)]] RWTexture3D<float> BakedVolume : register(u1);
-[[vk::binding(2, 0)]] RWTexture3D<float3> BakedOpticalDensity : register(u2);
+[[vk::binding(1, 0)]] RWTexture3D<float> RawMask : register(u2);
+[[vk::binding(2, 0)]] RWTexture3D<float2> BakedVolume : register(u3);
+[[vk::binding(3, 0)]] RWTexture3D<float4> BakedOpticalDensity : register(u4);
 
-[[vk::binding(3, 0)]] RWTexture2D<float4> RenderTarget : register(u3);
-[[vk::binding(4, 0)]] RWTexture2D<float4> DepthNormal : register(u4);
+[[vk::binding(4, 0)]] RWTexture2D<float4> RenderTarget : register(u5);
+[[vk::binding(5, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
 
-[[vk::binding(5, 0)]] Texture3D<float> BakedVolumeS : register(t0);
-[[vk::binding(6, 0)]] Texture3D<float3> BakedOpticalDensityS : register(t1);
+[[vk::binding(6, 0)]] Texture3D<float> BakedVolumeS : register(t0);
+[[vk::binding(7, 0)]] Texture3D<float3> BakedOpticalDensityS : register(t1);
 
-[[vk::binding(7, 0)]] Texture2D<float4> NoiseTex : register(t2);
-[[vk::binding(8, 0)]] SamplerState Sampler : register(s0);
+[[vk::binding(8, 0)]] Texture2D<float4> NoiseTex : register(t2);
+[[vk::binding(9, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float3 VolumePosition;
@@ -92,9 +95,16 @@ float HenyeyGreenstein(float angle, float g) {
 
 [numthreads(4, 4, 4)]
 void PreProcess(uint3 index : SV_DispatchThreadID) {
-	BakedVolume[index.xyz] = RawVolume[index.xyz];
-
+	#if defined(READ_RAW)
+	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], 1);
 	AllMemoryBarrierWithGroupSync();
+	#elif defined(READ_MASK)
+	BakedVolume[index.xyz] = float2(BakedVolume[index.xyz].r, RawMask[index.xyz]);
+	AllMemoryBarrierWithGroupSync();
+	#elif defined(READ_RAW_MASK)
+	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], RawMask[index.xyz]);
+	AllMemoryBarrierWithGroupSync();
+	#endif
 
 	float3 ld = WorldToVolumeV(LightDirection);
 	float scaledLightStep = StepSize * length(ld / InvVolumeScale);
@@ -104,7 +114,7 @@ void PreProcess(uint3 index : SV_DispatchThreadID) {
 	for (float lt = StepSize; lt < li; lt += StepSize)
 		opticalDensity += SampleFast((uint3)(index.xyz + VolumeResolution*lt*ld + .5));
 
-	BakedOpticalDensity[index.xyz] = opticalDensity*scaledLightStep;
+	BakedOpticalDensity[index.xyz] = float4(opticalDensity*scaledLightStep, 1);
 }
 
 [numthreads(8, 8, 1)]

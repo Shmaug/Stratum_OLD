@@ -41,10 +41,9 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 	// compute curve
 	mCoefficients.resize(mKeyframes.size());
 	memset(mCoefficients.data(), 0, sizeof(float4) * mCoefficients.size());
-	for (uint32_t i = 0; i < mKeyframes.size(); i++) {
-		float ts = 1;
-		if (i < mKeyframes.size() - 1)
-			ts = mKeyframes[i + 1].mTime - mKeyframes[i].mTime;
+	for (uint32_t i = 0; i < mKeyframes.size() - 1; i++) {
+
+		float ts =  mKeyframes[i + 1].mTime - mKeyframes[i].mTime;
 
 		float p0y = mKeyframes[i].mValue;
 		float p1y = mKeyframes[i + 1].mValue;
@@ -55,11 +54,8 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 		if (mKeyframes[i].mTangentModeOut == ANIMATION_TANGENT_STEP) continue;
 
 		mCoefficients[i].y = v0;
-
-		if (i < mKeyframes.size() - 1) {
-			mCoefficients[i].z = 3 * (p1y - p0y) - 2*v0 - v1;
-			mCoefficients[i].w = p1y - p0y - v0 -mCoefficients[i].z;
-		}
+		mCoefficients[i].z = 3 * (p1y - p0y) - 2*v0 - v1;
+		mCoefficients[i].w = p1y - p0y - v0 - mCoefficients[i].z;
 	}
 }
 
@@ -81,11 +77,9 @@ float AnimationChannel::Sample(float t) const {
 			return last.mValue;
 		case EXTRAPOLATE_LINEAR:
 			return last.mValue + last.mTangentOut * tl;
-		case EXTRAPOLATE_CYCLE:
-			t = fmodf(tl, length);
-			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
 			offset += (last.mValue - first.mValue) * (floorf(tl / length) + 1);
+		case EXTRAPOLATE_CYCLE:
 			t = fmodf(tl, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:
@@ -101,11 +95,9 @@ float AnimationChannel::Sample(float t) const {
 			return first.mValue;
 		case EXTRAPOLATE_LINEAR:
 			return first.mValue - first.mTangentIn * ts;
-		case EXTRAPOLATE_CYCLE:
-			t = fmodf(ts, length);
-			break;
 		case EXTRAPOLATE_CYCLE_OFFSET:
 			offset += (first.mValue - last.mValue) * (floorf(ts / length) + 1);
+		case EXTRAPOLATE_CYCLE:
 			t = fmodf(ts, length);
 			break;
 		case EXTRAPOLATE_BOUNCE:

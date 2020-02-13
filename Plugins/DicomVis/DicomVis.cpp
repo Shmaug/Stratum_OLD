@@ -23,7 +23,9 @@ private:
 	float3 mVolumeScale;
 
 	Texture* mRawVolume;
+	Texture* mRawMask;
 	bool mRawVolumeNew;
+	bool mRawMaskNew;
 	
 	struct FrameData {
 		Texture* mBakedVolume;
@@ -290,6 +292,10 @@ public:
 			mRawVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 			mRawVolumeNew = false;
 		}
+		if (mRawMaskNew) {
+			mRawMask->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			mRawMaskNew = false;
+		}
 
 		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
 		if (fd.mImagesNew) {
@@ -318,11 +324,18 @@ public:
 		float3 lightDir = normalize(float3(.1f, .5f, -1));
 
 		#pragma region pre-process
-		ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("PreProcess", {});
+		set<string> kw;
+		if (mRawVolumeNew && !mRawMaskNew) kw.emplace("READ_RAW");
+		if (!mRawVolumeNew && mRawMaskNew) kw.emplace("READ_MASK");
+		if (mRawVolumeNew && mRawMaskNew) kw.emplace("READ_RAW_MASK");
+		ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("PreProcess", kw);
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
 		
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("PreProcess", process->mDescriptorSetLayouts[0]);
-		ds->CreateStorageTextureDescriptor(mRawVolume, process->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		if (mRawVolumeNew) {
+			ds->CreateStorageTextureDescriptor(mRawVolume, process->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			fd.mImagesNew = false;
+		}
 		ds->CreateStorageTextureDescriptor(fd.mBakedVolume, process->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateStorageTextureDescriptor(fd.mOpticalDensity, process->mDescriptorBindings.at("BakedOpticalDensity").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->FlushWrites();
@@ -410,7 +423,7 @@ public:
 			FrameData& fd = mFrameData[i];
 			safe_delete(fd.mBakedVolume);
 			safe_delete(fd.mOpticalDensity);
-			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mOpticalDensity = new Texture("Baked Optical Density", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mImagesNew = true;
 		}
