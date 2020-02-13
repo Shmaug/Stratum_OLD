@@ -36,21 +36,29 @@ AnimationChannel::AnimationChannel(const vector<AnimationKeyframe>& keyframes, A
 	}
 
 	mKeyframes[0].mTangentIn = mKeyframes[0].mTangentOut;
-
 	mKeyframes[mKeyframes.size() - 1].mTangentOut = mKeyframes[mKeyframes.size() - 1].mTangentIn;
 	
 	// compute curve
 	mCoefficients.resize(mKeyframes.size());
 	memset(mCoefficients.data(), 0, sizeof(float4) * mCoefficients.size());
 	for (uint32_t i = 0; i < mKeyframes.size(); i++) {
-		mCoefficients[i].x = mKeyframes[i].mValue;
+		float ts = 1;
+		if (i < mKeyframes.size() - 1)
+			ts = mKeyframes[i + 1].mTime - mKeyframes[i].mTime;
+
+		float p0y = mKeyframes[i].mValue;
+		float p1y = mKeyframes[i + 1].mValue;
+		float v0 = mKeyframes[i].mTangentOut * ts;
+		float v1 = mKeyframes[i + 1].mTangentIn * ts;
+
+		mCoefficients[i].x = p0y;
 		if (mKeyframes[i].mTangentModeOut == ANIMATION_TANGENT_STEP) continue;
 
-		mCoefficients[i].y = mKeyframes[i].mTangentOut;
+		mCoefficients[i].y = v0;
 
 		if (i < mKeyframes.size() - 1) {
-			mCoefficients[i].z = 3*(mKeyframes[i + 1].mValue - mKeyframes[i].mValue) - 2 * mKeyframes[i].mTangentOut - mKeyframes[i+1].mTangentIn;
-			mCoefficients[i].w = mKeyframes[i + 1].mValue - mKeyframes[i].mValue - mKeyframes[i].mTangentOut - mCoefficients[i].z;
+			mCoefficients[i].z = 3 * (p1y - p0y) - 2*v0 - v1;
+			mCoefficients[i].w = p1y - p0y - v0 -mCoefficients[i].z;
 		}
 	}
 }
