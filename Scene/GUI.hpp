@@ -80,6 +80,7 @@ private:
 	static std::unordered_map<uint32_t, std::variant<float, std::string>> mControlData;
 
 	static uint32_t mHotControl;
+	static uint32_t mLastHotControl;
 	static uint32_t mNextControlId;
 	static float mCurrentDepth;
 
@@ -112,6 +113,7 @@ public:
 	ENGINE_EXPORT static void LayoutSeparator(float thickness, const float4& color, float padding = 2.f);
 	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
 	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
+	ENGINE_EXPORT static bool LayoutSlider(float& value, float minimum, float maximum, float size, const float4& color, float padding = 2.f);
 
 
 	/// Draws a string in the world
@@ -137,6 +139,9 @@ public:
 	ENGINE_EXPORT static bool Button(Font* font, const std::string& text, float textScale, const fRect2D& screenRect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor = TEXT_ANCHOR_MID, TextAnchor verticalAnchor = TEXT_ANCHOR_MID, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 	/// Draw a button in the world, "size" units big with the bottom-left corner at screenPos
 	ENGINE_EXPORT static bool Button(Font* font, const std::string& text, float textScale, const float4x4& transform, const fRect2D& rect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor = TEXT_ANCHOR_MID, TextAnchor verticalAnchor = TEXT_ANCHOR_MID, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
+
+	ENGINE_EXPORT static bool Slider(float& value, float minimum, float maximum, LayoutAxis axis, const fRect2D& screenRect, const float4& color, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
+	ENGINE_EXPORT static bool Slider(float& value, float minimum, float maximum, LayoutAxis axis, const float4x4& transform, const fRect2D& rect, const float4& color, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 
 
 	ENGINE_EXPORT static void DrawScreenLine(const float2* points, size_t pointCount, float thickness, const float2& offset, const float2& scale, const float4& color);

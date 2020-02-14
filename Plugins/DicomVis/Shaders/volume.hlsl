@@ -5,7 +5,7 @@
 #pragma multi_compile READ_MASK
 #pragma multi_compile PHYSICAL_SHADING LIGHTING
 
-#pragma static_sampler Sampler max_lod=0
+#pragma static_sampler Sampler max_lod=0 addressMode=clamp_border borderColor=float_transparent_black
 
 #define PI 3.1415926535897932
 
@@ -81,17 +81,26 @@ float3 RGBtoHCV(float3 rgb) {
 	return float3(H, C, Q.x);
 }
 
+float3 Transfer(float density) {
+	return HSVtoRGB(float3(density*.45, 1, 1));
+}
+
 #ifdef PHYSICAL_SHADING
 float3 Sample(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	float3 col = HSVtoRGB(float3(.75 - s.r * .5, .75, 1));
+	float3 col = Transfer(s.r);
 	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
 	return Density * col * s.r;
+}
+float3 SampleDensity(float3 p) {
+	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
+	return Density * s.r;
 }
 #else
 float4 Sample(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	float3 col = HSVtoRGB(float3(s.r, .75, 1));
+	float3 col = Transfer(s.r);
 	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
 	return float4(col, s.r * Density);
 }
@@ -113,24 +122,30 @@ void CopyRaw(uint3 index : SV_DispatchThreadID) {
 [numthreads(4, 4, 4)]
 void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
 	float3 ld = WorldToVolumeV(LightDirection);
-	float scaledLightStep = StepSize * length(ld / InvVolumeScale);
 
 	float3 ro = (index.xyz + .5) / VolumeResolution;
 
+	float start = StepSize;
+	// jitter samples
+	float2 jitter = NoiseTex.Load(uint3(index.xy % 256, 0)).xy;
+	start -= StepSize * jitter.x;
+
 	#ifdef PHYSICAL_SHADING
+	float scaledLightStep = StepSize * length(LightDirection);
 
 	float3 opticalDensity = 0;
 	float li = RayBox(ro, ld, 0, 1).y;
-	for (float lt = StepSize; lt < li; lt += StepSize)
-		opticalDensity += Sample(ro + lt*ld);
+	for (float lt = start; lt < li; lt += StepSize)
+		opticalDensity += SampleDensity(ro + lt*ld).rgb;
 	BakedOpticalDensity[index.xyz] = float4(opticalDensity*scaledLightStep, 1);
 
 	#else
 
 	float4 sum = 0;
 	float li = RayBox(ro, ld, 0, 1).y;
-	for (float lt = StepSize; lt < li; lt += StepSize){
+	for (float lt = start; lt < li; lt += StepSize){
 		float4 localDensity = Sample(ro + lt*ld);
+		localDensity.a *= StepSize;
 		localDensity.rgb *= localDensity.a;
 		sum += (1 - sum.a) * localDensity;
 	}
@@ -179,11 +194,10 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		float3 sp = ro + rd * t;
 
 		float3 localDensity = Sample(sp);
-		float3 densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0).rgb;
-		
 		opticalDensity += (localDensity + prevDensity) * scaledStep;
 		prevDensity = localDensity;
 
+		float3 densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0).rgb;
 		float3 densityCPA = opticalDensity + densityPA;
 		float3 localInscatter = localDensity * exp(-densityCPA * Extinction);
 
@@ -206,10 +220,11 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	for (float t = StepSize; t < isect.y; t += StepSize) {
 		float3 sp = ro + rd * t;
 		float4 localDensity = Sample(sp);
+		localDensity.a *= StepSize;
 
 		#ifdef LIGHTING
 		float densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0).a;
-		localDensity *= exp(-densityPA * Extinction);
+		localDensity.rgb *= exp(-densityPA * Extinction);
 		#endif
 
 		localDensity.rgb *= localDensity.a;
