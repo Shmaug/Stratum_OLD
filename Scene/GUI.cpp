@@ -7,6 +7,7 @@ using namespace std;
 #define DEPTH_DELTA -0.0001f;
 
 uint32_t GUI::mHotControl = -1u;
+uint32_t GUI::mLastHotControl = -1u;
 uint32_t GUI::mNextControlId = 0;
 float GUI::mCurrentDepth = START_DEPTH;
 InputManager* GUI::mInputManager;
@@ -26,6 +27,7 @@ GUI::BufferCache* GUI::mCaches;
 
 void GUI::Initialize(Device* device, AssetManager* assetManager) {
 	mHotControl = -1;
+	mLastHotControl = -1;
 	mCaches = new BufferCache[device->MaxFramesInFlight()];
 	//memset(mCaches, 0, sizeof(BufferCache) * device->MaxFramesInFlight());
 }
@@ -50,6 +52,9 @@ void GUI::PreFrame(Scene* scene) {
 	mWorldStrings.clear();
 	mCurrentDepth = START_DEPTH;
 	mNextControlId = 0;
+
+	mLastHotControl = mHotControl;
+	mHotControl = -1;
 
 	while (mLayoutStack.size()) mLayoutStack.pop();
 
@@ -222,6 +227,7 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			vkCmdDraw(*commandBuffer, (glyphBuffer->Size() / sizeof(TextGlyph)) * 6, 1, 0, 0);
 		}
 	}
+
 	if (mScreenLines.size()) {
 		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/line.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
 		if (!shader) return;
@@ -302,6 +308,12 @@ void GUI::DrawString(Font* font, const string& str, const float4& color, const f
 
 void GUI::Rect(const fRect2D& screenRect, const float4& color, const fRect2D& clipRect) {
 	if (!clipRect.Intersects(screenRect)) return;
+
+	MouseKeyboardInput* i = mInputManager->GetFirst<MouseKeyboardInput>();
+	float2 c = i->CursorPos();
+	c.y = i->WindowHeight() - c.y;
+	if (screenRect.Contains(c) && clipRect.Contains(c)) i->mMousePointer.mGuiHitT = 0.f;
+
 	GuiRect r = {};
 	r.TextureST = float4(1, 1, 0, 0);
 	r.ScaleTranslate = float4(screenRect.mExtent, screenRect.mOffset);
@@ -350,17 +362,16 @@ void GUI::Label(Font* font, const string& text, float textScale, const float4x4&
 
 bool GUI::Button(Font* font, const string& text, float textScale, const fRect2D& screenRect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const fRect2D& clipRect){
 	uint32_t controlId = mNextControlId++;
-
 	if (!clipRect.Intersects(screenRect)) return false;
 
 	MouseKeyboardInput* i = mInputManager->GetFirst<MouseKeyboardInput>();
 	float2 c = i->CursorPos();
 	c.y = i->WindowHeight() - c.y;
 
-	bool hvr = screenRect.Contains(c);
-	bool clk = hvr && i->KeyDown(MOUSE_LEFT);
+	bool hvr = screenRect.Contains(c) && clipRect.Contains(c);
+	bool clk = i->KeyDown(MOUSE_LEFT) && (hvr || mLastHotControl == controlId);
 
-	if (hvr) i->mMousePointer.mGuiHitT = 0.f;
+	if (hvr || clk) i->mMousePointer.mGuiHitT = 0.f;
 	if (clk) mHotControl = controlId;
 	
 	if (color.a > 0) {
@@ -381,8 +392,9 @@ bool GUI::Button(Font* font, const string& text, float textScale, const fRect2D&
 }
 bool GUI::Button(Font* font, const string& text, float textScale, const float4x4& transform, const fRect2D& rect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const fRect2D& clipRect){
 	uint32_t controlId = mNextControlId++;
-
 	if (!clipRect.Intersects(rect)) return false;
+
+	// TODO: world-space input
 
 	if (color.a > 0) Rect(transform, rect, color, clipRect);
 	if (textColor.a > 0 && text.length()){
@@ -395,6 +407,82 @@ bool GUI::Button(Font* font, const string& text, float textScale, const float4x4
 	}
 	return false;
 }
+
+
+bool GUI::Slider(float& value, float minimum, float maximum, LayoutAxis axis, const fRect2D& screenRect, const float4& color, const fRect2D& clipRect) {
+	uint32_t controlId = mNextControlId++;
+	if (!clipRect.Intersects(screenRect)) return false;
+
+	MouseKeyboardInput* i = mInputManager->GetFirst<MouseKeyboardInput>();
+	float2 c = i->CursorPos();
+	c.y = i->WindowHeight() - c.y;
+
+	fRect2D bgRect = screenRect;
+	fRect2D barRect = screenRect;
+
+	bool ret = false;
+	float vo;
+
+	switch (axis) {
+	case LAYOUT_HORIZONTAL:
+		bgRect.mOffset.y += screenRect.mExtent.y * .25f;
+		bgRect.mExtent.y *= 0.5f;
+
+		barRect.mExtent.x = screenRect.mExtent.x * .1f;
+		vo = barRect.mOffset.x + ((value - minimum) / (maximum - minimum)) * (screenRect.mExtent.x - barRect.mExtent.x);
+		if (mLastHotControl == controlId) {
+			vo += i->CursorDelta().x;
+			value = ((vo - screenRect.mOffset.x) / (screenRect.mExtent.x - barRect.mExtent.x)) * (maximum - minimum) + minimum;
+			value = clamp(value, minimum, maximum);
+			ret = true;
+		}
+
+		vo = barRect.mOffset.x + ((value - minimum) / (maximum - minimum)) * (screenRect.mExtent.x - barRect.mExtent.x);
+		barRect.mOffset.x = vo;
+		break;
+	case LAYOUT_VERTICAL:
+		bgRect.mOffset.x += screenRect.mExtent.y * .25f;
+		bgRect.mExtent.x *= 0.5f;
+
+		barRect.mExtent.y = screenRect.mExtent.y * .1f;
+		vo = barRect.mOffset.x + ((value - minimum) / (maximum - minimum)) * (screenRect.mExtent.x - barRect.mExtent.x);
+		if (mHotControl == controlId) {
+			vo += i->CursorDelta().x;
+			value = (vo - barRect.mOffset.y) / (screenRect.mExtent.y - barRect.mExtent.y) * (maximum - minimum) - 1.f + minimum;
+			value = clamp(value, minimum, maximum);
+			ret = true;
+		}
+
+		vo = barRect.mOffset.x + ((value - minimum) / (maximum - minimum)) * (screenRect.mExtent.x - barRect.mExtent.x);
+		barRect.mOffset.y = vo;
+		break;
+	}
+
+	bool hvr = barRect.Contains(c) && clipRect.Contains(c);
+	bool clk = i->KeyDown(MOUSE_LEFT) && (hvr || mLastHotControl == controlId);
+
+	if (hvr || clk) i->mMousePointer.mGuiHitT = 0.f;
+	if (clk) mHotControl = controlId;
+
+	float m = 1.25f;
+	if (hvr) m *= 1.2f;
+	if (clk) m *= 1.5f;
+
+	Rect(bgRect, color, clipRect);
+	Rect(barRect, float4(color.rgb * m, color.a), clipRect);
+
+	return ret;
+}
+bool GUI::Slider(float& value, float minimum, float maximum, LayoutAxis axis, const float4x4& transform, const fRect2D& rect, const float4& color, const fRect2D& clipRect) {
+	uint32_t controlId = mNextControlId++;
+	if (!clipRect.Intersects(rect)) return false;
+
+	Rect(transform, rect, color, clipRect);
+
+
+	return false;
+}
+
 
 fRect2D GUI::GuiLayout::Get(float size, float padding) {
 	fRect2D layoutRect = mRect;
@@ -462,6 +550,8 @@ fRect2D GUI::BeginScrollSubLayout(float size, float contentSize, const float4& b
 			scrollAmount -= i->ScrollDelta() * 60;
 			i->mMousePointer.mGuiHitT = 0.f;
 		}
+	} else {
+		// TODO: world-space input
 	}
 
 	float scrollMax = max(0.f, contentSize - layoutRect.mExtent.y);
@@ -511,8 +601,13 @@ fRect2D GUI::BeginScrollSubLayout(float size, float contentSize, const float4& b
 			break;
 		}
 
-		GUI::Rect(sliderbg, float4(.4f, .4f, .4f, 1));
-		GUI::Rect(slider, float4(.8f, .8f, .8f, 1));
+		if (l.mScreenSpace) {
+			GUI::Rect(sliderbg, float4(.4f, .4f, .4f, 1));
+			GUI::Rect(slider, float4(.8f, .8f, .8f, 1));
+		} else {
+			GUI::Rect(l.mTransform, sliderbg, float4(.4f, .4f, .4f, 1));
+			GUI::Rect(l.mTransform, slider, float4(.8f, .8f, .8f, 1));
+		}
 	}
 
 	mLayoutStack.push({ l.mTransform, l.mScreenSpace, l.mAxis, contentRect, layoutRect, 0 });
@@ -528,7 +623,10 @@ void GUI::LayoutSpace(float size) {
 }
 void GUI::LayoutSeparator(float thickness, const float4& color, float padding) {
 	GuiLayout& l = mLayoutStack.top();
-	GUI::Rect(l.Get(thickness, padding), color, l.mClipRect);
+	if (l.mScreenSpace)
+		GUI::Rect(l.Get(thickness, padding), color, l.mClipRect);
+	else
+		GUI::Rect(l.mTransform, l.Get(thickness, padding), color, l.mClipRect);
 }
 void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
 	GuiLayout& l = mLayoutStack.top();
@@ -546,7 +644,10 @@ void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float la
 		break;
 	}
 
-	Label(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
+	if (l.mScreenSpace)
+		Label(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
+	else
+		Label(font, text, textHeight, l.mTransform, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
 }
 bool GUI::LayoutButton(Font* font, const string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
 	GuiLayout& l = mLayoutStack.top();
@@ -564,5 +665,25 @@ bool GUI::LayoutButton(Font* font, const string& text, float textHeight, float b
 		break;
 	}
 
-	return Button(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
+	if (l.mScreenSpace)
+		return Button(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
+	else
+		return Button(font, text, textHeight, l.mTransform, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
+}
+bool GUI::LayoutSlider(float& value, float minimum, float maximum, float size, const float4& color, float padding) {
+	GuiLayout& l = mLayoutStack.top();
+	fRect2D layoutRect = l.Get(size, padding);
+	LayoutAxis a = LAYOUT_HORIZONTAL;
+	switch (l.mAxis) {
+	case LAYOUT_HORIZONTAL:
+		a = LAYOUT_VERTICAL;
+		break;
+	case LAYOUT_VERTICAL:
+		a = LAYOUT_HORIZONTAL;
+		break;
+	}
+	if (l.mScreenSpace)
+		return Slider(value, minimum, maximum, a, layoutRect, color, l.mClipRect);
+	else
+		return Slider(value, minimum, maximum, a, l.mTransform, layoutRect, color, l.mClipRect);
 }
