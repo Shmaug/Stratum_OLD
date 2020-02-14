@@ -22,6 +22,14 @@ private:
 	quaternion mVolumeRotation;
 	float3 mVolumeScale;
 
+	bool mLighting;
+	bool mPhysicalShading;
+	float mDensity;
+	float mRemapMin;
+	float mRemapMax;
+	float mVolumeScatter;
+	float mVolumeExtinction;
+
 	Texture* mRawVolume;
 	Texture* mRawMask;
 	bool mRawVolumeNew;
@@ -31,6 +39,8 @@ private:
 		Texture* mBakedVolume;
 		Texture* mOpticalDensity;
 		bool mImagesNew;
+		bool mBakeDirty;
+		bool mLightingDirty;
 	};
 	FrameData* mFrameData;
 
@@ -39,7 +49,7 @@ private:
 	MouseKeyboardInput* mInput;
 
 	float mZoom;
-
+	
 
 	bool mShowPerformance;
 	bool mSnapshotPerformance;
@@ -54,7 +64,9 @@ private:
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false) {
+		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false),
+		mPhysicalShading(false), mLighting(false), mDensity(1.f), mRemapMin(.125f), mRemapMax(1.f),
+		mVolumeScatter(100.f), mVolumeExtinction(20.f) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~DicomVis() {
@@ -157,8 +169,12 @@ public:
 
 			if (mInput->KeyDown(MOUSE_LEFT)) {
 				float3 axis = mMainCamera->WorldRotation() * float3(0, 1, 0) * mInput->CursorDelta().x + mMainCamera->WorldRotation() * float3(1, 0, 0) * mInput->CursorDelta().y;
-				if (dot(axis, axis) > .001f)
+				if (dot(axis, axis) > .001f){
 					mVolumeRotation = quaternion(length(axis) * .003f, -normalize(axis)) * mVolumeRotation;
+
+					for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+						mFrameData[i].mLightingDirty = true;
+				}
 			}
 		}
 
@@ -185,8 +201,8 @@ public:
 		
 		if (mShowPerformance) {
 			char tmpText[64];
-			snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
-			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+			snprintf(tmpText, 64, "%.2f fps\n", mFps);
+			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f, TEXT_ANCHOR_MIN, TEXT_ANCHOR_MAX);
 
 
 			#ifdef PROFILER_ENABLE
@@ -311,63 +327,82 @@ public:
 		float3 ivs = 1.f / mVolumeScale;
 		float far = camera->Far();
 		float3 vres(fd.mBakedVolume->Width(), fd.mBakedVolume->Height(), fd.mBakedVolume->Depth());
-
-		float threshold = .125f;
-		float invThreshold = 1 / (1 - .125f);
-		float density = 100.f;
+		
+		float remapRange = 1.f / (mRemapMax - mRemapMin);
 		float stepSize = .002f;
-
-		float scatter = 100.f;
-		float extinction = 20.f;
 
 		float3 lightCol = 2;
 		float3 lightDir = normalize(float3(.1f, .5f, -1));
 
-		#pragma region pre-process
-		set<string> kw;
-		if (mRawMask) kw.emplace("READ_MASK");
-		ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("PreProcess", kw);
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
-		
-		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("PreProcess", process->mDescriptorSetLayouts[0]);
-		ds->CreateStorageTextureDescriptor(mRawVolume, process->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		if (mRawMask)
-			ds->CreateStorageTextureDescriptor(mRawMask, process->mDescriptorBindings.at("RawMask").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(fd.mBakedVolume, process->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(fd.mOpticalDensity, process->mDescriptorBindings.at("BakedOpticalDensity").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->FlushWrites();
+		if (fd.mBakeDirty) {
+			// Copy volume
+			set<string> kw;
+			if (mRawMask) kw.emplace("READ_MASK");
+			ComputeShader* copy = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("CopyRaw", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copy->mPipeline);
+			
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("CopyRaw", copy->mDescriptorSetLayouts[0]);
+			ds->CreateStorageTextureDescriptor(mRawVolume, copy->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			if (mRawMask) ds->CreateStorageTextureDescriptor(mRawMask, copy->mDescriptorBindings.at("RawMask").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateStorageTextureDescriptor(fd.mBakedVolume, copy->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->FlushWrites();
 
-		commandBuffer->PushConstant(process, "InvVolumeRotation", &ivr);
-		commandBuffer->PushConstant(process, "InvVolumeScale", &ivs);
-		commandBuffer->PushConstant(process, "InvViewProj", &ivp);
-		commandBuffer->PushConstant(process, "VolumeResolution", &vres);
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copy->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+			vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
 
-		commandBuffer->PushConstant(process, "LightDirection", &lightDir);
-		commandBuffer->PushConstant(process, "LightColor", &lightCol);
+			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
-		commandBuffer->PushConstant(process, "Threshold", &threshold);
-		commandBuffer->PushConstant(process, "InvThreshold", &invThreshold);
-		commandBuffer->PushConstant(process, "Density", &density);
+			fd.mBakeDirty = false;
+		}
 
-		commandBuffer->PushConstant(process, "StepSize", &stepSize);
-		commandBuffer->PushConstant(process, "FrameIndex", &mFrameIndex);
+		// precompute optical density	
+		if (fd.mLightingDirty && (mPhysicalShading || mLighting)) {
+			set<string> kw;
+			if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");		
+			ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("ComputeOpticalDensity", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
+			
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("ComputeOpticalDensity", process->mDescriptorSetLayouts[0]);
+			ds->CreateSampledTextureDescriptor(fd.mBakedVolume, process->mDescriptorBindings.at("BakedVolumeS").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateStorageTextureDescriptor(fd.mOpticalDensity, process->mDescriptorBindings.at("BakedOpticalDensity").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->FlushWrites();
+			
+			commandBuffer->PushConstant(process, "InvVolumeRotation", &ivr);
+			commandBuffer->PushConstant(process, "InvVolumeScale", &ivs);
+			commandBuffer->PushConstant(process, "InvViewProj", &ivp);
+			commandBuffer->PushConstant(process, "VolumeResolution", &vres);
 
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-		vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
-		#pragma endregion
+			commandBuffer->PushConstant(process, "LightDirection", &lightDir);
+			commandBuffer->PushConstant(process, "LightColor", &lightCol);
+
+			commandBuffer->PushConstant(process, "RemapMin", &mRemapMin);
+			commandBuffer->PushConstant(process, "InvRemapRange", &remapRange);
+			commandBuffer->PushConstant(process, "Density", &mDensity);
+
+			commandBuffer->PushConstant(process, "StepSize", &stepSize);
+			commandBuffer->PushConstant(process, "FrameIndex", &mFrameIndex);
+
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+			vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
+
+			fd.mLightingDirty = false;
+		}
 
 		stepSize = .001f;
 
 		fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		fd.mOpticalDensity->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		
-		#pragma region pre-process
-		ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", {});
+		#pragma region render volume
+		set<string> kw;
+		if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
+		ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipeline);
 		
-		ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", draw->mDescriptorSetLayouts[0]);
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", draw->mDescriptorSetLayouts[0]);
 		ds->CreateSampledTextureDescriptor(fd.mBakedVolume, draw->mDescriptorBindings.at("BakedVolumeS").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateSampledTextureDescriptor(fd.mOpticalDensity, draw->mDescriptorBindings.at("BakedOpticalDensityS").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		if (mPhysicalShading || mLighting)
+			ds->CreateSampledTextureDescriptor(fd.mOpticalDensity, draw->mDescriptorBindings.at("BakedOpticalDensityS").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(0), draw->mDescriptorBindings.at("RenderTarget").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), draw->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), draw->mDescriptorBindings.at("NoiseTex").second.binding);
@@ -382,23 +417,14 @@ public:
 		commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
 		commandBuffer->PushConstant(draw, "Far", &far);
 		
-		commandBuffer->PushConstant(draw, "LightDirection", &lightDir);
-		commandBuffer->PushConstant(draw, "LightColor", &lightCol);
-
-		commandBuffer->PushConstant(draw, "Threshold", &threshold);
-		commandBuffer->PushConstant(draw, "InvThreshold", &invThreshold);
-		commandBuffer->PushConstant(draw, "Density", &density);
-		commandBuffer->PushConstant(draw, "Extinction", &extinction);
-		commandBuffer->PushConstant(draw, "Scattering", &scatter);
+		commandBuffer->PushConstant(draw, "RemapMin", &mRemapMin);
+		commandBuffer->PushConstant(draw, "InvRemapRange", &remapRange);
+		commandBuffer->PushConstant(draw, "Density", &mDensity);
+		commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
+		commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
 
 		commandBuffer->PushConstant(draw, "StepSize", &stepSize);
 		commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
-
-		float4x4 InvViewProj;
-		float3 CameraPosition;
-		float2 ScreenResolution;
-		float3 VolumeResolution;
-		float Far;
 
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 		vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
@@ -423,6 +449,7 @@ public:
 			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mOpticalDensity = new Texture("Baked Optical Density", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mImagesNew = true;
+			fd.mBakeDirty = true;
 		}
 	}
 };

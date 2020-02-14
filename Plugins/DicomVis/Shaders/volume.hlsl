@@ -1,7 +1,9 @@
-#pragma kernel PreProcess
+#pragma kernel CopyRaw
+#pragma kernel ComputeOpticalDensity
 #pragma kernel Draw
 
 #pragma multi_compile READ_MASK
+#pragma multi_compile PHYSICAL_SHADING LIGHTING
 
 #pragma static_sampler Sampler max_lod=0
 
@@ -16,7 +18,7 @@
 [[vk::binding(5, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
 
 [[vk::binding(6, 0)]] Texture3D<float2> BakedVolumeS : register(t0);
-[[vk::binding(7, 0)]] Texture3D<float3> BakedOpticalDensityS : register(t1);
+[[vk::binding(7, 0)]] Texture3D<float4> BakedOpticalDensityS : register(t1);
 
 [[vk::binding(8, 0)]] Texture2D<float4> NoiseTex : register(t2);
 [[vk::binding(9, 0)]] SamplerState Sampler : register(s0);
@@ -34,8 +36,8 @@
 	float3 LightColor;
 	float3 LightDirection;
 
-	float Threshold;
-	float InvThreshold;
+	float RemapMin;
+	float InvRemapRange;
 	float Density;
 	float Scattering;
 	float Extinction;
@@ -79,39 +81,62 @@ float3 RGBtoHCV(float3 rgb) {
 	return float3(H, C, Q.x);
 }
 
+#ifdef PHYSICAL_SHADING
 float3 Sample(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	s.r *= s.g;
-	return Density * HSVtoRGB(float3(.75 - s.r * .5, .75, 1)) * max(0, s.r - Threshold) * InvThreshold;
+	float3 col = HSVtoRGB(float3(.75 - s.r * .5, .75, 1));
+	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
+	return Density * col * s.r;
 }
-float3 SampleFast(uint3 p) {
-	float2 s = BakedVolume[p];
-	s.r *= s.g;
-	return Density * HSVtoRGB(float3(.75 - s.r * .5, .75, 1)) * max(0, s.r - Threshold) * InvThreshold;
+#else
+float4 Sample(float3 p) {
+	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	float3 col = HSVtoRGB(float3(s.r, .75, 1));
+	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
+	return float4(col, s.r * Density);
 }
+#endif
 
 float HenyeyGreenstein(float angle, float g) {
 	return (1 - g * g) / (pow(1 + g * g - 2 * g * angle, 1.5) * 4 * PI);
 }
 
 [numthreads(4, 4, 4)]
-void PreProcess(uint3 index : SV_DispatchThreadID) {
+void CopyRaw(uint3 index : SV_DispatchThreadID) {
 	#if defined(READ_MASK)
 	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], RawMask[index.xyz]);
 	#else
 	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], 1);
 	#endif
-	AllMemoryBarrierWithGroupSync();
+}
 
+[numthreads(4, 4, 4)]
+void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
 	float3 ld = WorldToVolumeV(LightDirection);
 	float scaledLightStep = StepSize * length(ld / InvVolumeScale);
 
-	float3 opticalDensity = 0;
-	float li = RayBox(index.xyz / VolumeResolution, ld, 0, 1).y;
-	for (float lt = StepSize; lt < li; lt += StepSize)
-		opticalDensity += SampleFast((uint3)(index.xyz + VolumeResolution*lt*ld + .5));
+	float3 ro = (index.xyz + .5) / VolumeResolution;
 
+	#ifdef PHYSICAL_SHADING
+
+	float3 opticalDensity = 0;
+	float li = RayBox(ro, ld, 0, 1).y;
+	for (float lt = StepSize; lt < li; lt += StepSize)
+		opticalDensity += Sample(ro + lt*ld);
 	BakedOpticalDensity[index.xyz] = float4(opticalDensity*scaledLightStep, 1);
+
+	#else
+
+	float4 sum = 0;
+	float li = RayBox(ro, ld, 0, 1).y;
+	for (float lt = StepSize; lt < li; lt += StepSize){
+		float4 localDensity = Sample(ro + lt*ld);
+		localDensity.rgb *= localDensity.a;
+		sum += (1 - sum.a) * localDensity;
+	}
+	BakedOpticalDensity[index.xyz] = sum;
+
+	#endif
 }
 
 [numthreads(8, 8, 1)]
@@ -141,6 +166,8 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	ro += rd * isect.x;
 	isect.y -= isect.x;
 
+	#ifdef PHYSICAL_SHADING
+	
 	float scaledStep = StepSize * length(rd / InvVolumeScale) / 2;
 
 	float3 opticalDensity = 0;
@@ -152,7 +179,7 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		float3 sp = ro + rd * t;
 
 		float3 localDensity = Sample(sp);
-		float3 densityPA = BakedOpticalDensityS[(uint3)(sp * VolumeResolution + .5)].rgb;
+		float3 densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0).rgb;
 		
 		opticalDensity += (localDensity + prevDensity) * scaledStep;
 		prevDensity = localDensity;
@@ -171,4 +198,25 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	float3 lightExtinction = exp(-opticalDensity * Extinction);
 
 	RenderTarget[index.xy] = float4(RenderTarget[index.xy].rgb * lightExtinction + lightInscatter, 1);
+
+	#else
+
+	float4 sum = 0;
+
+	for (float t = StepSize; t < isect.y; t += StepSize) {
+		float3 sp = ro + rd * t;
+		float4 localDensity = Sample(sp);
+
+		#ifdef LIGHTING
+		float densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0).a;
+		localDensity *= exp(-densityPA * Extinction);
+		#endif
+
+		localDensity.rgb *= localDensity.a;
+		sum += (1 - sum.a) * localDensity;
+	}
+
+	RenderTarget[index.xy] = RenderTarget[index.xy] * (1 - sum.a) + sum * sum.a;
+
+	#endif
 }
