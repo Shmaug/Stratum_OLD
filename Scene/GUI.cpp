@@ -156,6 +156,8 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		}
 	}
 
+	camera->Set(commandBuffer);
+
 	if (mScreenRects.size()) {
 		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(pass, { "SCREEN_SPACE" });
 		if (!shader) return;

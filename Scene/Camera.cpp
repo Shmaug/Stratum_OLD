@@ -256,8 +256,8 @@ bool Camera::UpdateMatrices() {
 	case STEREO_SBS_HORIZONTAL:
 	case STEREO_SBS_VERTICAL:
 		mView[0] = mView[1] = float4x4::Look(0, WorldRotation().forward(), WorldRotation() * float3(0, 1, 0));
-		mView[0] = mView[0] * mEyeTransform[0];
-		mView[1] = mView[1] * mEyeTransform[1];
+		mView[0] = mHeadToEye[0] * mView[0];
+		mView[1] = mHeadToEye[1] * mView[1];
 
 		if (mOrthographic)
 			mProjection[0] = mProjection[1] = float4x4::Orthographic(mOrthographicSize * Aspect(), mOrthographicSize, mNear, mFar);

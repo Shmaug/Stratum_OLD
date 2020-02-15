@@ -2,8 +2,13 @@
 #pragma kernel ComputeOpticalDensity
 #pragma kernel Draw
 
-#pragma multi_compile READ_MASK
+#pragma multi_compile COLORIZE
 #pragma multi_compile PHYSICAL_SHADING LIGHTING
+
+#pragma multi_compile READ_MASK
+#pragma multi_compile INVERT
+
+#pragma multi_compile SBS_HORIZONTAL SBS_VERTICAL
 
 #pragma static_sampler Sampler max_lod=0 addressMode=clamp_border borderColor=float_transparent_black
 
@@ -24,20 +29,24 @@
 [[vk::binding(9, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float4x4 InvViewProj;
+	float3 CameraPosition;
+
+	float2 ScreenResolution;
+	float3 VolumeResolution;
 	float3 VolumePosition;
 	float4 InvVolumeRotation;
 	float3 InvVolumeScale;
-	float4x4 InvViewProj;
-	float3 CameraPosition;
-	float2 ScreenResolution;
-	float3 VolumeResolution;
 	float Far;
+	uint2 WriteOffset;
 
 	float3 LightColor;
 	float3 LightDirection;
 
 	float RemapMin;
 	float InvRemapRange;
+	float Cutoff;
+
 	float Density;
 	float Scattering;
 	float Extinction;
@@ -82,26 +91,40 @@ float3 RGBtoHCV(float3 rgb) {
 }
 
 float3 Transfer(float density) {
-	return HSVtoRGB(float3(density*.45, 1, 1));
+	#ifdef COLORIZE
+	#ifdef PHYSICAL_SHADING
+	return HSVtoRGB(float3(density * .45, .7, 1));
+	#else
+	return HSVtoRGB(float3(density * .45, 1, 1));
+	#endif
+	#else
+	return density;
+	#endif
+}
+
+float Threshold(float x) {
+	float h = 1 - 100*max(0, x - Cutoff);
+	x = (x - RemapMin) * InvRemapRange * h;
+	return saturate(x);
 }
 
 #ifdef PHYSICAL_SHADING
 float3 Sample(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	s.r *= s.g * Threshold(s.r);
 	float3 col = Transfer(s.r);
-	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
 	return Density * col * s.r;
 }
 float3 SampleDensity(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
+	s.r *= s.g * Threshold(s.r);
 	return Density * s.r;
 }
 #else
 float4 Sample(float3 p) {
 	float2 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	s.r *= s.g * Threshold(s.r);
 	float3 col = Transfer(s.r);
-	s.r *= s.g * saturate((s.r - RemapMin) * InvRemapRange);
 	return float4(col, s.r * Density);
 }
 #endif
@@ -112,10 +135,14 @@ float HenyeyGreenstein(float angle, float g) {
 
 [numthreads(4, 4, 4)]
 void CopyRaw(uint3 index : SV_DispatchThreadID) {
+	float r = RawVolume[index.xyz];
+	#ifdef INVERT
+	r = 1 - r;
+	#endif
 	#if defined(READ_MASK)
-	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], RawMask[index.xyz]);
+	BakedVolume[index.xyz] = float2(r, RawMask[index.xyz]);
 	#else
-	BakedVolume[index.xyz] = float2(RawVolume[index.xyz], 1);
+	BakedVolume[index.xyz] = float2(r, 1);
 	#endif
 }
 
@@ -156,13 +183,13 @@ void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void Draw(uint3 index : SV_DispatchThreadID) {
-	float4 unprojected = mul(InvViewProj, float4(index.xy * 2 / ScreenResolution - 1, 0, 1));
 	float3 ro = CameraPosition;
-	float3 rd = normalize(unprojected.xyz / unprojected.w);
+	float4 unprojected = mul(InvViewProj, float4(2 * index.xy / ScreenResolution - 1, 0, 1));
+	float3 rd = normalize(unprojected.xyz / unprojected.w - ro);
 
 	float rdl = saturate(dot(rd, LightDirection));
 
-	float3 f = ro + rd * length(DepthNormal[index.xy].xyz)*Far;
+	float3 f = ro + rd * length(DepthNormal[WriteOffset + index.xy].xyz)*Far;
 
 	ro = WorldToVolume(ro);
 	rd = WorldToVolumeV(rd);
@@ -211,7 +238,7 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	float3 lightInscatter = scatter * Scattering * LightColor.xyz;
 	float3 lightExtinction = exp(-opticalDensity * Extinction);
 
-	RenderTarget[index.xy] = float4(RenderTarget[index.xy].rgb * lightExtinction + lightInscatter, 1);
+	RenderTarget[WriteOffset + index.xy] = float4(RenderTarget[WriteOffset + index.xy].rgb * lightExtinction + lightInscatter, 1);
 
 	#else
 
@@ -231,7 +258,7 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		sum += (1 - sum.a) * localDensity;
 	}
 
-	RenderTarget[index.xy] = RenderTarget[index.xy] * (1 - sum.a) + sum * sum.a;
+	RenderTarget[WriteOffset + index.xy] = RenderTarget[WriteOffset + index.xy] * (1 - sum.a) + sum * sum.a;
 
 	#endif
 }
