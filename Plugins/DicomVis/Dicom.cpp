@@ -29,7 +29,7 @@ Slice ReadDicomSlice(const string& file) {
 
 Texture* Dicom::LoadDicomStack(const string& folder, Device* device, float3* size) {
 	double3 maxSpacing = 0;
-	vector<Slice> images;
+	vector<Slice> images = {};
 	for (const auto& p : fs::directory_iterator(folder))
 		if (p.path().extension().string() == ".dcm") {
 			images.push_back(ReadDicomSlice(p.path().string()));
@@ -45,6 +45,8 @@ Texture* Dicom::LoadDicomStack(const string& folder, Device* device, float3* siz
 	uint32_t w = images[0].image->getWidth();
 	uint32_t h = images[0].image->getHeight();
 	uint32_t d = (uint32_t)images.size();
+
+	if (w == 0 || h == 0) return nullptr;
 
 	// volume size in meters
 	if (size) {

@@ -130,7 +130,8 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 					const auto& mtype = comp.get_type(type.member_types[i]);
 
 					const string name = comp.get_member_name(r.base_type_id, index);
-					auto& range = dest.mPushConstants[name];
+					
+					VkPushConstantRange range = {};
 					range.stageFlags |= vkstage;
 					range.offset = comp.type_struct_member_offset(type, index);
 
@@ -165,13 +166,33 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 					case spirv_cross::SPIRType::SampledImage:
 					case spirv_cross::SPIRType::Sampler:
 					case spirv_cross::SPIRType::AccelerationStructureNV:
+						fprintf(stderr, "Unknown type for push constant: %s\n", name.c_str());
+						range.size = 0;
 						break;
 					}
+
 					range.size *= mtype.columns * mtype.vecsize;
+
+					vector<pair<string, VkPushConstantRange>> ranges;
+					ranges.push_back(make_pair(name, range));
+
+					for (uint32_t dim : mtype.array) {
+						for (auto& r : ranges)
+							r.second.size *= dim;
+						// TODO: support individual element ranges
+						//uint32_t sz = ranges.size();
+						//for (uint32_t j = 0; j < sz; j++)
+						//	for (uint32_t c = 0; c < dim; c++)
+						//		ranges.push_back(make_pair(ranges[j].first + "[" + to_string(c) + "]", range));
+					}
+
+					for (auto& r : ranges)
+						dest.mPushConstants[r.first] = r.second;
+
 					index++;
 				}
 			} else
-				printf("Push constant data is not a struct! Reflection will not work.\n");
+				fprintf(stderr, "Push constant data is not a struct! Reflection will not work.\n");
 		}
 		#pragma endregion
 		

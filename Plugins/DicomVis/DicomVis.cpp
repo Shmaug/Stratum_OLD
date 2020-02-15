@@ -24,10 +24,13 @@ private:
 
 	bool mLighting;
 	bool mPhysicalShading;
+	bool mColorize;
+	bool mInvert;
 	float mStepSize;
 	float mDensity;
 	float mRemapMin;
 	float mRemapMax;
+	float mCutoff;
 	float mVolumeScatter;
 	float mVolumeExtinction;
 
@@ -65,8 +68,9 @@ private:
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false),
-		mPhysicalShading(false), mLighting(false), mDensity(100.f), mRemapMin(.125f), mRemapMax(1.f), mStepSize(.001f),
+		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
+		mPhysicalShading(false), mLighting(false),
+		mDensity(100.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f),
 		mVolumeScatter(100.f), mVolumeExtinction(20.f) {
 		mEnabled = true;
 	}
@@ -165,7 +169,7 @@ public:
 		}
 
 		if (mInput->GetPointer(0)->mLastGuiHitT < 0) {
-			mZoom = clamp(mZoom - mInput->ScrollDelta() * .2f, -1.f, 5.f);
+			mZoom = clamp(mZoom - mInput->ScrollDelta() * .05f, -1.f, 5.f);
 			mMainCamera->LocalPosition(0, 1.6f, -mZoom);
 
 			if (mInput->KeyDown(MOUSE_LEFT)) {
@@ -287,7 +291,7 @@ public:
 			#endif
 		}
 
-		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 300, 300, 600), float4(.3f, .3f, .3f, 1), 10);
+		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 350, 300, 700), float4(.3f, .3f, .3f, 1), 10);
 
 		GUI::LayoutLabel(bld24, "Load DICOM", 24, 30, 0, 1);
 
@@ -299,6 +303,13 @@ public:
 				LoadVolume(commandBuffer, p);
 		GUI::EndLayout();
 
+		if (GUI::LayoutButton(sem16, "Colorize", 16, 24, mColorize ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
+			mColorize = !mColorize;
+			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
+				mFrameData[i].mBakeDirty = true;
+				mFrameData[i].mLightingDirty = true;
+			}
+		}
 		if (GUI::LayoutButton(sem16, "Lighting", 16, 24, mLighting ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mLighting = !mLighting;
 			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
@@ -308,6 +319,11 @@ public:
 			mPhysicalShading = !mPhysicalShading;
 			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
 				mFrameData[i].mLightingDirty = true;
+		}
+		if (GUI::LayoutButton(sem16, "Invert", 16, 24, mInvert ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
+			mInvert = !mInvert;
+			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+				mFrameData[i].mBakeDirty = true;
 		}
 
 		GUI::LayoutSeparator(.5f, 1, 8);
@@ -329,6 +345,21 @@ public:
 
 		GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mVolumeExtinction, 1, 200, 16, float4(.5f, .5f, .5f, 1), 4))
+			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+				mFrameData[i].mLightingDirty = true;
+
+		GUI::LayoutLabel(sem16, "Remap Min: " + to_string(mRemapMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+		if (GUI::LayoutSlider(mRemapMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4))
+			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+				mFrameData[i].mLightingDirty = true;
+
+		GUI::LayoutLabel(sem16, "Remap Max: " + to_string(mRemapMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+		if (GUI::LayoutSlider(mRemapMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4))
+			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
+				mFrameData[i].mLightingDirty = true;
+
+		GUI::LayoutLabel(sem16, "Cutoff: " + to_string(mCutoff), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+		if (GUI::LayoutSlider(mCutoff, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4))
 			for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
 				mFrameData[i].mLightingDirty = true;
 
@@ -355,8 +386,12 @@ public:
 		}
 		
 		float2 res(camera->FramebufferWidth(), camera->FramebufferHeight());
-		float4x4 ivp = camera->InverseViewProjection();
-		float3 cp = camera->WorldPosition();
+		float4x4 ivp[2];
+		ivp[0] = camera->InverseViewProjection(EYE_LEFT);
+		ivp[1] = camera->InverseViewProjection(EYE_RIGHT);
+		float3 cp[2];
+		cp[0] = camera->InverseView(EYE_LEFT)[3].xyz;
+		cp[1] = camera->InverseView(EYE_RIGHT)[3].xyz;
 		float4 ivr = inverse(mVolumeRotation).xyzw;
 		float3 ivs = 1.f / mVolumeScale;
 		float far = camera->Far();
@@ -370,6 +405,7 @@ public:
 			// Copy volume
 			set<string> kw;
 			if (mRawMask) kw.emplace("READ_MASK");
+			if (mInvert) kw.emplace("INVERT");
 			ComputeShader* copy = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("CopyRaw", kw);
 			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copy->mPipeline);
 			
@@ -390,7 +426,8 @@ public:
 		// precompute optical density	
 		if (fd.mLightingDirty && (mPhysicalShading || mLighting)) {
 			set<string> kw;
-			if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");		
+			if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
+			if (mColorize) kw.emplace("COLORIZE");
 			ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("ComputeOpticalDensity", kw);
 			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
 			
@@ -411,6 +448,7 @@ public:
 
 			commandBuffer->PushConstant(process, "RemapMin", &mRemapMin);
 			commandBuffer->PushConstant(process, "InvRemapRange", &remapRange);
+			commandBuffer->PushConstant(process, "Cutoff", &mCutoff);
 			commandBuffer->PushConstant(process, "Density", &mDensity);
 
 			commandBuffer->PushConstant(process, "StepSize", &mStepSize);
@@ -431,6 +469,7 @@ public:
 		set<string> kw;
 		if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
 		else if (mLighting) kw.emplace("LIGHTING");
+		if (mColorize) kw.emplace("COLORIZE");
 		ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipeline);
 		
@@ -442,18 +481,20 @@ public:
 		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), draw->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), draw->mDescriptorBindings.at("NoiseTex").second.binding);
 		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-		commandBuffer->PushConstant(draw, "VolumePosition", &mVolumePosition);
+		uint2 wo(0);
+		float3 vp = mVolumePosition - camera->WorldPosition();
+
+		commandBuffer->PushConstant(draw, "VolumePosition", &vp);
 		commandBuffer->PushConstant(draw, "InvVolumeRotation", &ivr);
 		commandBuffer->PushConstant(draw, "InvVolumeScale", &ivs);
-		commandBuffer->PushConstant(draw, "InvViewProj", &ivp);
-		commandBuffer->PushConstant(draw, "CameraPosition", &cp);
-		commandBuffer->PushConstant(draw, "ScreenResolution", &res);
 		commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
 		commandBuffer->PushConstant(draw, "Far", &far);
 		
 		commandBuffer->PushConstant(draw, "RemapMin", &mRemapMin);
 		commandBuffer->PushConstant(draw, "InvRemapRange", &remapRange);
+		commandBuffer->PushConstant(draw, "Cutoff", &mCutoff);
 		commandBuffer->PushConstant(draw, "Density", &mDensity);
 		commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
 		commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
@@ -461,8 +502,41 @@ public:
 		commandBuffer->PushConstant(draw, "StepSize", &mStepSize);
 		commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
 
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-		vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+		switch (camera->StereoMode()) {
+		case STEREO_NONE:
+			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+			break;
+		case STEREO_SBS_HORIZONTAL:
+			res.x *= .5f;
+			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() / 2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+			wo.x = camera->FramebufferWidth() / 2;
+			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
+			commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
+			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+			break;
+		case STEREO_SBS_VERTICAL:
+			res.y *= .5f;
+			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
+			wo.y = camera->FramebufferWidth() / 2;
+			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
+			commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
+			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
+			break;
+		}
 
 		#pragma endregion
 
@@ -471,16 +545,24 @@ public:
 	
 	void LoadVolume(CommandBuffer* commandBuffer, const fs::path& folder){
 		safe_delete(mRawVolume);
+		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
+			safe_delete(mFrameData[i].mBakedVolume);
+			safe_delete(mFrameData[i].mOpticalDensity);
+		}
 
+		Texture* img = Dicom::LoadDicomStack(folder.string(), mScene->Instance()->Device(), &mVolumeScale);
+		if (!img) {
+			fprintf_color(COLOR_RED, stderr, "Failed to load volume!\n");
+			return;
+		}
+		
 		mVolumeRotation = quaternion(0,0,0,1);
 		mVolumePosition = float3(0, 1.6f, 0);
-		mRawVolume = Dicom::LoadDicomStack(folder.string(), mScene->Instance()->Device(), &mVolumeScale);
+		mRawVolume = img;
 		mRawVolumeNew = true;
 
 		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
 			FrameData& fd = mFrameData[i];
-			safe_delete(fd.mBakedVolume);
-			safe_delete(fd.mOpticalDensity);
 			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mOpticalDensity = new Texture("Baked Optical Density", mScene->Instance()->Device(), mRawVolume->Width()/2, mRawVolume->Height()/2, mRawVolume->Depth()/2, VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mImagesNew = true;
