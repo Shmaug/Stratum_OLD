@@ -20,12 +20,6 @@ class Device;
 
 class Instance {
 public:
-	struct DisplayCreateInfo {
-		uint32_t mDeviceIndex;
-		VkRect2D mWindowPosition;
-		std::string mXDisplay;
-	};
-
 	ENGINE_EXPORT ~Instance();
 
 	inline ::Device* Device() const { return mDevice; }
@@ -37,11 +31,13 @@ public:
 
 	inline uint32_t MaxFramesInFlight() const { return mMaxFramesInFlight; }
 
+	inline const std::vector<std::string>& CommandLineArguments() const { return mCmdArguments; }
+
 	inline operator VkInstance() const { return mInstance; }
 
 private:
 	friend class Stratum;
-	ENGINE_EXPORT Instance(const DisplayCreateInfo& display);
+	ENGINE_EXPORT Instance(int argc, char** argv);
 
 	ENGINE_EXPORT bool PollEvents();
 	ENGINE_EXPORT void AdvanceFrame();
@@ -55,11 +51,17 @@ private:
 
 	VkInstance mInstance;
 
+	#ifdef ENABLE_DEBUG_LAYERS
+	VkDebugUtilsMessengerEXT mDebugMessenger;
+	#endif
+
 	std::chrono::high_resolution_clock mClock;
 	std::chrono::high_resolution_clock::time_point mStartTime;
 	std::chrono::high_resolution_clock::time_point mLastFrame;
 	float mTotalTime;
 	float mDeltaTime;
+
+	std::vector<std::string> mCmdArguments;
 
 	bool mDestroyPending;
 	#ifdef __linux
