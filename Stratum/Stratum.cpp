@@ -17,35 +17,6 @@
 
 using namespace std;
 
-// Debug messenger functions
-#ifdef ENABLE_DEBUG_LAYERS
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
-	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-		fprintf_color(COLOR_RED_BOLD, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-		throw;
-	} else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		if (strcmp("UNASSIGNED-CoreValidation-Shader-OutputNotConsumed", pCallbackData->pMessageIdName) == 0) return VK_FALSE;
-		if (strcmp("UNASSIGNED-CoreValidation-DrawState-ClearCmdBeforeDraw", pCallbackData->pMessageIdName) == 0) return VK_FALSE;
-		fprintf_color(COLOR_YELLOW_BOLD, stderr, "%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-	} else
-		printf("%s: %s\n", pCallbackData->pMessageIdName, pCallbackData->pMessage);
-
-	return VK_FALSE;
-}
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
-	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-	if (func != nullptr)
-		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-	else
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
-	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-	if (func != nullptr)
-		func(instance, debugMessenger, pAllocator);
-}
-#endif
-
 class Stratum {
 private:
 	Instance* mInstance;
@@ -53,10 +24,6 @@ private:
 	PluginManager* mPluginManager;
 	AssetManager* mAssetManager;
 	Scene* mScene;
-
-	#ifdef ENABLE_DEBUG_LAYERS
-	VkDebugUtilsMessengerEXT mDebugMessenger;
-	#endif
 
 	void Render() {
 		PROFILER_BEGIN("Get CommandBuffers");
@@ -111,35 +78,13 @@ private:
 	}
 
 public:
-	Stratum(const Instance::DisplayCreateInfo& display, bool debugMessenger) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
-#ifdef ENABLE_DEBUG_LAYERS
-		, mDebugMessenger(VK_NULL_HANDLE)
-#endif
+	Stratum(int argc, char** argv) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
 	{
 		printf("Initializing...\n");
-		mInstance = new Instance(display);
+		mInstance = new Instance(argc, argv);
 		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
 		mAssetManager = new AssetManager(mInstance->Device());
-		
-		#ifdef ENABLE_DEBUG_LAYERS
-		if (debugMessenger) {
-			VkDebugUtilsMessengerCreateInfoEXT msgr = {};
-			msgr.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-			msgr.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-			msgr.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-			msgr.pfnUserCallback = DebugCallback;
-			printf("Creating debug messenger... ");
-			VkResult result = CreateDebugUtilsMessengerEXT(*mInstance, &msgr, nullptr, &mDebugMessenger);
-			if (result == VK_SUCCESS)
-				fprintf_color(COLOR_GREEN, stdout, "Success.\n");
-			else {
-				fprintf_color(COLOR_RED, stderr, "Failed.\n");
-				mDebugMessenger = VK_NULL_HANDLE;
-			}
-		}
-		#endif
-
 		printf("Initialized.\n");
 
 		mScene = new Scene(mInstance, mAssetManager, mInputManager, mPluginManager);
@@ -191,10 +136,6 @@ public:
 		Gizmos::Destroy(mInstance->Device());
 		safe_delete(mScene);
 
-		#ifdef ENABLE_DEBUG_LAYERS
-		if (mDebugMessenger != VK_NULL_HANDLE) DestroyDebugUtilsMessengerEXT(*mInstance, mDebugMessenger, nullptr);
-		#endif
-
 		safe_delete(mAssetManager);
 		safe_delete(mInputManager);
 		safe_delete(mInstance);
@@ -209,18 +150,8 @@ int main(int argc, char* argv[]) {
 			cerr << "WSAStartup failed" << endl;
 		#endif
 
-		Instance::DisplayCreateInfo display = {};
-		display.mDeviceIndex = 0;
-		display.mWindowPosition = { { 160, 90 }, { 1600, 900 }};
-		display.mXDisplay = "";
-		bool debugMessenger = true;
-		
-		for (int i = 1; i < argc; i++){
-			if (strcmp(argv[i], "-nodebug") == 0) debugMessenger = false;
-		}
-
 		// create, run, and delete the engine all in one line :)
-		delete (new Stratum(display, debugMessenger))->Loop();
+		delete (new Stratum(argc, argv))->Loop();
 
 		#ifdef WINDOWS
 		WSACleanup();
