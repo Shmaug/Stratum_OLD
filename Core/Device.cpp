@@ -83,7 +83,7 @@ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, ui
 	return g && p;
 }
 
-Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, vector<const char*> deviceExtensions, vector<const char*> validationLayers)
+Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, const set<string>& deviceExtensions, vector<const char*> validationLayers)
 	: mInstance(instance), mFrameContexts(nullptr), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
 
 	#ifdef ENABLE_DEBUG_LAYERS
@@ -95,6 +95,10 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	mPhysicalDevice = physicalDevice;
 	mMaxMSAASamples = GetMaxUsableSampleCount();
 	mPhysicalDeviceIndex = physicalDeviceIndex;
+
+	vector<const char*> deviceExts;
+	for (const string& s : deviceExtensions)
+		deviceExts.push_back(s.c_str());
 
 	#pragma region get queue info
 	set<uint32_t> uniqueQueueFamilies{ mGraphicsQueueFamily, mPresentQueueFamily };
@@ -129,8 +133,8 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	createInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.pEnabledFeatures = &deviceFeatures;
-	createInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
-	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+	createInfo.enabledExtensionCount = (uint32_t)deviceExts.size();
+	createInfo.ppEnabledExtensionNames = deviceExts.data();
 	createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
 	createInfo.ppEnabledLayerNames = validationLayers.data();
 	createInfo.pNext = &indexingFeatures;

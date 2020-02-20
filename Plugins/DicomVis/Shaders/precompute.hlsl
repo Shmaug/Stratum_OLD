@@ -105,7 +105,7 @@ void CopyRaw(uint3 index : SV_DispatchThreadID) {
 	float4 col = float4(Transfer(r), r);
 	#endif
 
-	#if defined(READ_MASK)
+	#ifdef READ_MASK
 	col.a *= RawMask[index.xyz];
 	#endif
 
@@ -133,5 +133,48 @@ void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
 		ro += ld;
 	}
 
-	BakedOpticalDensity[index.xyz] = opticalDensity * Density * StepSize * length(LightDirection);
+	BakedOpticalDensity[index.xyz] = opticalDensity * Density * length(ld);
+	/*
+	AllMemoryBarrierWithGroupSync();
+
+	const static float kernel[7] = { 0.00598, 0.060626, 0.241843, 0.383103, 0.241843, 0.060626, 0.00598 };
+
+	float value = 0;
+	value += BakedOpticalDensity[index.xyz + int3(-3, 0, 0)] * kernel[0];
+	value += BakedOpticalDensity[index.xyz + int3(-2, 0, 0)] * kernel[1];
+	value += BakedOpticalDensity[index.xyz + int3(-1, 0, 0)] * kernel[2];
+	value += BakedOpticalDensity[index.xyz + int3( 0, 0, 0)] * kernel[3];
+	value += BakedOpticalDensity[index.xyz + int3(-1, 0, 0)] * kernel[4];
+	value += BakedOpticalDensity[index.xyz + int3(-2, 0, 0)] * kernel[5];
+	value += BakedOpticalDensity[index.xyz + int3(-3, 0, 0)] * kernel[6];
+
+	AllMemoryBarrierWithGroupSync();
+	BakedOpticalDensity[index.xyz] = value;
+	AllMemoryBarrierWithGroupSync();
+
+	value = 0;
+	value += BakedOpticalDensity[index.xyz + int3(0, -3, 0)] * kernel[0];
+	value += BakedOpticalDensity[index.xyz + int3(0, -2, 0)] * kernel[1];
+	value += BakedOpticalDensity[index.xyz + int3(0, -1, 0)] * kernel[2];
+	value += BakedOpticalDensity[index.xyz + int3(0,  0, 0)] * kernel[3];
+	value += BakedOpticalDensity[index.xyz + int3(0, -1, 0)] * kernel[4];
+	value += BakedOpticalDensity[index.xyz + int3(0, -2, 0)] * kernel[5];
+	value += BakedOpticalDensity[index.xyz + int3(0, -3, 0)] * kernel[6];
+
+	AllMemoryBarrierWithGroupSync();
+	BakedOpticalDensity[index.xyz] = value;
+	AllMemoryBarrierWithGroupSync();
+	
+	value = 0;
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -3)] * kernel[0];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -2)] * kernel[1];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -1)] * kernel[2];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0,  0)] * kernel[3];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -1)] * kernel[4];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -2)] * kernel[5];
+	value += BakedOpticalDensity[index.xyz + int3(0, 0, -3)] * kernel[6];
+
+	AllMemoryBarrierWithGroupSync();
+	BakedOpticalDensity[index.xyz] = value;
+	*/
 }

@@ -81,9 +81,9 @@ public:
 	Stratum(int argc, char** argv) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
 	{
 		printf("Initializing...\n");
-		mInstance = new Instance(argc, argv);
-		mInputManager = new InputManager();
 		mPluginManager = new PluginManager();
+		mInstance = new Instance(argc, argv, mPluginManager);
+		mInputManager = new InputManager();
 		mAssetManager = new AssetManager(mInstance->Device());
 		printf("Initialized.\n");
 

@@ -83,7 +83,9 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 
 	mTargetWindow->mTargetCamera = this;
 
-	vector<VkFormat> colorFormats{ targetWindow->Format().format, VK_FORMAT_R16G16B16A16_SFLOAT };
+	VkFormat fmt = targetWindow->Format().format;
+
+	vector<VkFormat> colorFormats{ fmt, VK_FORMAT_R16G16B16A16_SFLOAT };
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];

@@ -76,7 +76,7 @@ v2f vsmain(uint index : SV_VertexID, uint instance : SV_InstanceID) {
 	float4 worldPos = mul(mul(ct, r.ObjectToWorld), float4(p, 0, 1.0));
 	o.position = mul(STRATUM_MATRIX_VP, worldPos);
 	StratumOffsetClipPosStereo(o.position);
-	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
+	o.worldPos = float4(worldPos.xyz, o.position.z);
 	#endif
 
 	#ifdef TEXTURED
