@@ -132,7 +132,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 					const string name = comp.get_member_name(r.base_type_id, index);
 					
 					VkPushConstantRange range = {};
-					range.stageFlags |= vkstage;
+					range.stageFlags = vkstage == VK_SHADER_STAGE_COMPUTE_BIT ? VK_SHADER_STAGE_COMPUTE_BIT : (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 					range.offset = comp.type_struct_member_offset(type, index);
 
 					switch (mtype.basetype) {

@@ -167,5 +167,5 @@ void fsmain(
 	color = float4(AmbientLight, 1);
 #endif
 
-	depthNormal = 1;
+	depthNormal = float4(normalize(float3(1)) * Camera.Viewport.w, 1);
 }

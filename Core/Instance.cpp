@@ -3,6 +3,7 @@
 #include <Core/Window.hpp>
 #include <Scene/Camera.hpp>
 #include <Util/Profiler.hpp>
+#include <Core/PluginManager.hpp>
 
 using namespace std;
 
@@ -59,7 +60,7 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 }
 #endif
 
-Instance::Instance(int argc, char** argv)
+Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 	: mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0), mWindow(nullptr), mWindowInput(nullptr), mDestroyPending(false)
 	#ifdef ENABLE_DEBUG_LAYERS
 	, mDebugMessenger(VK_NULL_HANDLE)
@@ -86,14 +87,15 @@ Instance::Instance(int argc, char** argv)
 
 	memset(const_cast<ProfilerSample*>(Profiler::Frames()), 0, sizeof(ProfilerSample)* PROFILER_FRAME_COUNT);
 
-	vector<const char*> deviceExtensions {
+	mInstanceExtensions  = { VK_KHR_SURFACE_EXTENSION_NAME };
+	mDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 	};
+
 	vector<const char*> validationLayers;
-	set<string> instanceExtensions { VK_KHR_SURFACE_EXTENSION_NAME };
 	#ifdef ENABLE_DEBUG_LAYERS
-	instanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	mInstanceExtensions.insert(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
 	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
 	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
@@ -104,8 +106,11 @@ Instance::Instance(int argc, char** argv)
 	instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
 	instanceExtensions.insert(VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME);
 	#else
-	instanceExtensions.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+	mInstanceExtensions.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	#endif
+
+	for (EnginePlugin* p : pluginManager->Plugins())
+		p->PreInit(this);
 
 	#pragma region Create Vulkan Instance
 
@@ -138,7 +143,7 @@ Instance::Instance(int argc, char** argv)
 	appInfo.apiVersion = VK_API_VERSION_1_1;
 
 	vector<const char*> exts;
-	for (const string& s : instanceExtensions)
+	for (const string& s : mInstanceExtensions)
 		exts.push_back(s.c_str());
 
 	VkInstanceCreateInfo createInfo = {};
@@ -153,7 +158,6 @@ Instance::Instance(int argc, char** argv)
 	printf("Done.\n");
 
 	#pragma endregion
-
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	if (debugMessenger) {
@@ -172,7 +176,6 @@ Instance::Instance(int argc, char** argv)
 		}
 	}
 	#endif
-
 
 	#ifdef WINDOWS
 	HINSTANCE hInstance = GetModuleHandleA(NULL);
@@ -223,7 +226,6 @@ Instance::Instance(int argc, char** argv)
 	vector<VkPhysicalDevice> devices(deviceCount);
 	ThrowIfFailed(vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data()), "vkEnumeratePhysicalDevices failed");
 
-
 	#pragma region Create Windows
 	if (deviceIndex >= devices.size()){
 		fprintf_color(COLOR_RED, stderr, "Device index out of bounds: %u\n", deviceIndex);
@@ -271,7 +273,7 @@ Instance::Instance(int argc, char** argv)
 
 	uint32_t graphicsQueue, presentQueue;
 	Device::FindQueueFamilies(physicalDevice, mWindow->Surface(), graphicsQueue, presentQueue);
-	mDevice = new ::Device(this, physicalDevice, deviceIndex, graphicsQueue, presentQueue, deviceExtensions, validationLayers);
+	mDevice = new ::Device(this, physicalDevice, deviceIndex, graphicsQueue, presentQueue, mDeviceExtensions, validationLayers);
 
 	mWindow->CreateSwapchain(mDevice);
 	mMaxFramesInFlight = mWindow->mImageCount;

@@ -17,6 +17,7 @@ namespace x11{
 
 class Window;
 class Device;
+class PluginManager;
 
 class Instance {
 public:
@@ -35,14 +36,20 @@ public:
 
 	inline operator VkInstance() const { return mInstance; }
 
+	ENGINE_EXPORT void RequestInstanceExtension(const std::string& name);
+	ENGINE_EXPORT void RequestDeviceExtension(const std::string& name);
+
 private:
 	friend class Stratum;
-	ENGINE_EXPORT Instance(int argc, char** argv);
+	ENGINE_EXPORT Instance(int argc, char** argv, PluginManager* pluginManager);
 
 	ENGINE_EXPORT bool PollEvents();
 	ENGINE_EXPORT void AdvanceFrame();
 
 	MouseKeyboardInput* mWindowInput;
+
+	std::set<std::string> mInstanceExtensions;
+	std::set<std::string> mDeviceExtensions;
 
 	::Device* mDevice;
 	::Window* mWindow;

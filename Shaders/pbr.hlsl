@@ -43,8 +43,7 @@
 [[vk::binding(BINDING_START + 9, PER_MATERIAL)]] SamplerState AtmosphereSampler : register(s2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	uint TextureIndex;
-	float4 TextureST;
+	STRATUM_PUSH_CONSTANTS
 
 	float4 Color;
 	float Metallic;
@@ -52,7 +51,8 @@
 	float BumpStrength;
 	float3 Emission;
 
-	STRATUM_PUSH_CONSTANTS
+	uint TextureIndex;
+	float4 TextureST;
 };
 
 //#define SHOW_CASCADE_SPLITS
@@ -92,7 +92,7 @@ v2f vsmain(
 
 	o.position = mul(STRATUM_MATRIX_VP, worldPos);
 	StratumOffsetClipPosStereo(o.position);
-	o.worldPos = float4(worldPos.xyz, LinearDepth01(o.position.z));
+	o.worldPos = float4(worldPos.xyz, o.position.z);
 	
 	o.screenPos = ComputeScreenPos(o.position);
 	o.normal = mul(float4(normal, 1), Instances[instance].WorldToObject).xyz;
@@ -117,6 +117,7 @@ float fsdepth(in float4 worldPos : TEXCOORD0) : SV_Target0 {
 void fsmain(v2f i,
 	out float4 color : SV_Target0,
 	out float4 depthNormal : SV_Target1) {
+	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, 1);
 
 	float3 view = ComputeView(i.worldPos.xyz, i.screenPos);
 
@@ -160,6 +161,5 @@ void fsmain(v2f i,
 	#endif
 
 	color = float4(eval, col.a);
-
-	depthNormal = float4(normalize(cross(ddx(i.worldPos.xyz), ddy(i.worldPos.xyz))) * i.worldPos.w, color.a);
+	depthNormal.a = col.a;
 }

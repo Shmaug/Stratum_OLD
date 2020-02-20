@@ -8,8 +8,8 @@
 
 #define PI 3.1415926535897932
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> RenderTarget : register(u5);
-[[vk::binding(1, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
+[[vk::binding(0, 0)]] RWTexture2D<float4> RenderTarget : register(u0);
+[[vk::binding(1, 0)]] RWTexture2D<float4> DepthNormal : register(u1);
 
 [[vk::binding(2, 0)]] Texture3D<float4> BakedVolumeS : register(t0);
 [[vk::binding(3, 0)]] Texture3D<float> BakedOpticalDensityS : register(t1);
@@ -26,7 +26,6 @@
 	float3 VolumePosition;
 	float4 InvVolumeRotation;
 	float3 InvVolumeScale;
-	float Far;
 	uint2 WriteOffset;
 
 	float3 LightColor;
@@ -39,6 +38,7 @@
 	float Density;
 	float Scattering;
 	float Extinction;
+	float HG;
 
 	float StepSize;
 	uint FrameIndex;
@@ -66,7 +66,7 @@ float3 WorldToVolumeV(float3 vec) {
 #ifdef PHYSICAL_SHADING
 float3 Sample(float3 p) {
 	float4 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
-	return s.rgb *  (Density * s.a);
+	return s.rgb * (Density * s.a);
 }
 #else
 float4 Sample(float3 p) {
@@ -81,21 +81,25 @@ float HenyeyGreenstein(float angle, float g) {
 
 [numthreads(8, 8, 1)]
 void Draw(uint3 index : SV_DispatchThreadID) {
+	float2 clip = 2 * index.xy / ScreenResolution - 1;
+
+	float4 unprojected = mul(InvViewProj, float4(clip, 0, 1));
+
 	float3 ro = CameraPosition;
-	float4 unprojected = mul(InvViewProj, float4(2 * index.xy / ScreenResolution - 1, 0, 1));
-	float3 rd = normalize(unprojected.xyz / unprojected.w - ro);
+	float3 rd = unprojected.xyz / unprojected.w - ro;
+	rd = normalize(rd);
 
-	float rdl = saturate(dot(rd, LightDirection));
+	float3 f = WorldToVolume(ro + rd * length(DepthNormal[WriteOffset + index.xy].xyz));
 
-	float3 f = ro + rd * length(DepthNormal[WriteOffset + index.xy].xyz)*Far;
-
+	float rdl = dot(rd, LightDirection);
+	
 	ro = WorldToVolume(ro);
 	rd = WorldToVolumeV(rd);
-	f  = WorldToVolume(f);
 
 	float2 isect = RayBox(ro, rd, -.5, .5);
 	isect.x = max(0, isect.x);
 	isect.y = min(isect.y, length(f - ro));
+
 	if (isect.x >= isect.y) return;
 	
 	// jitter samples
@@ -132,7 +136,8 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		t += StepSize;
 	}
 
-	scatter *= scaledStep * HenyeyGreenstein(rdl, .5);
+	scatter *= scaledStep * HenyeyGreenstein(rdl, HG);
+
 	float3 lightInscatter = scatter * Scattering * LightColor.xyz;
 	float3 lightExtinction = exp(-opticalDensity * Extinction);
 

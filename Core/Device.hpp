@@ -69,7 +69,7 @@ private:
 	friend class DescriptorSet;
 	friend class CommandBuffer;
 	friend class ::Instance;
-	ENGINE_EXPORT Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueue, uint32_t presentQueue, std::vector<const char*> deviceExtensions, std::vector<const char*> validationLayers);
+	ENGINE_EXPORT Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueue, uint32_t presentQueue, const std::set<std::string>& deviceExtensions, std::vector<const char*> validationLayers);
 
 	::Instance* mInstance;
 	uint32_t mFrameContextIndex; // assigned by mInstance

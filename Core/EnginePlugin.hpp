@@ -5,12 +5,16 @@
 
 class Scene;
 class Camera;
+class Instance;
 
 class EnginePlugin {
 public:
 	bool mEnabled;
 
 	inline virtual ~EnginePlugin() {}
+	
+	/// Used to request features prior to Vulkan initialization, such as instance and device extensions
+	inline virtual void PreInit(Instance* instance) {};
 	
 	inline virtual bool Init(Scene* scene) { return true; }
 	
