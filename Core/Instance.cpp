@@ -109,7 +109,7 @@ Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 	#endif
 
 	for (EnginePlugin* p : pluginManager->Plugins())
-		p->PreInit(this);
+		p->PreInstanceInit(this);
 
 	#pragma region Create Vulkan Instance
 
@@ -231,6 +231,9 @@ Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 		throw;
 	}
 	VkPhysicalDevice physicalDevice = devices[deviceIndex];
+
+	for (EnginePlugin* p : pluginManager->Plugins())
+		p->PreDeviceInit(this, physicalDevice);
 
 	#ifdef __linux
 	// create xcb connection
