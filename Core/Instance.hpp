@@ -36,8 +36,8 @@ public:
 
 	inline operator VkInstance() const { return mInstance; }
 
-	ENGINE_EXPORT void RequestInstanceExtension(const std::string& name);
-	ENGINE_EXPORT void RequestDeviceExtension(const std::string& name);
+	inline void RequestInstanceExtension(const std::string& name) { mInstanceExtensions.emplace(name); }
+	inline void RequestDeviceExtension(const std::string& name) { mDeviceExtensions.emplace(name); }
 
 private:
 	friend class Stratum;

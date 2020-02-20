@@ -1,6 +1,5 @@
 #pragma kernel Draw
 
-#pragma multi_compile LIGHTING
 #pragma multi_compile PHYSICAL_SHADING
 #pragma multi_compile SBS_HORIZONTAL SBS_VERTICAL
 
@@ -11,8 +10,8 @@
 [[vk::binding(0, 0)]] RWTexture2D<float4> RenderTarget : register(u0);
 [[vk::binding(1, 0)]] RWTexture2D<float4> DepthNormal : register(u1);
 
-[[vk::binding(2, 0)]] Texture3D<float4> BakedVolumeS : register(t0);
-[[vk::binding(3, 0)]] Texture3D<float> BakedOpticalDensityS : register(t1);
+[[vk::binding(2, 0)]] Texture3D<float4> BakedVolume : register(t0);
+[[vk::binding(3, 0)]] Texture3D<float3> BakedInscatter : register(t1);
 
 [[vk::binding(4, 0)]] Texture2D<float4> NoiseTex : register(t2);
 [[vk::binding(5, 0)]] SamplerState Sampler : register(s0);
@@ -27,9 +26,6 @@
 	float4 InvVolumeRotation;
 	float3 InvVolumeScale;
 	uint2 WriteOffset;
-
-	float3 LightColor;
-	float3 LightDirection;
 
 	float RemapMin;
 	float InvRemapRange;
@@ -65,12 +61,12 @@ float3 WorldToVolumeV(float3 vec) {
 
 #ifdef PHYSICAL_SHADING
 float3 Sample(float3 p) {
-	float4 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	float4 s = BakedVolume.SampleLevel(Sampler, p, 0);
 	return s.rgb * (Density * s.a);
 }
 #else
 float4 Sample(float3 p) {
-	float4 s = BakedVolumeS.SampleLevel(Sampler, p, 0);
+	float4 s = BakedVolume.SampleLevel(Sampler, p, 0);
 	return float4(s.rgb, s.a * Density);
 }
 #endif
@@ -91,8 +87,6 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 
 	float3 f = WorldToVolume(ro + rd * length(DepthNormal[WriteOffset + index.xy].xyz));
 
-	float rdl = dot(rd, LightDirection);
-	
 	ro = WorldToVolume(ro);
 	rd = WorldToVolumeV(rd);
 
@@ -103,8 +97,7 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	if (isect.x >= isect.y) return;
 	
 	// jitter samples
-	float2 jitter = NoiseTex.Load(uint3((index.xy ^ FrameIndex + FrameIndex) % 256, 0)).xy;
-	isect.x -= StepSize * jitter.x;
+	isect.x -= StepSize * NoiseTex.Load(uint3((index.xy ^ FrameIndex + FrameIndex) % 256, 0)).x;
 
 	ro += .5;
 	ro += rd * isect.x;
@@ -115,52 +108,38 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	float scaledStep = StepSize * length(rd / InvVolumeScale) / 2;
 
 	float3 opticalDensity = 0;
-	float3 scatter = 0;
-	float3 prevDensity = 0;
-	float3 prevScatter = 0;
+	float3 inscatter = 0;
+
+	float exStep = scaledStep * Extinction;
+
+	float3 sp = ro + rd * StepSize;
+	float3 rstep = rd * StepSize;
 
 	for (float t = StepSize; t < isect.y;) {
-		float3 sp = ro + rd * t;
-
-		float3 localDensity = Sample(sp);
-		opticalDensity += (localDensity + prevDensity) * scaledStep;
-		prevDensity = localDensity;
-
-		float densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0);
-		float3 densityCPA = opticalDensity + densityPA;
-		float3 localInscatter = localDensity * exp(-densityCPA * Extinction);
-
-		scatter += localInscatter + prevScatter;
-		prevScatter = localInscatter;
+		opticalDensity += Sample(sp) * exStep;
+		inscatter += BakedInscatter.SampleLevel(Sampler, sp, 0) * exp(-opticalDensity);
 
 		t += StepSize;
+		sp += rstep;
 	}
 
-	scatter *= scaledStep * HenyeyGreenstein(rdl, HG);
-
-	float3 lightInscatter = scatter * Scattering * LightColor.xyz;
-	float3 lightExtinction = exp(-opticalDensity * Extinction);
+	float3 lightInscatter = inscatter * scaledStep * Scattering;
+	float3 lightExtinction = exp(-opticalDensity);
 
 	RenderTarget[WriteOffset + index.xy] = float4(RenderTarget[WriteOffset + index.xy].rgb * lightExtinction + lightInscatter, 1);
 
 	#else
 
+	// traditional alpha blending
 	float4 sum = 0;
-
 	for (float t = StepSize; t < isect.y; t += StepSize) {
 		float3 sp = ro + rd * t;
 		float4 localDensity = Sample(sp);
 		localDensity.a *= StepSize;
 
-		#ifdef LIGHTING
-		float densityPA = BakedOpticalDensityS.SampleLevel(Sampler, sp, 0);
-		localDensity.rgb *= exp(-densityPA * Extinction);
-		#endif
-
 		localDensity.rgb *= localDensity.a;
 		sum += (1 - sum.a) * localDensity;
 	}
-
 	RenderTarget[WriteOffset + index.xy] = RenderTarget[WriteOffset + index.xy] * (1 - sum.a) + sum * sum.a;
 
 	#endif
