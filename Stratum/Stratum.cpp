@@ -116,7 +116,7 @@ public:
 
 			mScene->Update();
 			Render();
-
+			mScene->PreSwap();
 			mInstance->AdvanceFrame();
 
 			#ifdef PROFILER_ENABLE

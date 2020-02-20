@@ -336,6 +336,14 @@ void Scene::Update() {
 	PROFILER_END;
 }
 
+void Scene::PreSwap() {
+	PROFILER_BEGIN("PostRender");
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled)
+			p->PreSwap();
+	PROFILER_END;
+}
+
 void Scene::AddObject(shared_ptr<Object> object) {
 	mObjects.push_back(object);
 	object->mScene = this;

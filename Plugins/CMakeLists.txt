@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 2.8)
 
-add_subdirectory("DicomVis/")
+add_subdirectory("OpenVR/")
+#add_subdirectory("DicomVis/")
 #add_subdirectory("TerrainSystem/")
 
 #add_subdirectory("CameraControl/")
