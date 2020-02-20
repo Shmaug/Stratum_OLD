@@ -21,6 +21,9 @@ public:
 	inline virtual void PreUpdate () {}
 	inline virtual void Update	  () {}
 	inline virtual void PostUpdate() {}
+
+	// Called before a camera presents to a window, after the command buffer has been submitted
+	inline virtual void PreSwap   () {}
 	
 	/// Called before a camera starts rendering, before BeginRenderPass
 	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
