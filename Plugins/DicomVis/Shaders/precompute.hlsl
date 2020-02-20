@@ -1,5 +1,5 @@
 #pragma kernel CopyRaw
-#pragma kernel ComputeOpticalDensity
+#pragma kernel ComputeInscatter
 
 #pragma multi_compile READ_MASK
 #pragma multi_compile INVERT
@@ -12,33 +12,35 @@
 #else
 [[vk::binding(0, 0)]] RWTexture3D<float> RawVolume : register(u0);
 #endif
-[[vk::binding(1, 0)]] RWTexture3D<float> RawMask : register(u2);
-[[vk::binding(2, 0)]] RWTexture3D<float4> BakedVolume : register(u3);
-[[vk::binding(3, 0)]] RWTexture3D<float> BakedOpticalDensity : register(u4);
+[[vk::binding(1, 0)]] RWTexture3D<uint> RawMask : register(u1);
+[[vk::binding(2, 0)]] RWTexture3D<float4> BakedVolume : register(u2);
+[[vk::binding(3, 0)]] RWTexture3D<float3> PrevBakedInscatter : register(u3);
+[[vk::binding(4, 0)]] RWTexture3D<float3> BakedInscatter : register(u4);
 
-[[vk::binding(4, 0)]] Texture3D<float4> BakedVolumeS : register(t0);
+[[vk::binding(5, 0)]] Texture3D<float4> BakedVolumeS : register(t0);
 
-[[vk::binding(5, 0)]] RWTexture2D<float4> RenderTarget : register(u5);
-[[vk::binding(6, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
+[[vk::binding(6, 0)]] RWTexture2D<float4> RenderTarget : register(u5);
+[[vk::binding(7, 0)]] RWTexture2D<float4> DepthNormal : register(u6);
 
-[[vk::binding(7, 0)]] Texture2D<float4> NoiseTex : register(t2);
-[[vk::binding(8, 0)]] SamplerState Sampler : register(s0);
+[[vk::binding(8, 0)]] Texture2D<float4> EnvironmentTexture	: register(t1);
+
+[[vk::binding(9, 0)]] Texture2D<float4> NoiseTex : register(t2);
+[[vk::binding(10, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float3 VolumeResolution;
 	float3 VolumePosition;
 	float4 InvVolumeRotation;
 	float3 InvVolumeScale;
-	float Far;
-
-	float3 LightColor;
-	float3 LightDirection;
 
 	float RemapMin;
 	float InvRemapRange;
 	float Cutoff;
 
 	float Density;
+	float Scattering;
+	float Extinction;
+	float HG;
 
 	float StepSize;
 	uint FrameIndex;
@@ -88,40 +90,68 @@ float3 WorldToVolumeV(float3 vec) {
 	return qmul(InvVolumeRotation, vec) * InvVolumeScale;
 }
 
+const float4 MaskColors[8] = {
+	float4( 1,  1,  1, 0),
+	float4( 1, .1, .1, 1),
+	float4(.1,  1, .1, 1),
+	float4(.1, .1,  1, 1),
+	float4( 1,  1, .1, 1),
+	float4( 1, .1,  1, 1),
+	float4(.1,  1,  1, 1),
+	float4( 1,  1,  1, 1),
+};
+
 [numthreads(4, 4, 4)]
 void CopyRaw(uint3 index : SV_DispatchThreadID) {
 	#ifdef COLORED
+
 	float4 col = float4(RawVolume[index.xyz], 1);
-	#ifdef INVERT
-	col.a = 1 - col.a;
-	#endif
 
 	#else
 
-	float r = RawVolume[index.xyz];
 	#ifdef INVERT
-	r = 1 - r;
-	#endif
-	float4 col = float4(Transfer(r), r);
+	float r = 1 - RawVolume[index.xyz];
+	#else
+	float r = RawVolume[index.xyz];
 	#endif
 
 	#ifdef READ_MASK
-	col.a *= RawMask[index.xyz];
+	float4 col = MaskColors[RawMask[index.xyz] % 8];
+	col.a *= r;
+	#else
+	float4 col = float4(Transfer(r), r);
 	#endif
+
+	#endif
+
 
 	col.a = Threshold(col.a);
 	BakedVolume[index.xyz] = col;
 }
 
+#define PI (3.14159265359)
+#define INV_PI (1.0 / 3.14159265359)
+
+float3 SampleEnvironment(float3 ray){
+	uint texWidth, texHeight, numMips;
+	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	float2 envuv = float2(atan2(ray.z, ray.x) * INV_PI * .5 + .5, acos(ray.y) * INV_PI);
+	return EnvironmentTexture.SampleLevel(Sampler, envuv, 0).rgb;
+}
+
 [numthreads(4, 4, 4)]
-void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
-	float3 ld = WorldToVolumeV(LightDirection);
+void ComputeInscatter(uint3 index : SV_DispatchThreadID) {
+	float4 noise = NoiseTex.Load(uint3((index.xy ^ FrameIndex + FrameIndex) % 256, 0));
+
+	float3 lightDir = normalize(noise.xyz*2-1);
+	float3 lightCol = SampleEnvironment(lightDir);
+
+	float3 ld = WorldToVolumeV(lightDir);
 
 	float3 ro = (index.xyz + .5) / VolumeResolution;
 
 	// jitter samples
-	float2 jitter = NoiseTex.Load(uint3(index.xy % 256, 0)).xy;
-	float start = StepSize * jitter.x;
+	float start = StepSize * noise.w;
 
 	float li = RayBox(ro, ld, 0, 1).y;
 	ro += ld * start;
@@ -133,48 +163,51 @@ void ComputeOpticalDensity(uint3 index : SV_DispatchThreadID) {
 		ro += ld;
 	}
 
-	BakedOpticalDensity[index.xyz] = opticalDensity * Density * length(ld);
+	BakedInscatter[index.xyz] = exp(-opticalDensity * Density * length(ld));
+	
 	/*
+	// 7x7x7 gaussian blur
+
 	AllMemoryBarrierWithGroupSync();
 
 	const static float kernel[7] = { 0.00598, 0.060626, 0.241843, 0.383103, 0.241843, 0.060626, 0.00598 };
 
 	float value = 0;
-	value += BakedOpticalDensity[index.xyz + int3(-3, 0, 0)] * kernel[0];
-	value += BakedOpticalDensity[index.xyz + int3(-2, 0, 0)] * kernel[1];
-	value += BakedOpticalDensity[index.xyz + int3(-1, 0, 0)] * kernel[2];
-	value += BakedOpticalDensity[index.xyz + int3( 0, 0, 0)] * kernel[3];
-	value += BakedOpticalDensity[index.xyz + int3(-1, 0, 0)] * kernel[4];
-	value += BakedOpticalDensity[index.xyz + int3(-2, 0, 0)] * kernel[5];
-	value += BakedOpticalDensity[index.xyz + int3(-3, 0, 0)] * kernel[6];
+	value += BakedInscatter[index.xyz + int3(-3, 0, 0)] * kernel[0];
+	value += BakedInscatter[index.xyz + int3(-2, 0, 0)] * kernel[1];
+	value += BakedInscatter[index.xyz + int3(-1, 0, 0)] * kernel[2];
+	value += BakedInscatter[index.xyz + int3( 0, 0, 0)] * kernel[3];
+	value += BakedInscatter[index.xyz + int3(-1, 0, 0)] * kernel[4];
+	value += BakedInscatter[index.xyz + int3(-2, 0, 0)] * kernel[5];
+	value += BakedInscatter[index.xyz + int3(-3, 0, 0)] * kernel[6];
 
 	AllMemoryBarrierWithGroupSync();
-	BakedOpticalDensity[index.xyz] = value;
+	BakedInscatter[index.xyz] = value;
 	AllMemoryBarrierWithGroupSync();
 
 	value = 0;
-	value += BakedOpticalDensity[index.xyz + int3(0, -3, 0)] * kernel[0];
-	value += BakedOpticalDensity[index.xyz + int3(0, -2, 0)] * kernel[1];
-	value += BakedOpticalDensity[index.xyz + int3(0, -1, 0)] * kernel[2];
-	value += BakedOpticalDensity[index.xyz + int3(0,  0, 0)] * kernel[3];
-	value += BakedOpticalDensity[index.xyz + int3(0, -1, 0)] * kernel[4];
-	value += BakedOpticalDensity[index.xyz + int3(0, -2, 0)] * kernel[5];
-	value += BakedOpticalDensity[index.xyz + int3(0, -3, 0)] * kernel[6];
+	value += BakedInscatter[index.xyz + int3(0, -3, 0)] * kernel[0];
+	value += BakedInscatter[index.xyz + int3(0, -2, 0)] * kernel[1];
+	value += BakedInscatter[index.xyz + int3(0, -1, 0)] * kernel[2];
+	value += BakedInscatter[index.xyz + int3(0,  0, 0)] * kernel[3];
+	value += BakedInscatter[index.xyz + int3(0, -1, 0)] * kernel[4];
+	value += BakedInscatter[index.xyz + int3(0, -2, 0)] * kernel[5];
+	value += BakedInscatter[index.xyz + int3(0, -3, 0)] * kernel[6];
 
 	AllMemoryBarrierWithGroupSync();
-	BakedOpticalDensity[index.xyz] = value;
+	BakedInscatter[index.xyz] = value;
 	AllMemoryBarrierWithGroupSync();
 	
 	value = 0;
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -3)] * kernel[0];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -2)] * kernel[1];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -1)] * kernel[2];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0,  0)] * kernel[3];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -1)] * kernel[4];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -2)] * kernel[5];
-	value += BakedOpticalDensity[index.xyz + int3(0, 0, -3)] * kernel[6];
+	value += BakedInscatter[index.xyz + int3(0, 0, -3)] * kernel[0];
+	value += BakedInscatter[index.xyz + int3(0, 0, -2)] * kernel[1];
+	value += BakedInscatter[index.xyz + int3(0, 0, -1)] * kernel[2];
+	value += BakedInscatter[index.xyz + int3(0, 0,  0)] * kernel[3];
+	value += BakedInscatter[index.xyz + int3(0, 0, -1)] * kernel[4];
+	value += BakedInscatter[index.xyz + int3(0, 0, -2)] * kernel[5];
+	value += BakedInscatter[index.xyz + int3(0, 0, -3)] * kernel[6];
 
 	AllMemoryBarrierWithGroupSync();
-	BakedOpticalDensity[index.xyz] = value;
-	*/
+	BakedInscatter[index.xyz] = value;
+	//*/
 }
