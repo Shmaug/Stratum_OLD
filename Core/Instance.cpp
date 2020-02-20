@@ -100,11 +100,10 @@ Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 	validationLayers.push_back("VK_LAYER_LUNARG_core_validation");
 	validationLayers.push_back("VK_LAYER_LUNARG_standard_validation");
 	#endif
+	
 	#ifdef __linux
-	instanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-	instanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
-	instanceExtensions.insert(VK_EXT_DIRECT_MODE_DISPLAY_EXTENSION_NAME);
-	instanceExtensions.insert(VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME);
+	mInstanceExtensions.insert(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+	mInstanceExtensions.insert(VK_KHR_DISPLAY_EXTENSION_NAME);
 	#else
 	mInstanceExtensions.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 	#endif
