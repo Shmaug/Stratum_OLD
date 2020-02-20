@@ -13,8 +13,8 @@ public:
 
 	inline virtual ~EnginePlugin() {}
 	
-	/// Used to request features prior to Vulkan initialization, such as instance and device extensions
-	inline virtual void PreInit(Instance* instance) {};
+	inline virtual void PreInstanceInit(Instance* instance) {};
+	inline virtual void PreDeviceInit(Instance* instance, VkPhysicalDevice physicalDevice) {};
 	
 	inline virtual bool Init(Scene* scene) { return true; }
 	
