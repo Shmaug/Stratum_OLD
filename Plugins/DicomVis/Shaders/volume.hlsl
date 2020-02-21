@@ -32,6 +32,8 @@
 	float3 InvVolumeScale;
 	uint2 WriteOffset;
 
+	float3 AmbientLight;
+
 	float Density;
 	float Scattering;
 	float Extinction;
@@ -127,14 +129,6 @@ float3 VolumeToWorldV(float3 vec) {
 	return qmul(VolumeRotation, vec) * VolumeScale;
 }
 
-float4 Sample(float3 p, out float3 gradient) {
-	float4 s   = BakedVolume.SampleLevel(Sampler, p, 0);
-	gradient.x = BakedVolume.SampleLevel(Sampler, p, 0, int3(1,0,0)).a - s.a;
-	gradient.y = BakedVolume.SampleLevel(Sampler, p, 0, int3(0,1,0)).a - s.a;
-	gradient.z = BakedVolume.SampleLevel(Sampler, p, 0, int3(0,0,1)).a - s.a;
-	return float4(s.rgb, s.a);
-}
-
 float HenyeyGreenstein(float angle, float g) {
 	return (1 - g * g) / (pow(1 + g * g - 2 * g * angle, 1.5) * 4 * PI);
 }
@@ -160,10 +154,11 @@ float3 BRDFIndirect(float3 albedo, float metallic, float roughness, float3 view,
 
 	uint texWidth, texHeight, numMips;
 	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+	numMips--;
 	float3 reflection = normalize(reflect(-view, normal));
 	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
-	float3 diffuseLight = EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
-	float3 specularLight = EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(roughness) * numMips).rgb;
+	float3 diffuseLight  = AmbientLight * EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
+	float3 specularLight = AmbientLight * EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(roughness) * numMips).rgb;
 
 	float surfaceReduction = 1.0 / (roughness * roughness + 1.0);
 	float grazingTerm = saturate((1 - roughness) + (1 - oneMinusReflectivity));
@@ -209,17 +204,23 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	float3 inscatter = 0;
 
 	for (float t = StepSize; t < isect.y;) {
-		float3 gradient;
-		float4 localSample = Sample(sp, gradient);
-
-		float3 localEval = localSample.rgb;
-
+		float4 localSample = BakedVolume.SampleLevel(Sampler, sp, 0);
+		float3 gradient = float3(
+			BakedVolume.SampleLevel(Sampler, sp, 0, int3(1, 0, 0)).a - localSample.a,
+			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 1, 0)).a - localSample.a,
+			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 0, 1)).a - localSample.a );
 		gradient = VolumeToWorldV(gradient);
 		float l = length(gradient);
-		if (l > .01) localEval = BRDFIndirect(localSample.rgb, 0, .9 - localSample.a*.4, -rd_w, gradient / l);
+
+		float3 localEval = localSample.rgb;
+		float4 lightEval = BakedVolume.SampleLevel(Sampler, sp, 2);
+
+		if (l > .01) localEval = BRDFIndirect(localSample.rgb, 0, 1 - localSample.a * .1, -rd_w, gradient / l);
+
+		localEval *= exp(-lightEval.rgb * lightEval.a * Density * Extinction);
 
 		localSample.a *= scaledStep * Density;
-		inscatter += localEval * exp(-opticalDensity * Extinction) * localSample.a;
+		inscatter += localEval * localSample.a * exp(-opticalDensity * Extinction);
 		opticalDensity += localSample.rgb * localSample.a;
 
 		t += StepSize;
@@ -236,9 +237,8 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 	// traditional alpha blending
 	float4 sum = 0;
 	for (float t = StepSize; t < isect.y; t += StepSize) {
-		float3 gradient;
 		float3 sp = ro + rd * t;
-		float4 localDensity = Sample(sp, gradient);
+		float4 localDensity = BakedVolume.SampleLevel(Sampler, sp, 0);
 		localDensity.a *= StepSize * Density;
 
 		localDensity.rgb *= localDensity.a;

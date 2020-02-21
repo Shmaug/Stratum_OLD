@@ -27,7 +27,7 @@ struct GuiRect {
 };
 
 // per-object
-[[vk::binding(BINDING_START + 0, PER_OBJECT)]] Texture2D<float4> Textures[32] : register(t0);
+[[vk::binding(BINDING_START + 0, PER_OBJECT)]] Texture2D<float4> Textures[64] : register(t0);
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] StructuredBuffer<GuiRect> Rects : register(t32);
 [[vk::binding(BINDING_START + 2, PER_OBJECT)]] SamplerState Sampler : register(s0);
 // per-camera

@@ -17,6 +17,8 @@
 [[vk::binding(4, 0)]] RWTexture3D<float4> BakedInscatter : register(u4);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	float TransferMin;
+	float TransferMax;
 	float RemapMin;
 	float InvRemapRange;
 	float Cutoff;
@@ -40,7 +42,7 @@ float3 RGBtoHCV(float3 rgb) {
 
 float3 Transfer(float density) {
 	#ifdef COLORIZE
-	return HSVtoRGB(float3(.45 - density * .4, .5, 1));
+	return HSVtoRGB(float3(TransferMin + density * (TransferMax - TransferMin), .5, 1));
 	#else
 	return density;
 	#endif
