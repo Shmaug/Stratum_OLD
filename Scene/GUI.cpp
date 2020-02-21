@@ -14,7 +14,9 @@ InputManager* GUI::mInputManager;
 vector<Texture*> GUI::mTextureArray;
 unordered_map<Texture*, uint32_t> GUI::mTextureMap;
 vector<GUI::GuiRect> GUI::mScreenRects;
+vector<GUI::GuiRect> GUI::mScreenTextureRects;
 vector<GUI::GuiRect> GUI::mWorldRects;
+vector<GUI::GuiRect> GUI::mWorldTextureRects;
 vector<GUI::GuiLine> GUI::mScreenLines;
 vector<float2> GUI::mLinePoints;
 vector<GUI::GuiString> GUI::mScreenStrings;
@@ -101,6 +103,24 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 
 		vkCmdDraw(*commandBuffer, 6, (uint32_t)mWorldRects.size(), 0, 0);
 	}
+	if (mWorldTextureRects.size()) {
+		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(pass, { "TEXTURED" });
+		if (!shader) return;
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr);
+		if (!layout) return;
+
+		Buffer* screenRects = commandBuffer->Device()->GetTempBuffer("WorldRects", mWorldTextureRects.size() * sizeof(GuiRect), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+		memcpy(screenRects->MappedData(), mWorldTextureRects.data(), mWorldTextureRects.size() * sizeof(GuiRect));
+
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("WorldRects", shader->mDescriptorSetLayouts[PER_OBJECT]);
+		ds->CreateStorageBufferDescriptor(screenRects, 0, mWorldTextureRects.size() * sizeof(GuiRect), shader->mDescriptorBindings.at("Rects").second.binding);
+		for (uint32_t i = 0; i < mTextureArray.size(); i++)
+			ds->CreateSampledTextureDescriptor(mTextureArray[i], i, shader->mDescriptorBindings.at("Textures").second.binding);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+
+		vkCmdDraw(*commandBuffer, 6, (uint32_t)mWorldTextureRects.size(), 0, 0);
+	}
 	if (mWorldStrings.size()) {
 		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
 		if (!shader) return;
@@ -176,6 +196,24 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		commandBuffer->PushConstant(shader, "ScreenSize", &s);
 
 		vkCmdDraw(*commandBuffer, 6, (uint32_t)mScreenRects.size(), 0, 0);
+	}
+	if (mScreenTextureRects.size()) {
+		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/ui.stm")->GetGraphics(pass, { "TEXTURED" });
+		if (!shader) return;
+		VkPipelineLayout layout = commandBuffer->BindShader(shader, pass, nullptr);
+		if (!layout) return;
+
+		Buffer* screenRects = commandBuffer->Device()->GetTempBuffer("WorldRects", mScreenTextureRects.size() * sizeof(GuiRect), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+		memcpy(screenRects->MappedData(), mScreenTextureRects.data(), mScreenTextureRects.size() * sizeof(GuiRect));
+
+		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("WorldRects", shader->mDescriptorSetLayouts[PER_OBJECT]);
+		ds->CreateStorageBufferDescriptor(screenRects, 0, mScreenTextureRects.size() * sizeof(GuiRect), shader->mDescriptorBindings.at("Rects").second.binding);
+		for (uint32_t i = 0; i < mTextureArray.size(); i++)
+			ds->CreateSampledTextureDescriptor(mTextureArray[i], i, shader->mDescriptorBindings.at("Textures").second.binding);
+		ds->FlushWrites();
+		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *ds, 0, nullptr);
+
+		vkCmdDraw(*commandBuffer, 6, (uint32_t)mScreenTextureRects.size(), 0, 0);
 	}
 	if (mScreenStrings.size()) {
 		GraphicsShader* shader = camera->Scene()->AssetManager()->LoadShader("Shaders/font.stm")->GetGraphics(PASS_MAIN, { "SCREEN_SPACE" });
@@ -257,6 +295,9 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 			vkCmdDraw(*commandBuffer, l.mCount, 1, l.mIndex, 0);
 		}
 	}
+
+	mTextureArray.clear();
+	mTextureMap.clear();
 }
 
 void GUI::DrawScreenLine(const float2* points, size_t pointCount, float thickness, const float2& offset, const float2& scale, const float4& color) {
@@ -308,7 +349,7 @@ void GUI::DrawString(Font* font, const string& str, const float4& color, const f
 	mScreenStrings.push_back(s);
 }
 
-void GUI::Rect(const fRect2D& screenRect, const float4& color, const fRect2D& clipRect) {
+void GUI::Rect(const fRect2D& screenRect, const float4& color, Texture* texture, const float4& textureST, const fRect2D& clipRect) {
 	if (!clipRect.Intersects(screenRect)) return;
 
 	MouseKeyboardInput* i = mInputManager->GetFirst<MouseKeyboardInput>();
@@ -317,29 +358,51 @@ void GUI::Rect(const fRect2D& screenRect, const float4& color, const fRect2D& cl
 	if (screenRect.Contains(c) && clipRect.Contains(c)) i->mMousePointer.mGuiHitT = 0.f;
 
 	GuiRect r = {};
-	r.TextureST = float4(1, 1, 0, 0);
 	r.ScaleTranslate = float4(screenRect.mExtent, screenRect.mOffset);
 	r.Color = color;
 	r.Bounds = clipRect;
 	r.Depth = mCurrentDepth;
-	mScreenRects.push_back(r);
+	r.TextureST = textureST;
+
+	if (texture) {
+		if (mTextureMap.count(texture))
+			r.TextureIndex = mTextureMap.at(texture);
+		else {
+			r.TextureIndex = mTextureArray.size();
+			mTextureMap.emplace(texture, mTextureArray.size());
+			mTextureArray.push_back(texture);
+		}
+		mScreenTextureRects.push_back(r);
+	} else
+		mScreenRects.push_back(r);
 
 	mCurrentDepth += DEPTH_DELTA;
 }
-void GUI::Rect(const float4x4& transform, const fRect2D& rect, const float4& color, const fRect2D& clipRect) {
+void GUI::Rect(const float4x4& transform, const fRect2D& rect, const float4& color, Texture* texture, const float4& textureST, const fRect2D& clipRect) {
 	if (!clipRect.Intersects(rect)) return;
 	GuiRect r = {};
 	r.ObjectToWorld = transform;
-	r.TextureST = float4(1, 1, 0, 0);
 	r.ScaleTranslate = float4(rect.mExtent, rect.mOffset);
 	r.Color = color;
 	r.Bounds = clipRect;
-	mWorldRects.push_back(r);
+	r.TextureST = textureST;
+
+	if (texture) {
+		if (mTextureMap.count(texture))
+			r.TextureIndex = mTextureMap.at(texture);
+		else {
+			r.TextureIndex = mTextureArray.size();
+			mTextureMap.emplace(texture, mTextureArray.size());
+			mTextureArray.push_back(texture);
+		}
+		mWorldTextureRects.push_back(r);
+	} else
+		mWorldRects.push_back(r);
 }
 
 void GUI::Label(Font* font, const string& text, float textScale, const fRect2D& screenRect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const fRect2D& clipRect){
 	if (!clipRect.Intersects(screenRect)) return;
-	if (color.a > 0) Rect(screenRect, color, clipRect);
+	if (color.a > 0) Rect(screenRect, color, nullptr, 0, clipRect);
 	if (textColor.a > 0 && text.length()){
 		float2 o = 0;
 		if (horizontalAnchor == TEXT_ANCHOR_MID) o.x = screenRect.mExtent.x * .5f;
@@ -351,7 +414,7 @@ void GUI::Label(Font* font, const string& text, float textScale, const fRect2D& 
 }
 void GUI::Label(Font* font, const string& text, float textScale, const float4x4& transform, const fRect2D& rect, const float4& color, const float4& textColor, TextAnchor horizontalAnchor, TextAnchor verticalAnchor, const fRect2D& clipRect){
 	if (!clipRect.Intersects(rect)) return;
-	if (color.a > 0) Rect(transform,rect, color, clipRect);
+	if (color.a > 0) Rect(transform,rect, color, nullptr, 0, clipRect);
 	if (textColor.a > 0 && text.length()){
 		float2 o = 0;
 		if (horizontalAnchor == TEXT_ANCHOR_MID) o.x = rect.mExtent.x * .5f;
@@ -380,7 +443,7 @@ bool GUI::Button(Font* font, const string& text, float textScale, const fRect2D&
 		float m = 1.f;
 		if (hvr) m = 1.2f;
 		if (clk) m = 1.5f;
-		Rect(screenRect, float4(color.rgb * m, color.a), clipRect);
+		Rect(screenRect, float4(color.rgb * m, color.a), nullptr, 0, clipRect);
 	}
 	if (textColor.a > 0 && text.length()){
 		float2 o = 0;
@@ -398,7 +461,7 @@ bool GUI::Button(Font* font, const string& text, float textScale, const float4x4
 
 	// TODO: world-space input
 
-	if (color.a > 0) Rect(transform, rect, color, clipRect);
+	if (color.a > 0) Rect(transform, rect, color, nullptr, 0, clipRect);
 	if (textColor.a > 0 && text.length()){
 		float2 o = 0;
 		if (horizontalAnchor == TEXT_ANCHOR_MID) o.x = rect.mExtent.x * .5f;
@@ -470,8 +533,8 @@ bool GUI::Slider(float& value, float minimum, float maximum, LayoutAxis axis, co
 	if (hvr) m *= 1.2f;
 	if (clk) m *= 1.5f;
 
-	Rect(bgRect, color, clipRect);
-	Rect(barRect, float4(color.rgb * m, color.a), clipRect);
+	Rect(bgRect, color, nullptr, 0, clipRect);
+	Rect(barRect, float4(color.rgb * m, color.a), nullptr, 0, clipRect);
 
 	return ret;
 }
@@ -479,7 +542,7 @@ bool GUI::Slider(float& value, float minimum, float maximum, LayoutAxis axis, co
 	uint32_t controlId = mNextControlId++;
 	if (!clipRect.Intersects(rect)) return false;
 
-	Rect(transform, rect, color, clipRect);
+	Rect(transform, rect, color, nullptr, 0, clipRect);
 
 
 	return false;
@@ -514,9 +577,9 @@ fRect2D GUI::BeginSubLayout(LayoutAxis axis, float size, const float4& backgroun
 
 	if (backgroundColor.a > 0) {
 		if (l.mScreenSpace)
-			Rect(layoutRect, backgroundColor, l.mClipRect);
+			Rect(layoutRect, backgroundColor, nullptr, 0, l.mClipRect);
 		else
-			Rect(l.mTransform, layoutRect, backgroundColor, l.mClipRect);
+			Rect(l.mTransform, layoutRect, backgroundColor, nullptr, 0, l.mClipRect);
 	}
 
 	layoutRect.mOffset += insidePadding;
@@ -533,9 +596,9 @@ fRect2D GUI::BeginScrollSubLayout(float size, float contentSize, const float4& b
 
 	if (backgroundColor.a > 0) {
 		if (l.mScreenSpace)
-			Rect(layoutRect, backgroundColor, l.mClipRect);
+			Rect(layoutRect, backgroundColor, nullptr, 0, l.mClipRect);
 		else
-			Rect(l.mTransform, layoutRect, backgroundColor, l.mClipRect);
+			Rect(l.mTransform, layoutRect, backgroundColor, nullptr, 0, l.mClipRect);
 	}
 	
 	float scrollAmount = 0;
@@ -626,9 +689,18 @@ void GUI::LayoutSpace(float size) {
 void GUI::LayoutSeparator(float thickness, const float4& color, float padding) {
 	GuiLayout& l = mLayoutStack.top();
 	if (l.mScreenSpace)
-		GUI::Rect(l.Get(thickness, padding), color, l.mClipRect);
+		GUI::Rect(l.Get(thickness, padding), color, nullptr, 0, l.mClipRect);
 	else
-		GUI::Rect(l.mTransform, l.Get(thickness, padding), color, l.mClipRect);
+		GUI::Rect(l.mTransform, l.Get(thickness, padding), color, nullptr, 0, l.mClipRect);
+}
+void GUI::LayoutRect(float size, const float4& color, Texture* texture, const float4& textureST, float padding) {
+	GuiLayout& l = mLayoutStack.top();
+	fRect2D layoutRect = l.Get(size, padding);
+
+	if (l.mScreenSpace)
+		Rect(layoutRect, color, texture, textureST, l.mClipRect);
+	else
+		Rect(l.mTransform, layoutRect, color, texture, textureST, l.mClipRect);
 }
 void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
 	GuiLayout& l = mLayoutStack.top();

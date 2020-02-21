@@ -28,8 +28,9 @@ private:
 	bool mPhysicalShading;
 	bool mColorize;
 	bool mInvert;
-	float mLightStepSize;
 	float mStepSize;
+	float mTransferMin;
+	float mTransferMax;
 	float mDensity;
 	float mRemapMin;
 	float mRemapMax;
@@ -57,7 +58,6 @@ private:
 	MouseKeyboardInput* mInput;
 
 	float mZoom;
-	
 
 	bool mShowPerformance;
 	bool mSnapshotPerformance;
@@ -80,8 +80,8 @@ public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
 		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
 		mPhysicalShading(false),
-		mDensity(10.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mLightStepSize(.005f),
-		mVolumeScatter(1.f), mVolumeExtinction(1.f) {
+		mDensity(500.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mTransferMin(.01f), mTransferMax(.5f),
+		mVolumeScatter(1.f), mVolumeExtinction(.2f) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~DicomVis() {
@@ -110,8 +110,8 @@ public:
 
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
-		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/studio_small_03_4k.hdr"));
-		mScene->Environment()->AmbientLight(.6f);
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/paul_lobe_haus_8k.hdr"));
+		mScene->Environment()->AmbientLight(.1f);
 
 		string path = "/Data";
 		for (uint32_t i = 0; i < mScene->Instance()->CommandLineArguments().size(); i++)
@@ -206,8 +206,9 @@ public:
 		}
 	}
 
-	PLUGIN_EXPORT void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
+	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
 		if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
+
 		Font* reg14 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 14);
 		Font* sem11 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 11);
 		Font* sem16 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 16);
@@ -303,17 +304,17 @@ public:
 			#endif
 		}
 
-		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 360, 300, 720), float4(.3f, .3f, .3f, 1), 10);
+		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 400, 300, 800), float4(.3f, .3f, .3f, 1), 10);
 
 		GUI::LayoutLabel(bld24, "Load Data Set", 24, 30, 0, 1);
-
 		GUI::LayoutSeparator(.5f, 1);
 
-		GUI::BeginScrollSubLayout(200, mDataFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
+		GUI::BeginScrollSubLayout(175, mDataFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
 		for (const auto& p : mDataFolders)
 			if (GUI::LayoutButton(sem16, fs::path(p.first).stem().string(), 16, 24, p.second ? float4(.4f, .4f, .15f, 1) : float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
 				LoadVolume(commandBuffer, p.first, p.second);
 		GUI::EndLayout();
+
 
 		if (GUI::LayoutButton(sem16, "Invert", 16, 24, mInvert ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mInvert = !mInvert;
@@ -327,43 +328,42 @@ public:
 			mPhysicalShading = !mPhysicalShading;
 			mFrameIndex = 0;
 		}
-
 		GUI::LayoutSeparator(.5f, 1, 3);
 
 		GUI::LayoutLabel(bld24, "Render Settings", 18, 24, 0, 1);
-
 		GUI::LayoutSpace(8);
 
 		GUI::LayoutLabel(sem16, "Step Size: " + to_string(mStepSize), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mStepSize, .0005f, .01f, 16, float4(.5f, .5f, .5f, 1), 4));
-
-		GUI::LayoutLabel(sem16, "Light Step Size: " + to_string(mLightStepSize), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mLightStepSize, .0005f, .01f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;;
-
-		GUI::LayoutSpace(5);
-
 		GUI::LayoutLabel(sem16, "Density: " + to_string(mDensity), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mDensity, 10, 1000.f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumeScatter, 0, 10, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumeExtinction, 0, 10, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "HG Phase: " + to_string(mVolumePhaseHG), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutSpace(5);
+		if (GUI::LayoutSlider(mDensity, 100, 10000.f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+		GUI::LayoutSpace(10);
 
 		GUI::LayoutLabel(sem16, "Remap Min: " + to_string(mRemapMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mRemapMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
-
 		GUI::LayoutLabel(sem16, "Remap Max: " + to_string(mRemapMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mRemapMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
-
 		GUI::LayoutLabel(sem16, "Cutoff: " + to_string(mCutoff), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mCutoff, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+
+		if (mColorize) {
+			GUI::LayoutSpace(10);
+
+			GUI::LayoutLabel(sem16, "Transfer Min: " + to_string(mTransferMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mTransferMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			GUI::LayoutLabel(sem16, "Transfer Max: " + to_string(mTransferMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mTransferMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		}
+		if (mPhysicalShading) {
+			GUI::LayoutSpace(10);
+
+			GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumeScatter, 0, 3, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumeExtinction, 0, .5f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "HG Phase: " + to_string(mVolumePhaseHG), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+		}
 
 		GUI::EndLayout();
 	}
@@ -424,14 +424,16 @@ public:
 			commandBuffer->PushConstant(copy, "RemapMin", &mRemapMin);
 			commandBuffer->PushConstant(copy, "InvRemapRange", &remapRange);
 			commandBuffer->PushConstant(copy, "Cutoff", &mCutoff);
-			commandBuffer->PushConstant(copy, "Density", &mDensity);
+			commandBuffer->PushConstant(copy, "TransferMin", &mTransferMin);
+			commandBuffer->PushConstant(copy, "TransferMax", &mTransferMax);
 
 			vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
-			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-			
+
+			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+			fd.mBakedVolume->GenerateMipMaps(commandBuffer);
+
 			fd.mDirty = false;
 		}
-
 
 		fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		
@@ -458,6 +460,7 @@ public:
 
 			uint2 wo(0);
 			float3 vp = mVolumePosition - camera->WorldPosition();
+			float3 ambient = mScene->Environment()->AmbientLight();
 
 			commandBuffer->PushConstant(draw, "VolumePosition", &vp);
 			commandBuffer->PushConstant(draw, "VolumeRotation", &mVolumeRotation.xyzw);
@@ -466,6 +469,7 @@ public:
 			commandBuffer->PushConstant(draw, "InvVolumeScale", &ivs);
 			commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
 
+			commandBuffer->PushConstant(draw, "AmbientLight", &ambient);
 			commandBuffer->PushConstant(draw, "Density", &mDensity);
 			commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
 			commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
@@ -583,9 +587,9 @@ public:
 
 			if (fs::exists(maskPath)) {
 				mRawMask = LoadMask(maskPath, mScene->Instance()->Device());
-				if (!mRawMask) {
+				if (!mRawMask)
 					fprintf_color(COLOR_RED, stderr, "Failed to load mask!\n");
-				} else
+				else
 					mRawMaskNew = true;
 			}
 		}
@@ -599,7 +603,7 @@ public:
 
 		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
 			FrameData& fd = mFrameData[i];
-			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), nullptr, 0, mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_UNORM, 3, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mImagesNew = true;
 			fd.mDirty = true;
 		}
