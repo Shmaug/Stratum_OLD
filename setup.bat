@@ -22,7 +22,7 @@ echo Shaderc configured.
 
 echo Configuring SPIRV-cross...
 cd third_party/spirv-cross
-cmake CMakeLists.txt -GNinja -S "%SPIRV_CROSS_DIR%" -B "%SPIRV_CROSS_DIR%" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DSPIRV_CROSS_SHARED=OFF -DSPIRV_CROSS_ENABLE_TESTS=OFF -DCMAKE_INSTALL_PREFIX="%SPIRV_CROSS_DIR" 
+cmake CMakeLists.txt -GNinja -S "%SPIRV_CROSS_DIR%" -B "%SPIRV_CROSS_DIR%" -Wno-dev -DCMAKE_BUILD_TYPE=Release -DSPIRV_CROSS_SHARED=OFF -DSPIRV_CROSS_ENABLE_TESTS=OFF -DCMAKE_INSTALL_PREFIX="%SPIRV_CROSS_DIR%" 
 echo SPIRV-cross configured.
 
 
