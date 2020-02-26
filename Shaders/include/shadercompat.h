@@ -49,6 +49,27 @@ struct CameraBuffer {
 	float3 Position;
 };
 
+struct ScatteringParameters {
+	float4 MoonRotation;
+	float MoonSize;
+
+	float3 IncomingLight;
+
+	float3 SunDir;
+
+	float PlanetRadius;
+	float AtmosphereHeight;
+
+	float SunIntensity;
+	float MieG;
+
+	float3 ScatteringR;
+	float3 ScatteringM;
+
+	float4 StarRotation;
+	float StarFade;
+};
+
 struct GPULight {
 	float4 CascadeSplits;
 	float3 WorldPosition;
