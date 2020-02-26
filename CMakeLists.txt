@@ -74,13 +74,15 @@ if(WIN32)
 	target_link_libraries(ShaderCompiler
 		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"${STRATUM_HOME}/ThirdParty/shaderc/lib/shaderc_shared.lib"
+		"${STRATUM_HOME}/ThirdParty/shaderc/lib/shaderc.lib"
+		"${STRATUM_HOME}/ThirdParty/shaderc/lib/shaderc_combined.lib"
 		"${STRATUM_HOME}/ThirdParty/shaderc/third_party/spirv-cross/lib/spirv-cross-core.lib" )
 
 	target_link_libraries(Engine
 		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
+		"${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
 
 	target_link_libraries(Stratum
@@ -88,17 +90,12 @@ if(WIN32)
 		"${PROJECT_BINARY_DIR}/lib/Engine.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
+		"${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib"
 		"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
-
-	target_link_libraries(Engine "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
-	target_link_libraries(Stratum "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib")
 
 	if (${ENABLE_DEBUG_LAYERS})
 		target_link_libraries(Engine "$ENV{VULKAN_SDK}/lib/VkLayer_utils.lib")
-		target_link_libraries(Stratum "${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstaticd.lib")
 	endif()
-
-	configure_file("${STRATUM_HOME}/ThirdParty/shaderc/bin/shaderc_shared.dll" "${PROJECT_BINARY_DIR}/bin/shaderc_shared.dll" COPYONLY)
 else()
 	target_link_libraries(ShaderCompiler
 		stdc++fs

@@ -28,20 +28,17 @@ echo SPIRV-cross configured.
 
 echo Building Assimp...
 cd "%ASSIMP_DIR%"
-rem ninja install
 cmake --build . --config Release --target install
 echo Assimp built.
 
 echo Building Shaderc...
 cd "%SHADERC_DIR%"
-rem ninja install
 cmake --build . --config Release --target add-copyright
 cmake --build . --config Release --target install
 echo Shaderc built.
 
 echo Building SPIRV-cross...
 cd "%SPIRV_CROSS_DIR%"
-rem ninja install
 cmake --build . --config Release --target install
 echo SPIRV-cross built.
 
