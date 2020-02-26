@@ -26,11 +26,13 @@ private:
 	Scene* mScene;
 
 	void Render() {
-		PROFILER_BEGIN("Get CommandBuffers");
+		PROFILER_BEGIN("Get CommandBuffer");
 		shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->Device()->GetCommandBuffer();
 		PROFILER_END;
 
+		PROFILER_BEGIN("Scene PreFrame");
 		mScene->PreFrame(commandBuffer.get());
+		PROFILER_END;
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras())
@@ -78,8 +80,7 @@ private:
 	}
 
 public:
-	Stratum(int argc, char** argv) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr)
-	{
+	Stratum(int argc, char** argv) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr) {
 		printf("Initializing...\n");
 		mPluginManager = new PluginManager();
 		mInstance = new Instance(argc, argv, mPluginManager);

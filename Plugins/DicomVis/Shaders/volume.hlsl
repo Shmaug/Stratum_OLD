@@ -40,6 +40,7 @@
 	float HG;
 
 	float StepSize;
+	float LightStep;
 	uint FrameIndex;
 }
 
@@ -147,7 +148,7 @@ float3 DiffuseAndSpecularFromMetallic(float3 albedo, float metallic, out float3 
 	oneMinusReflectivity = oneMinusDielectricSpec - metallic * oneMinusDielectricSpec;
 	return albedo * oneMinusReflectivity;
 }
-float3 BRDFIndirect(float3 albedo, float metallic, float roughness, float3 view, float3 normal) {
+float3 BRDFIndirect(float3 albedo, float metallic, float roughness, float3 view, float3 normal, out float3 reflection) {
 	float oneMinusReflectivity;
 	float3 specular;
 	float3 diffuse = DiffuseAndSpecularFromMetallic(albedo, metallic, specular, oneMinusReflectivity);
@@ -155,7 +156,7 @@ float3 BRDFIndirect(float3 albedo, float metallic, float roughness, float3 view,
 	uint texWidth, texHeight, numMips;
 	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
 	numMips--;
-	float3 reflection = normalize(reflect(-view, normal));
+	reflection = normalize(reflect(-view, normal));
 	float2 envuv = float2(atan2(reflection.z, reflection.x) * INV_PI * .5 + .5, acos(reflection.y) * INV_PI);
 	float3 diffuseLight  = AmbientLight * EnvironmentTexture.SampleLevel(Sampler, envuv, .75 * numMips).rgb;
 	float3 specularLight = AmbientLight * EnvironmentTexture.SampleLevel(Sampler, envuv, saturate(roughness) * numMips).rgb;
@@ -213,13 +214,16 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 		float l = length(gradient);
 
 		float3 localEval = localSample.rgb;
-		float4 lightEval = BakedVolume.SampleLevel(Sampler, sp, 2);
 
-		if (l > .01) localEval = BRDFIndirect(localSample.rgb, 0, 1 - localSample.a * .1, -rd_w, gradient / l);
-
-		localEval *= exp(-lightEval.rgb * lightEval.a * Density * Extinction);
-
+		if (l > .001) {
+			float3 wo;
+			localEval = BRDFIndirect(localSample.rgb, 0, 1 - localSample.a * .1, -rd_w, gradient / l, wo);
+			wo = WorldToVolumeV(wo);
+			float3 lightEval = BakedVolume.SampleLevel(Sampler, sp + wo * LightStep, 1) * LightStep;
+			localEval.rgb *= exp(-lightEval * Density * Extinction);
+		}
 		localSample.a *= scaledStep * Density;
+
 		inscatter += localEval * localSample.a * exp(-opticalDensity * Extinction);
 		opticalDensity += localSample.rgb * localSample.a;
 

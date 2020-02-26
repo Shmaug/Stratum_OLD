@@ -29,6 +29,7 @@ private:
 	bool mColorize;
 	bool mInvert;
 	float mStepSize;
+	float mLightStep;
 	float mTransferMin;
 	float mTransferMax;
 	float mDensity;
@@ -64,10 +65,6 @@ private:
 	ProfilerSample mProfilerFrames[PROFILER_FRAME_COUNT - 1];
 	uint32_t mSelectedFrame;
 
-	float mFrameTimeAccum;
-	float mFps;
-	uint32_t mFrameCount;
-
 	std::unordered_map<std::string, bool> mDataFolders;
 
 	inline void MarkCopyDirty() {
@@ -78,9 +75,9 @@ private:
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
+		mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
 		mPhysicalShading(false),
-		mDensity(500.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mTransferMin(.01f), mTransferMax(.5f),
+		mDensity(500.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mLightStep(.01f), mTransferMin(.01f), mTransferMax(.5f),
 		mVolumeScatter(1.f), mVolumeExtinction(.2f) {
 		mEnabled = true;
 	}
@@ -110,7 +107,7 @@ public:
 
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
-		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/paul_lobe_haus_8k.hdr"));
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
 		mScene->Environment()->AmbientLight(.1f);
 
 		string path = "/Data";
@@ -195,15 +192,6 @@ public:
 				}
 			}
 		}
-
-		// count fps
-		mFrameTimeAccum += mScene->Instance()->DeltaTime();
-		mFrameCount++;
-		if (mFrameTimeAccum > 1.f) {
-			mFps = mFrameCount / mFrameTimeAccum;
-			mFrameTimeAccum -= 1.f;
-			mFrameCount = 0;
-		}
 	}
 
 	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
@@ -220,7 +208,7 @@ public:
 		
 		if (mShowPerformance) {
 			char tmpText[64];
-			snprintf(tmpText, 64, "%.2f fps\n", mFps);
+			snprintf(tmpText, 64, "%.2f fps\n", mScene->FPS());
 			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f, TEXT_ANCHOR_MIN, TEXT_ANCHOR_MAX);
 
 			#ifdef PROFILER_ENABLE
@@ -315,6 +303,7 @@ public:
 				LoadVolume(commandBuffer, p.first, p.second);
 		GUI::EndLayout();
 
+		float sliderHeight = 12;
 
 		if (GUI::LayoutButton(sem16, "Invert", 16, 24, mInvert ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mInvert = !mInvert;
@@ -334,35 +323,37 @@ public:
 		GUI::LayoutSpace(8);
 
 		GUI::LayoutLabel(sem16, "Step Size: " + to_string(mStepSize), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mStepSize, .0005f, .01f, 16, float4(.5f, .5f, .5f, 1), 4));
+		if (GUI::LayoutSlider(mStepSize, .0005f, .01f, sliderHeight, float4(.5f, .5f, .5f, 1), 4));
 		GUI::LayoutLabel(sem16, "Density: " + to_string(mDensity), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mDensity, 100, 10000.f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+		if (GUI::LayoutSlider(mDensity, 100, 10000.f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 		GUI::LayoutSpace(10);
 
 		GUI::LayoutLabel(sem16, "Remap Min: " + to_string(mRemapMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mRemapMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 		GUI::LayoutLabel(sem16, "Remap Max: " + to_string(mRemapMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mRemapMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 		GUI::LayoutLabel(sem16, "Cutoff: " + to_string(mCutoff), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mCutoff, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mCutoff, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 
 		if (mColorize) {
 			GUI::LayoutSpace(10);
 
 			GUI::LayoutLabel(sem16, "Transfer Min: " + to_string(mTransferMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mTransferMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			if (GUI::LayoutSlider(mTransferMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 			GUI::LayoutLabel(sem16, "Transfer Max: " + to_string(mTransferMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mTransferMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			if (GUI::LayoutSlider(mTransferMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 		}
 		if (mPhysicalShading) {
 			GUI::LayoutSpace(10);
 
+			GUI::LayoutLabel(sem16, "Light Step: " + to_string(mLightStep), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mLightStep, 0.0005f, .05f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 			GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mVolumeScatter, 0, 3, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			if (GUI::LayoutSlider(mVolumeScatter, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 			GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mVolumeExtinction, 0, .5f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			if (GUI::LayoutSlider(mVolumeExtinction, 0, .5f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 			GUI::LayoutLabel(sem16, "HG Phase: " + to_string(mVolumePhaseHG), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 		}
 
 		GUI::EndLayout();
@@ -476,6 +467,7 @@ public:
 			commandBuffer->PushConstant(draw, "HG", &mVolumePhaseHG);
 
 			commandBuffer->PushConstant(draw, "StepSize", &mStepSize);
+			commandBuffer->PushConstant(draw, "LightStep", &mLightStep);
 			commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
 
 			switch (camera->StereoMode()) {

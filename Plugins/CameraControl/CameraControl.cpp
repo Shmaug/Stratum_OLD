@@ -9,7 +9,7 @@ ENGINE_PLUGIN(CameraControl)
 
 CameraControl::CameraControl()
 	: mScene(nullptr), mCameraPivot(nullptr), mInput(nullptr), mCameraDistance(1.5f), mCameraEuler(float3(0)),
-	mFps(0), mFrameTimeAccum(0), mFrameCount(0), mSnapshotPerformance(false), mShowPerformance(false), mSelectedFrame(PROFILER_FRAME_COUNT) {
+	mSnapshotPerformance(false), mShowPerformance(false), mSelectedFrame(PROFILER_FRAME_COUNT) {
 	mEnabled = true;
 	memset(mProfilerFrames, 0, sizeof(ProfilerSample) * (PROFILER_FRAME_COUNT - 1));
 }
@@ -100,15 +100,6 @@ void CameraControl::Update() {
 		for (uint32_t i = 0; i < mCameras.size(); i++)
 			mCameras[i]->LocalPosition(0, 0, -mCameraDistance);
 		#pragma endregion
-	}
-
-	// count fps
-	mFrameTimeAccum += mScene->Instance()->DeltaTime();
-	mFrameCount++;
-	if (mFrameTimeAccum > 1.f) {
-		mFps = mFrameCount / mFrameTimeAccum;
-		mFrameTimeAccum -= 1.f;
-		mFrameCount = 0;
 	}
 }
 
@@ -218,7 +209,7 @@ void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera,
 		}
 		#endif
 
-		snprintf(tmpText, 64, "%.2f fps | %llu tris\n", mFps, commandBuffer->mTriangleCount);
+		snprintf(tmpText, 64, "%.2f fps\n", mScene->FPS());
 		GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
 	}
 }

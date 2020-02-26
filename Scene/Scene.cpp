@@ -36,7 +36,9 @@ bool RendererCompare(Object* oa, Object* ob) {
 };
 
 Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager)
-	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mLastBvhBuild(0), mDrawGizmos(false), mBvhDirty(true) {
+	: mInstance(instance), mAssetManager(assetManager), mInputManager(inputManager), mPluginManager(pluginManager), mLastBvhBuild(0), mDrawGizmos(false), mBvhDirty(true),
+	mFixedTimeStep(.03f), mFixedAccumulator(0), mDeltaTime(0), mTotalTime(0), mFps(0), mFrameTimeAccum(0), mFrameCount(0), mPhysicsTimeLimitPerFrame(.5f) {
+
 	mBvh = new ObjectBvh2();
 	mShadowTexelSize = float2(1.f / SHADOW_ATLAS_RESOLUTION, 1.f / SHADOW_ATLAS_RESOLUTION) * .75f;
 	mEnvironment = new ::Environment(this);
@@ -63,6 +65,9 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mInstance->Device()->Execute(commandBuffer, false)->Wait();
 
 	mSkyboxCube = Mesh::CreateCube("SkyCube", mInstance->Device(), 1.f);
+
+	mStartTime = mClock.now();
+	mLastFrame = mClock.now();
 }
 Scene::~Scene(){
 	safe_delete(mSkyboxCube);
@@ -321,6 +326,37 @@ Object* Scene::LoadModelScene(const string& filename,
 }
 
 void Scene::Update() {
+	auto t1 = mClock.now();
+	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
+	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
+	mLastFrame = t1;
+
+	// count fps
+	mFrameTimeAccum += mDeltaTime;
+	mFrameCount++;
+	if (mFrameTimeAccum > 1.f) {
+		mFps = mFrameCount / mFrameTimeAccum;
+		mFrameTimeAccum -= 1.f;
+		mFrameCount = 0;
+	}
+
+	PROFILER_BEGIN("FixedUpdate");
+	float physicsTime = 0;
+	mFixedAccumulator += mDeltaTime;
+	t1 = mClock.now();
+	while (mFixedAccumulator > mFixedTimeStep && physicsTime < mPhysicsTimeLimitPerFrame) {
+		for (auto o : mObjects)
+			if (o->EnabledHierarchy())
+				o->FixedUpdate();
+		for (const auto& p : mPluginManager->Plugins())
+			if (p->mEnabled)
+				p->FixedUpdate();
+
+		mFixedAccumulator -= mFixedTimeStep;
+		physicsTime = (mClock.now() - t1).count() * 1e-9f;
+	}
+	PROFILER_END;
+
 	PROFILER_BEGIN("Update");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
@@ -334,6 +370,7 @@ void Scene::Update() {
 		if (p->mEnabled)
 			p->PostUpdate();
 	PROFILER_END;
+
 }
 
 void Scene::AddObject(shared_ptr<Object> object) {
@@ -415,8 +452,6 @@ void Scene::AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size,
 };
 
 void Scene::PreFrame(CommandBuffer* commandBuffer) {
-	PROFILER_BEGIN("Scene PreFrame");
-
 	vkCmdSetLineWidth(*commandBuffer, 1.0f);
 	
 	PROFILER_BEGIN("Renderer PreFrame");
@@ -625,8 +660,6 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 
 	Gizmos::PreFrame(this);
 	GUI::PreFrame(this);
-
-	PROFILER_END;
 }
 
 void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear) {
