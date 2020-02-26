@@ -50,6 +50,9 @@ public:
 	inline void BlendMode(::BlendMode c) { mBlendMode = c; }
 	inline ::BlendMode BlendMode() const { return mBlendMode; }
 
+	ENGINE_EXPORT void SetUniformBuffer(const std::string& name, VkDeviceSize offset, VkDeviceSize range, std::shared_ptr<Buffer> param);
+	ENGINE_EXPORT void SetUniformBuffer(const std::string& name, VkDeviceSize offset, VkDeviceSize range, Buffer* param);
+
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, Texture* param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, uint32_t index, std::shared_ptr<Texture> param);
 	ENGINE_EXPORT void SetParameter(const std::string& name, const MaterialParameter& param);
@@ -83,6 +86,13 @@ private:
 	PassType mPassMask;
 	uint32_t mRenderQueue;
 
+	struct UniformBufferParameter {
+		std::variant<std::shared_ptr<Buffer>, Buffer*> mBuffer;
+		VkDeviceSize mOffset;
+		VkDeviceSize mRange;
+	};
+
+	std::unordered_map<std::string, UniformBufferParameter> mUniformBuffers;
 	std::unordered_map<std::string, MaterialParameter> mParameters;
 	std::unordered_map<std::string, std::unordered_map<uint32_t, std::variant<std::shared_ptr<Texture>, Texture*>>> mArrayParameters;
 

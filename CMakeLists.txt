@@ -74,7 +74,6 @@ if(WIN32)
 	target_link_libraries(ShaderCompiler
 		"Ws2_32.lib"
 		"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-		"${STRATUM_HOME}/ThirdParty/shaderc/lib/shaderc.lib"
 		"${STRATUM_HOME}/ThirdParty/shaderc/lib/shaderc_combined.lib"
 		"${STRATUM_HOME}/ThirdParty/shaderc/third_party/spirv-cross/lib/spirv-cross-core.lib" )
 

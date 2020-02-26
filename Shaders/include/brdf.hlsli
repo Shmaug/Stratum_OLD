@@ -135,8 +135,8 @@ float3 EvaluateLighting(MaterialInfo material, float3 worldPos, float3 normal, f
 
 	eval.rgb += material.emission;
 
-	float3 env_spec = AmbientLight;
-	float3 env_diff = AmbientLight;
+	float3 env_spec = AmbientLight * lerp(.5, 1, normal.y * .5 + .5);
+	float3 env_diff = AmbientLight * lerp(.5, 1, normal.y * .5 + .5);
 
 	#ifdef ENVIRONMENT_TEXTURE
 	uint texWidth, texHeight, numMips;

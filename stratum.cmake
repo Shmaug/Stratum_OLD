@@ -38,7 +38,7 @@ function(link_plugin TARGET_NAME)
 		target_link_libraries(${TARGET_NAME}
 			"${PROJECT_BINARY_DIR}/lib/Engine.lib"
 			"$ENV{VULKAN_SDK}/lib/vulkan-1.lib"
-			"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"+
+			"${STRATUM_HOME}/ThirdParty/assimp/lib/assimp.lib"
 			"${STRATUM_HOME}/ThirdParty/assimp/lib/zlibstatic.lib"
 			"${STRATUM_HOME}/ThirdParty/assimp/lib/IrrXML.lib" )
 
