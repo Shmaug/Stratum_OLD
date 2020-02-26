@@ -20,21 +20,19 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
 - `Instance`
   - Wraps `VkInstance`
   - **Useful functions**:
-    - `Device()`: The device being used by Stratum
-    - `Window()`: The window being used by Stratum
-    - `TotalTime()`: Total time in seconds since Stratum has started
-    - `DeltaTIme()`: Delta time in seconds between last frame and the current frame
-    - `MaxFramesInFlight()`: Tells the total number of frames in flight on the CPU
+    - `Instance::Device()`: The device being used by Stratum
+    - `Instance::Window()`: The window being used by Stratum
+    - `Instance::MaxFramesInFlight()`: Tells the total number of frames in flight on the CPU
 - `Device`
   - Wraps `VkDevice`
   - Accessible through `Instance::Device()`
   - Tracks current frame data
     - Useful for grabbing a `Buffer` or `DescriptorSet` used for a particular render pass
   - **Useful functions**:
-    - `GetTempBuffer()`: Get a buffer that is valid for this frame
-    - `GetTempDescriptorSet`: Get a descriptor set that is valid for the current frame
-    - `MaxFramesInFlight()`: Tells the total number of frames in flight on the CPU
-    - `FrameContextIndex()`: Tells the index of the current frame. Between 0 and MaxFramesInFlight-1
+    - `Device::GetTempBuffer()`: Get a buffer that is valid for this frame
+    - `Device::GetTempDescriptorSet`: Get a descriptor set that is valid for the current frame
+    - `Device::MaxFramesInFlight()`: Tells the total number of frames in flight on the CPU
+    - `Device::FrameContextIndex()`: Tells the index of the current frame. Between 0 and MaxFramesInFlight-1
 - `Buffer`
   - Wraps `VkBuffer`
   - Represents a buffer of data on the GPU
@@ -42,19 +40,19 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
 - `DescriptorSet`
   - Wraps `VkDescriptorSet`
   - Descriptor writes are buffered
-    - Must call `FlushWrites()` to actually write them
+    - Must call `DescriptorSet::FlushWrites()` to actually write them
 - `CommandBuffer`
   - Wraps `VkCommandBuffer`
   - Passed in by most rendering functions
   - Tracks active `RenderPass`, `Camera`, `Material`, `Shader` vertex buffer, index buffer, and more to avoid unecessary API calls
   - **Useful functions**:
-    - `BindShader()`: Binds a shader pipeline. Tracks active `Shader`, and `Camera`
-    - `BindMaterrial()`: Binds the shader pipline from the material. Tracks active `Material`, `Shader`, and `Camera`
-    - `BindVertexBuffer()`: Binds a vertex buffer and sets it as active
-    - `BindIndexBuffer()`: Binds an index buffer and sets it as active
-    - `BeginRenderPass()`: Begins a `RenderPass` and sets it as active.
-    - `EndRenderPass()`: Ends a `RenderPass` and un-sets it as active.
-    - `PushConstant()`: Pushes a PushConstant value. Checks to see if the provided shader supports the PushConstant before attempting to push.
+    - `CommandBuffer::BindShader()`: Binds a shader pipeline. Tracks active `Shader`, and `Camera`
+    - `CommandBuffer::BindMaterrial()`: Binds the shader pipline from the material. Tracks active `Material`, `Shader`, and `Camera`
+    - `CommandBuffer::BindVertexBuffer()`: Binds a vertex buffer and sets it as active
+    - `CommandBuffer::BindIndexBuffer()`: Binds an index buffer and sets it as active
+    - `CommandBuffer::BeginRenderPass()`: Begins a `RenderPass` and sets it as active.
+    - `CommandBuffer::EndRenderPass()`: Ends a `RenderPass` and un-sets it as active.
+    - `CommandBuffer::PushConstant()`: Pushes a PushConstant value. Checks to see if the provided shader supports the PushConstant before attempting to push.
 - `RenderPass`
   - Wraps `VkRenderPass`
   - Active `RenderPass` tracked by `CommandBuffer`
@@ -79,6 +77,9 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
   - Stores an `AssetManager`, `InputManager`, and `PluginManager`
   - Use `Scene::LoadModelScene()` to efficiently load multiple `MeshRenderers` from one 3D file
     - Stores all vertices and indices in the same buffer
+  - Computes timing
+    - `Scene::TotalTime()`: Total time in seconds since Stratum has started
+    - `Scene::DeltaTIme()`: Delta time in seconds between last frame and the current frame
 - `Object`
   - Base class for all Scene Objects. Stores a Position, Rotation, and Scale that is used to compute an object-to-parent matrix (see `Object::ObjectToParent()`). Objects can have other Objects within them as children, allowing for hierarchical transforms.
   - Almost completely virtual, designed to be inhereted from
@@ -166,6 +167,9 @@ Each frame follows the following sequence of events:
 - Acquire SwapChain image
 - Scene Update
   - `Plugin::PreUpdate()`
+  - Fixed Update Loop
+      - `Object::FixedUpdate()`
+      - `Plugin::FixedUpdate()`
   - `Plugin::Update()`
   - `Plugin::PostUpdate()`
 - Render

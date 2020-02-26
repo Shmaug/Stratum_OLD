@@ -18,8 +18,9 @@ public:
 	
 	inline virtual bool Init(Scene* scene) { return true; }
 	
-	inline virtual void PreUpdate () {}
-	inline virtual void Update	  () {}
+	inline virtual void PreUpdate() {}
+	inline virtual void FixedUpdate() {}
+	inline virtual void Update() {}
 	inline virtual void PostUpdate() {}
 	
 	/// Called before a camera starts rendering, before BeginRenderPass

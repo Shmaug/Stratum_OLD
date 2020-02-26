@@ -136,7 +136,7 @@ void SkinnedMeshRenderer::DrawInstanced(CommandBuffer* commandBuffer, Camera* ca
 
 	uint32_t lc = (uint32_t)Scene()->ActiveLights().size();
 	float2 s = Scene()->ShadowTexelSize();
-	float t = Scene()->Instance()->TotalTime();
+	float t = Scene()->TotalTime();
 	commandBuffer->PushConstant(shader, "Time", &t);
 	commandBuffer->PushConstant(shader, "LightCount", &lc);
 	commandBuffer->PushConstant(shader, "ShadowTexelSize", &s);

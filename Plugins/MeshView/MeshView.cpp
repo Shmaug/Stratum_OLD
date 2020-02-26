@@ -30,12 +30,13 @@ private:
 	Object* mSelected;
 
 	uint32_t mCurrentBone;
-	shared_ptr<Animation> mWaspWalk;
+	Animation* mCurrentAnimation;
 	float mAnimTime;
 	bool mPlayAnimation;
 	bool mLoopAnimation;
 
 	SkinnedMeshRenderer* mWasp;
+	shared_ptr<Animation> mWaspWalk;
 	SkinnedMeshRenderer* mHead;
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string& name, float scale) {
@@ -387,7 +388,7 @@ private:
 
 public:
 	PLUGIN_EXPORT MeshView() 
-		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mAnimTime(0.f), mHead(nullptr), mWasp(nullptr),
+		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mAnimTime(0.f), mHead(nullptr), mWasp(nullptr), mCurrentAnimation(nullptr),
 		mCurrentBone(0xFFFFFFFF), mPlayAnimation(false), mLoopAnimation(true) {
 		mEnabled = true;
 	}
@@ -420,7 +421,7 @@ public:
 		auto light2 = make_shared<Light>("Spot");
 		light2->CastShadows(true);
 		light2->Type(LIGHT_TYPE_SPOT);
-		light2->Color(float3(.4, 1, .4f));
+		light2->Color(float3(.4f, 1, .4f));
 		light2->Intensity(15.f);
 		light2->Range(16.f);
 		light2->LocalPosition(-3, 3, 1);
@@ -460,10 +461,10 @@ public:
 			mHead->ShapeKey("head2", 1.f - mAnimTime);
 		}
 		if (mWasp) {
-			if (mPlayAnimation) mAnimTime += mScene->Instance()->DeltaTime();
-			if (mLoopAnimation) if (mAnimTime > mWaspWalk->TimeEnd()) mAnimTime -= (mWaspWalk->TimeStart() + mWaspWalk->TimeEnd());
+			if (mPlayAnimation) mAnimTime += mScene->DeltaTime();
+			if (mLoopAnimation) if (mAnimTime > mCurrentAnimation->TimeEnd()) mAnimTime -= (mCurrentAnimation->TimeStart() + mCurrentAnimation->TimeEnd());
 			
-			mWaspWalk->Sample(mAnimTime, mWasp->Rig());
+			mCurrentAnimation->Sample(mAnimTime, mWasp->Rig());
 		}
 	}
 
@@ -481,7 +482,7 @@ public:
 
 		if (GUI::LayoutButton(sem16, "Wasp", 16, 20, .5f, 1)) {
 			if (mHead) mHead->mVisible = false;
-			if (mWasp) { mWasp->mVisible = true; return; }
+			if (mWasp) { mCurrentAnimation = mWaspWalk.get(); mWasp->mVisible = true; return; }
 
 			auto waspMat = make_shared<Material>("Wasp", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 			waspMat->SetParameter("Color", float4(1));
@@ -505,8 +506,10 @@ public:
 			mWasp = wasp.get();
 
 			mWaspWalk = LoadAnim("Assets/Models/wasp/wasp_walk.anim");
+			mCurrentAnimation = mWaspWalk.get();
 		}
 		if (GUI::LayoutButton(sem16, "Head", 16, 20, .5f, 1)) {
+			mCurrentAnimation = nullptr;
 			if (mWasp) mWasp->mVisible = false;
 			if (mHead) { mHead->mVisible = true; return; }
 
@@ -538,10 +541,13 @@ public:
 			headRig[0]->AddChild(head.get());
 			mHead = head.get();
 		}
+		if (GUI::LayoutButton(sem16, "Cloth", 16, 20, .5f, 1)) {
+
+		}
 
 		GUI::EndLayout();
 
-		if (mWaspWalk) {
+		if (mCurrentAnimation) {
 			fRect2D r = GUI::BeginScreenLayout(LAYOUT_HORIZONTAL, fRect2D(0, 0, camera->FramebufferWidth(), 200), float4(.2f, .2f, .2f, 1), 2);
 			
 			GUI::LayoutSpace(10);
@@ -577,8 +583,8 @@ public:
 
 			// extrapolation modes
 			for (uint32_t j = 0; j < 3; j++) {
-				if (mWaspWalk->Channels().count(mCurrentBone*3)) {
-					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3);
+				if (mCurrentAnimation->Channels().count(mCurrentBone*3)) {
+					const AnimationChannel& c = mCurrentAnimation->Channels().at(mCurrentBone*3);
 					string e = "";
 					switch (c.ExtrapolateIn()){
 						case EXTRAPOLATE_CONSTANT: 		e = "Constant"; break;
@@ -605,15 +611,15 @@ public:
 			r.mExtent.y -= 24;
 			GUI::Rect(r, float4(.1f, .1f, .1f, 1));
 
-			float tmx = mWaspWalk->TimeEnd();
-			float tmn = mWaspWalk->TimeStart();
+			float tmx = mCurrentAnimation->TimeEnd();
+			float tmn = mCurrentAnimation->TimeStart();
 			float vmx = 0;
 			float vmn = 0;
 
 			// compute curve range
 			for (uint32_t j = 0; j < 3; j++) {
-				if (mWaspWalk->Channels().count(mCurrentBone*3 + j)) {
-					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3 + j);
+				if (mCurrentAnimation->Channels().count(mCurrentBone*3 + j)) {
+					const AnimationChannel& c = mCurrentAnimation->Channels().at(mCurrentBone*3 + j);
 					for (uint32_t i = 0; i < c.KeyframeCount(); i++){
 						tmx = fmaxf(tmx, c.Keyframe(i).mTime);
 						tmn = fminf(tmn, c.Keyframe(i).mTime);
@@ -636,7 +642,7 @@ public:
 			}
 
 			// animation window background
-			fRect2D bgrect(r.mOffset + float2(r.mExtent.x * (mWaspWalk->TimeStart() - tmn) / (tmx - tmn), 0), float2(r.mExtent.x * (mWaspWalk->TimeEnd()) / (tmx - tmn), r.mExtent.y));
+			fRect2D bgrect(r.mOffset + float2(r.mExtent.x * (mCurrentAnimation->TimeStart() - tmn) / (tmx - tmn), 0), float2(r.mExtent.x * (mCurrentAnimation->TimeEnd()) / (tmx - tmn), r.mExtent.y));
 			GUI::Rect(bgrect, float4(.15f, .15f, .15f, 1));
 			GUI::Rect(fRect2D(bgrect.mOffset, float2(1, r.mExtent.y)), float4(1, 1, 1, 1));
 			GUI::Rect(fRect2D(bgrect.mOffset + float2(bgrect.mExtent.x, 0), float2(1, r.mExtent.y)), float4(1, 1, 1, 1));
@@ -644,8 +650,8 @@ public:
 			GUI::Rect(fRect2D(r.mOffset + r.mExtent * float2(0, (0 - vmn) / (vmx - vmn)), float2(r.mExtent.x, 1)), float4(1, 1, 1, .3f));
 
 			for (uint32_t j = 0; j < 3; j++) {
-				if (mWaspWalk->Channels().count(mCurrentBone*3 + j)) {
-					const AnimationChannel& c = mWaspWalk->Channels().at(mCurrentBone*3 + j);
+				if (mCurrentAnimation->Channels().count(mCurrentBone*3 + j)) {
+					const AnimationChannel& c = mCurrentAnimation->Channels().at(mCurrentBone*3 + j);
 					// boxes and tangents
 					for (uint32_t i = 0; i < c.KeyframeCount(); i++){
 						float2 p(c.Keyframe(i).mTime, c.Keyframe(i).mValue);
@@ -678,7 +684,6 @@ public:
 
 			GUI::EndLayout();
 		}
-
 	}
 	
 	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
