@@ -58,7 +58,7 @@ public:
 	/// Buffer of ShadowData structs (defined in shadercompat.h)
 	inline Buffer* ShadowBuffer() const { return mShadowBuffers[mInstance->Device()->FrameContextIndex()]; }
 	/// Shadow atlas of multiple shadowmaps
-	inline Texture* ShadowAtlas() const { return mShadowAtlasFramebuffer->DepthBuffer(); }
+	inline Texture* ShadowAtlas() const { return mShadowAtlases[mInstance->Device()->FrameContextIndex()]; }
 	inline const std::vector<Light*>& ActiveLights() const { return mActiveLights; }
 	inline const std::vector<Camera*>& Cameras() const { return mCameras; }
 
@@ -82,7 +82,7 @@ public:
 
 private:
 	friend class Stratum;
-	ENGINE_EXPORT void Update();
+	ENGINE_EXPORT void Update(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
 	
