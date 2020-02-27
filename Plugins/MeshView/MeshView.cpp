@@ -542,7 +542,7 @@ public:
 			mHead = head.get();
 		}
 		if (GUI::LayoutButton(sem16, "Cloth", 16, 20, .5f, 1)) {
-
+			
 		}
 
 		GUI::EndLayout();
