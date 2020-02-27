@@ -325,7 +325,7 @@ Object* Scene::LoadModelScene(const string& filename,
 	return root;
 }
 
-void Scene::Update() {
+void Scene::Update(CommandBuffer* commandBuffer) {
 	auto t1 = mClock.now();
 	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
 	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
@@ -347,7 +347,7 @@ void Scene::Update() {
 	while (mFixedAccumulator > mFixedTimeStep && physicsTime < mPhysicsTimeLimitPerFrame) {
 		for (auto o : mObjects)
 			if (o->EnabledHierarchy())
-				o->FixedUpdate();
+				o->FixedUpdate(commandBuffer);
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
 				p->FixedUpdate();
@@ -383,6 +383,8 @@ void Scene::AddObject(shared_ptr<Object> object) {
 		mCameras.push_back(c);
 	if (auto r = dynamic_cast<Renderer*>(object.get()))
 		mRenderers.push_back(r);
+
+	mBvhDirty = true;
 }
 void Scene::RemoveObject(Object* object) {
 	if (!object) return;
@@ -416,6 +418,7 @@ void Scene::RemoveObject(Object* object) {
 
 	for (auto it = mObjects.begin(); it != mObjects.end();)
 		if (it->get() == object) {
+			mBvhDirty = true;
 			while (object->mChildren.size())
 				object->RemoveChild(object->mChildren[0]);
 			if (object->mParent) object->mParent->RemoveChild(object);

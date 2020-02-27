@@ -19,10 +19,6 @@ bool MeshRenderer::UpdateTransform() {
 	return true;
 }
 
-void MeshRenderer::Material(shared_ptr<::Material> m) {
-	mMaterial = m;
-}
-
 void MeshRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
 	if (pass == PASS_MAIN) Scene()->Environment()->SetEnvironment(camera, mMaterial.get());
 }

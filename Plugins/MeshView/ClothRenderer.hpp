@@ -10,34 +10,49 @@ class ClothRenderer : public Renderer {
 public:
 	bool mVisible;
 
-	ENGINE_EXPORT ClothRenderer(const std::string& name);
-	ENGINE_EXPORT ~ClothRenderer();
+	PLUGIN_EXPORT ClothRenderer(const std::string& name, float size = 1.f, uint32_t resolution = 128);
+	PLUGIN_EXPORT ~ClothRenderer();
 
-	inline virtual PassType PassMask() override { return (PassType)(mMaterial ? mMaterial->PassMask() : (PassType)0); }
+	inline void ExternalForce(const float3& f) { mExternalForce = f; }
+	inline float3 ExternalForce() const { return mExternalForce; }
+	inline void Drag(float d) { mDrag = d; }
+	inline float Drag() const { return mDrag; }
+	inline void Stiffness(float d) { mStiffness = d; }
+	inline float Stiffness() const { return mStiffness; }
 
-	inline virtual ::Material* Material() { return mMaterial.get(); }
-	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
+	inline bool Visible() override { return mVisible && EnabledHierarchy(); }
+	inline PassType PassMask() override { return (PassType)(PASS_DEPTH | PASS_MAIN); }
+	inline uint32_t RenderQueue() override { return 1000; }
 
-	inline virtual bool Visible() override { return mVisible && mMaterial && EnabledHierarchy(); }
-	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
-	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
+	PLUGIN_EXPORT void FixedUpdate(CommandBuffer* commandBuffer) override;
 
-	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass);
-	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass);
+	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
+	PLUGIN_EXPORT void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
+	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
-
-	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
+	inline AABB Bounds() override { return AABB(-mSize, mSize) * ObjectToWorld(); }
 
 private:
 	uint32_t mRayMask;
+	Texture* mMainTexture;
+	Texture* mNormalTexture;
+	Texture* mMaskTexture;
+	uint2 mPinIndex;
+	float3 mPinPos;
 
-protected:
-    AABB mClothAABB;
+	float4 mColor;
+	float mMetallic;
+	float mRoughness;
+	float mBumpStrength;
+	float3 mEmission;
+	float4 mTextureST;
+
     uint32_t mResolution;
-	std::shared_ptr<::Material> mMaterial;
+	float3 mExternalForce;
+	float mDrag;
+	float mStiffness;
+	float mSize;
 
-	AABB mAABB;
-	std::variant<::Mesh*, std::shared_ptr<::Mesh>> mMesh;
-	ENGINE_EXPORT virtual bool UpdateTransform() override;
+	Buffer* mVertices;
+	Material* mMaterial;
 };

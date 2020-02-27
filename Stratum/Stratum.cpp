@@ -25,36 +25,32 @@ private:
 	AssetManager* mAssetManager;
 	Scene* mScene;
 
-	void Render() {
-		PROFILER_BEGIN("Get CommandBuffer");
-		shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->Device()->GetCommandBuffer();
-		PROFILER_END;
-
+	void Render(CommandBuffer* commandBuffer) {
 		PROFILER_BEGIN("Scene PreFrame");
-		mScene->PreFrame(commandBuffer.get());
+		mScene->PreFrame(commandBuffer);
 		PROFILER_END;
 
 		PROFILER_BEGIN("Render Cameras");
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy())
-				mScene->Render(commandBuffer.get(), camera, camera->Framebuffer(), PASS_MAIN);
+				mScene->Render(commandBuffer, camera, camera->Framebuffer(), PASS_MAIN);
 
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy())
-				camera->Resolve(commandBuffer.get());
+				camera->Resolve(commandBuffer);
 
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy()) {
 				PROFILER_BEGIN("Plugin PostProcess");
 				for (const auto& p : mPluginManager->Plugins())
-					if (p->mEnabled) p->PostProcess(commandBuffer.get(), camera);
+					if (p->mEnabled) p->PostProcess(commandBuffer, camera);
 				PROFILER_END;
 			}
 		for (const auto& camera : mScene->Cameras())
 			if (camera->TargetWindow() && camera->EnabledHierarchy()) {
 				Texture* src = camera->ResolveBuffer();
-				src->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer.get());
-				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+				src->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
+				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 				VkImageCopy rgn = {};
 				rgn.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 				rgn.srcSubresource.layerCount = 1;
@@ -65,17 +61,13 @@ private:
 					src->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 					camera->TargetWindow()->BackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 					1, &rgn);
-				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer.get());
-				src->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer.get());
+				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer);
+				src->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 			}
 
 		for (const auto& camera : mScene->Cameras())
 			if (camera->EnabledHierarchy())
-				camera->PostRender(commandBuffer.get());
-		PROFILER_END;
-
-		PROFILER_BEGIN("Execute CommandBuffer");
-		mInstance->Device()->Execute(commandBuffer);
+				camera->PostRender(commandBuffer);
 		PROFILER_END;
 	}
 
@@ -115,8 +107,14 @@ public:
 			mInstance->Window()->AcquireNextImage();
 			PROFILER_END;
 
-			mScene->Update();
-			Render();
+			PROFILER_BEGIN("Get CommandBuffer");
+			shared_ptr<CommandBuffer> commandBuffer = mScene->Instance()->Device()->GetCommandBuffer();
+			PROFILER_END;
+			mScene->Update(commandBuffer.get());
+			Render(commandBuffer.get());
+			PROFILER_BEGIN("Execute CommandBuffer");
+			mInstance->Device()->Execute(commandBuffer);
+			PROFILER_END;
 
 			mInstance->AdvanceFrame();
 

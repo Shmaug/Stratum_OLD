@@ -24,7 +24,8 @@ typedef std::variant<
 	int32_t,
 	int2,
 	int3,
-	int4
+	int4,
+	float4x4
 > MaterialParameter;
 
 class Material {

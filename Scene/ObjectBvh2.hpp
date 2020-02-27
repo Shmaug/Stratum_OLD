@@ -38,6 +38,4 @@ public:
 private:
 	std::vector<Node> mNodes;
 	std::vector<Primitive> mPrimitives;
-
-	uint32_t mLeafSize;
 };
