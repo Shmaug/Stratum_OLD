@@ -89,6 +89,7 @@ protected:
 
 	float4x4 ConvertMat34(vr::HmdMatrix34_t);
 	float4x4 ConvertMat44(vr::HmdMatrix44_t);
+	float4x4 RHtoLH(float4x4 RH);
 
 private:
 	// Handles for the new IVRInput

@@ -2236,6 +2236,18 @@ struct float4x4 {
 		r[2][3] = 1;
 		return r;
 	}
+	inline static float4x4 Perspective(float left, float right, float top, float bottom, float near, float far) {
+		float df = 1 / (far - near);
+		float4x4 r(0);
+		r[0][0] = 2 * near / (right - left);
+		r[1][1] = 2 * near / (top - bottom);
+		r[2][0] = (right + left) / (right - left);
+		r[2][1] = (top + bottom) / (top - bottom);
+		r[2][2] = far * df;
+		r[3][2] = -far * near * df;
+		r[2][3] = 1;
+		return r;
+	}
 	inline static float4x4 Orthographic(float width, float height, float near, float far) {
 		float df = 1 / (far - near);
 		float4x4 r(1);
