@@ -20,13 +20,22 @@ float4x4 OpenVRDevice::ConvertMat44(vr::HmdMatrix44_t mat44) {
 	);
 }
 
+float4x4 OpenVRDevice::RHtoLH(float4x4 RH) {
+	return float4x4(
+		RH[0][0], RH[1][0], -RH[2][0], RH[3][0],
+		RH[0][1], RH[1][1], -RH[2][1], RH[3][1],
+		-RH[0][2], -RH[1][2], RH[2][2], -RH[3][2],
+		RH[0][3], RH[1][3], -RH[2][3], RH[3][3]
+	);
+}
+
 OpenVRDevice::OpenVRDevice(float near, float far)
 	: mNearClip(near), mFarClip(far), mSystem(nullptr), mPosition(float3()), mRotation(quaternion()) {
 	Init();
 }
 
 OpenVRDevice::~OpenVRDevice() {
-
+	vr::VR_Shutdown();
 }
 
 void OpenVRDevice::Init() {
@@ -65,7 +74,7 @@ void OpenVRDevice::Init() {
 		return;
 	}
 
-	InitializeActions();
+	//InitializeActions();
 
 	std::string driverName = GetDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_TrackingSystemName_String);
 	std::string deviceSerialNumber = GetDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_SerialNumber_String);
@@ -192,7 +201,11 @@ void OpenVRDevice::Update() {
 	if (mTrackedDevicePoses[vr::k_unTrackedDeviceIndex_Hmd].bPoseIsValid)
 	{
 		mHeadMatrix = ConvertMat34(mTrackedDevicePoses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking);
+		//mHeadMatrix = RHtoLH(mHeadMatrix);
 		mHeadMatrix.Decompose(&mPosition, &mRotation, nullptr);
+		//mPosition.z = -mPosition.z;
+		//mRotation.x = -mRotation.x;
+		//mRotation.y = -mRotation.y;
 		//printf_color(COLOR_MAGENTA, "Head position: %f, %f, %f\nHead rotation: %f, %f, %f, %f\n\n", mPosition.x, mPosition.y, mPosition.z, mRotation.x, mRotation.y, mRotation.z, mRotation.w);
 	}
 }
@@ -279,19 +292,34 @@ void OpenVRDevice::UpdateTracking() {
 void OpenVRDevice::CalculateEyeAdjustment() {
 	vr::HmdMatrix34_t mat;
 
-	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Left);
-	mLeftEyeTransform = ConvertMat34(mat);
 	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Right);
-	mRightEyeTransform = ConvertMat34(mat);
+	mLeftEyeTransform = inverse(ConvertMat34(mat));
+	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Left);
+	mRightEyeTransform = inverse(ConvertMat34(mat));
 }
 
 void OpenVRDevice::CalculateProjectionMatrices() {
 	vr::HmdMatrix44_t mat;
+	float l, r, t, b;
 
-	mat = mSystem->GetProjectionMatrix(vr::Eye_Left, mNearClip, mFarClip);
-	mLeftProjection = ConvertMat44(mat);
-	mat = mSystem->GetProjectionMatrix(vr::Eye_Right, mNearClip, mFarClip);
-	mRightProjection = ConvertMat44(mat);
+	//mat = mSystem->GetProjectionMatrix(vr::Eye_Left, mNearClip, mFarClip);
+	mSystem->GetProjectionRaw(vr::Eye_Right, &l, &r, &t, &b);
+	l *= mNearClip;
+	r *= mNearClip;
+	t *= mNearClip;
+	b *= mNearClip;
+	mLeftProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
+	//mLeftProjection = ConvertMat44(mat);
+
+	//mat = mSystem->GetProjectionMatrix(vr::Eye_Right, mNearClip, mFarClip);
+	//mRightProjection = ConvertMat44(mat);
+	mSystem->GetProjectionRaw(vr::Eye_Left, &l, &r, &t, &b);
+	l *= mNearClip;
+	r *= mNearClip;
+	t *= mNearClip;
+	b *= mNearClip;
+	mRightProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
+
 }
 
 

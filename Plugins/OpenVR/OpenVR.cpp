@@ -11,25 +11,56 @@ ENGINE_PLUGIN(OpenVR)
 
 OpenVR::OpenVR() : mScene(nullptr), mCamera(nullptr), mInput(nullptr){
 	mEnabled = true;
+	mVRDevice = new OpenVRDevice();
+	
 }
 OpenVR::~OpenVR() {
 	mScene->RemoveObject(mCamera);
-	mScene->RemoveObject(mCameraBase);
+	mScene->RemoveObject(mCameraRight);
+	mScene->RemoveObject(mBodyBase);
+	mScene->RemoveObject(mHead);
 	for (Object* obj : mObjects)
 		mScene->RemoveObject(obj);
+	//delete mLeftEye;
+	//delete mRightEye;
+	delete mMirror;
+	delete mVRDevice;
+}
+
+void OpenVR::PreInstanceInit(Instance* instance)
+{
+	std::vector< std::string > requiredInstanceExtensions;
+	mVRDevice->GetVulkanInstanceExtensionsRequired(requiredInstanceExtensions);
+	for (std::string ex : requiredInstanceExtensions)
+	{
+		instance->RequestInstanceExtension(ex);
+	}
+
+	//instance->RequestInstanceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	instance->RequestInstanceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+}
+
+void OpenVR::PreDeviceInit(Instance* instance, VkPhysicalDevice device)
+{
+	std::vector< std::string > requiredDeviceExtensions;
+	mVRDevice->GetVulkanDeviceExtensionsRequired(device, requiredDeviceExtensions);
+	for (std::string ex : requiredDeviceExtensions)
+	{
+		instance->RequestDeviceExtension(ex);
+	}
+
+	instance->RequestDeviceExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	//instance->RequestDeviceExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 }
 
 bool OpenVR::Init(Scene* scene) {
+
+	VkInstance i = *scene->Instance();
+	uint64_t device;
+
+
 	mScene = scene;
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
-	mVRDevice = new OpenVRDevice();
-
-#pragma region OpenVR extensions
-
-	std::vector< std::string > requiredInstanceExtensions;
-	mVRDevice->GetVulkanInstanceExtensionsRequired(requiredInstanceExtensions);
-
-#pragma endregion
 
 #pragma region load glTF
 	string folder = "Assets/Models/";
@@ -173,6 +204,7 @@ bool OpenVR::Init(Scene* scene) {
 	Object* root = mScene->LoadModelScene(folder + file, matfunc, objfunc, .6f, 1.f, .05f, .0015f);
 
 	root->LocalRotation(quaternion(float3(0, PI / 2, 0)));
+	//root->LocalScale(float3(10, 10, 10));
 	queue<Object*> nodes;
 	nodes.push(root);
 	while (nodes.size()) {
@@ -197,10 +229,16 @@ bool OpenVR::Init(Scene* scene) {
 
 	
 #pragma region Camera setup
-	shared_ptr<Object> cameraBase = make_shared<Object>("CameraBase");
-	mScene->AddObject(cameraBase);
-	mCameraBase = cameraBase.get();
-	mCameraBase->LocalPosition(0, .5f, 0);
+	shared_ptr<Object> bodyBase = make_shared<Object>("Openvr body");
+	mScene->AddObject(bodyBase);
+	mBodyBase = bodyBase.get();
+	mBodyBase->LocalPosition(0, -.5f, 0);
+
+	shared_ptr<Object> head = make_shared<Object>("Openvr head");
+	mScene->AddObject(head);
+	mHead = head.get();
+	mBodyBase->AddChild(mHead);
+	
 
 
 	uint32_t renderWidth = 0;
@@ -208,67 +246,149 @@ bool OpenVR::Init(Scene* scene) {
 	mVRDevice->System()->GetRecommendedRenderTargetSize(&renderWidth, &renderHeight);
 	fprintf_color(COLOR_GREEN, stderr, "Created stereo camera of size %dx%d\n", renderWidth, renderHeight);
 
+	mVRDevice->CalculateEyeAdjustment();
+	mVRDevice->CalculateProjectionMatrices();
 
 	//vector<VkFormat> colorFormats{ VK_FORMAT_R8G8B8A8_UNORM };
 	//Framebuffer* f = new Framebuffer("Openvr Camera", scene->Instance()->Device(), renderWidth, renderHeight, colorFormats, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
-	shared_ptr<Camera> camera = make_shared<Camera>("Camera", scene->Instance()->Window());
+	shared_ptr<Camera> camera = make_shared<Camera>("Left Camera", scene->Instance()->Device());
 	mScene->AddObject(camera);
 	camera->Near(.01f);
 	camera->Far(1024.f);
-	camera->FieldOfView(radians(65.f));
-	camera->LocalPosition(0, 0, 0);
-	mCamera = camera.get();
-	mCameraBase->AddChild(mCamera);
+	camera->FramebufferWidth(renderWidth);
+	camera->FramebufferHeight(renderHeight);
+	camera->ViewportWidth(renderWidth);
+	camera->ViewportHeight(renderHeight);
 
+	float3 pos;
+	quaternion rot;
+	float3 scale;
+
+	float4x4 eye = mVRDevice->LeftEyeMatrix();
+	eye.Decompose(&pos, &rot, &scale);
+	camera->LocalPosition(pos);
+	camera->LocalRotation(rot);
+	camera->LocalScale(scale);
+
+	camera->Projection(mVRDevice->LeftProjection());
+
+
+
+	mCamera = camera.get();
+	mHead->AddChild(mCamera);
+
+
+
+
+	shared_ptr<Camera> camera2 = make_shared<Camera>("Right Camera", scene->Instance()->Device());
+	mScene->AddObject(camera2);
+	camera2->Near(.01f);
+	camera2->Far(1024.f);
+	camera2->FramebufferWidth(renderWidth);
+	camera2->FramebufferHeight(renderHeight);
+	camera2->ViewportWidth(renderWidth);
+	camera2->ViewportHeight(renderHeight);
+
+
+	eye = mVRDevice->RightEyeMatrix();
+	eye.Decompose(&pos, &rot, &scale);
+	camera2->LocalPosition(pos);
+	camera2->LocalRotation(rot);
+	camera2->LocalScale(scale);
+
+	camera2->Projection(mVRDevice->RightProjection());
+
+
+
+	mCameraRight = camera2.get();
+	mHead->AddChild(mCameraRight);
+
+
+
+
+	/*
 	camera->StereoMode(STEREO_SBS_HORIZONTAL);
 
 
 	mVRDevice->CalculateEyeAdjustment();
-	float4x4 eye = (inverse(mVRDevice->LeftEyeMatrix()));
-	camera->EyeTransform(eye, EYE_LEFT);
-	eye = (inverse(mVRDevice->RightEyeMatrix()));
-	camera->EyeTransform(eye, EYE_RIGHT);
+	float4x4 eye = mVRDevice->LeftEyeMatrix();
+	camera->HeadToEye(eye, EYE_LEFT);
+	eye = mVRDevice->RightEyeMatrix();
+	camera->HeadToEye(eye, EYE_RIGHT);
 
 	mVRDevice->CalculateProjectionMatrices();
 	float4x4 proj = (mVRDevice->LeftProjection());
-	float4x4 flipy = float4x4(1);
-	//flipy[1][1] = -1;
 	//proj[1][1] = -proj[1][1];
-	camera->Projection(proj * flipy, EYE_LEFT);
+	camera->Projection(proj , EYE_LEFT);
 	proj = (mVRDevice->RightProjection());
 	//proj[1][1] = -proj[1][1];
-	camera->Projection(proj * flipy, EYE_RIGHT);
+	camera->Projection(proj, EYE_RIGHT);
+	*/
 #pragma endregion
 
+	VkImageUsageFlags flags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	/*
+	mLeftEye = new Texture("Left Eye Texture", 
+		scene->Instance()->Device(), 
+		mCamera->FramebufferWidth() / 2, mCamera->FramebufferHeight(), 1, 
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, 
+		flags);
+	mRightEye = new Texture("Right Eye Texture",
+		scene->Instance()->Device(),
+		mCamera->FramebufferWidth() / 2, mCamera->FramebufferHeight(), 1,
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL,
+		flags);
+	*/
+	mMirror = new Texture("Mirror Texture",
+		scene->Instance()->Device(),
+		renderWidth * 2, renderHeight, 1,
+		VK_FORMAT_R8G8B8A8_UNORM,
+		VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL,
+		flags);
 	return true;
 }
 
 void OpenVR::Update() {
+	float3 pos;
+	quaternion rot;
+	float3 scale;
+
+	//Update head position/rotation
+	mVRDevice->Update();
+	pos = mVRDevice->Position();
+	pos.z = -pos.z;
+	mHead->LocalPosition(pos);
+
+	rot = mVRDevice->Rotation();
+	rot.z = -rot.z;
+	//rot.y = -rot.y;
+	mHead->LocalRotation(rot);
+
+
+	//Update eye matrices (needs to be done bc of bug that prevents camera matrices from being updated by parent
 	mVRDevice->CalculateEyeAdjustment();
-	//mCamera->EyeTransform(mVRDevice->LeftEyeMatrix(), EYE_LEFT);
-	//mCamera->EyeTransform(mVRDevice->RightEyeMatrix(), EYE_RIGHT);
 
-	mVRDevice->CalculateProjectionMatrices();
-	//mCamera->Projection(mVRDevice->LeftProjection(), EYE_LEFT);
-	//mCamera->Projection(mVRDevice->RightProjection(), EYE_RIGHT);
+	float4x4 eye = mVRDevice->LeftEyeMatrix();
+	eye.Decompose(&pos, &rot, &scale);
+	mCamera->LocalPosition(pos);
+	mCamera->LocalRotation(rot);
+	mCamera->LocalScale(scale);
 
-
-	if (mInput->KeyDownFirst(KEY_F1))
-		mScene->DrawGizmos(!mScene->DrawGizmos());
-	//if (mInput->KeyDownFirst(KEY_TILDE))
-	//	mShowPerformance = !mShowPerformance;
-
+	eye = mVRDevice->RightEyeMatrix();
+	eye.Decompose(&pos, &rot, &scale);
+	mCameraRight->LocalPosition(pos);
+	mCameraRight->LocalRotation(rot);
+	mCameraRight->LocalScale(scale);
 }
 
 void OpenVR::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass)
 {
-	std::vector< std::string > requiredDeviceExtensions;
-	mVRDevice->GetVulkanDeviceExtensionsRequired(commandBuffer->Device()->PhysicalDevice(), requiredDeviceExtensions);
-
-
-	mVRDevice->Update();
-	camera->LocalPosition(mVRDevice->Position());
-	camera->LocalRotation(mVRDevice->Rotation());
+	//if (camera != mCamera)
+	//	return;
+	//camera->LocalPosition(mVRDevice->Position());
+	//camera->LocalRotation(mVRDevice->Rotation());
 }
 
 /*
@@ -280,21 +400,126 @@ void OpenVR::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassT
 */
 
 void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
-	if (camera != mCamera)
+	if (camera == mCamera)
 	{
-		return;
+		VkPipelineStageFlags srcStage, dstStage, srcStage2, dstStage2;
+		VkImageMemoryBarrier barrier[3] = {};
+		barrier[0] = mCamera->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage, dstStage);
+		barrier[1] = mMirror->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, srcStage2, dstStage2);
+		srcStage = srcStage | srcStage2;
+		dstStage = dstStage | dstStage2;
+		vkCmdPipelineBarrier(*commandBuffer,
+			srcStage, dstStage,
+			0,
+			0, nullptr,
+			0, nullptr,
+			2, barrier);
+
+
+
+		VkImageSubresourceLayers srcLayers = {};
+		srcLayers.baseArrayLayer = 0;
+		srcLayers.layerCount = 1;
+		srcLayers.mipLevel = 0;
+		srcLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		VkImageSubresourceLayers dstLayers = {};
+		dstLayers.baseArrayLayer = 0;
+		dstLayers.layerCount = 1;
+		dstLayers.mipLevel = 0;
+		dstLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		VkExtent3D extent = {};
+		extent.width = mMirror->Width() / 2;
+		extent.height = mMirror->Height();
+		extent.depth = mMirror->Depth();
+
+		//VkOffset3D rightOffset = {};
+		//rightOffset.x = mLeftEye->Width();
+		//rightOffset.y = 0;
+		//rightOffset.z = 0;
+
+		VkImageCopy copy = {};
+		copy.srcSubresource = srcLayers;
+		copy.dstSubresource = dstLayers;
+		copy.extent = extent;
+
+		vkCmdCopyImage(*commandBuffer, mCamera->ResolveBuffer()->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mMirror->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+		VkImageMemoryBarrier barrier2[3] = {};
+		barrier2[0] = mCamera->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		barrier2[1] = mMirror->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage2, dstStage2);
+
+		srcStage = srcStage | srcStage2;
+		dstStage = dstStage | dstStage2;
+		vkCmdPipelineBarrier(*commandBuffer,
+			srcStage, dstStage,
+			0,
+			0, nullptr,
+			0, nullptr,
+			2, barrier2);
 	}
+	else if (camera == mCameraRight)
+	{
+		VkPipelineStageFlags srcStage, dstStage, srcStage2, dstStage2;
+		VkImageMemoryBarrier barrier[3] = {};
+		barrier[0] = mCameraRight->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage, dstStage);
+		barrier[1] = mMirror->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, srcStage2, dstStage2);
+		srcStage = srcStage | srcStage2;
+		dstStage = dstStage | dstStage2;
+		vkCmdPipelineBarrier(*commandBuffer,
+			srcStage, dstStage,
+			0,
+			0, nullptr,
+			0, nullptr,
+			2, barrier);
 
-	//mCamera->Resolve(commandBuffer);
 
-	//mCamera->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
+		VkImageSubresourceLayers srcLayers = {};
+		srcLayers.baseArrayLayer = 0;
+		srcLayers.layerCount = 1;
+		srcLayers.mipLevel = 0;
+		srcLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		VkImageSubresourceLayers dstLayers = {};
+		dstLayers.baseArrayLayer = 0;
+		dstLayers.layerCount = 1;
+		dstLayers.mipLevel = 0;
+		dstLayers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		VkExtent3D extent = {};
+		extent.width = mMirror->Width() / 2;
+		extent.height = mMirror->Height();
+		extent.depth = mMirror->Depth();
+
+		VkOffset3D rightOffset = {};
+		rightOffset.x = mMirror->Width() / 2;
+		rightOffset.y = 0;
+		rightOffset.z = 0;
+
+		VkImageCopy copy = {};
+		copy.srcSubresource = srcLayers;
+		copy.dstSubresource = dstLayers;
+		copy.extent = extent;
+		copy.dstOffset = rightOffset;
+
+		vkCmdCopyImage(*commandBuffer, mCameraRight->ResolveBuffer()->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mMirror->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+		VkImageMemoryBarrier barrier2[3] = {};
+		barrier2[0] = mCameraRight->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+		barrier2[1] = mMirror->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage2, dstStage2);
+
+		srcStage = srcStage | srcStage2;
+		dstStage = dstStage | dstStage2;
+		vkCmdPipelineBarrier(*commandBuffer,
+			srcStage, dstStage,
+			0,
+			0, nullptr,
+			0, nullptr,
+			2, barrier2);
+	}	
 }
 
 void OpenVR::PreSwap()
 {
-	Texture* tex = mCamera->ResolveBuffer();
-
+	
 	// Submit to SteamVR
 	vr::VRTextureBounds_t leftBounds;
 	leftBounds.uMin = 0.0f;
@@ -307,48 +532,48 @@ void OpenVR::PreSwap()
 	rightBounds.uMax = 1.0f;
 	rightBounds.vMin = 0.0f;
 	rightBounds.vMax = 1.0f;
-
+	
 	//tex->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 
-	vr::VRVulkanTextureData_t vulkanData;
-	vulkanData.m_nImage = (uint64_t)((VkImage)tex->Image());
-	vulkanData.m_pDevice = (VkDevice_T*)mScene->Instance()->Device();
-	vulkanData.m_pPhysicalDevice = (VkPhysicalDevice_T*)mScene->Instance()->Device()->PhysicalDevice();
-	vulkanData.m_pInstance = (VkInstance_T*)mScene->Instance()->Device()->Instance();
-	vulkanData.m_pQueue = (VkQueue_T*)mScene->Instance()->Device()->GraphicsQueue();
-	vulkanData.m_nQueueFamilyIndex = mScene->Instance()->Device()->GraphicsQueueFamily();
+	vr::VRVulkanTextureData_t vulkanDataLeft;
+	vulkanDataLeft.m_nImage = (uint64_t)(mMirror->Image());
+	vulkanDataLeft.m_pDevice = *mScene->Instance()->Device();
+	vulkanDataLeft.m_pPhysicalDevice = mScene->Instance()->Device()->PhysicalDevice();
+	vulkanDataLeft.m_pInstance = *mScene->Instance()->Device()->Instance();
+	vulkanDataLeft.m_pQueue = mScene->Instance()->Device()->GraphicsQueue();
+	vulkanDataLeft.m_nQueueFamilyIndex = mScene->Instance()->Device()->GraphicsQueueFamily();
 
-	vulkanData.m_nHeight = tex->Height();
-	vulkanData.m_nWidth = tex->Width();
-	vulkanData.m_nFormat = tex->Format();
-	vulkanData.m_nSampleCount = tex->SampleCount();
+	vulkanDataLeft.m_nHeight = mMirror->Height();
+	vulkanDataLeft.m_nWidth = mMirror->Width();
+	vulkanDataLeft.m_nFormat = mMirror->Format();
+	vulkanDataLeft.m_nSampleCount = mMirror->SampleCount();
 
-	vr::Texture_t texture = { &vulkanData, vr::TextureType_Vulkan, vr::ColorSpace_Auto };
+	vr::Texture_t textureLeft = { &vulkanDataLeft, vr::TextureType_Vulkan, vr::ColorSpace_Auto };
+
+	vr::VRVulkanTextureData_t vulkanDataRight;
+	vulkanDataRight.m_nImage = (uint64_t)(mMirror->Image());
+	vulkanDataRight.m_pDevice = *mScene->Instance()->Device();
+	vulkanDataRight.m_pPhysicalDevice = mScene->Instance()->Device()->PhysicalDevice();
+	vulkanDataRight.m_pInstance = *mScene->Instance()->Device()->Instance();
+	vulkanDataRight.m_pQueue = mScene->Instance()->Device()->GraphicsQueue();
+	vulkanDataRight.m_nQueueFamilyIndex = mScene->Instance()->Device()->GraphicsQueueFamily();
+
+	vulkanDataRight.m_nHeight = mMirror->Height();
+	vulkanDataRight.m_nWidth = mMirror->Width();
+	vulkanDataRight.m_nFormat = mMirror->Format();
+	vulkanDataRight.m_nSampleCount = mMirror->SampleCount();
+
+	vr::Texture_t textureRight = { &vulkanDataRight, vr::TextureType_Vulkan, vr::ColorSpace_Auto };
+
+
+
 	vr::EVRCompositorError error;
-	error = vr::VRCompositor()->Submit(vr::Eye_Left, &texture, &leftBounds);
+	error = vr::VRCompositor()->Submit(vr::Eye_Left, &textureLeft, &leftBounds);
 	if (error != vr::VRCompositorError_None)
 	{
-		if (error == vr::VRCompositorError_TextureUsesUnsupportedFormat)
-		{
-			printf_color(COLOR_RED, "Texture format unsupported: %s\n", FormatToString(tex->Format()));
-
-			if (tex->Usage() & VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
-				printf_color(COLOR_RED, "TRANSFER_SRC_BIT, ");
-			if (tex->Usage() & VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-				printf_color(COLOR_RED, "TRANSFER_DST_BIT, ");
-			if (tex->Usage() & VK_IMAGE_USAGE_SAMPLED_BIT)
-				printf_color(COLOR_RED, "SAMPLED_BIT, ");
-			if (tex->Usage() & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
-				printf_color(COLOR_RED, "COLOR_ATTACHMENT_BIT, ");
-			printf("\n");
-			printf_color(COLOR_RED, "Texture name: %s, mips: %d\nsamples: %d\n", tex->mName, tex->MipLevels(), tex->SampleCount());
-		}
-		else
-		{
-			printf_color(COLOR_RED, "Compositor error on left eye submission: %d\n", error);
-		}
+		printf_color(COLOR_RED, "Compositor error on left eye submission: %d\n", error);
 	}
-	vr::VRCompositor()->Submit(vr::Eye_Right, &texture, &rightBounds);
+	vr::VRCompositor()->Submit(vr::Eye_Right, &textureLeft, &rightBounds);
 	if (error != vr::VRCompositorError_None)
 	{
 		//printf_color(COLOR_RED, "Compositor error on right eye submission: %d\n", error);
