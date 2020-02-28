@@ -6,6 +6,55 @@
 
 using namespace std;
 
+#pragma pack(push)
+#pragma pack(0)
+struct ScatterInputs {
+	float4 DensityScaleHeight;
+	float4 ScatteringR;
+	float4 ScatteringM;
+	float4 ExtinctionR;
+	float4 ExtinctionM;
+
+	float4 BottomLeftCorner;
+	float4 BottomRightCorner;
+	float4 TopLeftCorner;
+	float4 TopRightCorner;
+
+	float3 LightDir;
+	float SunIntensity;
+
+	float3 CameraPos;
+	float MieG;
+
+	float4 IncomingLight;
+	
+	float DistanceScale;
+	float AtmosphereHeight;
+	float PlanetRadius;
+	float pad;
+};
+struct SkyboxInputs{
+	float4 MoonRotation;
+	float MoonSize;
+
+	float3 IncomingLight;
+
+	float3 SunDir;
+
+	float PlanetRadius;
+	float AtmosphereHeight;
+
+	float SunIntensity;
+	float MieG;
+
+	float3 ScatteringR;
+	float3 ScatteringM;
+
+	float4 StarRotation;
+	float StarFade;
+};
+#pragma pack(pop)
+
 Environment::Environment(Scene* scene) : 
 	mTimeOfDay(.25f),
 	mScene(scene),
@@ -80,11 +129,6 @@ void Environment::InitializeAtmosphere() {
 		"Assets/Textures/stars/posz.png",
 		"Assets/Textures/stars/negz.png", false);
 
-	float4 scatterR = mRayleighSct * mRayleighScatterCoef;
-	float4 scatterM = mMieSct * mMieScatterCoef;
-	float4 extinctR = mRayleighSct * mRayleighExtinctionCoef;
-	float4 extinctM = mMieSct * mMieExtinctionCoef;
-
 	uint8_t r[256 * 4];
 	for (uint32_t i = 0; i < 256; i++) {
 		r[4 * i + 0] = rand() % 0xFF;
@@ -97,7 +141,21 @@ void Environment::InitializeAtmosphere() {
 
 	printf("Precomputing scattering LUTs... ");
 
+
+	ScatterInputs inputs = {};
+	inputs.AtmosphereHeight = mAtmosphereHeight;
+	inputs.PlanetRadius = mPlanetRadius;
+	inputs.DensityScaleHeight = mDensityScale;
+	inputs.ScatteringR = mRayleighSct * mRayleighScatterCoef;
+	inputs.ScatteringM = mMieSct * mMieScatterCoef;
+	inputs.ExtinctionR = mRayleighSct * mRayleighExtinctionCoef;
+	inputs.ExtinctionM = mMieSct * mMieExtinctionCoef;
+	inputs.IncomingLight = mIncomingLight;
+	inputs.MieG = mMieG;
+	inputs.SunIntensity = mSunIntensity;
+
 	Device* device = mScene->Instance()->Device();
+	Buffer* scatterInputBuffer = new Buffer("Scatter Inputs", device, &inputs, sizeof(ScatterInputs), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	{
 		auto commandBuffer = device->GetCommandBuffer();
@@ -117,12 +175,10 @@ void Environment::InitializeAtmosphere() {
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipeline);
 
 		DescriptorSet* ds = new DescriptorSet("Particle Density", device, particleDensity->mDescriptorSetLayouts[0]);
-		ds->CreateStorageTextureDescriptor(dlut.mParticleDensityLUT, particleDensity->mDescriptorBindings.at("_RWParticleDensityLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(dlut.mParticleDensityLUT, particleDensity->mDescriptorBindings.at("RWParticleDensityLUT").second.binding);
+		ds->CreateUniformBufferDescriptor(scatterInputBuffer, 0, scatterInputBuffer->Size(), particleDensity->mDescriptorBindings.at("Inputs").second.binding);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, particleDensity->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-		commandBuffer->PushConstant(particleDensity, "_AtmosphereHeight", &mAtmosphereHeight);
-		commandBuffer->PushConstant(particleDensity, "_PlanetRadius", &mPlanetRadius);
-		commandBuffer->PushConstant(particleDensity, "_DensityScaleHeight", &mDensityScale);
 		vkCmdDispatch(*commandBuffer, 128, 128, 1);
 
 		dlut.mParticleDensityLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
@@ -134,20 +190,11 @@ void Environment::InitializeAtmosphere() {
 		DescriptorSet* ds2 = new DescriptorSet("Scatter LUT", device, skyboxc->mDescriptorSetLayouts[0]);
 		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUTR, skyboxc->mDescriptorBindings.at("SkyboxLUTR").second.binding);
 		ds2->CreateStorageTextureDescriptor(dlut.mSkyboxLUTM, skyboxc->mDescriptorBindings.at("SkyboxLUTM").second.binding);
-		ds2->CreateSampledTextureDescriptor(dlut.mParticleDensityLUT, skyboxc->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
+		ds2->CreateSampledTextureDescriptor(dlut.mParticleDensityLUT, skyboxc->mDescriptorBindings.at("ParticleDensityLUT").second.binding);
+		ds2->CreateUniformBufferDescriptor(scatterInputBuffer, 0, scatterInputBuffer->Size(), skyboxc->mDescriptorBindings.at("Inputs").second.binding);
 		ds2->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, skyboxc->mPipelineLayout, 0, 1, *ds2, 0, nullptr);
 
-		commandBuffer->PushConstant(skyboxc, "_AtmosphereHeight", &mAtmosphereHeight);
-		commandBuffer->PushConstant(skyboxc, "_PlanetRadius", &mPlanetRadius);
-		commandBuffer->PushConstant(skyboxc, "_DensityScaleHeight", &mDensityScale);
-		commandBuffer->PushConstant(skyboxc, "_ScatteringR", &scatterR);
-		commandBuffer->PushConstant(skyboxc, "_ScatteringM", &scatterM);
-		commandBuffer->PushConstant(skyboxc, "_ExtinctionR", &extinctR);
-		commandBuffer->PushConstant(skyboxc, "_ExtinctionM", &extinctM);
-		commandBuffer->PushConstant(skyboxc, "_IncomingLight", &mIncomingLight);
-		commandBuffer->PushConstant(skyboxc, "_MieG", &mMieG);
-		commandBuffer->PushConstant(skyboxc, "_SunIntensity", &mSunIntensity);
 		vkCmdDispatch(*commandBuffer, 16, 64, 16);
 
 		mDeviceLUTs.emplace(device, dlut);
@@ -171,22 +218,13 @@ void Environment::InitializeAtmosphere() {
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipeline);
 
 		DescriptorSet* ds = new DescriptorSet("Ambient LUT", device, ambient->mDescriptorSetLayouts[0]);
-		ds->CreateStorageBufferDescriptor(&ambientBuffer, 0, ambientBuffer.Size(), ambient->mDescriptorBindings.at("_RWAmbientLightLUT").second.binding);
-		ds->CreateStorageTextureDescriptor(randTex, ambient->mDescriptorBindings.at("_RandomVectors").second.binding);
-		ds->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, ambient->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
+		ds->CreateStorageBufferDescriptor(&ambientBuffer, 0, ambientBuffer.Size(), ambient->mDescriptorBindings.at("RWAmbientLightLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(randTex, ambient->mDescriptorBindings.at("RandomVectors").second.binding);
+		ds->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, ambient->mDescriptorBindings.at("ParticleDensityLUT").second.binding);
+		ds->CreateUniformBufferDescriptor(scatterInputBuffer, 0, scatterInputBuffer->Size(), ambient->mDescriptorBindings.at("Inputs").second.binding);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, ambient->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-		commandBuffer->PushConstant(ambient, "_AtmosphereHeight", &mAtmosphereHeight);
-		commandBuffer->PushConstant(ambient, "_PlanetRadius", &mPlanetRadius);
-		commandBuffer->PushConstant(ambient, "_DensityScaleHeight", &mDensityScale);
-		commandBuffer->PushConstant(ambient, "_ScatteringR", &scatterR);
-		commandBuffer->PushConstant(ambient, "_ScatteringM", &scatterM);
-		commandBuffer->PushConstant(ambient, "_ExtinctionR", &extinctR);
-		commandBuffer->PushConstant(ambient, "_ExtinctionM", &extinctM);
-		commandBuffer->PushConstant(ambient, "_IncomingLight", &mIncomingLight);
-		commandBuffer->PushConstant(ambient, "_MieG", &mMieG);
-		commandBuffer->PushConstant(ambient, "_SunIntensity", &mSunIntensity);
 		vkCmdDispatch(*commandBuffer, 2, 1, 1);
 
 
@@ -194,21 +232,12 @@ void Environment::InitializeAtmosphere() {
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipeline);
 
 		DescriptorSet* ds2 = new DescriptorSet("Ambient LUT", device, direct->mDescriptorSetLayouts[0]);
-		ds2->CreateStorageBufferDescriptor(&dirBuffer, 0, dirBuffer.Size(), direct->mDescriptorBindings.at("_RWDirectLightLUT").second.binding);
-		ds2->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, direct->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
+		ds2->CreateStorageBufferDescriptor(&dirBuffer, 0, dirBuffer.Size(), direct->mDescriptorBindings.at("RWDirectLightLUT").second.binding);
+		ds2->CreateSampledTextureDescriptor(mDeviceLUTs.at(device).mParticleDensityLUT, direct->mDescriptorBindings.at("ParticleDensityLUT").second.binding);
+		ds2->CreateUniformBufferDescriptor(scatterInputBuffer, 0, scatterInputBuffer->Size(), direct->mDescriptorBindings.at("Inputs").second.binding);
 		ds2->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, direct->mPipelineLayout, 0, 1, *ds2, 0, nullptr);
-
-		commandBuffer->PushConstant(direct, "_AtmosphereHeight", &mAtmosphereHeight);
-		commandBuffer->PushConstant(direct, "_PlanetRadius", &mPlanetRadius);
-		commandBuffer->PushConstant(direct, "_DensityScaleHeight", &mDensityScale);
-		commandBuffer->PushConstant(direct, "_ScatteringR", &scatterR);
-		commandBuffer->PushConstant(direct, "_ScatteringM", &scatterM);
-		commandBuffer->PushConstant(direct, "_ExtinctionR", &extinctR);
-		commandBuffer->PushConstant(direct, "_ExtinctionM", &extinctM);
-		commandBuffer->PushConstant(direct, "_IncomingLight", &mIncomingLight);
-		commandBuffer->PushConstant(direct, "_MieG", &mMieG);
-		commandBuffer->PushConstant(direct, "_SunIntensity", &mSunIntensity);
+		
 		vkCmdDispatch(*commandBuffer, 2, 1, 1);
 
 		device->Execute(commandBuffer, false)->Wait();
@@ -237,6 +266,7 @@ void Environment::SetEnvironment(Camera* camera, Material* mat) {
 		mat->SetParameter("ExtinctionLUT", l->mOutscatterLUT);
 		mat->SetParameter("LightShaftLUT", l->mLightShaftLUT);
 		mat->SetParameter("AmbientLight", mAmbientLight);
+		mat->SetUniformBuffer("ScatterParams", 0, sizeof(ScatteringParameters), mScatterParamBuffer);
 		mat->EnableKeyword("ENABLE_SCATTERING");
 		mat->DisableKeyword("ENVIRONMENT_TEXTURE");
 		mat->DisableKeyword("ENVIRONMENT_TEXTURE_HDR");
@@ -321,47 +351,41 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		l->mOutscatterLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		l->mLightShaftLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
-		float3 r0 = camera->ClipToWorld(float3(-1, 1, 1));
-		float3 r1 = camera->ClipToWorld(float3(-1, -1, 1));
-		float3 r2 = camera->ClipToWorld(float3(1, -1, 1));
-		float3 r3 = camera->ClipToWorld(float3(1, 1, 1));
-		float4 scatterR = mRayleighSct * mRayleighScatterCoef;
-		float4 scatterM = mMieSct * mMieScatterCoef;
-		float4 extinctR = mRayleighSct * mRayleighExtinctionCoef;
-		float4 extinctM = mMieSct * mMieExtinctionCoef;
-		float3 cp = camera->WorldPosition();
-		float3 lightdir = -normalize(mSun->WorldRotation().forward());
-		float4 incoming = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
+		ScatterInputs inputs = {};
+		inputs.BottomLeftCorner  = camera->ClipToWorld(float3(-1, 1, 1));
+		inputs.TopLeftCorner = camera->ClipToWorld(float3(-1, -1, 1));
+		inputs.TopRightCorner = camera->ClipToWorld(float3(1, -1, 1));
+		inputs.BottomRightCorner = camera->ClipToWorld(float3(1, 1, 1));
+		inputs.AtmosphereHeight = mAtmosphereHeight;
+		inputs.PlanetRadius = mPlanetRadius;
+		inputs.LightDir = -normalize(mSun->WorldRotation().forward());
+		inputs.CameraPos = camera->WorldPosition();
+		inputs.DensityScaleHeight = mDensityScale;
+		inputs.ScatteringR = mRayleighSct * mRayleighScatterCoef;
+		inputs.ScatteringM = mMieSct * mMieScatterCoef;
+		inputs.ExtinctionR = mRayleighSct * mRayleighExtinctionCoef;
+		inputs.ExtinctionM = mMieSct * mMieExtinctionCoef;
+		inputs.IncomingLight = mSun->mEnabled ? mIncomingLight * clamp(length(mSun->Color()) * mSun->Intensity(), 0.f, 1.f) : 0;
+		inputs.MieG = mMieG;
+		inputs.DistanceScale = mDistanceScale;
+		inputs.SunIntensity = mSunIntensity;
+
+		Device* device = mScene->Instance()->Device();
+		Buffer* scatterInputBuffer = device->GetTempBuffer("Scatter Inputs", sizeof(ScatterInputs), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		memcpy(scatterInputBuffer->MappedData(), &inputs, sizeof(ScatterInputs));
 
 		#pragma region Precompute scattering
 		ComputeShader* scatter = mShader->GetCompute("InscatteringLUT", {});
 
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipeline);
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Scatter LUT", scatter->mDescriptorSetLayouts[0]);
-		ds->CreateStorageTextureDescriptor(l->mInscatterLUT, scatter->mDescriptorBindings.at("_InscatteringLUT").second.binding);
-		ds->CreateStorageTextureDescriptor(l->mOutscatterLUT, scatter->mDescriptorBindings.at("_ExtinctionLUT").second.binding);
-		ds->CreateSampledTextureDescriptor(dlut->mParticleDensityLUT, scatter->mDescriptorBindings.at("_ParticleDensityLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(l->mInscatterLUT, scatter->mDescriptorBindings.at("InscatteringLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(l->mOutscatterLUT, scatter->mDescriptorBindings.at("ExtinctionLUT").second.binding);
+		ds->CreateSampledTextureDescriptor(dlut->mParticleDensityLUT, scatter->mDescriptorBindings.at("ParticleDensityLUT").second.binding);
+		ds->CreateUniformBufferDescriptor(scatterInputBuffer, 0, sizeof(ScatterInputs), scatter->mDescriptorBindings.at("Inputs").second.binding);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, scatter->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-		commandBuffer->PushConstant(scatter, "_BottomLeftCorner", &r0);
-		commandBuffer->PushConstant(scatter, "_TopLeftCorner", &r1);
-		commandBuffer->PushConstant(scatter, "_TopRightCorner", &r2);
-		commandBuffer->PushConstant(scatter, "_BottomRightCorner", &r3);
-
-		commandBuffer->PushConstant(scatter, "_AtmosphereHeight", &mAtmosphereHeight);
-		commandBuffer->PushConstant(scatter, "_PlanetRadius", &mPlanetRadius);
-		commandBuffer->PushConstant(scatter, "_LightDir", &lightdir);
-		commandBuffer->PushConstant(scatter, "_CameraPos", &cp);
-		commandBuffer->PushConstant(scatter, "_DensityScaleHeight", &mDensityScale);
-		commandBuffer->PushConstant(scatter, "_ScatteringR", &scatterR);
-		commandBuffer->PushConstant(scatter, "_ScatteringM", &scatterM);
-		commandBuffer->PushConstant(scatter, "_ExtinctionR", &extinctR);
-		commandBuffer->PushConstant(scatter, "_ExtinctionM", &extinctM);
-		commandBuffer->PushConstant(scatter, "_IncomingLight", &incoming);
-		commandBuffer->PushConstant(scatter, "_MieG", &mMieG);
-		commandBuffer->PushConstant(scatter, "_DistanceScale", &mDistanceScale);
-		commandBuffer->PushConstant(scatter, "_SunIntensity", &mSunIntensity);
 		vkCmdDispatch(*commandBuffer, l->mInscatterLUT->Width() / 8, l->mInscatterLUT->Width() / 8, 1);
 		#pragma endregion
 		/*
@@ -370,18 +394,14 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 
 		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipeline);
 		ds = commandBuffer->Device()->GetTempDescriptorSet("Light Shaft LUT", shaft->mDescriptorSetLayouts[0]);
-		ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("_LightShaftLUT").second.binding);
+		ds->CreateStorageTextureDescriptor(l->mLightShaftLUT, shaft->mDescriptorBindings.at("LightShaftLUT").second.binding);
 		ds->CreateSampledTextureDescriptor(camera->DepthFramebuffer(), shaft->mDescriptorBindings.at("DepthTexture").second.binding);
 		ds->CreateStorageBufferDescriptor(mScene->LightBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Lights").second.binding);
 		ds->CreateStorageBufferDescriptor(mScene->ShadowBuffer(commandBuffer->Device()), shaft->mDescriptorBindings.at("Shadows").second.binding);
 		ds->CreateSampledTextureDescriptor(mScene->ShadowAtlas(commandBuffer->Device()), shaft->mDescriptorBindings.at("ShadowAtlas").second.binding);
+		ds->CreateUniformBufferDescriptor(scatterInputBuffer, 0, sizeof(ScatterInputs), shaft->mDescriptorBindings.at("Inputs").second.binding);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shaft->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-
-		commandBuffer->PushConstant(shaft, "_BottomLeftCorner", &r0);
-		commandBuffer->PushConstant(shaft, "_TopLeftCorner", &r1);
-		commandBuffer->PushConstant(shaft, "_TopRightCorner", &r2);
-		commandBuffer->PushConstant(shaft, "_BottomRightCorner", &r3);
 
 		commandBuffer->PushConstant(shaft, "_CameraPos", &cp);
 		vkCmdDispatch(*commandBuffer, (l->mLightShaftLUT->Width() + 7) / 8, (l->mLightShaftLUT->Height() + 7) / 8, 1);
@@ -396,18 +416,23 @@ void Environment::PreRender(CommandBuffer* commandBuffer, Camera* camera) {
 		mSkyboxMaterial->SetParameter("LightShaftLUT", l->mLightShaftLUT);
 		mSkyboxMaterial->SetParameter("MoonTexture", mMoonTexture);
 		mSkyboxMaterial->SetParameter("StarTexture", mStarTexture);
-		mSkyboxMaterial->SetParameter("_MoonRotation", inverse(mMoon->WorldRotation()).xyzw);
-		mSkyboxMaterial->SetParameter("_MoonSize", mMoonSize);
-		mSkyboxMaterial->SetParameter("_IncomingLight", mIncomingLight.xyz);
-		mSkyboxMaterial->SetParameter("_SunDir", lightdir);
-		mSkyboxMaterial->SetParameter("_PlanetRadius", mPlanetRadius);
-		mSkyboxMaterial->SetParameter("_AtmosphereHeight", mAtmosphereHeight);
-		mSkyboxMaterial->SetParameter("_SunIntensity", mSunIntensity);
-		mSkyboxMaterial->SetParameter("_MieG", mMieG);
-		mSkyboxMaterial->SetParameter("_ScatteringR", scatterR.xyz);
-		mSkyboxMaterial->SetParameter("_ScatteringM", scatterM.xyz);
-		mSkyboxMaterial->SetParameter("_StarRotation", quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw);
-		mSkyboxMaterial->SetParameter("_StarFade", 100 * clamp(lightdir.y, 0.f, 1.f));
+
+		ScatteringParameters params = {};
+		params.MoonRotation = inverse(mMoon->WorldRotation()).xyzw;
+		params.MoonSize = mMoonSize;
+		params.IncomingLight = mIncomingLight.xyz;
+		params.SunDir = inputs.LightDir;
+		params.PlanetRadius = mPlanetRadius;
+		params.AtmosphereHeight = mAtmosphereHeight;
+		params.SunIntensity = mSunIntensity;
+		params.MieG = mMieG;
+		params.ScatteringR = inputs.ScatteringR.xyz;
+		params.ScatteringM = inputs.ScatteringM.xyz;
+		params.StarRotation = quaternion(float3(-mTimeOfDay * PI * 2, 0, 0)).xyzw;
+		params.StarFade = 100 * clamp(inputs.LightDir.y, 0.f, 1.f);
+
+		mScatterParamBuffer = device->GetTempBuffer("Scattering", sizeof(ScatteringParameters), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		memcpy(mScatterParamBuffer->MappedData(), &params, sizeof(ScatteringParameters));
 	}
 
 	SetEnvironment(camera, mSkyboxMaterial.get());

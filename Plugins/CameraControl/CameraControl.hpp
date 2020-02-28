@@ -21,10 +21,6 @@ private:
 	ProfilerSample mProfilerFrames[PROFILER_FRAME_COUNT - 1];
 	uint32_t mSelectedFrame;
 
-	float mFrameTimeAccum;
-	float mFps;
-	uint32_t mFrameCount;
-
 public:
 	PLUGIN_EXPORT CameraControl();
 	PLUGIN_EXPORT ~CameraControl();

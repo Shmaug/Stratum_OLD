@@ -37,10 +37,21 @@ public:
 		std::function<void(Scene*, Object*, aiMaterial*)> objectSetupFunc,
 		float scale, float directionalLightIntensity, float spotLightIntensity, float pointLightIntensity);
 
+	inline float FPS() const { return mFps; }
+	inline float TotalTime() const { return mTotalTime; }
+	inline float DeltaTime() const { return mDeltaTime; }
 
+	inline float FixedTimeStep() const { return mFixedTimeStep; }
+	inline void FixedTimeStep(float step) { mFixedTimeStep = step; }
+	inline float PhysicsTimeLimitPerFrame() const { return mPhysicsTimeLimitPerFrame; }
+	inline void PhysicsTimeLimitPerFrame(float t) { mPhysicsTimeLimitPerFrame = t; }
+
+	// Render to a camera
+	// Note: this is called automatically on all cameras added to the scene via Scene->AddObject()
 	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer = nullptr, PassType pass = PASS_MAIN, bool clear = true);
 
 	inline Object* Raycast(const Ray& worldRay, float* t = nullptr, bool any = false, uint32_t mask = 0xFFFFFFFF) { return BVH()->Intersect(worldRay, t, any, mask); }
+
 
 	/// Buffer of GPULight structs (defined in shadercompat.h)
 	inline Buffer* LightBuffer() const { return mLightBuffers[mInstance->Device()->FrameContextIndex()]; }
@@ -63,9 +74,10 @@ public:
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }
 
+
 	ENGINE_EXPORT ObjectBvh2* BVH();
 	inline void BvhDirty(Object* reason) { mBvhDirty = true; }
-	// frame id of the last bvh build
+	// Frame id of the last bvh build
 	inline uint64_t LastBvhBuild() { return mLastBvhBuild; }
 
 private:
@@ -79,6 +91,19 @@ private:
 	ENGINE_EXPORT void AddShadowCamera(uint32_t si, ShadowData* sd, bool ortho, float size, const float3& pos, const quaternion& rot, float near, float far);
 
 	ENGINE_EXPORT void Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* framebuffer, PassType pass, bool clear, std::vector<Object*>& renderList);
+
+	float mFixedAccumulator;
+	float mFixedTimeStep;
+
+	std::chrono::high_resolution_clock mClock;
+	std::chrono::high_resolution_clock::time_point mStartTime;
+	std::chrono::high_resolution_clock::time_point mLastFrame;
+	float mTotalTime;
+	float mDeltaTime;
+	float mFrameTimeAccum;
+	float mPhysicsTimeLimitPerFrame;
+	uint32_t mFrameCount;
+	float mFps;
 
 	Mesh* mSkyboxCube;
 

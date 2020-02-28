@@ -28,8 +28,10 @@ private:
 	bool mPhysicalShading;
 	bool mColorize;
 	bool mInvert;
-	float mLightStepSize;
 	float mStepSize;
+	float mLightStep;
+	float mTransferMin;
+	float mTransferMax;
 	float mDensity;
 	float mRemapMin;
 	float mRemapMax;
@@ -47,7 +49,6 @@ private:
 	struct FrameData {
 		// Volume color and density, post-transfer and post-threshold
 		Texture* mBakedVolume;
-		Texture* mBakedInscatter;
 		bool mImagesNew;
 		bool mDirty;
 	};
@@ -58,16 +59,11 @@ private:
 	MouseKeyboardInput* mInput;
 
 	float mZoom;
-	
 
 	bool mShowPerformance;
 	bool mSnapshotPerformance;
 	ProfilerSample mProfilerFrames[PROFILER_FRAME_COUNT - 1];
 	uint32_t mSelectedFrame;
-
-	float mFrameTimeAccum;
-	float mFps;
-	uint32_t mFrameCount;
 
 	std::unordered_map<std::string, bool> mDataFolders;
 
@@ -79,17 +75,16 @@ private:
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameCount(0), mFrameTimeAccum(0), mFps(0), mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
+		mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false), mColorize(false),
 		mPhysicalShading(false),
-		mDensity(100.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mLightStepSize(.005f),
-		mVolumeScatter(100.f), mVolumeExtinction(20.f) {
+		mDensity(500.f), mRemapMin(.125f), mRemapMax(1.f), mCutoff(1.f), mStepSize(.001f), mLightStep(.01f), mTransferMin(.01f), mTransferMax(.5f),
+		mVolumeScatter(1.f), mVolumeExtinction(.2f) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~DicomVis() {
 		safe_delete(mRawVolume);
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(mFrameData[i].mBakedVolume);
-			safe_delete(mFrameData[i].mBakedInscatter);
 		}
 		for (Object* obj : mObjects)
 			mScene->RemoveObject(obj);
@@ -110,32 +105,10 @@ public:
 		mMainCamera = camera.get();
 		mObjects.push_back(mMainCamera);
 
-		#pragma region plane
-		auto planeMat = make_shared<Material>("Plane", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
-		planeMat->EnableKeyword("TEXTURED");
-		planeMat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/grid.png"));
-		planeMat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/bump.png"));
-		planeMat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/mask.png"));
-		planeMat->SetParameter("TextureST", float4(256, 256, 1, 1));
-		planeMat->SetParameter("Color", float4(1));
-		planeMat->SetParameter("Metallic", 0.f);
-		planeMat->SetParameter("Roughness", .5f);
-		planeMat->SetParameter("BumpStrength", 1.f);
-		planeMat->SetParameter("Emission", float3(0));
-
-		auto plane = make_shared<MeshRenderer>("Plane");
-		plane->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Plane", mScene->Instance()->Device(), 512.f)));
-		plane->Material(planeMat);
-		plane->PushConstant("TextureIndex", 0u);
-		plane->LocalRotation(quaternion(float3(-PI / 2, 0, 0)));
-		mScene->AddObject(plane);
-		mObjects.push_back(plane.get());
-		#pragma endregion
-
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
-		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/studio_small_03_4k.hdr"));
-		mScene->Environment()->AmbientLight(.6f);
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
+		mScene->Environment()->AmbientLight(.9f);
 
 		string path = "/Data";
 		for (uint32_t i = 0; i < mScene->Instance()->CommandLineArguments().size(); i++)
@@ -219,19 +192,11 @@ public:
 				}
 			}
 		}
-
-		// count fps
-		mFrameTimeAccum += mScene->Instance()->DeltaTime();
-		mFrameCount++;
-		if (mFrameTimeAccum > 1.f) {
-			mFps = mFrameCount / mFrameTimeAccum;
-			mFrameTimeAccum -= 1.f;
-			mFrameCount = 0;
-		}
 	}
 
-	PLUGIN_EXPORT void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
+	PLUGIN_EXPORT void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
 		if (pass != PASS_MAIN || camera != mScene->Cameras()[0]) return;
+
 		Font* reg14 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 14);
 		Font* sem11 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 11);
 		Font* sem16 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-SemiBold.ttf", 16);
@@ -243,7 +208,7 @@ public:
 		
 		if (mShowPerformance) {
 			char tmpText[64];
-			snprintf(tmpText, 64, "%.2f fps\n", mFps);
+			snprintf(tmpText, 64, "%.2f fps\n", mScene->FPS());
 			GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f, TEXT_ANCHOR_MIN, TEXT_ANCHOR_MAX);
 
 			#ifdef PROFILER_ENABLE
@@ -327,17 +292,18 @@ public:
 			#endif
 		}
 
-		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 350, 300, 700), float4(.3f, .3f, .3f, 1), 10);
+		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 400, 300, 800), float4(.3f, .3f, .3f, 1), 10);
 
 		GUI::LayoutLabel(bld24, "Load Data Set", 24, 30, 0, 1);
-
 		GUI::LayoutSeparator(.5f, 1);
 
-		GUI::BeginScrollSubLayout(200, mDataFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
+		GUI::BeginScrollSubLayout(175, mDataFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
 		for (const auto& p : mDataFolders)
 			if (GUI::LayoutButton(sem16, fs::path(p.first).stem().string(), 16, 24, p.second ? float4(.4f, .4f, .15f, 1) : float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
 				LoadVolume(commandBuffer, p.first, p.second);
 		GUI::EndLayout();
+
+		float sliderHeight = 12;
 
 		if (GUI::LayoutButton(sem16, "Invert", 16, 24, mInvert ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mInvert = !mInvert;
@@ -351,43 +317,44 @@ public:
 			mPhysicalShading = !mPhysicalShading;
 			mFrameIndex = 0;
 		}
-
 		GUI::LayoutSeparator(.5f, 1, 3);
 
 		GUI::LayoutLabel(bld24, "Render Settings", 18, 24, 0, 1);
-
 		GUI::LayoutSpace(8);
 
 		GUI::LayoutLabel(sem16, "Step Size: " + to_string(mStepSize), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mStepSize, .0005f, .01f, 16, float4(.5f, .5f, .5f, 1), 4));
-
-		GUI::LayoutLabel(sem16, "Light Step Size: " + to_string(mLightStepSize), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mLightStepSize, .0005f, .01f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;;
-
-		GUI::LayoutSpace(5);
-
+		if (GUI::LayoutSlider(mStepSize, .0005f, .01f, sliderHeight, float4(.5f, .5f, .5f, 1), 4));
 		GUI::LayoutLabel(sem16, "Density: " + to_string(mDensity), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mDensity, 10, 2000.f, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumeScatter, 0, 150, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumeExtinction, 0, 80, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutLabel(sem16, "HG Phase: " + to_string(mVolumePhaseHG), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, 16, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-
-		GUI::LayoutSpace(5);
+		if (GUI::LayoutSlider(mDensity, 100, 10000.f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+		GUI::LayoutSpace(10);
 
 		GUI::LayoutLabel(sem16, "Remap Min: " + to_string(mRemapMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMin, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
-
+		if (GUI::LayoutSlider(mRemapMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 		GUI::LayoutLabel(sem16, "Remap Max: " + to_string(mRemapMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMax, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
-
+		if (GUI::LayoutSlider(mRemapMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
 		GUI::LayoutLabel(sem16, "Cutoff: " + to_string(mCutoff), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mCutoff, 0, 1, 16, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mCutoff, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+
+		if (mColorize) {
+			GUI::LayoutSpace(10);
+
+			GUI::LayoutLabel(sem16, "Transfer Min: " + to_string(mTransferMin), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mTransferMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			GUI::LayoutLabel(sem16, "Transfer Max: " + to_string(mTransferMax), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mTransferMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		}
+		if (mPhysicalShading) {
+			GUI::LayoutSpace(10);
+
+			GUI::LayoutLabel(sem16, "Light Step: " + to_string(mLightStep), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mLightStep, 0.0005f, .05f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumeScatter, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumeExtinction, 0, .5f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "HG Phase: " + to_string(mVolumePhaseHG), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mVolumePhaseHG, -1, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+		}
 
 		GUI::EndLayout();
 	}
@@ -408,7 +375,6 @@ public:
 		}
 		if (fd.mImagesNew) {
 			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-			fd.mBakedInscatter->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 			fd.mImagesNew = false;
 		}
 		
@@ -449,123 +415,99 @@ public:
 			commandBuffer->PushConstant(copy, "RemapMin", &mRemapMin);
 			commandBuffer->PushConstant(copy, "InvRemapRange", &remapRange);
 			commandBuffer->PushConstant(copy, "Cutoff", &mCutoff);
-			commandBuffer->PushConstant(copy, "Density", &mDensity);
+			commandBuffer->PushConstant(copy, "TransferMin", &mTransferMin);
+			commandBuffer->PushConstant(copy, "TransferMax", &mTransferMax);
 
 			vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
 
-			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-			
+			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+			fd.mBakedVolume->GenerateMipMaps(commandBuffer);
+
 			fd.mDirty = false;
 		}
 
-		// Compute lighting
-		if (mPhysicalShading) {
-			set<string> kw;
-			ComputeShader* process = mScene->AssetManager()->LoadShader("Shaders/precompute.stm")->GetCompute("ComputeInscatter", kw);
-			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipeline);
-			
-			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("ComputeInscatter", process->mDescriptorSetLayouts[0]);
-			ds->CreateSampledTextureDescriptor(fd.mBakedVolume, process->mDescriptorBindings.at("BakedVolumeS").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateStorageTextureDescriptor(fd.mBakedInscatter, process->mDescriptorBindings.at("BakedInscatter").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateStorageTextureDescriptor(pfd.mBakedInscatter, process->mDescriptorBindings.at("PrevBakedInscatter").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), process->mDescriptorBindings.at("NoiseTex").second.binding);
-			ds->CreateSampledTextureDescriptor(mScene->Environment()->EnvironmentTexture(), process->mDescriptorBindings.at("EnvironmentTexture").second.binding);
-			ds->FlushWrites();
-			float3 vres(fd.mBakedInscatter->Width(), fd.mBakedInscatter->Height(), fd.mBakedInscatter->Depth());
-			
-			commandBuffer->PushConstant(process, "InvVolumeRotation", &ivr);
-			commandBuffer->PushConstant(process, "InvVolumeScale", &ivs);
-			commandBuffer->PushConstant(process, "InvViewProj", &ivp);
-			commandBuffer->PushConstant(process, "VolumeResolution", &vres);
-
-			commandBuffer->PushConstant(process, "Density", &mDensity);
-			commandBuffer->PushConstant(process, "Scattering", &mVolumeScatter);
-			commandBuffer->PushConstant(process, "Extinction", &mVolumeExtinction);
-			commandBuffer->PushConstant(process, "HG", &mDensity);
-
-			commandBuffer->PushConstant(process, "StepSize", &mLightStepSize);
-			commandBuffer->PushConstant(process, "FrameIndex", &mFrameIndex);
-
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, process->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-			vkCmdDispatch(*commandBuffer, (fd.mBakedInscatter->Width() + 3) / 4, (fd.mBakedInscatter->Height() + 3) / 4, (fd.mBakedInscatter->Depth() + 3) / 4);
-		}
-
-		float3 vres(fd.mBakedVolume->Width(), fd.mBakedVolume->Height(), fd.mBakedVolume->Depth());
-
 		fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-		fd.mBakedInscatter->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		
 		#pragma region render volume
-		set<string> kw;
-		if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
-		if (mColorize) kw.emplace("COLORIZE");
-		ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipeline);
-		
-		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", draw->mDescriptorSetLayouts[0]);
-		ds->CreateSampledTextureDescriptor(fd.mBakedVolume, draw->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		if (mPhysicalShading)
-			ds->CreateSampledTextureDescriptor(fd.mBakedInscatter, draw->mDescriptorBindings.at("BakedInscatter").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(0), draw->mDescriptorBindings.at("RenderTarget").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), draw->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), draw->mDescriptorBindings.at("NoiseTex").second.binding);
-		ds->FlushWrites();
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+		{
+			float3 vres(fd.mBakedVolume->Width(), fd.mBakedVolume->Height(), fd.mBakedVolume->Depth());
+			set<string> kw;
+			if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
+			if (mColorize) kw.emplace("COLORIZE");
+			ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipeline);
+			
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", draw->mDescriptorSetLayouts[0]);
+			ds->CreateSampledTextureDescriptor(fd.mBakedVolume, draw->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			if (mPhysicalShading){
+				//ds->CreateSampledTextureDescriptor(fd.mBakedInscatter, draw->mDescriptorBindings.at("BakedInscatter").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+				ds->CreateSampledTextureDescriptor(mScene->Environment()->EnvironmentTexture(), draw->mDescriptorBindings.at("EnvironmentTexture").second.binding);
+			}
+			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(0), draw->mDescriptorBindings.at("RenderTarget").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), draw->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), draw->mDescriptorBindings.at("NoiseTex").second.binding);
+			ds->FlushWrites();
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-		uint2 wo(0);
-		float3 vp = mVolumePosition - camera->WorldPosition();
+			uint2 wo(0);
+			float3 vp = mVolumePosition - camera->WorldPosition();
+			float3 ambient = mScene->Environment()->AmbientLight();
 
-		commandBuffer->PushConstant(draw, "VolumePosition", &vp);
-		commandBuffer->PushConstant(draw, "InvVolumeRotation", &ivr);
-		commandBuffer->PushConstant(draw, "InvVolumeScale", &ivs);
-		commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
+			commandBuffer->PushConstant(draw, "VolumePosition", &vp);
+			commandBuffer->PushConstant(draw, "VolumeRotation", &mVolumeRotation.xyzw);
+			commandBuffer->PushConstant(draw, "VolumeScale", &mVolumeScale);
+			commandBuffer->PushConstant(draw, "InvVolumeRotation", &ivr);
+			commandBuffer->PushConstant(draw, "InvVolumeScale", &ivs);
+			commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
 
-		commandBuffer->PushConstant(draw, "Density", &mDensity);
-		commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
-		commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
-		commandBuffer->PushConstant(draw, "HG", &mVolumePhaseHG);
+			commandBuffer->PushConstant(draw, "AmbientLight", &ambient);
+			commandBuffer->PushConstant(draw, "Density", &mDensity);
+			commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
+			commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
+			commandBuffer->PushConstant(draw, "HG", &mVolumePhaseHG);
 
-		commandBuffer->PushConstant(draw, "StepSize", &mStepSize);
-		commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
+			commandBuffer->PushConstant(draw, "StepSize", &mStepSize);
+			commandBuffer->PushConstant(draw, "LightStep", &mLightStep);
+			commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
 
-		switch (camera->StereoMode()) {
-		case STEREO_NONE:
-			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
-			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
-			break;
-		case STEREO_SBS_HORIZONTAL:
-			res.x *= .5f;
-			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
-			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() / 2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
-			wo.x = camera->FramebufferWidth() / 2;
-			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
-			commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
-			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
-			break;
-		case STEREO_SBS_VERTICAL:
-			res.y *= .5f;
-			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-			commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-			commandBuffer->PushConstant(draw, "ScreenResolution", &res);
-			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
-			wo.y = camera->FramebufferWidth() / 2;
-			commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
-			commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
-			commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-			vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
-			break;
+			switch (camera->StereoMode()) {
+			case STEREO_NONE:
+				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+				break;
+			case STEREO_SBS_HORIZONTAL:
+				res.x *= .5f;
+				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() / 2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+				wo.x = camera->FramebufferWidth() / 2;
+				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
+				commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
+				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
+				break;
+			case STEREO_SBS_VERTICAL:
+				res.y *= .5f;
+				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
+				wo.y = camera->FramebufferWidth() / 2;
+				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
+				commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
+				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
+				break;
+			}
+
+			camera->ResolveBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		}
-
-		camera->ResolveBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-
 		#pragma endregion
 
 		mFrameIndex++;
@@ -617,7 +559,6 @@ public:
 		safe_delete(mRawMask);
 		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(mFrameData[i].mBakedVolume);
-			safe_delete(mFrameData[i].mBakedInscatter);
 		}
 
 		Texture* vol;
@@ -638,9 +579,9 @@ public:
 
 			if (fs::exists(maskPath)) {
 				mRawMask = LoadMask(maskPath, mScene->Instance()->Device());
-				if (!mRawMask) {
+				if (!mRawMask)
 					fprintf_color(COLOR_RED, stderr, "Failed to load mask!\n");
-				} else
+				else
 					mRawMaskNew = true;
 			}
 		}
@@ -654,8 +595,7 @@ public:
 
 		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
 			FrameData& fd = mFrameData[i];
-			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mBakedInscatter = new Texture("Baked Optical Density", mScene->Instance()->Device(), mRawVolume->Width()/2, mRawVolume->Height()/2, mRawVolume->Depth()/2, VK_FORMAT_R16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), nullptr, 0, mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_UNORM, 3, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 			fd.mImagesNew = true;
 			fd.mDirty = true;
 		}

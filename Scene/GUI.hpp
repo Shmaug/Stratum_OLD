@@ -75,7 +75,9 @@ private:
 	static std::unordered_map<Texture*, uint32_t> mTextureMap;
 
 	static std::vector<GuiRect> mScreenRects;
+	static std::vector<GuiRect> mScreenTextureRects;
 	static std::vector<GuiRect> mWorldRects;
+	static std::vector<GuiRect> mWorldTextureRects;
 
 	static std::unordered_map<uint32_t, std::variant<float, std::string>> mControlData;
 
@@ -111,6 +113,7 @@ public:
 
 	ENGINE_EXPORT static void LayoutSpace(float size);
 	ENGINE_EXPORT static void LayoutSeparator(float thickness, const float4& color, float padding = 2.f);
+	ENGINE_EXPORT static void LayoutRect(float size, const float4& color, Texture* texture = nullptr, const float4& TextureST = float4(1,1,0,0), float padding = 2.f);
 	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
 	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
 	ENGINE_EXPORT static bool LayoutSlider(float& value, float minimum, float maximum, float size, const float4& color, float padding = 2.f);
@@ -122,9 +125,9 @@ public:
 	ENGINE_EXPORT static void DrawString(Font* font, const std::string& str, const float4& color, const float2& screenPos, float scale, TextAnchor horizontalAnchor = TEXT_ANCHOR_MIN, TextAnchor verticalAnchor = TEXT_ANCHOR_MIN, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 
 	/// Draw a rectangle on the screen, "size" pixels big with the bottom-left corner at screenPos
-	ENGINE_EXPORT static void Rect(const fRect2D& screenRect, const float4& color, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
+	ENGINE_EXPORT static void Rect(const fRect2D& screenRect, const float4& color, Texture* texture = nullptr, const float4& textureST = float4(1,1,0,0), const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 	/// Draw a rectangle in the world, "size" units big with the bottom-left corner at screenPos
-	ENGINE_EXPORT static void Rect(const float4x4& transform, const fRect2D& rect, const float4& color, const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
+	ENGINE_EXPORT static void Rect(const float4x4& transform, const fRect2D& rect, const float4& color, Texture* texture = nullptr, const float4& textureST = float4(1, 1, 0, 0), const fRect2D& clipRect = fRect2D(-1e10f, -1e10f, 1e20f, 1e20f));
 
 	/// Draw a label on the screen, "size" pixels big with the bottom-left corner at screenPos
 	ENGINE_EXPORT static void Label(Font* font, const std::string& text, float textScale,

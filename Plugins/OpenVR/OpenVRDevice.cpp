@@ -292,33 +292,40 @@ void OpenVRDevice::UpdateTracking() {
 void OpenVRDevice::CalculateEyeAdjustment() {
 	vr::HmdMatrix34_t mat;
 
-	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Right);
-	mLeftEyeTransform = inverse(ConvertMat34(mat));
 	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Left);
-	mRightEyeTransform = inverse(ConvertMat34(mat));
+	mLeftEyeTransform = (ConvertMat34(mat));
+	mat = mSystem->GetEyeToHeadTransform(vr::Eye_Right);
+	mRightEyeTransform = (ConvertMat34(mat));
 }
 
 void OpenVRDevice::CalculateProjectionMatrices() {
 	vr::HmdMatrix44_t mat;
 	float l, r, t, b;
 
-	//mat = mSystem->GetProjectionMatrix(vr::Eye_Left, mNearClip, mFarClip);
-	mSystem->GetProjectionRaw(vr::Eye_Right, &l, &r, &t, &b);
-	l *= mNearClip;
-	r *= mNearClip;
-	t *= mNearClip;
-	b *= mNearClip;
-	mLeftProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
-	//mLeftProjection = ConvertMat44(mat);
-
-	//mat = mSystem->GetProjectionMatrix(vr::Eye_Right, mNearClip, mFarClip);
-	//mRightProjection = ConvertMat44(mat);
 	mSystem->GetProjectionRaw(vr::Eye_Left, &l, &r, &t, &b);
 	l *= mNearClip;
 	r *= mNearClip;
 	t *= mNearClip;
 	b *= mNearClip;
-	mRightProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
+	//mLeftProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
+	//Need to invert near/far. dont ask me why this works
+	mLeftProjection = ConvertMat44(mSystem->GetProjectionMatrix(vr::Eye_Right, -mNearClip, -mFarClip));
+	mLeftProjection[1][1] = -mLeftProjection[1][1];
+	mLeftProjection[2][2] = -mLeftProjection[2][2];
+	mLeftProjection[3][2] = -mLeftProjection[3][2];
+	mLeftProjection[2][3] = -mLeftProjection[2][3];
+
+	mSystem->GetProjectionRaw(vr::Eye_Right, &l, &r, &t, &b);
+	l *= mNearClip;
+	r *= mNearClip;
+	t *= mNearClip;
+	b *= mNearClip;
+	//mRightProjection = float4x4::Perspective(l, r, t, b, mNearClip, mFarClip);
+	mRightProjection = ConvertMat44(mSystem->GetProjectionMatrix(vr::Eye_Right, -mNearClip, -mFarClip));
+	mRightProjection[1][1] = -mRightProjection[1][1];
+	mRightProjection[2][2] = -mRightProjection[2][2];
+	mRightProjection[3][2] = -mRightProjection[3][2];
+	mRightProjection[2][3] = -mRightProjection[2][3];
 
 }
 

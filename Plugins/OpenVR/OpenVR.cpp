@@ -61,7 +61,7 @@ bool OpenVR::Init(Scene* scene) {
 
 	mScene = scene;
 	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
-
+	
 #pragma region load glTF
 	string folder = "Assets/Models/";
 	string file = "cornellbox.gltf";
@@ -226,7 +226,7 @@ bool OpenVR::Init(Scene* scene) {
 	mScene->Environment()->EnableCelestials(false);
 	mScene->Environment()->EnableScattering(false);
 	mScene->Environment()->AmbientLight(.6f);
-
+	
 	
 #pragma region Camera setup
 	shared_ptr<Object> bodyBase = make_shared<Object>("Openvr body");
@@ -317,12 +317,8 @@ bool OpenVR::Init(Scene* scene) {
 	camera->HeadToEye(eye, EYE_RIGHT);
 
 	mVRDevice->CalculateProjectionMatrices();
-	float4x4 proj = (mVRDevice->LeftProjection());
-	//proj[1][1] = -proj[1][1];
-	camera->Projection(proj , EYE_LEFT);
-	proj = (mVRDevice->RightProjection());
-	//proj[1][1] = -proj[1][1];
-	camera->Projection(proj, EYE_RIGHT);
+	camera->Projection(mVRDevice->LeftProjection() , EYE_LEFT);
+	camera->Projection(, EYE_RIGHT);
 	*/
 #pragma endregion
 
@@ -459,6 +455,7 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 	}
 	else if (camera == mCameraRight)
 	{
+		//Change image layouts for transfer
 		VkPipelineStageFlags srcStage, dstStage, srcStage2, dstStage2;
 		VkImageMemoryBarrier barrier[3] = {};
 		barrier[0] = mCameraRight->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage, dstStage);
@@ -473,7 +470,7 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 			2, barrier);
 
 
-
+		//Copy image
 		VkImageSubresourceLayers srcLayers = {};
 		srcLayers.baseArrayLayer = 0;
 		srcLayers.layerCount = 1;
@@ -502,6 +499,8 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 
 		vkCmdCopyImage(*commandBuffer, mCameraRight->ResolveBuffer()->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mMirror->Image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
+
+		//Change image layouts back to what they were before
 		VkImageMemoryBarrier barrier2[3] = {};
 		barrier2[0] = mCameraRight->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
 		barrier2[1] = mMirror->TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage2, dstStage2);
@@ -514,6 +513,37 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 			0, nullptr,
 			0, nullptr,
 			2, barrier2);
+
+
+
+		#pragma region BlitToBackbuffer
+		Texture::TransitionImageLayout(mScene->Instance()->Window()->BackBuffer(), mScene->Instance()->Window()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
+
+		VkOffset3D srcoffsets[2];
+		srcoffsets[0] = {};
+		srcoffsets[1] = {};
+		srcoffsets[1].x = mMirror->Width();
+		srcoffsets[1].y = mMirror->Height();
+		srcoffsets[1].z = 1;
+		VkOffset3D dstoffsets[2];
+		dstoffsets[0] = {};
+		dstoffsets[1] = {};
+		dstoffsets[1].x = mScene->Instance()->Window()->BackBufferSize().width;
+		dstoffsets[1].y = mScene->Instance()->Window()->BackBufferSize().height;
+		dstoffsets[1].z = 1;
+
+		VkImageBlit regions = {};
+		regions.srcSubresource = srcLayers;
+		regions.dstSubresource = dstLayers;
+		regions.srcOffsets[0] = srcoffsets[0];
+		regions.srcOffsets[1] = srcoffsets[1];
+		regions.dstOffsets[0] = dstoffsets[0];
+		regions.dstOffsets[1] = dstoffsets[1];
+
+		vkCmdBlitImage(*commandBuffer, mMirror->Image(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, mScene->Instance()->Window()->BackBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &regions, VK_FILTER_LINEAR);
+	
+		Texture::TransitionImageLayout(mScene->Instance()->Window()->BackBuffer(), mScene->Instance()->Window()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer);
+		#pragma endregion
 	}	
 }
 

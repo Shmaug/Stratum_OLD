@@ -158,11 +158,11 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	vkCreatePipelineCache(mDevice, &cache, nullptr, &mPipelineCache);
 	
 	VkDescriptorPoolSize type_count[5] {
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			mLimits.maxDescriptorSetUniformBuffers },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	mLimits.maxDescriptorSetSampledImages },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				mLimits.maxDescriptorSetSampledImages },
-		{ VK_DESCRIPTOR_TYPE_SAMPLER,					mLimits.maxDescriptorSetSamplers },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			mLimits.maxDescriptorSetStorageBuffers },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,			min(4096u, mLimits.maxDescriptorSetUniformBuffers) },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,	min(4096u, mLimits.maxDescriptorSetSampledImages) },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,				min(4096u, mLimits.maxDescriptorSetSampledImages) },
+		{ VK_DESCRIPTOR_TYPE_SAMPLER,					min(4096u, mLimits.maxDescriptorSetSamplers) },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,			min(4096u, mLimits.maxDescriptorSetStorageBuffers) },
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
@@ -170,7 +170,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 	poolInfo.poolSizeCount = 5;
 	poolInfo.pPoolSizes = type_count;
-	poolInfo.maxSets = 65535;
+	poolInfo.maxSets = 8192;
 
 	ThrowIfFailed(vkCreateDescriptorPool(mDevice, &poolInfo, nullptr, &mDescriptorPool), "vkCreateDescriptorPool failed");
 	SetObjectName(mDescriptorPool, name, VK_OBJECT_TYPE_DESCRIPTOR_POOL);

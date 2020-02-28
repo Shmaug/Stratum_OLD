@@ -85,6 +85,8 @@ private:
 
 	float mTimeOfDay; // 0-1
 
+	Buffer* mScatterParamBuffer;
+
 	// global settings
 
 	float3 mAmbientLight;
