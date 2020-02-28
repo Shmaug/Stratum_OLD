@@ -18,8 +18,9 @@ public:
 	
 	inline virtual bool Init(Scene* scene) { return true; }
 	
-	inline virtual void PreUpdate () {}
-	inline virtual void Update	  () {}
+	inline virtual void PreUpdate() {}
+	inline virtual void FixedUpdate() {}
+	inline virtual void Update() {}
 	inline virtual void PostUpdate() {}
 
 	// Called before a camera presents to a window, after the command buffer has been submitted

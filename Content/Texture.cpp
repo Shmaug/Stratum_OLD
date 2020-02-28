@@ -156,38 +156,41 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 
 Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
 	: mName(name), mDevice(device), mWidth(width), mHeight(height), mDepth(depth), mArrayLayers(1), mMipLevels(mipLevels), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
-	if (mipLevels == 0) {
-		mMipLevels = (uint32_t)std::floor(std::log2(std::max(mWidth, mHeight))) + 1;
-		mUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	
+	if (mipLevels == 0) mMipLevels = (uint32_t)std::floor(std::log2(std::max(mWidth, mHeight))) + 1;
+	if (mMipLevels > 1) mUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	if (pixels && imageSize) {
+		mUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		CreateImage();
+		CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+
+		VkBufferImageCopy copyRegion = {};
+		copyRegion.bufferOffset = 0;
+		copyRegion.bufferRowLength = 0;
+		copyRegion.bufferImageHeight = 0;
+		copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.imageSubresource.mipLevel = 0;
+		copyRegion.imageSubresource.baseArrayLayer = 0;
+		copyRegion.imageSubresource.layerCount = 1;
+		copyRegion.imageOffset = { 0, 0, 0 };
+		copyRegion.imageExtent = { mWidth, mHeight, mDepth };
+
+		Buffer uploadBuffer(name + " Copy", mDevice, pixels, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		auto commandBuffer = mDevice->GetCommandBuffer();
+		TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
+		vkCmdCopyBufferToImage(*commandBuffer, uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+		if (mMipLevels > 1)
+			GenerateMipMaps(commandBuffer.get());
+		else
+			TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, ((mUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
+		mDevice->Execute(commandBuffer, false)->Wait();
+	} else {
+		CreateImage();
+		CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 	}
-	mUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-
-	CreateImage();
-	CreateImageView(VK_IMAGE_ASPECT_COLOR_BIT);
-
-	VkBufferImageCopy copyRegion = {};
-	copyRegion.bufferOffset = 0;
-	copyRegion.bufferRowLength = 0;
-	copyRegion.bufferImageHeight = 0;
-	copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	copyRegion.imageSubresource.mipLevel = 0;
-	copyRegion.imageSubresource.baseArrayLayer = 0;
-	copyRegion.imageSubresource.layerCount = 1;
-	copyRegion.imageOffset = { 0, 0, 0 };
-	copyRegion.imageExtent = { mWidth, mHeight, mDepth };
-
-	Buffer uploadBuffer(name + " Copy", mDevice, pixels, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	auto commandBuffer = mDevice->GetCommandBuffer();
-	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
-	vkCmdCopyBufferToImage(*commandBuffer, uploadBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-
-	if (mipLevels == 0)
-		GenerateMipMaps(commandBuffer.get());
-	else
-		TransitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0 ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());
-
-	mDevice->Execute(commandBuffer, false)->Wait();
 }
 
 Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
@@ -271,7 +274,7 @@ void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
 			VK_FILTER_LINEAR);
 
 		barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		barrier.newLayout = ((mUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
@@ -288,12 +291,11 @@ void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
 
 	barrier.subresourceRange.baseMipLevel = mMipLevels - 1;
 	barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.newLayout = ((mUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
 	vkCmdPipelineBarrier(*commandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, (mUsage & VK_IMAGE_USAGE_STORAGE_BIT) ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
 		0, nullptr,
 		0, nullptr,
 		1, &barrier);

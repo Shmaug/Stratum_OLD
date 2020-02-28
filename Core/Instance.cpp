@@ -61,7 +61,7 @@ LRESULT CALLBACK Instance::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 #endif
 
 Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
-	: mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mTotalTime(0), mDeltaTime(0), mWindow(nullptr), mWindowInput(nullptr), mDestroyPending(false)
+	: mInstance(VK_NULL_HANDLE), mFrameCount(0), mMaxFramesInFlight(0), mWindow(nullptr), mWindowInput(nullptr), mDestroyPending(false)
 	#ifdef ENABLE_DEBUG_LAYERS
 	, mDebugMessenger(VK_NULL_HANDLE)
 	#endif
@@ -283,9 +283,6 @@ Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 	mDevice->mFrameContexts = new Device::FrameContext[mMaxFramesInFlight];
 	for (uint32_t i = 0; i < mMaxFramesInFlight; i++)
 		mDevice->mFrameContexts[i].mDevice = mDevice;
-
-	mStartTime = mClock.now();
-	mLastFrame = mClock.now();
 }
 Instance::~Instance() {
 	safe_delete(mWindow);
@@ -420,11 +417,6 @@ xcb_generic_event_t* Instance::PollEvent() {
 #endif
 
 bool Instance::PollEvents() {
-    auto t1 = mClock.now();
-	mDeltaTime = (t1 - mLastFrame).count() * 1e-9f;
-	mTotalTime = (t1 - mStartTime).count() * 1e-9f;
-	mLastFrame = t1;
-
 	#ifdef __linux
 	xcb_generic_event_t* event;
 	while (event = PollEvent()){

@@ -35,6 +35,10 @@ public:
 	ENGINE_EXPORT void TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, CommandBuffer* commandBuffer);
 	ENGINE_EXPORT VkImageMemoryBarrier TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags& srcStage, VkPipelineStageFlags& dstStage);
 
+	// Texture must have been created with the appropriate mipmap levels defined
+	// Texture must be in VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	ENGINE_EXPORT void GenerateMipMaps(CommandBuffer* commandBuffer);
+
 private:
 	friend class AssetManager;
 	ENGINE_EXPORT Texture(const std::string& name, Device* device, const std::string& filename, bool srgb = true);
@@ -60,7 +64,6 @@ private:
 	VkImageView mView;
 	VkDeviceMemory mImageMemory;
 
-	ENGINE_EXPORT void GenerateMipMaps(CommandBuffer* commandBuffer);
 
 	ENGINE_EXPORT void CreateImage();
 	ENGINE_EXPORT void CreateImageView(VkImageAspectFlags flags);

@@ -38,6 +38,45 @@ void Material::DisableKeyword(const string& kw) {
 	}
 }
 
+void Material::SetUniformBuffer(const string& name, VkDeviceSize offset, VkDeviceSize range, std::shared_ptr<Buffer> param) {
+	if (!mUniformBuffers.count(name)) {
+		auto& p = mUniformBuffers[name];
+		p.mBuffer = param;
+		p.mOffset = offset;
+		p.mRange = range;
+		for (auto& d : mVariantData)
+			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+	} else {
+		auto& p = mUniformBuffers[name];
+		if (p.mBuffer.index() != 0 || get<shared_ptr<Buffer>>(p.mBuffer) != param || p.mOffset != offset || p.mRange != range) {
+			p.mBuffer = param;
+			p.mOffset = offset;
+			p.mRange = range;
+			for (auto& d : mVariantData)
+				memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+		}
+	}
+}
+void Material::SetUniformBuffer(const string& name, VkDeviceSize offset, VkDeviceSize range, Buffer* param) {
+	if (!mUniformBuffers.count(name)) {
+		auto& p = mUniformBuffers[name];
+		p.mBuffer = param;
+		p.mOffset = offset;
+		p.mRange = range;
+		for (auto& d : mVariantData)
+			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+	} else {
+		auto& p = mUniformBuffers[name];
+		if (p.mBuffer.index() != 1 || get<Buffer*>(p.mBuffer) != param || p.mOffset != offset || p.mRange != range) {
+			p.mBuffer = param;
+			p.mOffset = offset;
+			p.mRange = range;
+			for (auto& d : mVariantData)
+				memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
+		}
+	}
+}
+
 void Material::SetParameter(const string& name, const MaterialParameter& param) {
 	MaterialParameter& p = mParameters[name];
 	if (p != param) {
@@ -47,17 +86,17 @@ void Material::SetParameter(const string& name, const MaterialParameter& param) 
 				memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 	}
 }
-void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
+void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
 	auto& p = mArrayParameters[name][index];
-	if (p.index() != 1 || get<Texture*>(p) != param) {
+	if (p.index() != 0 || get<shared_ptr<Texture>>(p) != param) {
 		p = param;
 		for (auto& d : mVariantData)
 			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
 	}
 }
-void Material::SetParameter(const string& name, uint32_t index, shared_ptr<Texture> param) {
+void Material::SetParameter(const string& name, uint32_t index, Texture* param) {
 	auto& p = mArrayParameters[name][index];
-	if (p.index() != 0 || get<shared_ptr<Texture>>(p) != param) {
+	if (p.index() != 1 || get<Texture*>(p) != param) {
 		p = param;
 		for (auto& d : mVariantData)
 			memset(d.second->mDirty, true, sizeof(bool) * mDevice->MaxFramesInFlight());
@@ -136,6 +175,23 @@ void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* cam
 					ds->CreateSampledTextureDescriptor(t, p.first, bindings.second.binding);
 				}
 
+			}
+
+			for (auto& m : mUniformBuffers) {
+				if (shader->mDescriptorBindings.count(m.first) == 0) continue;
+				auto& bindings = shader->mDescriptorBindings.at(m.first);
+				if (bindings.first != PER_MATERIAL) continue;
+
+				auto binding = bindings.second;
+
+				switch (m.second.mBuffer.index()) {
+				case 0:
+					ds->CreateUniformBufferDescriptor(get<Buffer*>(m.second.mBuffer), m.second.mOffset, m.second.mRange, binding.binding);
+					break;
+				case 1:
+					ds->CreateUniformBufferDescriptor(get<shared_ptr<Buffer>>(m.second.mBuffer).get(), m.second.mOffset, m.second.mRange, binding.binding);
+					break;
+				}
 			}
 
 			ds->FlushWrites();

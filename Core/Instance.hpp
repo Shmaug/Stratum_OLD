@@ -26,8 +26,6 @@ public:
 	inline ::Device* Device() const { return mDevice; }
 	inline ::Window* Window() const { return mWindow; }
 
-	inline float TotalTime() const { return mTotalTime; }
-	inline float DeltaTime() const { return mDeltaTime; }
 	inline uint64_t FrameCount() const { return mFrameCount; }
 
 	inline uint32_t MaxFramesInFlight() const { return mMaxFramesInFlight; }
@@ -61,12 +59,6 @@ private:
 	#ifdef ENABLE_DEBUG_LAYERS
 	VkDebugUtilsMessengerEXT mDebugMessenger;
 	#endif
-
-	std::chrono::high_resolution_clock mClock;
-	std::chrono::high_resolution_clock::time_point mStartTime;
-	std::chrono::high_resolution_clock::time_point mLastFrame;
-	float mTotalTime;
-	float mDeltaTime;
 
 	std::vector<std::string> mCmdArguments;
 
