@@ -11,9 +11,11 @@ struct GizmoVertex {
 };
 const ::VertexInput GizmoVertexInput {
 	{
-		0, // binding
-		sizeof(GizmoVertex), // stride
-		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		{
+			0, // binding
+			sizeof(GizmoVertex), // stride
+			VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		}
 	},
 	{
 		{

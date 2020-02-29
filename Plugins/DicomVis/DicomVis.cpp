@@ -143,7 +143,7 @@ public:
 
 		return true;
 	}
-	PLUGIN_EXPORT void Update() override {
+	PLUGIN_EXPORT void Update(CommandBuffer* commandBuffer) override {
 		if (mInput->KeyDownFirst(KEY_F1))
 			mScene->DrawGizmos(!mScene->DrawGizmos());
 		if (mInput->KeyDownFirst(KEY_TILDE))

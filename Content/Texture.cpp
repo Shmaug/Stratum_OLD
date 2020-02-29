@@ -93,7 +93,7 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 
 	stbi_image_free(pixels);
 
-	printf("Loaded %s: %dx%d %s\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat));
+	//printf("Loaded %s: %dx%d %s\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat));
 }
 Texture::Texture(const string& name, Device* device, const string& px, const string& nx, const string& py, const string& ny, const string& pz, const string& nz, bool srgb)
 	: mName(name), mDevice(device) {
@@ -151,7 +151,7 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 	for (uint32_t i = 0; i < 6; i++)
 		stbi_image_free(pixels[i]);
 
-	printf("Loaded Cubemap %s: %dx%d %s\n", nx.c_str(), mWidth, mHeight, FormatToString(mFormat));
+	//printf("Loaded Cubemap %s: %dx%d %s\n", nx.c_str(), mWidth, mHeight, FormatToString(mFormat));
 }
 
 Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)

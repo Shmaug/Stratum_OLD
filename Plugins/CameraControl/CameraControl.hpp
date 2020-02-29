@@ -26,7 +26,7 @@ public:
 	PLUGIN_EXPORT ~CameraControl();
 
 	PLUGIN_EXPORT bool Init(Scene* scene) override;
-	PLUGIN_EXPORT void Update() override;
+	PLUGIN_EXPORT void Update(CommandBuffer* commandBuffer) override;
 	PLUGIN_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 	PLUGIN_EXPORT void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 

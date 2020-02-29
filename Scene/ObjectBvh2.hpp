@@ -27,7 +27,7 @@ public:
 	const std::vector<Node>& Nodes() const { return mNodes; }
 	Object* GetObject(uint32_t index) const { return mPrimitives[index].mObject; }
 
-	inline AABB Bounds() { return mNodes.size() ? mNodes[0].mBounds : AABB(); }
+	inline AABB RendererBounds() { return mRendererBounds; }
 
 	ENGINE_EXPORT void Build(Object** objects, uint32_t objectCount);
 	ENGINE_EXPORT void FrustumCheck(const float4 frustum[6], std::vector<Object*>& objects, uint32_t mask);
@@ -36,6 +36,7 @@ public:
 	ENGINE_EXPORT void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene);
 
 private:
+	AABB mRendererBounds;
 	std::vector<Node> mNodes;
 	std::vector<Primitive> mPrimitives;
 };
