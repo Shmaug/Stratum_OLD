@@ -1,6 +1,7 @@
 #include <Scene/ObjectBvh2.hpp>
 
 #include <Scene/Scene.hpp>
+#include <Scene/Renderer.hpp>
 
 using namespace std;
 
@@ -8,11 +9,17 @@ void ObjectBvh2::Build(Object** objects, uint32_t objectCount) {
 	mPrimitives.clear();
 	mNodes.clear();
 
+	mRendererBounds.mMin = 1e10f;
+	mRendererBounds.mMax = -1e10f;
+
 	for (uint32_t i = 0; i < objectCount; i++) {
 		AABB aabb(objects[i]->Bounds());
 		aabb.mMin -= 1e-3f;
 		aabb.mMax += 1e-3f;
 		mPrimitives.push_back({ aabb, objects[i] });
+
+		if (dynamic_cast<Renderer*>(objects[i]))
+			mRendererBounds.Encapsulate(aabb);
 	}
 
 	struct BuildTask {

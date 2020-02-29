@@ -328,16 +328,18 @@ inline bool IsPowerOfTwo(T value) {
 // Note: Meshes store a pointer to one of these, but do not handle creation/deletion.
 struct VertexInput {
 public:
-	const VkVertexInputBindingDescription mBinding;
+	const std::vector<VkVertexInputBindingDescription> mBindings;
 	// Note: In order to hash and compare correctly, attributes must appear in order of location.
 	const std::vector<VkVertexInputAttributeDescription> mAttributes;
 
-	VertexInput(const VkVertexInputBindingDescription& binding, const std::vector<VkVertexInputAttributeDescription>& attribs)
-		: mBinding(binding), mAttributes(attribs) {
+	VertexInput(const std::vector<VkVertexInputBindingDescription>& bindings, const std::vector<VkVertexInputAttributeDescription>& attribs)
+		: mBindings(bindings), mAttributes(attribs) {
 		std::size_t h = 0;
-		hash_combine(h, mBinding.binding);
-		hash_combine(h, mBinding.inputRate);
-		hash_combine(h, mBinding.stride);
+		for (const auto& b : mBindings) {
+			hash_combine(h, b.binding);
+			hash_combine(h, b.inputRate);
+			hash_combine(h, b.stride);
+		}
 		for (const auto& a : mAttributes) {
 			hash_combine(h, a.binding);
 			hash_combine(h, a.format);

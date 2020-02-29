@@ -129,6 +129,14 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
 		commandBuffer->PushConstant(shader, "ScreenSize", &s);
 
+		Buffer* transforms = commandBuffer->Device()->GetTempBuffer("Transforms", sizeof(float4x4) * mWorldStrings.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		float4x4* m = (float4x4*)transforms->MappedData();
+		for (const GuiString& s : mWorldStrings) {
+			*m = s.mTransform;
+			m++;
+		}
+		uint32_t idx = 0;
+
 		for (const GuiString& s : mWorldStrings) {
 			Buffer* glyphBuffer = nullptr;
 			char hashstr[256];
@@ -140,11 +148,10 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 				auto& b = bc.mGlyphCache.at(key);
 				b.second = 8;
 				glyphBuffer = b.first;
-			}
-			else {
+			} else {
 				vector<TextGlyph> glyphs(s.mString.length());
 				uint32_t glyphCount = s.mFont->GenerateGlyphs(s.mString, s.mScale, nullptr, glyphs, s.mHorizontalAnchor, s.mVerticalAnchor);
-				if (glyphCount == 0) return;
+				if (glyphCount == 0) { idx++; return; }
 				
 				for (auto it = bc.mGlyphBufferCache.begin(); it != bc.mGlyphBufferCache.end();) {
 					if (it->first->Size() == glyphCount * sizeof(TextGlyph)) {
@@ -164,15 +171,17 @@ void GUI::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 
 			DescriptorSet* descriptorSet = commandBuffer->Device()->GetTempDescriptorSet(s.mFont->mName + " DescriptorSet", shader->mDescriptorSetLayouts[PER_OBJECT]);
 			descriptorSet->CreateSampledTextureDescriptor(s.mFont->Texture(), BINDING_START + 0);
+			descriptorSet->CreateStorageBufferDescriptor(transforms, 0, transforms->Size(), BINDING_START + 1);
 			descriptorSet->CreateStorageBufferDescriptor(glyphBuffer, 0, glyphBuffer->Size(), BINDING_START + 2);
 			descriptorSet->FlushWrites();
 			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, PER_OBJECT, 1, *descriptorSet, 0, nullptr);
-			commandBuffer->PushConstant(shader, "ObjectToWorld", &s.mTransform);
 			commandBuffer->PushConstant(shader, "Color", &s.mColor);
 			commandBuffer->PushConstant(shader, "Offset", &s.mOffset);
 			commandBuffer->PushConstant(shader, "Bounds", &s.mBounds);
 			commandBuffer->PushConstant(shader, "Depth", &s.mDepth);
-			vkCmdDraw(*commandBuffer, (glyphBuffer->Size() / sizeof(TextGlyph)) * 6, 1, 0, 0);
+			vkCmdDraw(*commandBuffer, (glyphBuffer->Size() / sizeof(TextGlyph)) * 6, 1, 0, idx);
+
+			idx++;
 		}
 	}
 

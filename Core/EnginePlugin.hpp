@@ -18,10 +18,10 @@ public:
 	
 	inline virtual bool Init(Scene* scene) { return true; }
 	
-	inline virtual void PreUpdate() {}
-	inline virtual void FixedUpdate() {}
-	inline virtual void Update() {}
-	inline virtual void PostUpdate() {}
+	inline virtual void PreUpdate(CommandBuffer* commandBuffer) {}
+	inline virtual void FixedUpdate(CommandBuffer* commandBuffer) {}
+	inline virtual void Update(CommandBuffer* commandBuffer) {}
+	inline virtual void PostUpdate(CommandBuffer* commandBuffer) {}
 	
 	/// Called before a camera starts rendering, before BeginRenderPass
 	inline virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {}
@@ -33,6 +33,8 @@ public:
 	inline virtual void PostProcess(CommandBuffer* commandBuffer, Camera* camera) {}
 
 	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {}
+
+	inline virtual void PrePresent() {}
 	
 	/// Higher priority plugins get called first
 	inline virtual int Priority() { return 50; }

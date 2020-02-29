@@ -14,12 +14,17 @@ CompileOptions options;
 
 class Includer : public CompileOptions::IncluderInterface {
 public:
-	virtual shaderc_include_result* GetInclude(const char* requested_source, shaderc_include_type type, const char* requesting_source, size_t include_depth) override {
-		auto src = fs::absolute(requesting_source).parent_path();
+	inline Includer(const string& globalPath) : mIncludePath(globalPath) {}
 
-		string fullpath = src.generic_u8string() + "/" + requested_source;
+	inline virtual shaderc_include_result* GetInclude(const char* requested_source, shaderc_include_type type, const char* requesting_source, size_t include_depth) override {
+		fs::path folder;
+		
+		if (type == shaderc_include_type_relative)
+			folder = fs::absolute(requesting_source).parent_path();
+		else
+			folder = mIncludePath;
 
-
+		string fullpath = folder.string() + "/" + requested_source;
 
 		shaderc_include_result* response = new shaderc_include_result();
 		string& data = mFiles[fullpath];
@@ -45,12 +50,14 @@ public:
 
 		return response;
 	}
-	virtual void ReleaseInclude(shaderc_include_result* data) override {
+	inline void ReleaseInclude(shaderc_include_result* data) override {
 		if (data->user_data) delete[] (char*)data->user_data;
 		delete data;
 	}
 
 private:
+	string mIncludePath;
+
 	unordered_map<string, string> mFiles;
 	unordered_map<string, string> mFullPaths;
 };
@@ -524,12 +531,13 @@ CompiledShader* Compile(shaderc::Compiler* compiler, const string& filename) {
 }
 
 int main(int argc, char* argv[]) {
-	char* inputFile;
-	char* outputFile;
+	const char* inputFile;
+	const char* outputFile;
+	const char* include;
 
-	if (argc < 2) {
+	if (argc < 3) {
 		//*
-		fprintf(stderr, "Usage: %s <input> <output>\n", argv[0]);
+		fprintf(stderr, "Usage: %s <input> <output> <global include path>\n", argv[0]);
 		return EXIT_FAILURE;
 		/*/
 		inputFile = "E:/Projects/Vulkan/Stratum/Shaders/pbr.hlsl";
@@ -538,11 +546,12 @@ int main(int argc, char* argv[]) {
 	} else {
 		inputFile = argv[1];
 		outputFile = argv[2];
+		include = argv[3];
 	}
 
 	printf("Compiling %s\n", inputFile);
 	
-	options.SetIncluder(make_unique<Includer>());
+	options.SetIncluder(make_unique<Includer>(include));
 	options.SetSourceLanguage(shaderc_source_language_hlsl);
 
 	Compiler* compiler = new Compiler();

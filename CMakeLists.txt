@@ -1,7 +1,5 @@
 cmake_minimum_required (VERSION 2.8)
 
-project(Stratum)
-
 option(ENABLE_DEBUG_LAYERS "Enable debug layers?" TRUE)
 set(STRATUM_HOME ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "Directory of Stratum")
 

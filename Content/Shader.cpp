@@ -313,8 +313,8 @@ VkPipeline GraphicsShader::GetPipeline(RenderPass* renderPass, const VertexInput
 		VkPipelineVertexInputStateCreateInfo vinput = {};
 		vinput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		if (vertexInput) {
-			vinput.vertexBindingDescriptionCount = 1;
-			vinput.pVertexBindingDescriptions = &vertexInput->mBinding;
+			vinput.vertexBindingDescriptionCount = (uint32_t)vertexInput->mBindings.size();
+			vinput.pVertexBindingDescriptions = vertexInput->mBindings.data();
 			vinput.vertexAttributeDescriptionCount = (uint32_t)vertexInput->mAttributes.size();
 			vinput.pVertexAttributeDescriptions = vertexInput->mAttributes.data();
 		} else {

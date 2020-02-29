@@ -15,8 +15,8 @@ using namespace std;
 #define INSTANCE_BATCH_SIZE 1024
 #define MAX_GPU_LIGHTS 64
 
-#define SHADOW_ATLAS_RESOLUTION 4096
-#define SHADOW_RESOLUTION 1024
+#define SHADOW_ATLAS_RESOLUTION 8192
+#define SHADOW_RESOLUTION 4096
 
 bool RendererCompare(Object* oa, Object* ob) {
 	Renderer* a = dynamic_cast<Renderer*>(oa);
@@ -350,7 +350,7 @@ void Scene::Update(CommandBuffer* commandBuffer) {
 				o->FixedUpdate(commandBuffer);
 		for (const auto& p : mPluginManager->Plugins())
 			if (p->mEnabled)
-				p->FixedUpdate();
+				p->FixedUpdate(commandBuffer);
 
 		mFixedAccumulator -= mFixedTimeStep;
 		physicsTime = (mClock.now() - t1).count() * 1e-9f;
@@ -360,15 +360,24 @@ void Scene::Update(CommandBuffer* commandBuffer) {
 	PROFILER_BEGIN("Update");
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PreUpdate();
+			p->PreUpdate(commandBuffer);
 
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->Update();
+			p->Update(commandBuffer);
 
 	for (const auto& p : mPluginManager->Plugins())
 		if (p->mEnabled)
-			p->PostUpdate();
+			p->PostUpdate(commandBuffer);
+	PROFILER_END;
+
+}
+
+void Scene::PrePresent() {
+	PROFILER_BEGIN("PrePresent");
+	for (const auto& p : mPluginManager->Plugins())
+		if (p->mEnabled)
+			p->PrePresent();
 	PROFILER_END;
 
 }
@@ -488,7 +497,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 	if (mainCamera && mLights.size()) {
 		AABB sceneBounds;
 		if (mBvh)
-			sceneBounds = BVH()->Bounds();
+			sceneBounds = BVH()->RendererBounds();
 		else
 			for (Renderer* r : mRenderers)
 				if (r->Visible()) sceneBounds.Encapsulate(r->Bounds());
@@ -598,7 +607,7 @@ void Scene::PreFrame(CommandBuffer* commandBuffer) {
 							corners[6] = float3(-sceneExtent.x, -sceneExtent.y,  sceneExtent.z) + sceneCenter;
 							corners[7] = float3( sceneExtent.x, -sceneExtent.y,  sceneExtent.z) + sceneCenter;
 						}
-						
+
 						// project direction onto scene bounds for near and far
 						float3 fwd   = l->WorldRotation() * float3(0, 0, 1);
 						float3 right = l->WorldRotation() * float3(1, 0, 0);

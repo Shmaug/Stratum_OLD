@@ -10,7 +10,7 @@
 
 #pragma multicompile ENABLE_SCATTERING ENVIRONMENT_TEXTURE ENVIRONMENT_TEXTURE_HDR
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 #define PI 3.1415926535897932
 #define INVPI 0.31830988618
@@ -30,10 +30,12 @@
 [[vk::binding(BINDING_START + 7, PER_MATERIAL)]] ConstantBuffer<ScatteringParameters> ScatterParams : register(b2);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b3) {
-	STRATUM_PUSH_CONSTANTS
+	uint StereoEye;
+	float4 StereoClipTransform;
+	float3 AmbientLight;
 }
 
-#include "include/util.hlsli"
+#include <include/util.hlsli>
 
 float3 rotate(float4 q, float3 v) {
 	return 2 * dot(q.xyz, v) * q.xyz + (q.w * q.w - dot(q.xyz, q.xyz)) * v + 2 * q.w * cross(q.xyz, v);

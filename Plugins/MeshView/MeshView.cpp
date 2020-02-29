@@ -457,7 +457,7 @@ public:
 		return true;
 	}
 
-	PLUGIN_EXPORT void Update() override {
+	PLUGIN_EXPORT void Update(CommandBuffer* commandBuffer) override {
 		if (mHead) {
 			mAnimTime = clamp(mAnimTime, 0.f, 1.f);
 			mHead->ShapeKey("head1", mAnimTime);

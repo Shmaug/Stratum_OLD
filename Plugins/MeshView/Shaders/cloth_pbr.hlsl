@@ -14,7 +14,7 @@
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 struct ClothVertex {
 	float4 Position;
