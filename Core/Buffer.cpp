@@ -5,11 +5,11 @@
 
 using namespace std;
 
-Buffer::Buffer(const std::string& name, Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
+Buffer::Buffer(const std::string& name, ::Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
 	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryFlags(memoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
 	Allocate();
 }
-Buffer::Buffer(const std::string& name, Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
+Buffer::Buffer(const std::string& name, ::Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
 	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryFlags(memoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
 	if ((memoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
 		mUsageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
