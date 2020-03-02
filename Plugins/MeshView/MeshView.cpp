@@ -1,4 +1,4 @@
-#include <Scene/MeshRenderer.hpp>
+#include <Scene/ClothRenderer.hpp>
 #include <Scene/SkinnedMeshRenderer.hpp>
 #include <Scene/GUI.hpp>
 #include <Util/Profiler.hpp>
@@ -6,8 +6,6 @@
 
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
-
-#include "ClothRenderer.hpp"
 
 #define THROW_INVALID_SKEL { fprintf_color(COLOR_RED, stderr, "Invalid SKEL file\n"); throw; }
 #define THROW_INVALID_SKIN { fprintf_color(COLOR_RED, stderr, "Invalid SKIN file\n"); throw; }
@@ -551,8 +549,24 @@ public:
 			if (mHead) mHead->mVisible = false;
 			if (mCloth) { mCloth->mVisible = true; return; }
 
-			auto cloth = make_shared<ClothRenderer>("Cloth", 1.f, 64);
-			cloth->LocalPosition(0, .9f, 0);
+			auto gridmat = make_shared<Material>("Grid", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
+			gridmat->EnableKeyword("TWO_SIDED");
+			gridmat->EnableKeyword("TEXTURED");
+			gridmat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/grid.png"));
+			gridmat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/bump.png"));
+			gridmat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/mask.png"));
+			gridmat->SetParameter("TextureST", float4(256, 256, 1, 1));
+			gridmat->SetParameter("Color", float4(1));
+			gridmat->SetParameter("Metallic", 0.f);
+			gridmat->SetParameter("Roughness", .5f);
+			gridmat->SetParameter("BumpStrength", 1.f);
+			gridmat->SetParameter("Emission", float3(0));
+			auto cloth = make_shared<ClothRenderer>("Cloth");
+			cloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid.fbx"));
+			cloth->Material(gridmat);
+			cloth->PushConstant("TextureIndex", 0u);
+			cloth->PushConstant("TextureST", float4(4, 4, 0, 0));
+			cloth->LocalPosition(0, 1, 0);
 			mCloth = cloth.get();
 			mScene->AddObject(cloth);
 			mObjects.push_back(mCloth);
@@ -561,8 +575,6 @@ public:
 		if (mCloth && mCloth->Visible()) {
 			float k = mCloth->Stiffness();
 			float d = mCloth->Drag();
-			float fx = mCloth->ExternalForce().x;
-			float fz = mCloth->ExternalForce().z;
 
 			GUI::LayoutLabel(sem16, "Stiffness: " + to_string(k), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 			GUI::LayoutSlider(k, 0, 500, 18, float4(.5f, .5f, .5f, 1), 4);
@@ -570,13 +582,8 @@ public:
 			GUI::LayoutLabel(sem16, "Drag: " + to_string(d), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 			GUI::LayoutSlider(d, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
 
-			GUI::LayoutLabel(sem16, "Wind x/z: " + to_string(fx) + "/" + to_string(fz), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(fx, -.5f, .5f, 18, float4(.5f, .5f, .5f, 1), 4);
-			GUI::LayoutSlider(fz, -.5f, .5f, 18, float4(.5f, .5f, .5f, 1), 4);
-			
 			mCloth->Drag(d);
 			mCloth->Stiffness(k);
-			mCloth->ExternalForce(float3(fx, -5.f, fz));
 		}
 
 		GUI::EndLayout();

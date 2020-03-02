@@ -7,8 +7,8 @@ class Buffer {
 public:
 	const std::string mName;
 
-	ENGINE_EXPORT Buffer(const std::string& name, Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	ENGINE_EXPORT Buffer(const std::string& name, Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	ENGINE_EXPORT Buffer(const std::string& name, ::Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	ENGINE_EXPORT Buffer(const std::string& name, ::Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	ENGINE_EXPORT Buffer(const Buffer& src);
 	ENGINE_EXPORT ~Buffer();
 
@@ -27,10 +27,11 @@ public:
 	ENGINE_EXPORT void CopyFrom(const Buffer& other);
 	Buffer& operator=(const Buffer& other) = delete;
 
+	inline ::Device* Device() const { return mDevice; }
 	inline operator VkBuffer() const { return mBuffer; }
 
 private:
-	Device* mDevice;
+	::Device* mDevice;
 	VkBuffer mBuffer;
 	VkDeviceMemory mMemory;
 
