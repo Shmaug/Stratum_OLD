@@ -113,7 +113,7 @@ bool TerrainSystem::Init(Scene* scene) {
 	return true;
 }
 
-void TerrainSystem::Update() {
+void TerrainSystem::Update(CommandBuffer* commandBuffer) {
 	float tod = mScene->Environment()->TimeOfDay();
 	tod += mScene->Instance()->DeltaTime() * .000555555555f; // 30min days
 	if (mInput->KeyDown(KEY_T)) {

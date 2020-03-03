@@ -182,13 +182,14 @@ VkPipelineLayout CommandBuffer::BindMaterial(Material* material, PassType pass, 
 void CommandBuffer::BindVertexBuffer(Buffer* buffer, uint32_t index, VkDeviceSize offset) {
 	if (mCurrentVertexBuffers[index] == buffer) return;
 
-	VkBuffer buf = *buffer;
+	VkBuffer buf = buffer == nullptr ? (VkBuffer)VK_NULL_HANDLE : (*buffer);
 	vkCmdBindVertexBuffers(mCommandBuffer, index, 1, &buf, &offset);
 
 	mCurrentVertexBuffers[index] = buffer;
 }
 void CommandBuffer::BindIndexBuffer(Buffer* buffer, VkDeviceSize offset, VkIndexType indexType) {
 	if (mCurrentIndexBuffer == buffer) return;
-	vkCmdBindIndexBuffer(mCommandBuffer, *buffer, offset, indexType);
+	VkBuffer buf = buffer == nullptr ? (VkBuffer)VK_NULL_HANDLE : (*buffer);
+	vkCmdBindIndexBuffer(mCommandBuffer, buf, offset, indexType);
 	mCurrentIndexBuffer = buffer;
 }

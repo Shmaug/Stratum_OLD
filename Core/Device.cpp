@@ -121,6 +121,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	deviceFeatures.wideLines = VK_TRUE;
 	deviceFeatures.shaderStorageImageExtendedFormats = VK_TRUE;
 	deviceFeatures.sparseBinding = VK_TRUE;
+	deviceFeatures.shaderImageGatherExtended = VK_TRUE;
 
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT indexingFeatures = {};
 	indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;

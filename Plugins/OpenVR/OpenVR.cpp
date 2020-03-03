@@ -346,7 +346,7 @@ bool OpenVR::Init(Scene* scene) {
 	return true;
 }
 
-void OpenVR::Update() {
+void OpenVR::Update(CommandBuffer* commandBuffer) {
 	float3 pos;
 	quaternion rot;
 	float3 scale;
@@ -359,11 +359,7 @@ void OpenVR::Update() {
 
 	rot = mVRDevice->Rotation();
 	rot.z = -rot.z;
-	printf_color(COLOR_GREEN, "rot: <%f, %f, %f, %f>\n", rot.x, rot.y, rot.z, rot.w);
-
-	//rot.y = -rot.y;
 	mHead->LocalRotation(normalize(rot));
-
 
 }
 
@@ -374,14 +370,6 @@ void OpenVR::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pa
 	//camera->LocalPosition(mVRDevice->Position());
 	//camera->LocalRotation(mVRDevice->Rotation());
 }
-
-/*
-void OpenVR::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-}
-
-void OpenVR::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {
-}
-*/
 
 void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 	if (camera == mCamera)
@@ -539,7 +527,7 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 	}	
 }
 
-void OpenVR::PreSwap()
+void OpenVR::PrePresent()
 {
 
 	

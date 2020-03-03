@@ -40,7 +40,7 @@ bool CameraControl::Init(Scene* scene) {
 	return true;
 }
 
-void CameraControl::Update() {
+void CameraControl::Update(CommandBuffer* commandBuffer) {
 	if (mInput->KeyDownFirst(KEY_F1))
 		mScene->DrawGizmos(!mScene->DrawGizmos());
 	if (mInput->KeyDownFirst(KEY_TILDE))

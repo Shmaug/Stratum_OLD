@@ -9,7 +9,7 @@
 #pragma staticsampler LinearClampSampler maxAnisotropy=0 maxLod=0 addressMode=clampedge filter=linear
 #pragma staticsampler Sampler maxAnisotropy=0 maxLod=0
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 [[vk::binding(0, 0)]] RWTexture3D<float3> SkyboxLUTR : register(u0);
 [[vk::binding(1, 0)]] RWTexture3D<float3> SkyboxLUTM : register(u1);
@@ -62,7 +62,7 @@
 	float pad;
 }
 
-#include "include/shadow.hlsli"
+#include <include/shadow.hlsli>
 
 #define PI 3.14159265359
 

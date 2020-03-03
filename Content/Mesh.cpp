@@ -18,9 +18,11 @@ using namespace std;
 
 const ::VertexInput StdVertex::VertexInput {
 	{
-		0, // binding
-		sizeof(StdVertex), // stride
-		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		{
+			0, // binding
+			sizeof(StdVertex), // stride
+			VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		}
 	},
 	{
 		{
@@ -52,9 +54,11 @@ const ::VertexInput StdVertex::VertexInput {
 
 const ::VertexInput Float3VertexInput{
 	{
-		0, // binding
-		sizeof(float3), // stride
-		VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		{
+			0, // binding
+			sizeof(float3), // stride
+			VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		}
 	},
 	{
 		{
