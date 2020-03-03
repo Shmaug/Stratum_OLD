@@ -4,8 +4,6 @@
 #pragma multi_compile INVERT
 #pragma multi_compile COLORED COLORIZE
 
-#pragma static_sampler Sampler max_lod=0 addressMode=clamp_border borderColor=float_transparent_black
-
 #ifdef COLORED
 [[vk::binding(0, 0)]] RWTexture3D<float3> RawVolume : register(u0);
 #else
@@ -21,7 +19,6 @@
 	float TransferMax;
 	float RemapMin;
 	float InvRemapRange;
-	float Cutoff;
 }
 
 float3 HuetoRGB(float h) {
@@ -48,9 +45,8 @@ float3 Transfer(float density) {
 	#endif
 }
 float Threshold(float x) {
-	float h = 1 - 100 * max(0, x - Cutoff);
-	x = (x - RemapMin) * InvRemapRange * h;
-	return saturate(x);
+	x = (x - RemapMin) * InvRemapRange;
+	return saturate(x) * saturate(x);
 }
 
 const float4 MaskColors[8] = {
@@ -78,6 +74,8 @@ void CopyRaw(uint3 index : SV_DispatchThreadID) {
 	float r = RawVolume[index.xyz];
 	#endif
 
+	r = Threshold(r);
+
 	#ifdef READ_MASK
 	float4 col = MaskColors[RawMask[index.xyz] % 8];
 	col.a *= r;
@@ -87,6 +85,5 @@ void CopyRaw(uint3 index : SV_DispatchThreadID) {
 
 	#endif
 
-	col.a = Threshold(col.a);
 	BakedVolume[index.xyz] = col;
 }

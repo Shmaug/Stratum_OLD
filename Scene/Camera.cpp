@@ -85,6 +85,13 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 
 	vector<VkFormat> colorFormats{ fmt, VK_FORMAT_R16G16B16A16_SFLOAT };
 	mFramebuffer = new ::Framebuffer(name, mDevice, targetWindow->ClientRect().extent.width, targetWindow->ClientRect().extent.height, colorFormats, depthFormat, sampleCount, {}, VK_ATTACHMENT_LOAD_OP_CLEAR);
+	
+	VkClearValue c = {};
+	c.color.float32[0] = 1.f;
+	c.color.float32[1] = 1.f;
+	c.color.float32[2] = 1.f;
+	c.color.float32[3] = 1.f;
+	mFramebuffer->ClearValue(1, c);
 
 	mResolveBuffers = new vector<Texture*>[mDevice->MaxFramesInFlight()];
 	memset(mResolveBuffers, 0, sizeof(Texture*) * mDevice->MaxFramesInFlight());
@@ -178,7 +185,7 @@ void Camera::Resolve(CommandBuffer* commandBuffer) {
 			if (buffers[i] && (buffers[i]->Width() != mFramebuffer->Width() || buffers[i]->Height() != mFramebuffer->Height()))
 				safe_delete(buffers[i]);
 			if (!buffers[i]) {
-				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(i)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
+				buffers[i] = new Texture("Camera Resolve", mDevice, mFramebuffer->Width(), mFramebuffer->Height(), 1, mFramebuffer->ColorBuffer(i)->Format(), VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 			} else
 				buffers[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
@@ -363,6 +370,5 @@ void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 		Gizmos::DrawLine(f1, f5, 1);
 		Gizmos::DrawLine(f2, f6, 1);
 		Gizmos::DrawLine(f3, f7, 1);
-
 	}
 }

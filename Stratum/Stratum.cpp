@@ -117,7 +117,9 @@ public:
 			mInstance->Device()->Execute(commandBuffer);
 			PROFILER_END;
 
-			mScene->PreSwap();
+
+			mScene->PrePresent();
+
 			mInstance->AdvanceFrame();
 
 			#ifdef PROFILER_ENABLE

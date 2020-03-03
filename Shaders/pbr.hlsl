@@ -18,7 +18,7 @@
 #pragma static_sampler ShadowSampler maxAnisotropy=0 maxLod=0 addressMode=clamp_border borderColor=float_opaque_white compareOp=less
 #pragma static_sampler AtmosphereSampler maxAnisotropy=0 addressMode=clamp_edge
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 // per-object
 [[vk::binding(INSTANCE_BUFFER_BINDING, PER_OBJECT)]] StructuredBuffer<InstanceBuffer> Instances : register(t0);
@@ -57,10 +57,10 @@
 
 //#define SHOW_CASCADE_SPLITS
 
-#include "include/util.hlsli"
-#include "include/shadow.hlsli"
-#include "include/brdf.hlsli"
-#include "include/scatter.hlsli"
+#include <include/util.hlsli>
+#include <include/shadow.hlsli>
+#include <include/brdf.hlsli>
+#include <include/scatter.hlsli>
 
 struct v2f {
 	float4 position : SV_Position;

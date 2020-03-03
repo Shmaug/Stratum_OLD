@@ -1,7 +1,7 @@
 #pragma kernel GenHeight
 #pragma kernel DrawDetails
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 struct VkDrawIndexedIndirectCommand {
 	uint indexCount;
@@ -33,7 +33,7 @@ struct DetailTransform{
 	float Offset;
 }
 
-#include "include/noise.hlsli"
+#include <include/noise.hlsli>
 
 float CompositeHeight(float2 p, out float4 w) {
 	w = 0;

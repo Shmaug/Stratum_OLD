@@ -85,6 +85,7 @@ private:
 	ENGINE_EXPORT void Update(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void PreSwap();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
+	ENGINE_EXPORT void PrePresent();
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);
 	
 	/// Used in PreFrame() to add a shadow camera to mShadowCameras

@@ -74,7 +74,7 @@ function(add_shader_target TARGET_NAME FOLDER_PATH)
 		add_custom_command(
 			OUTPUT ${SPIRV}
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/bin/Shaders/"
-			COMMAND "${PROJECT_BINARY_DIR}/bin/ShaderCompiler" ${SHADER} ${SPIRV}
+			COMMAND "${PROJECT_BINARY_DIR}/bin/ShaderCompiler" ${SHADER} ${SPIRV} "${STRATUM_HOME}/Shaders"
 			DEPENDS ${SHADER})
 
 		list(APPEND SPIRV_BINARY_FILES ${SPIRV})

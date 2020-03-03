@@ -9,7 +9,7 @@
 #pragma static_sampler Sampler
 #pragma array MainTexture 16
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 struct Gizmo {
 	float4 Color;
@@ -28,10 +28,11 @@ struct Gizmo {
 [[vk::binding(BINDING_START + 1, PER_OBJECT)]] Texture2D<float4> MainTexture[16] : register(t1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	STRATUM_PUSH_CONSTANTS
+	uint StereoEye;
+	float4 StereoClipTransform;
 }
 
-#include "include/util.hlsli"
+#include <include/util.hlsli>
 
 struct v2f {
 	float4 position : SV_Position;

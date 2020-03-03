@@ -12,7 +12,7 @@
 
 #pragma array Textures 32
 
-#include "include/shadercompat.h"
+#include <include/shadercompat.h>
 
 struct GuiRect {
 	float4x4 ObjectToWorld;
@@ -34,12 +34,12 @@ struct GuiRect {
 [[vk::binding(CAMERA_BUFFER_BINDING, PER_CAMERA)]] ConstantBuffer<CameraBuffer> Camera : register(b1);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
-	STRATUM_PUSH_CONSTANTS
-
+	uint StereoEye;
+	float4 StereoClipTransform;
 	float2 ScreenSize;
 }
 
-#include "include/util.hlsli"
+#include <include/util.hlsli>
 
 struct v2f {
 	float4 position : SV_Position;
