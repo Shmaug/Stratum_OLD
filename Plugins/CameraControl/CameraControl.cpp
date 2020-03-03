@@ -210,6 +210,6 @@ void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera,
 		#endif
 
 		snprintf(tmpText, 64, "%.2f fps\n", mScene->FPS());
-		GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 18), 18.f);
+		GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 30), 18.f);
 	}
 }

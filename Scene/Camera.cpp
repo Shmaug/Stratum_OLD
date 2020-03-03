@@ -56,7 +56,6 @@ void Camera::CreateDescriptorSet() {
 
 Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFormat depthFormat, VkSampleCountFlagBits sampleCount)
 	: Object(name), mDevice(device), mTargetWindow(nullptr),
-	mMatricesDirty(true),
 	mDeleteFramebuffer(true),
 	mOrthographic(false), mOrthographicSize(3),
 	mFieldOfView(PI/4),
@@ -73,7 +72,6 @@ Camera::Camera(const string& name, ::Device* device, VkFormat renderFormat, VkFo
 }
 Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, VkSampleCountFlagBits sampleCount)
 	: Object(name), mDevice(targetWindow->Device()), mTargetWindow(targetWindow),
-	mMatricesDirty(true),
 	mFramebuffer(nullptr),
 	mDeleteFramebuffer(true),
 	mOrthographic(false), mOrthographicSize(3),
@@ -94,7 +92,7 @@ Camera::Camera(const string& name, Window* targetWindow, VkFormat depthFormat, V
 	CreateDescriptorSet();
 }
 Camera::Camera(const string& name, ::Framebuffer* framebuffer)
-		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr), mMatricesDirty(true),
+		: Object(name), mDevice(framebuffer->Device()), mTargetWindow(nullptr),
 	mFramebuffer(framebuffer),
 	mDeleteFramebuffer(false),
 	mOrthographic(false), mOrthographicSize(3),
@@ -124,17 +122,17 @@ Camera::~Camera() {
 }
 
 float4 Camera::WorldToClip(const float3& worldPos, StereoEye eye) {
-	UpdateMatrices();
+	UpdateTransform();
 	return mViewProjection[eye] * float4(worldPos - WorldPosition(), 1);
 }
 float3 Camera::ClipToWorld(const float3& clipPos, StereoEye eye) {
-	UpdateMatrices();
+	UpdateTransform();
 	float4 wp = mInvViewProjection[eye] * float4(clipPos, 1);
 	wp.xyz /= wp.w;
 	return wp.xyz + WorldPosition();
 }
 Ray Camera::ScreenToWorldRay(const float2& uv, StereoEye eye) {
-	UpdateMatrices();
+	UpdateTransform();
 	float2 clip = 2.f * uv - 1.f;
 	Ray ray;
 	if (mOrthographic) {
@@ -157,7 +155,7 @@ void Camera::PreRender() {
 	if (mTargetWindow && (FramebufferWidth() != mTargetWindow->BackBufferSize().width || FramebufferHeight() != mTargetWindow->BackBufferSize().height)) {
 		mFramebuffer->Width(mTargetWindow->BackBufferSize().width);
 		mFramebuffer->Height(mTargetWindow->BackBufferSize().height);
-		mMatricesDirty = true;
+		Dirty();
 
 		mViewport.x = 0;
 		mViewport.y = 0;
@@ -199,7 +197,7 @@ void Camera::PostRender(CommandBuffer* commandBuffer) {
 }
 
 void Camera::Set(CommandBuffer* commandBuffer) {
-	UpdateMatrices();
+	UpdateTransform();
 	CameraBuffer& buf = *(CameraBuffer*)mUniformBufferPtrs[commandBuffer->Device()->FrameContextIndex()];
 	buf.View[0] = mView[0];
 	buf.View[1] = mView[1];
@@ -242,8 +240,8 @@ void Camera::SetStereo(CommandBuffer* commandBuffer, ShaderVariant* shader, Ster
 	vkCmdSetScissor(*commandBuffer, 0, 1, &scissor);
 }
 
-bool Camera::UpdateMatrices() {
-	if (!mMatricesDirty) return false;
+bool Camera::UpdateTransform() {
+	if (!Object::UpdateTransform()) return false;
 
 	switch (mStereoMode) {
 	case STEREO_NONE:
@@ -308,12 +306,7 @@ bool Camera::UpdateMatrices() {
 	mFrustum[4].w = dot(mFrustum[4].xyz, corners[2]);
 	mFrustum[5].w = dot(mFrustum[5].xyz, corners[0]);
 
-	mMatricesDirty = false;
 	return true;
-}
-void Camera::Dirty() {
-	Object::Dirty();
-	mMatricesDirty = true;
 }
 
 void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {

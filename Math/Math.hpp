@@ -2195,12 +2195,47 @@ struct float4x4 {
 			scale->z = length(v[2].xyz);
 		}
 		if (rotation) {
-			rotation->x = v[2].y - v[1].z;
-			rotation->y = v[0].z - v[2].x;
-			rotation->z = v[1].x - v[0].y;
-			rotation->w = sqrtf(1.f + v[0].x + v[1].y + v[2].z) * .5f;
-			rotation->xyz /= 4.f * rotation->w;
+			float trace = 1.f + v[0].x + v[1].y + v[2].z;
+			if (trace > 0)
+			{
+				rotation->x = v[2].y - v[1].z;
+				rotation->y = v[0].z - v[2].x;
+				rotation->z = v[1].x - v[0].y;
+				rotation->w = sqrtf(1.f + v[0].x + v[1].y + v[2].z) * .5f;
+				rotation->xyz /= 4.f * rotation->w;
+			}
+			else if (v[0][0] > v[1][1] && v[0][0] > v[2][2])
+			{
+				rotation->w = v[2].y - v[1].z;
+				rotation->z = v[0].z + v[2].x;
+				rotation->y = v[1].x + v[0].y;
+				rotation->x = sqrtf(1.f + v[0].x - v[1].y - v[2].z) * .5f;
+				rotation->y /= 4.f * rotation->x;
+				rotation->z /= 4.f * rotation->x;
+				rotation->w /= 4.f * rotation->x;
+			}
+			else if (v[1][1] > v[2][2])
+			{
+				rotation->z = v[2].y + v[1].z;
+				rotation->w = v[0].z - v[2].x;
+				rotation->x = v[1].x + v[0].y;
+				rotation->y = sqrtf(1.f - v[0].x + v[1].y - v[2].z) * .5f;
+				rotation->x /= 4.f * rotation->y;
+				rotation->z /= 4.f * rotation->y;
+				rotation->w /= 4.f * rotation->y;
+			}
+			else
+			{
+				rotation->y = v[2].y + v[1].z;
+				rotation->x = v[0].z + v[2].x;
+				rotation->w = v[1].x - v[0].y;
+				rotation->z = sqrtf(1.f - v[0].x - v[1].y + v[2].z) * .5f;
+				rotation->x /= 4.f * rotation->z;
+				rotation->y /= 4.f * rotation->z;
+				rotation->w /= 4.f * rotation->z;
+			}
 		}
+
 	}
 
 	inline static float4x4 Look(const float3& p, const float3& fwd, const float3& up) {
@@ -2423,7 +2458,8 @@ inline quaternion inverse(const quaternion& q) {
 }
 
 inline quaternion normalize(const quaternion& q){
-	return q / length(q.xyzw);
+	float l = length(q.xyzw);
+	return l == 0 ? q : q / l;
 }
 
 inline float4x4 transpose(const float4x4& m) {

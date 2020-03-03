@@ -47,7 +47,7 @@ public:
 	inline virtual ::Mesh* Mesh() const { return mMesh.index() == 0 ? std::get<::Mesh*>(mMesh) : std::get<std::shared_ptr<::Mesh>>(mMesh).get(); }
 
 	inline virtual ::Material* Material() { return mMaterial.get(); }
-	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m);
+	ENGINE_EXPORT virtual void Material(std::shared_ptr<::Material> m) { mMaterial = m; }
 
 	template<typename T>
 	inline void PushConstant(const std::string& name, const T& value) { mPushConstants.emplace(name, PushConstantValue(value)); }
@@ -57,10 +57,10 @@ public:
 	inline virtual uint32_t RenderQueue() override { return mMaterial ? mMaterial->RenderQueue() : Renderer::RenderQueue(); }
 	ENGINE_EXPORT virtual void Draw(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 
-	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass);
+	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass);
 
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera);
+	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
 
 	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t, bool any) override;
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
