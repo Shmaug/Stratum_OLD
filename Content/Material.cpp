@@ -128,7 +128,7 @@ GraphicsShader* Material::GetShader(PassType pass) {
 
 void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
 	GraphicsShader* shader = data->mShaderVariant;
-	if (shader->mDescriptorSetLayouts.size() > PER_MATERIAL&& shader->mDescriptorBindings.size()) {
+	if (shader->mDescriptorSetLayouts.size() > PER_MATERIAL && shader->mDescriptorBindings.size()) {
 		uint32_t frameContextIndex = commandBuffer->Device()->FrameContextIndex();
 		DescriptorSet*& ds = data->mDescriptorSets[frameContextIndex];
 		if (!ds || (ds->Layout() != shader->mDescriptorSetLayouts[PER_MATERIAL])) {
@@ -208,7 +208,6 @@ void Material::SetDescriptorParameters(CommandBuffer* commandBuffer, Camera* cam
 		auto binding = shader->mDescriptorBindings.at("Camera");
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shader->mPipelineLayout, PER_CAMERA, 1, *camera->DescriptorSet(binding.second.stageFlags), 0, nullptr);
 	}
-
 }
 void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* camera, VariantData* data) {
 	PROFILER_BEGIN("Push Constants");
@@ -223,6 +222,7 @@ void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* c
 			float4 fvalue;
 			uint4 uvalue;
 			int4 ivalue;
+			float4x4 f4x4value;
 		};
 		pvalue value = { uint4(0) };
 
@@ -276,6 +276,11 @@ void Material::SetPushConstantParameters(CommandBuffer* commandBuffer, Camera* c
 		case 15:
 			if (range.size != sizeof(int4)) continue;
 			value.ivalue = get<int4>(m.second);
+			break;
+
+		case 16:
+			if (range.size != sizeof(float4x4)) continue;
+			value.f4x4value = get<float4x4>(m.second);
 			break;
 		}
 

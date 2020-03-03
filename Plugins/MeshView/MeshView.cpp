@@ -7,6 +7,8 @@
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
 
+#include "ClothRenderer.hpp"
+
 #define THROW_INVALID_SKEL { fprintf_color(COLOR_RED, stderr, "Invalid SKEL file\n"); throw; }
 #define THROW_INVALID_SKIN { fprintf_color(COLOR_RED, stderr, "Invalid SKIN file\n"); throw; }
 #define THROW_INVALID_ANIM { fprintf_color(COLOR_RED, stderr, "Invalid ANIM file\n"); throw; }
@@ -38,6 +40,7 @@ private:
 	SkinnedMeshRenderer* mWasp;
 	shared_ptr<Animation> mWaspWalk;
 	SkinnedMeshRenderer* mHead;
+	ClothRenderer* mCloth;
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string& name, float scale) {
 		shared_ptr<SkelJoint> j = make_shared<SkelJoint>(name, destRig.size());
@@ -388,7 +391,7 @@ private:
 
 public:
 	PLUGIN_EXPORT MeshView() 
-		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mAnimTime(0.f), mHead(nullptr), mWasp(nullptr), mCurrentAnimation(nullptr),
+		: mScene(nullptr), mSelected(nullptr), mInput(nullptr), mAnimTime(0.f), mHead(nullptr), mWasp(nullptr), mCloth(nullptr), mCurrentAnimation(nullptr),
 		mCurrentBone(0xFFFFFFFF), mPlayAnimation(false), mLoopAnimation(true) {
 		mEnabled = true;
 	}
@@ -404,6 +407,7 @@ public:
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
 		mScene->Environment()->AmbientLight(.3f);
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
 
 		auto light = make_shared<Light>("Spot");
 		light->CastShadows(true);
@@ -442,7 +446,6 @@ public:
 		planeMat->SetParameter("Roughness", .5f);
 		planeMat->SetParameter("BumpStrength", 1.f);
 		planeMat->SetParameter("Emission", float3(0));
-
 		auto plane = make_shared<MeshRenderer>("Plane");
 		plane->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Plane", mScene->Instance()->Device(), 512.f)));
 		plane->Material(planeMat);
@@ -460,10 +463,9 @@ public:
 			mHead->ShapeKey("head1", mAnimTime);
 			mHead->ShapeKey("head2", 1.f - mAnimTime);
 		}
-		if (mWasp) {
+		if (mCurrentAnimation) {
 			if (mPlayAnimation) mAnimTime += mScene->DeltaTime();
 			if (mLoopAnimation) if (mAnimTime > mCurrentAnimation->TimeEnd()) mAnimTime -= (mCurrentAnimation->TimeStart() + mCurrentAnimation->TimeEnd());
-			
 			mCurrentAnimation->Sample(mAnimTime, mWasp->Rig());
 		}
 	}
@@ -482,6 +484,7 @@ public:
 
 		if (GUI::LayoutButton(sem16, "Wasp", 16, 20, .5f, 1)) {
 			if (mHead) mHead->mVisible = false;
+			if (mCloth) mCloth->mVisible = false;
 			if (mWasp) { mCurrentAnimation = mWaspWalk.get(); mWasp->mVisible = true; return; }
 
 			auto waspMat = make_shared<Material>("Wasp", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
@@ -511,6 +514,7 @@ public:
 		if (GUI::LayoutButton(sem16, "Head", 16, 20, .5f, 1)) {
 			mCurrentAnimation = nullptr;
 			if (mWasp) mWasp->mVisible = false;
+			if (mCloth) mCloth->mVisible = false;
 			if (mHead) { mHead->mVisible = true; return; }
 
 			auto headMat = make_shared<Material>("Head", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
@@ -542,7 +546,37 @@ public:
 			mHead = head.get();
 		}
 		if (GUI::LayoutButton(sem16, "Cloth", 16, 20, .5f, 1)) {
+			mCurrentAnimation = nullptr;
+			if (mWasp) mWasp->mVisible = false;
+			if (mHead) mHead->mVisible = false;
+			if (mCloth) { mCloth->mVisible = true; return; }
+
+			auto cloth = make_shared<ClothRenderer>("Cloth", 1.f, 64);
+			cloth->LocalPosition(0, .9f, 0);
+			mCloth = cloth.get();
+			mScene->AddObject(cloth);
+			mObjects.push_back(mCloth);
+		}
+
+		if (mCloth && mCloth->Visible()) {
+			float k = mCloth->Stiffness();
+			float d = mCloth->Drag();
+			float fx = mCloth->ExternalForce().x;
+			float fz = mCloth->ExternalForce().z;
+
+			GUI::LayoutLabel(sem16, "Stiffness: " + to_string(k), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(k, 0, 500, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "Drag: " + to_string(d), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(d, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "Wind x/z: " + to_string(fx) + "/" + to_string(fz), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(fx, -.5f, .5f, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(fz, -.5f, .5f, 18, float4(.5f, .5f, .5f, 1), 4);
 			
+			mCloth->Drag(d);
+			mCloth->Stiffness(k);
+			mCloth->ExternalForce(float3(fx, -5.f, fz));
 		}
 
 		GUI::EndLayout();
@@ -744,8 +778,7 @@ public:
 				mSelected = light;
 		}
 
-
-		if (mCurrentBone < mWasp->Rig().size()) {
+		if (mWasp && mCurrentBone < mWasp->Rig().size()) {
 			Bone* b = mWasp->Rig()[mCurrentBone];
 			if (mCurrentBone == 0) {
 				float3 r = b->WorldPosition();

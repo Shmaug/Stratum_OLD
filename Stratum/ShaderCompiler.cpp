@@ -19,8 +19,9 @@ public:
 
 		string fullpath = src.generic_u8string() + "/" + requested_source;
 
-		shaderc_include_result* response = new shaderc_include_result();
 
+
+		shaderc_include_result* response = new shaderc_include_result();
 		string& data = mFiles[fullpath];
 		if (data.empty() && !ReadFile(fullpath, data)) {
 			char* err = new char[128];

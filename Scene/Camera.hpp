@@ -57,26 +57,26 @@ public:
 
 	// Setters
 
-	inline virtual void StereoMode(::StereoMode s) { mStereoMode = s; mMatricesDirty = true; }
+	inline virtual void StereoMode(::StereoMode s) { mStereoMode = s; Dirty(); }
 
-	inline virtual void Orthographic(bool o) { mOrthographic = o; mMatricesDirty = true; }
-	inline virtual void OrthographicSize(float s) { mOrthographicSize = s; mMatricesDirty = true; }
+	inline virtual void Orthographic(bool o) { mOrthographic = o; Dirty(); }
+	inline virtual void OrthographicSize(float s) { mOrthographicSize = s; Dirty(); }
 
-	inline virtual void Near(float n) { mNear = n; mMatricesDirty = true; }
-	inline virtual void Far(float f) { mFar = f;  mMatricesDirty = true; }
-	inline virtual void FieldOfView(float f) { mFieldOfView = f; mMatricesDirty = true; }
+	inline virtual void Near(float n) { mNear = n; Dirty(); }
+	inline virtual void Far(float f) { mFar = f;  Dirty(); }
+	inline virtual void FieldOfView(float f) { mFieldOfView = f; Dirty(); }
 
 	inline virtual void ViewportX(float x) { mViewport.x = x; }
 	inline virtual void ViewportY(float y) { mViewport.y = y; }
-	inline virtual void ViewportWidth(float f) { mViewport.width = f; mMatricesDirty = true; }
-	inline virtual void ViewportHeight(float f) { mViewport.height = f; mMatricesDirty = true; }
+	inline virtual void ViewportWidth(float f) { mViewport.width = f; Dirty(); }
+	inline virtual void ViewportHeight(float f) { mViewport.height = f; Dirty(); }
 
-	inline virtual void FramebufferWidth(uint32_t w) { mFramebuffer->Width(w);  mMatricesDirty = true; }
-	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); mMatricesDirty = true; }
+	inline virtual void FramebufferWidth(uint32_t w) { mFramebuffer->Width(w);  Dirty(); }
+	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h);  Dirty(); }
 	inline virtual void SampleCount(VkSampleCountFlagBits s) { mFramebuffer->SampleCount(s); }
 
-	inline virtual void HeadToEye(const float4x4& transform, StereoEye eye = EYE_NONE) { mHeadToEye[eye] = transform; mMatricesDirty = true; }
-	inline virtual void Projection(const float4x4& projection, StereoEye eye = EYE_NONE) { mFieldOfView = 0; mOrthographic = false; mProjection[eye] = projection; mMatricesDirty = true; }
+	inline virtual void HeadToEye(const float4x4& transform, StereoEye eye = EYE_NONE) { mHeadToEye[eye] = transform; Dirty(); }
+	inline virtual void Projection(const float4x4& projection, StereoEye eye = EYE_NONE) { mFieldOfView = 0; mOrthographic = false; mProjection[eye] = projection; Dirty(); }
 
 
 	// Getters
@@ -110,16 +110,16 @@ public:
 
 	// Note: The view matrix is calculated placing the camera at the origin. To transform from world->view, one must apply:
 	// view * (worldPos-cameraPos)
-	inline virtual float4x4 View(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mView[eye]; }
-	inline virtual float4x4 InverseView(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mInvView[eye]; }
-	inline virtual float4x4 Projection(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mProjection[eye]; }
-	inline virtual float4x4 InverseProjection(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mInvProjection[eye]; }
-	inline virtual float4x4 ViewProjection(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mViewProjection[eye]; }
-	inline virtual float4x4 InverseViewProjection(StereoEye eye = EYE_NONE) { UpdateMatrices(); return mInvViewProjection[eye]; }
+	inline virtual float4x4 View(StereoEye eye = EYE_NONE) { UpdateTransform(); return mView[eye]; }
+	inline virtual float4x4 InverseView(StereoEye eye = EYE_NONE) { UpdateTransform(); return mInvView[eye]; }
+	inline virtual float4x4 Projection(StereoEye eye = EYE_NONE) { UpdateTransform(); return mProjection[eye]; }
+	inline virtual float4x4 InverseProjection(StereoEye eye = EYE_NONE) { UpdateTransform(); return mInvProjection[eye]; }
+	inline virtual float4x4 ViewProjection(StereoEye eye = EYE_NONE) { UpdateTransform(); return mViewProjection[eye]; }
+	inline virtual float4x4 InverseViewProjection(StereoEye eye = EYE_NONE) { UpdateTransform(); return mInvViewProjection[eye]; }
 
 	inline virtual float4x4 HeadToEye(StereoEye eye = EYE_NONE) { return mHeadToEye[eye]; }
 
-	inline virtual const float4* Frustum() { UpdateMatrices(); return mFrustum; }
+	inline virtual const float4* Frustum() { UpdateTransform(); return mFrustum; }
 
 private:
 	uint32_t mRenderPriority;
@@ -140,7 +140,6 @@ private:
 	float4x4 mInvView[2];
 	float4x4 mInvViewProjection[2];
 	float4x4 mHeadToEye[2];
-	bool mMatricesDirty;
 
 	float4 mFrustum[6];
 
@@ -160,6 +159,5 @@ private:
 	void CreateDescriptorSet();
 
 protected:
-	ENGINE_EXPORT virtual void Dirty();
-	ENGINE_EXPORT virtual bool UpdateMatrices();
+	ENGINE_EXPORT virtual bool UpdateTransform() override;
 };

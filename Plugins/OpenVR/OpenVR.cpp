@@ -226,7 +226,7 @@ bool OpenVR::Init(Scene* scene) {
 	mScene->Environment()->EnableCelestials(false);
 	mScene->Environment()->EnableScattering(false);
 	mScene->Environment()->AmbientLight(.6f);
-	
+
 	
 #pragma region Camera setup
 	shared_ptr<Object> bodyBase = make_shared<Object>("Openvr body");
@@ -359,24 +359,12 @@ void OpenVR::Update() {
 
 	rot = mVRDevice->Rotation();
 	rot.z = -rot.z;
+	printf_color(COLOR_GREEN, "rot: <%f, %f, %f, %f>\n", rot.x, rot.y, rot.z, rot.w);
+
 	//rot.y = -rot.y;
-	mHead->LocalRotation(rot);
+	mHead->LocalRotation(normalize(rot));
 
 
-	//Update eye matrices (needs to be done bc of bug that prevents camera matrices from being updated by parent
-	mVRDevice->CalculateEyeAdjustment();
-
-	float4x4 eye = mVRDevice->LeftEyeMatrix();
-	eye.Decompose(&pos, &rot, &scale);
-	mCamera->LocalPosition(pos);
-	mCamera->LocalRotation(rot);
-	mCamera->LocalScale(scale);
-
-	eye = mVRDevice->RightEyeMatrix();
-	eye.Decompose(&pos, &rot, &scale);
-	mCameraRight->LocalPosition(pos);
-	mCameraRight->LocalRotation(rot);
-	mCameraRight->LocalScale(scale);
 }
 
 void OpenVR::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass)
@@ -398,6 +386,9 @@ void OpenVR::PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassT
 void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 	if (camera == mCamera)
 	{
+		//printf_color(COLOR_GREEN, "scale: <%f, %f, %f>\n", camera->LocalScale().x, camera->LocalScale().y, camera->LocalScale().z);
+		//printf_color(COLOR_GREEN, "rot: <%f, %f, %f, %f>\n", camera->WorldRotation().x, camera->WorldRotation().y, camera->WorldRotation().z, camera->WorldRotation().w);
+
 		VkPipelineStageFlags srcStage, dstStage, srcStage2, dstStage2;
 		VkImageMemoryBarrier barrier[3] = {};
 		barrier[0] = mCamera->ResolveBuffer()->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcStage, dstStage);
@@ -515,7 +506,7 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 			2, barrier2);
 
 
-
+		return;
 		#pragma region BlitToBackbuffer
 		Texture::TransitionImageLayout(mScene->Instance()->Window()->BackBuffer(), mScene->Instance()->Window()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
 
@@ -544,11 +535,13 @@ void OpenVR::PostProcess(CommandBuffer* commandBuffer, Camera* camera) {
 	
 		Texture::TransitionImageLayout(mScene->Instance()->Window()->BackBuffer(), mScene->Instance()->Window()->Format().format, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, commandBuffer);
 		#pragma endregion
+		
 	}	
 }
 
 void OpenVR::PreSwap()
 {
+
 	
 	// Submit to SteamVR
 	vr::VRTextureBounds_t leftBounds;

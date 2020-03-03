@@ -45,7 +45,7 @@ public:
 
 	ENGINE_EXPORT virtual AABB Bounds();
 
-	inline virtual void FixedUpdate() {};
+	inline virtual void FixedUpdate(CommandBuffer* commandBuffer) {};
 	inline virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {};
 	
 	ENGINE_EXPORT bool EnabledHierarchy();
