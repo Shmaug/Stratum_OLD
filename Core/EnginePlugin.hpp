@@ -17,7 +17,7 @@ public:
 	inline virtual void PreDeviceInit(Instance* instance, VkPhysicalDevice physicalDevice) {};
 	
 	inline virtual bool Init(Scene* scene) { return true; }
-	
+
 	inline virtual void PreUpdate(CommandBuffer* commandBuffer) {}
 	inline virtual void FixedUpdate(CommandBuffer* commandBuffer) {}
 	inline virtual void Update(CommandBuffer* commandBuffer) {}

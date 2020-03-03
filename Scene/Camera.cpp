@@ -312,11 +312,13 @@ bool Camera::UpdateTransform() {
 	mFrustum[3].w = dot(mFrustum[3].xyz, corners[0]);
 	mFrustum[4].w = dot(mFrustum[4].xyz, corners[2]);
 	mFrustum[5].w = dot(mFrustum[5].xyz, corners[0]);
+
 	return true;
 }
 
 void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	if (camera == this) return;
+	Gizmos::DrawWireSphere(WorldPosition(), .01f, 1.f);
 
 	float3 f0 = ClipToWorld(float3(-1, -1, 0));
 	float3 f1 = ClipToWorld(float3(-1, 1, 0));
@@ -344,15 +346,15 @@ void Camera::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
 	Gizmos::DrawLine(f3, f7, 1);
 
 	if (mStereoMode != STEREO_NONE) {
-		f0 = ClipToWorld(float3(-1, -1, 0), EYE_LEFT);
-		f1 = ClipToWorld(float3(-1, 1, 0), EYE_LEFT);
-		f2 = ClipToWorld(float3(1, -1, 0), EYE_LEFT);
-		f3 = ClipToWorld(float3(1, 1, 0), EYE_LEFT);
+		f0 = ClipToWorld(float3(-1, -1, 0), EYE_RIGHT);
+		f1 = ClipToWorld(float3(-1, 1, 0), EYE_RIGHT);
+		f2 = ClipToWorld(float3(1, -1, 0), EYE_RIGHT);
+		f3 = ClipToWorld(float3(1, 1, 0), EYE_RIGHT);
 
-		f4 = ClipToWorld(float3(-1, -1, 1), EYE_LEFT);
-		f5 = ClipToWorld(float3(-1, 1, 1), EYE_LEFT);
-		f6 = ClipToWorld(float3(1, -1, 1), EYE_LEFT);
-		f7 = ClipToWorld(float3(1, 1, 1), EYE_LEFT);
+		f4 = ClipToWorld(float3(-1, -1, 1), EYE_RIGHT);
+		f5 = ClipToWorld(float3(-1, 1, 1), EYE_RIGHT);
+		f6 = ClipToWorld(float3(1, -1, 1), EYE_RIGHT);
+		f7 = ClipToWorld(float3(1, 1, 1), EYE_RIGHT);
 
 		Gizmos::DrawLine(f0, f1, 1);
 		Gizmos::DrawLine(f0, f2, 1);

@@ -36,6 +36,7 @@ private:
 	ENGINE_EXPORT void UnloadPlugin(PluginHandle handle);
 	ENGINE_EXPORT PluginHandle LoadPlugin(const std::string& filename, bool errmsg);
 	
-	ENGINE_EXPORT void LoadPlugins(Scene* scene);
+	ENGINE_EXPORT void LoadPlugins();
+	ENGINE_EXPORT void InitPlugins(Scene* scene);
 	ENGINE_EXPORT void UnloadPlugins();
 };

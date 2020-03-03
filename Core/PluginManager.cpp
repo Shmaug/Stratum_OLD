@@ -73,18 +73,18 @@ void PluginManager::UnloadPlugin(PluginHandle handle){
 	#endif
 }
 
-void PluginManager::LoadPlugins(Scene* scene) {
+void PluginManager::LoadPlugins() {
 	UnloadPlugins();
 
 	std::vector<string> failed;
 
 	for (const auto& p : fs::directory_iterator("Plugins")) {
-		#ifdef WINDOWS
+#ifdef WINDOWS
 		// load plugin DLLs
 		if (wcscmp(p.path().extension().c_str(), L".dll") == 0) {
-		#else
+#else
 		if (strcmp(p.path().extension().c_str(), ".so") == 0) {
-		#endif
+#endif
 			PluginHandle handle = LoadPlugin(p.path().string(), false);
 			if (handle == NULL_PLUGIN) { failed.push_back(p.path().string()); continue; }
 			EnginePlugin* plugin = CreatePlugin(handle);
@@ -136,8 +136,10 @@ void PluginManager::LoadPlugins(Scene* scene) {
 
 	sort(mPlugins.begin(), mPlugins.end(), [](const auto& a, const auto& b) {
 		return a->Priority() > b->Priority();
-	});
+		});
+}
 
+void PluginManager::InitPlugins(Scene* scene) {
 	for (const auto& p : mPlugins)
 		p->Init(scene);
 }

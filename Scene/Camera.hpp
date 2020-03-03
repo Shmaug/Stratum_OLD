@@ -72,7 +72,7 @@ public:
 	inline virtual void ViewportHeight(float f) { mViewport.height = f; Dirty(); }
 
 	inline virtual void FramebufferWidth(uint32_t w) { mFramebuffer->Width(w);  Dirty(); }
-	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h); Dirty(); }
+	inline virtual void FramebufferHeight(uint32_t h) { mFramebuffer->Height(h);  Dirty(); }
 	inline virtual void SampleCount(VkSampleCountFlagBits s) { mFramebuffer->SampleCount(s); }
 
 	inline virtual void HeadToEye(const float4x4& transform, StereoEye eye = EYE_NONE) { mHeadToEye[eye] = transform; Dirty(); }

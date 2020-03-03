@@ -110,7 +110,7 @@ public:
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
 		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
-		mScene->Environment()->AmbientLight(.1f);
+		mScene->Environment()->AmbientLight(.9f);
 
 		string path = "/Data";
 		for (uint32_t i = 0; i < mScene->Instance()->CommandLineArguments().size(); i++)

@@ -83,6 +83,7 @@ public:
 private:
 	friend class Stratum;
 	ENGINE_EXPORT void Update(CommandBuffer* commandBuffer);
+	ENGINE_EXPORT void PreSwap();
 	ENGINE_EXPORT void PreFrame(CommandBuffer* commandBuffer);
 	ENGINE_EXPORT void PrePresent();
 	ENGINE_EXPORT Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager* inputManager, ::PluginManager* pluginManager);

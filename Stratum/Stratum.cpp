@@ -75,6 +75,7 @@ public:
 	Stratum(int argc, char** argv) : mScene(nullptr), mInstance(nullptr), mInputManager(nullptr) {
 		printf("Initializing...\n");
 		mPluginManager = new PluginManager();
+		mPluginManager->LoadPlugins();
 		mInstance = new Instance(argc, argv, mPluginManager);
 		mInputManager = new InputManager();
 		mAssetManager = new AssetManager(mInstance->Device());
@@ -87,7 +88,7 @@ public:
 	}
 
 	Stratum* Loop() {
-		mPluginManager->LoadPlugins(mScene);
+		mPluginManager->InitPlugins(mScene);
 
 		while (true) {
 			#ifdef PROFILER_ENABLE
@@ -115,6 +116,7 @@ public:
 			PROFILER_BEGIN("Execute CommandBuffer");
 			mInstance->Device()->Execute(commandBuffer);
 			PROFILER_END;
+
 
 			mScene->PrePresent();
 

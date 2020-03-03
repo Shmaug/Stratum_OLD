@@ -90,7 +90,7 @@ Instance::Instance(int argc, char** argv, PluginManager* pluginManager)
 	mInstanceExtensions  = { VK_KHR_SURFACE_EXTENSION_NAME };
 	mDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 	};
 
 	vector<const char*> validationLayers;
