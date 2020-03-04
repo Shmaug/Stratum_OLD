@@ -68,6 +68,7 @@ public:
 	inline VkPrimitiveTopology Topology() const { return mTopology; }
 	inline uint32_t BaseVertex() const { return mBaseVertex; }
 	inline uint32_t VertexCount() const { return mVertexCount; }
+	inline uint32_t VertexSize() const { return mVertexSize; }
 	inline uint32_t BaseIndex() const { return mBaseIndex; }
 	inline uint32_t IndexCount() const { return mIndexCount; }
 	inline VkIndexType IndexType() const { return mIndexType; }
@@ -89,6 +90,7 @@ private:
 	const ::VertexInput* mVertexInput;
 	uint32_t mBaseVertex;
 	uint32_t mVertexCount;
+	VkDeviceSize mVertexSize;
 	uint32_t mBaseIndex;
 	uint32_t mIndexCount;
 	VkIndexType mIndexType;

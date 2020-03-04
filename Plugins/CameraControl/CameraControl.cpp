@@ -30,7 +30,7 @@ bool CameraControl::Init(Scene* scene) {
 
 	shared_ptr<Camera> camera = make_shared<Camera>("Camera", mScene->Instance()->Window());
 	mScene->AddObject(camera);
-	camera->Near(.01f);
+	camera->Near(.1f);
 	camera->Far(1024.f);
 	camera->FieldOfView(radians(65.f));
 	camera->LocalPosition(0, 0, -mCameraDistance);

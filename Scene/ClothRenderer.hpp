@@ -19,15 +19,22 @@ public:
 	ENGINE_EXPORT virtual void Mesh(::Mesh* m) override;
 	ENGINE_EXPORT virtual void Mesh(std::shared_ptr<::Mesh> m) override;
 
+	inline virtual void AddSphereCollider(Object* obj, float radius) { mSphereColliders.push_back(std::make_pair(obj, radius)); }
+	
 	ENGINE_EXPORT virtual void FixedUpdate(CommandBuffer* commandBuffer) override;
+	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass) override;
 
 	ENGINE_EXPORT bool Intersect(const Ray& ray, float* t, bool any) override;
 
 protected:
 	Buffer* mVertexBuffer;
+	Buffer* mLastVertexBuffer;
 	Buffer* mForceBuffer;
+	Buffer* mColliderBuffer;
 	bool mCopyVertices;
+
+	std::vector<std::pair<Object*, float>> mSphereColliders;
 
 	float mDrag;
 	float mStiffness;

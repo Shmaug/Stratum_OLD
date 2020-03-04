@@ -404,7 +404,7 @@ public:
 
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
-		mScene->Environment()->AmbientLight(.3f);
+		mScene->Environment()->AmbientLight(.25f);
 		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
 
 		auto light = make_shared<Light>("Spot");
@@ -445,7 +445,7 @@ public:
 		planeMat->SetParameter("BumpStrength", 1.f);
 		planeMat->SetParameter("Emission", float3(0));
 		auto plane = make_shared<MeshRenderer>("Plane");
-		plane->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Plane", mScene->Instance()->Device(), 512.f)));
+		plane->Mesh(shared_ptr<Mesh>(Mesh::CreatePlane("Plane", mScene->Instance()->Device(), 128.f)));
 		plane->Material(planeMat);
 		plane->PushConstant("TextureIndex", 0u);
 		plane->LocalRotation(quaternion(float3(-PI / 2, 0, 0)));
@@ -549,6 +549,11 @@ public:
 			if (mHead) mHead->mVisible = false;
 			if (mCloth) { mCloth->mVisible = true; return; }
 
+			auto sphere = make_shared<Object>("Cloth Sphere");
+			sphere->LocalPosition(0, 1, 0);
+			mScene->AddObject(sphere);
+			mObjects.push_back(sphere.get());
+
 			auto gridmat = make_shared<Material>("Grid", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
 			gridmat->EnableKeyword("TWO_SIDED");
 			gridmat->EnableKeyword("TEXTURED");
@@ -566,7 +571,8 @@ public:
 			cloth->Material(gridmat);
 			cloth->PushConstant("TextureIndex", 0u);
 			cloth->PushConstant("TextureST", float4(4, 4, 0, 0));
-			cloth->LocalPosition(0, 1, 0);
+			cloth->LocalPosition(0, 1.5f, 0);
+			cloth->AddSphereCollider(sphere.get(), .3f);
 			mCloth = cloth.get();
 			mScene->AddObject(cloth);
 			mObjects.push_back(mCloth);

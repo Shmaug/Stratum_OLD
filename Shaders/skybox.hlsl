@@ -6,9 +6,9 @@
 #pragma zwrite false
 #pragma ztest false
 
-#pragma staticsampler Sampler maxAnisotropy=0 addressMode=clampedge
+#pragma static_sampler Sampler maxAnisotropy=0 addressMode=clamp_edge
 
-#pragma multicompile ENABLE_SCATTERING ENVIRONMENT_TEXTURE ENVIRONMENT_TEXTURE_HDR
+#pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE ENVIRONMENT_TEXTURE_HDR
 
 #include <include/shadercompat.h>
 
@@ -71,7 +71,7 @@ void ApplyPhaseFunctionElek(inout float3 scatterR, inout float3 scatterM, float 
 }
 
 void vsmain(
-	float3 vertex : POSITION,
+	[[vk::location(0)]] float3 vertex : POSITION,
 	out float4 position : SVPosition,
 	out float4 screenPos : TEXCOORD0,
 	out float3 viewRay : TEXCOORD1) {
@@ -93,22 +93,22 @@ void fsmain(
 	out float4 depthNormal : SVTarget1 ) {
 	float3 ray = normalize(viewRay);
 
-#ifdef ENABLESCATTERING
+#ifdef ENABLE_SCATTERING
 	float3 rayStart = Camera.Position;
 
 	float3 planetCenter = float3(0, -ScatterParams.PlanetRadius, 0);
 
 	float rp = length(rayStart - planetCenter);
-	float height = max(0, rp - PlanetRadius);
+	float height = max(0, rp - ScatterParams.PlanetRadius);
 	float3 normal = (rayStart - planetCenter) / rp;
 
 	float viewZenith = abs(dot(normal, ray));
-	float sunZenith = dot(normal, SunDir);
+	float sunZenith = dot(normal, ScatterParams.SunDir);
 
 	float3 coords = float3(height / ScatterParams.AtmosphereHeight, viewZenith * 0.5 + 0.5, sunZenith * 0.5 + 0.5);
 
 	coords.x = sqrt(height / ScatterParams.AtmosphereHeight);
-	float ch = -(sqrt(height * (2 * ScatterParams.PlanetRadius + height)) / (PlanetRadius + height));
+	float ch = -(sqrt(height * (2 * ScatterParams.PlanetRadius + height)) / (ScatterParams.PlanetRadius + height));
 	if (viewZenith > ch)
 		coords.y = 0.5 * pow((viewZenith - ch) / (1 - ch), 0.2) + 0.5;
 	else
@@ -121,8 +121,8 @@ void fsmain(
 
 	float3 m = scatterM;
 
-	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, SunDir));
-	float3 lightInscatter = (scatterR * ScatterParams.ScatteringR + scatterM * ScatterParams.ScatteringM) * IncomingLight;
+	ApplyPhaseFunctionElek(scatterR.xyz, scatterM.xyz, dot(ray, ScatterParams.SunDir));
+	float3 lightInscatter = (scatterR * ScatterParams.ScatteringR + scatterM * ScatterParams.ScatteringM) * ScatterParams.IncomingLight;
 
 	// light shafts
 	//float shadow = LightShaftLUT.SampleLevel(Sampler, screenPos.xy / screenPos.w, 0);
@@ -131,7 +131,7 @@ void fsmain(
 	//lightInscatter *= shadow * .2 + shadow4 * .8;
 	
 	// sun and moon
-	lightInscatter += RenderSun(m, dot(ray, SunDir)) * ScatterParams.SunIntensity;
+	lightInscatter += RenderSun(m, dot(ray, ScatterParams.SunDir)) * ScatterParams.SunIntensity;
 	RenderMoon(lightInscatter, ray);
 
 	// stars
@@ -139,12 +139,10 @@ void fsmain(
 	lightInscatter += star * (1 - saturate(ScatterParams.StarFade * dot(lightInscatter, lightInscatter)));
 
 	color = float4(lightInscatter, 1);
-#elif defined(ENVIRONMENTTEXTURE) || defined(ENVIRONMENTTEXTUREHDR)
-	uint texWidth, texHeight, numMips;
-	EnvironmentTexture.GetDimensions(0, texWidth, texHeight, numMips);
+#elif defined(ENVIRONMENT_TEXTURE) || defined(ENVIRONMENT_TEXTURE_HDR)
 	float2 envuv = float2(atan2(ray.z, ray.x) * INVPI * .5 + .5, acos(ray.y) * INVPI);
 	color = float4(EnvironmentTexture.SampleLevel(Sampler, envuv, 0).rgb, 1);
-#ifdef ENVIRONMENTTEXTUREHDR
+#ifdef ENVIRONMENT_TEXTURE_HDR
 	color = pow(color, 1 / 2.2);
 #endif
 #else
