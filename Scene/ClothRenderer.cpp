@@ -11,19 +11,19 @@
 using namespace std;
 
 ClothRenderer::ClothRenderer(const string& name)
-	:  MeshRenderer(name), Object(name), mVertexBuffer(nullptr), mLastVertexBuffer(nullptr), mForceBuffer(nullptr), mCopyVertices(false), mDrag(10), mStiffness(1) {}
-ClothRenderer::~ClothRenderer() { safe_delete(mVertexBuffer); safe_delete(mLastVertexBuffer); safe_delete(mForceBuffer); }
+	:  MeshRenderer(name), Object(name), mVertexBuffer(nullptr), mVelocityBuffer(nullptr), mForceBuffer(nullptr), mCopyVertices(false), mFriction(5), mDrag(1), mStiffness(500), mDamping(10), mGravity(float3(0,-1,0)) {}
+ClothRenderer::~ClothRenderer() { safe_delete(mVertexBuffer); safe_delete(mVelocityBuffer); safe_delete(mForceBuffer); }
 
 void ClothRenderer::Mesh(::Mesh* m) {
 	mMesh = m;
 	Dirty();
 
 	safe_delete(mVertexBuffer);
-	safe_delete(mLastVertexBuffer);
+	safe_delete(mVelocityBuffer);
 	safe_delete(mForceBuffer);
 	if (m) {
-		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexCount() * m->VertexSize(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		mLastVertexBuffer = new Buffer(mName + "PrevVertices", m->VertexBuffer()->Device(), m->VertexCount() * m->VertexSize(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		mVelocityBuffer = new Buffer(mName + "PrevVertices", m->VertexBuffer()->Device(), m->VertexCount() * sizeof(float4), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mForceBuffer = new Buffer(mName + "Forces", m->VertexBuffer()->Device(), sizeof(float4) * m->VertexCount(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mCopyVertices = true;
 	}
@@ -33,11 +33,11 @@ void ClothRenderer::Mesh(std::shared_ptr<::Mesh> m) {
 	Dirty();
 
 	safe_delete(mVertexBuffer);
-	safe_delete(mLastVertexBuffer);
+	safe_delete(mVelocityBuffer);
 	safe_delete(mForceBuffer);
 	if (m) {
-		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		mLastVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		mVelocityBuffer = new Buffer(mName + "PrevVertices", m->VertexBuffer()->Device(), m->VertexCount() * sizeof(float4), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mForceBuffer = new Buffer(mName + "Forces", m->VertexBuffer()->Device(), sizeof(float4) * m->VertexCount(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mCopyVertices = true;
 	}
@@ -59,14 +59,16 @@ void ClothRenderer::FixedUpdate(CommandBuffer* commandBuffer) {
 		cpy.srcOffset = m->VertexSize() * m->BaseVertex();
 		cpy.size = mVertexBuffer->Size();
 		vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(), *mVertexBuffer, 1, &cpy);
-		vkCmdCopyBuffer(*commandBuffer, *m->VertexBuffer(), *mLastVertexBuffer, 1, &cpy);
+		vkCmdFillBuffer(*commandBuffer, *mVelocityBuffer, 0, mVelocityBuffer->Size(), 0);
 
 		b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
 		b.buffer = *mVertexBuffer;
 		b.size = mVertexBuffer->Size();
 		vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
 
-		b.buffer = *mLastVertexBuffer;
+		b.buffer = *mVelocityBuffer;
+		b.size = mVelocityBuffer->Size();
 		vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
 
 		mCopyVertices = false;
@@ -78,71 +80,126 @@ void ClothRenderer::FixedUpdate(CommandBuffer* commandBuffer) {
 	b.buffer = *mForceBuffer;
 	b.size = mForceBuffer->Size();
 	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
-	b.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 
+	Shader* shader = Scene()->AssetManager()->LoadShader("Shaders/cloth.stm");
 
+	Buffer* sphereBuffer = commandBuffer->Device()->GetTempBuffer("Cloth Spheres", sizeof(float4) * max(1u, mSphereColliders.size()), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+	for (uint32_t i = 0; i < mSphereColliders.size(); i++)
+		((float4*)sphereBuffer->MappedData())[i] = float4(mSphereColliders[i].first->WorldPosition(), mSphereColliders[i].second);
+	
 	Buffer* objBuffer = commandBuffer->Device()->GetTempBuffer("Cloth Obj", sizeof(float4x4) * 2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 	((float4x4*)objBuffer->MappedData())[0] = ObjectToWorld();
 	((float4x4*)objBuffer->MappedData())[1] = WorldToObject();
 
-	Shader* shader = Scene()->AssetManager()->LoadShader("Shaders/cloth.stm");
-
 	uint32_t vc = m->VertexCount();
 	uint32_t no = offsetof(StdVertex, normal);
+	uint32_t to = offsetof(StdVertex, tangent);
+	uint32_t tco = offsetof(StdVertex, uv);
 	uint32_t vs = sizeof(StdVertex);
-
-	float4x4 o2w = ObjectToWorld();
-	float4x4 w2o = WorldToObject();
+	uint32_t sc = mSphereColliders.size();
+	
 	float dt = Scene()->FixedTimeStep();
 	VkDeviceSize vsize = m->VertexSize();
 
 	VkDeviceSize baseVertex = m->BaseVertex() * m->VertexSize();
 	VkDeviceSize baseIndex = m->BaseIndex() * (m->IndexType() == VK_INDEX_TYPE_UINT16 ? sizeof(uint16_t) : sizeof(uint32_t));
 
-	ComputeShader* add = m->IndexType() == VK_INDEX_TYPE_UINT16 ? Scene()->AssetManager()->LoadShader("Shaders/cloth.stm")->GetCompute("AddForces", {}) : Scene()->AssetManager()->LoadShader("Shaders/cloth.stm")->GetCompute("AddForces", {"INDEX_UINT32"});
+	ComputeShader* add = m->IndexType() == VK_INDEX_TYPE_UINT16 ? shader->GetCompute("AddForces", {}) : shader->GetCompute("AddForces", {"INDEX_UINT32"});
 	DescriptorSet* ds = new DescriptorSet("AddForces", Scene()->Instance()->Device(), add->mDescriptorSetLayouts[0]);
 	ds->CreateUniformBufferDescriptor(objBuffer, 0, objBuffer->Size(), add->mDescriptorBindings.at("ObjectBuffer").second.binding);
 	ds->CreateStorageBufferDescriptor(m->VertexBuffer().get(), baseVertex, m->VertexBuffer()->Size() - baseVertex, add->mDescriptorBindings.at("SourceVertices").second.binding);
 	ds->CreateStorageBufferDescriptor(m->IndexBuffer().get(), baseIndex, m->IndexBuffer()->Size() - baseIndex, add->mDescriptorBindings.at("Triangles").second.binding);
 	ds->CreateStorageBufferDescriptor(mVertexBuffer, 0, mVertexBuffer->Size(), add->mDescriptorBindings.at("Vertices").second.binding);
-	ds->CreateStorageBufferDescriptor(mLastVertexBuffer, 0, mLastVertexBuffer->Size(), add->mDescriptorBindings.at("LastVertices").second.binding);
+	ds->CreateStorageBufferDescriptor(mVelocityBuffer, 0, mVelocityBuffer->Size(), add->mDescriptorBindings.at("Velocities").second.binding);
 	ds->CreateStorageBufferDescriptor(mForceBuffer, 0, mForceBuffer->Size(), add->mDescriptorBindings.at("Forces").second.binding);
 	ds->FlushWrites();
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, add->mPipeline);
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, add->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-	commandBuffer->PushConstant(add, "ObjectToWorld", &o2w);
-	commandBuffer->PushConstant(add, "WorldToObject", &w2o);
 	commandBuffer->PushConstant(add, "VertexSize", &vsize);
+	commandBuffer->PushConstant(add, "Friction", &mFriction);
 	commandBuffer->PushConstant(add, "Drag", &mDrag);
-	commandBuffer->PushConstant(add, "Stiffness", &mStiffness);
+	commandBuffer->PushConstant(add, "SpringK", &mStiffness);
+	commandBuffer->PushConstant(add, "SpringD", &mDamping);
 	commandBuffer->PushConstant(add, "DeltaTime", &dt);
-	vkCmdDispatch(*commandBuffer, ((m->IndexCount() / 3 + 63) / 64), 1, 1);
+	vkCmdDispatch(*commandBuffer, (m->IndexCount() / 3 + 63) / 64, 1, 1);
 
 
-	b.buffer = *mForceBuffer;
-	b.size = mForceBuffer->Size();
-	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
+	b.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+	VkBufferMemoryBarrier bb[2] = { b, b };
+	bb[0].buffer = *mForceBuffer;
+	bb[0].size = mForceBuffer->Size();
+	bb[1].buffer = *mVelocityBuffer;
+	bb[1].size = mVelocityBuffer->Size();
+	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 2, bb, 0, nullptr);
 
 
-	ComputeShader* integrate = Scene()->AssetManager()->LoadShader("Shaders/cloth.stm")->GetCompute("Integrate", {});
-	ds = new DescriptorSet("Integrate", Scene()->Instance()->Device(), integrate->mDescriptorSetLayouts[0]);
+	ComputeShader* integrate = shader->GetCompute("Integrate", {});
+	ds = new DescriptorSet("Integrate0", Scene()->Instance()->Device(), integrate->mDescriptorSetLayouts[0]);
 	ds->CreateUniformBufferDescriptor(objBuffer, 0, objBuffer->Size(), integrate->mDescriptorBindings.at("ObjectBuffer").second.binding);
 	ds->CreateStorageBufferDescriptor(mVertexBuffer, 0, mVertexBuffer->Size(), integrate->mDescriptorBindings.at("Vertices").second.binding);
-	ds->CreateStorageBufferDescriptor(mLastVertexBuffer, 0, mLastVertexBuffer->Size(), integrate->mDescriptorBindings.at("LastVertices").second.binding);
+	ds->CreateStorageBufferDescriptor(mVelocityBuffer, 0, mVelocityBuffer->Size(), integrate->mDescriptorBindings.at("Velocities").second.binding);
 	ds->CreateStorageBufferDescriptor(mForceBuffer, 0, mForceBuffer->Size(), integrate->mDescriptorBindings.at("Forces").second.binding);
+	ds->CreateStorageBufferDescriptor(sphereBuffer, 0, sphereBuffer->Size(), integrate->mDescriptorBindings.at("Spheres").second.binding);
 	ds->FlushWrites();
 	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, integrate->mPipeline);
 	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, integrate->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-	commandBuffer->PushConstant(integrate, "ObjectToWorld", &o2w);
-	commandBuffer->PushConstant(integrate, "WorldToObject", &w2o);
-	commandBuffer->PushConstant(add, "VertexSize", &vsize);
+	commandBuffer->PushConstant(integrate, "VertexSize", &vsize);
+	commandBuffer->PushConstant(integrate, "NormalLocation", &no);
+	commandBuffer->PushConstant(integrate, "TangentLocation", &to);
+	commandBuffer->PushConstant(integrate, "TexcoordLocation", &tco);
 	commandBuffer->PushConstant(integrate, "DeltaTime", &dt);
-	vkCmdDispatch(*commandBuffer, ((m->IndexCount() / 3 + 63) / 64), 1, 1);
+	commandBuffer->PushConstant(integrate, "SphereCount", &sc);
+	commandBuffer->PushConstant(integrate, "Friction", &mFriction);
+	commandBuffer->PushConstant(integrate, "Gravity", &mGravity);
+	vkCmdDispatch(*commandBuffer, (m->VertexCount() + 63) / 64, 1, 1);
+
+
+	b.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+	b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+	b.buffer = *mVertexBuffer;
+	b.size = mVertexBuffer->Size();
+	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
+
+
+	ComputeShader* normals = m->IndexType() == VK_INDEX_TYPE_UINT16 ? shader->GetCompute("ComputeNormals0", {}) : shader->GetCompute("ComputeNormals0", { "INDEX_UINT32" });
+	ds = new DescriptorSet("Normals0", Scene()->Instance()->Device(), normals->mDescriptorSetLayouts[0]);
+	ds->CreateUniformBufferDescriptor(objBuffer, 0, objBuffer->Size(), normals->mDescriptorBindings.at("ObjectBuffer").second.binding);
+	ds->CreateStorageBufferDescriptor(mVertexBuffer, 0, mVertexBuffer->Size(), normals->mDescriptorBindings.at("Verticesu").second.binding);
+	ds->CreateStorageBufferDescriptor(m->IndexBuffer().get(), baseIndex, m->IndexBuffer()->Size() - baseIndex, normals->mDescriptorBindings.at("Triangles").second.binding);
+	ds->FlushWrites();
+	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, normals->mPipeline);
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, normals->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+	commandBuffer->PushConstant(normals, "VertexSize", &vsize);
+	commandBuffer->PushConstant(normals, "NormalLocation", &no);
+	commandBuffer->PushConstant(normals, "TangentLocation", &to);
+	commandBuffer->PushConstant(normals, "TexcoordLocation", &tco);
+	vkCmdDispatch(*commandBuffer, (m->VertexCount() + 63) / 64, 1, 1);
 
 
 	b.buffer = *mVertexBuffer;
 	b.size = mVertexBuffer->Size();
 	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
+
+
+	ComputeShader* normals2 = shader->GetCompute("ComputeNormals1", {});
+	ds = new DescriptorSet("Normals1", Scene()->Instance()->Device(), normals2->mDescriptorSetLayouts[0]);
+	ds->CreateUniformBufferDescriptor(objBuffer, 0, objBuffer->Size(), normals2->mDescriptorBindings.at("ObjectBuffer").second.binding);
+	ds->CreateStorageBufferDescriptor(mVertexBuffer, 0, mVertexBuffer->Size(), normals2->mDescriptorBindings.at("Vertices").second.binding);
+	ds->FlushWrites();
+	vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, normals2->mPipeline);
+	vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, normals2->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+	commandBuffer->PushConstant(normals2, "VertexSize", &vsize);
+	commandBuffer->PushConstant(normals2, "NormalLocation", &no);
+	commandBuffer->PushConstant(normals2, "TangentLocation", &to);
+	commandBuffer->PushConstant(normals2, "TexcoordLocation", &tco);
+	vkCmdDispatch(*commandBuffer, (m->VertexCount() + 63) / 64, 1, 1);
+
+
+	b.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+	b.buffer = *mVertexBuffer;
+	b.size = mVertexBuffer->Size();
+	vkCmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, nullptr, 1, &b, 0, nullptr);
 }
 
 void ClothRenderer::PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {

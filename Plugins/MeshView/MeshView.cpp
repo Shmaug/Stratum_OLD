@@ -554,24 +554,25 @@ public:
 			mScene->AddObject(sphere);
 			mObjects.push_back(sphere.get());
 
-			auto gridmat = make_shared<Material>("Grid", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
-			gridmat->EnableKeyword("TWO_SIDED");
-			gridmat->EnableKeyword("TEXTURED");
-			gridmat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/grid.png"));
-			gridmat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/bump.png"));
-			gridmat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/mask.png"));
-			gridmat->SetParameter("TextureST", float4(256, 256, 1, 1));
-			gridmat->SetParameter("Color", float4(1));
-			gridmat->SetParameter("Metallic", 0.f);
-			gridmat->SetParameter("Roughness", .5f);
-			gridmat->SetParameter("BumpStrength", 1.f);
-			gridmat->SetParameter("Emission", float3(0));
+			auto fabmat = make_shared<Material>("Fabric", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
+			fabmat->EnableKeyword("TWO_SIDED");
+			fabmat->EnableKeyword("TEXTURED");
+			fabmat->CullMode(VK_CULL_MODE_NONE);
+			fabmat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/fabricwool/wool_albedo.png"));
+			fabmat->SetParameter("NormalTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/fabricwool/wool_normal.png"));
+			fabmat->SetParameter("MaskTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/mask.png"));
+			fabmat->SetParameter("TextureST", float4(8, 8, 1, 1));
+			fabmat->SetParameter("Color", float4(1));
+			fabmat->SetParameter("Metallic", 0.f);
+			fabmat->SetParameter("Roughness", .5f);
+			fabmat->SetParameter("BumpStrength", 1.f);
+			fabmat->SetParameter("Emission", float3(0));
 			auto cloth = make_shared<ClothRenderer>("Cloth");
-			cloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid.fbx"));
-			cloth->Material(gridmat);
+			cloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid.fbx", .01f));
+			cloth->Material(fabmat);
 			cloth->PushConstant("TextureIndex", 0u);
-			cloth->PushConstant("TextureST", float4(4, 4, 0, 0));
 			cloth->LocalPosition(0, 1.5f, 0);
+			cloth->LocalRotation(quaternion(float3(PI * .125f, 0, 0)));
 			cloth->AddSphereCollider(sphere.get(), .3f);
 			mCloth = cloth.get();
 			mScene->AddObject(cloth);
@@ -579,17 +580,27 @@ public:
 		}
 
 		if (mCloth && mCloth->Visible()) {
+			float f = mCloth->Friction();
 			float k = mCloth->Stiffness();
-			float d = mCloth->Drag();
+			float d = mCloth->Damping();
+			float cd = mCloth->Drag();
+
+			GUI::LayoutLabel(sem16, "Friction: " + to_string(f), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(f, 0, 10, 18, float4(.5f, .5f, .5f, 1), 4);
 
 			GUI::LayoutLabel(sem16, "Stiffness: " + to_string(k), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(k, 0, 500, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(k, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
 
-			GUI::LayoutLabel(sem16, "Drag: " + to_string(d), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutLabel(sem16, "Damping: " + to_string(d), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
 			GUI::LayoutSlider(d, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
 
-			mCloth->Drag(d);
+			GUI::LayoutLabel(sem16, "Drag: " + to_string(cd), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(cd, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			mCloth->Friction(f);
 			mCloth->Stiffness(k);
+			mCloth->Damping(d);
+			mCloth->Drag(cd);
 		}
 
 		GUI::EndLayout();

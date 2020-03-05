@@ -69,6 +69,7 @@ bool CompileStage(Compiler* compiler, const CompileOptions& options, const strin
 	
 	string error = result.GetErrorMessage();
 	if (error.size()) fprintf_color(COLOR_RED, stderr, "%s\n", error.c_str());
+
 	switch (result.GetCompilationStatus()) {
 	case shaderc_compilation_status_success:
 		// store SPIRV module
@@ -551,8 +552,13 @@ int main(int argc, char* argv[]) {
 
 	printf("Compiling %s\n", inputFile);
 	
+	if (fs::path(inputFile).extension().string() == ".hlsl")
+		options.SetSourceLanguage(shaderc_source_language_hlsl);
+	else
+		options.SetSourceLanguage(shaderc_source_language_glsl);
+	
 	options.SetIncluder(make_unique<Includer>(include));
-	options.SetSourceLanguage(shaderc_source_language_hlsl);
+	options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
 	Compiler* compiler = new Compiler();
 	CompiledShader* shader = Compile(compiler, inputFile);

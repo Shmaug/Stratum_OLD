@@ -47,7 +47,7 @@ private:
 				PROFILER_END;
 			}
 		for (const auto& camera : mScene->Cameras())
-			if (camera->TargetWindow() && camera->EnabledHierarchy()) {
+			if (camera->TargetWindow() && camera->EnabledHierarchy() && camera->TargetWindow()->BackBuffer() != VK_NULL_HANDLE) {
 				Texture* src = camera->ResolveBuffer();
 				src->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, commandBuffer);
 				Texture::TransitionImageLayout(camera->TargetWindow()->BackBuffer(), camera->TargetWindow()->Format().format, 1, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);

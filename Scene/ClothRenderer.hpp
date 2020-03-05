@@ -15,6 +15,12 @@ public:
 	inline float Drag() const { return mDrag; }
 	inline void Stiffness(float d) { mStiffness = d; }
 	inline float Stiffness() const { return mStiffness; }
+	inline void Damping(float d) { mDamping = d; }
+	inline float Damping() const { return mDamping; }
+	inline void Friction(float f) { mFriction = f; }
+	inline float Friction() const { return mFriction; }
+	inline void Gravity(const float3& g) { mGravity = g; }
+	inline float3 Gravity() const { return mGravity; }
 
 	ENGINE_EXPORT virtual void Mesh(::Mesh* m) override;
 	ENGINE_EXPORT virtual void Mesh(std::shared_ptr<::Mesh> m) override;
@@ -29,13 +35,16 @@ public:
 
 protected:
 	Buffer* mVertexBuffer;
-	Buffer* mLastVertexBuffer;
+	Buffer* mVelocityBuffer;
 	Buffer* mForceBuffer;
 	Buffer* mColliderBuffer;
 	bool mCopyVertices;
 
 	std::vector<std::pair<Object*, float>> mSphereColliders;
 
+	float mFriction;
 	float mDrag;
 	float mStiffness;
+	float mDamping;
+	float3 mGravity;
 };
