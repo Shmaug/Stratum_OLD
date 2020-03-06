@@ -5,7 +5,6 @@
 #pragma multi_compile ENABLE_SCATTERING ENVIRONMENT_TEXTURE
 
 #pragma multi_compile ALPHA_CLIP
-#pragma multi_compile TWO_SIDED
 #pragma multi_compile TEXTURED
 
 #pragma render_queue 1000
@@ -127,16 +126,15 @@ void fsmain(v2f i,
 	float4 col = Color;
 	#endif
 
-	float3 normal = normalize(i.normal);
-	#ifdef TWO_SIDED
-	if (dot(normal, view) < 0) normal = -normal;
-	#endif
+	bool ff = dot(i.normal, view) > 0;
+
+	float3 normal = normalize(i.normal) * (ff ? 1 : -1);
 
 	#ifdef TEXTURED
 	float4 bump = NormalTextures[TextureIndex].Sample(Sampler, i.texcoord);
 	bump.xyz = bump.xyz * 2 - 1;
 	float3 tangent = normalize(i.tangent);
-	float3 bitangent = normalize(cross(i.normal, i.tangent));
+	float3 bitangent = normalize(cross(normal, tangent));// * (ff ? 1 : -1);
 	bump.xy *= BumpStrength;
 	normal = normalize(tangent * bump.x + bitangent * bump.y + normal * bump.z);
 	#endif

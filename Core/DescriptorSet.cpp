@@ -14,6 +14,7 @@ DescriptorSet::DescriptorSet(const string& name, Device* device, VkDescriptorSet
 	lock_guard lock(device->mDescriptorPoolMutex);
 	ThrowIfFailed(vkAllocateDescriptorSets(*mDevice, &allocInfo, &mDescriptorSet), "vkAllocateDescriptorSets failed");
 	mDevice->SetObjectName(mDescriptorSet, name, VK_OBJECT_TYPE_DESCRIPTOR_SET);
+	mDevice->mDescriptorSetCount++;
 }
 DescriptorSet::~DescriptorSet() {
 	for (auto c : mCurrent) {
@@ -35,6 +36,7 @@ DescriptorSet::~DescriptorSet() {
 	}
 	lock_guard lock(mDevice->mDescriptorPoolMutex);
 	ThrowIfFailed(vkFreeDescriptorSets(*mDevice, mDevice->mDescriptorPool, 1, &mDescriptorSet), "vkFreeDescriptorSets failed");
+	mDevice->mDescriptorSetCount--;
 }
 
 void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {

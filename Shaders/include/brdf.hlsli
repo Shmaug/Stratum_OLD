@@ -78,7 +78,7 @@ float3 BRDF(MaterialInfo material, float nv, float3 omega, float3 normal, float3
 
 	float nl = saturate(dot(normal, omega));
 	float nh = saturate(dot(normal, H));
-
+	
 	float lv = saturate(dot(omega, view));
 	float lh = saturate(dot(omega, H));
 

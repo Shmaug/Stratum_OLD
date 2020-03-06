@@ -21,6 +21,10 @@ public:
 	inline float Friction() const { return mFriction; }
 	inline void Gravity(const float3& g) { mGravity = g; }
 	inline float3 Gravity() const { return mGravity; }
+	inline void Pin(bool p) { mPin = p; }
+	inline bool Pin() const { return mPin; }
+	inline void Move(const float3& f) { mMove = f; }
+	inline float3 Move() const { return mMove; }
 
 	ENGINE_EXPORT virtual void Mesh(::Mesh* m) override;
 	ENGINE_EXPORT virtual void Mesh(std::shared_ptr<::Mesh> m) override;
@@ -38,13 +42,18 @@ protected:
 	Buffer* mVelocityBuffer;
 	Buffer* mForceBuffer;
 	Buffer* mColliderBuffer;
+	Buffer* mEdgeBuffer;
 	bool mCopyVertices;
 
 	std::vector<std::pair<Object*, float>> mSphereColliders;
 
+	bool mPin;
+	float3 mMove;
 	float mFriction;
 	float mDrag;
 	float mStiffness;
 	float mDamping;
 	float3 mGravity;
+
+	ENGINE_EXPORT virtual bool UpdateTransform() override;
 };

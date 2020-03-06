@@ -41,6 +41,7 @@ public:
 	inline VkQueue PresentQueue() const { return mPresentQueue; };
 	inline uint32_t GraphicsQueueFamily() const { return mGraphicsQueueFamily; };
 	inline uint32_t PresentQueueFamily() const { return mPresentQueueFamily; };
+	inline uint32_t DescriptorSetCount() const { return mDescriptorSetCount; };
 
 	ENGINE_EXPORT void SetObjectName(void* object, const std::string& name, VkObjectType type) const;
 
@@ -51,7 +52,7 @@ public:
 
 	ENGINE_EXPORT std::shared_ptr<CommandBuffer> GetCommandBuffer(const std::string& name = "Command Buffer");
 	ENGINE_EXPORT std::shared_ptr<Fence> Execute(std::shared_ptr<CommandBuffer> commandBuffer, bool frameContext = true);
-	ENGINE_EXPORT void FlushFrames();
+	ENGINE_EXPORT void Flush();
 
 	ENGINE_EXPORT VkSampleCountFlagBits GetMaxUsableSampleCount();
 
@@ -90,6 +91,7 @@ private:
 	VkQueue mPresentQueue;
 
 	VkDescriptorPool mDescriptorPool;
+	uint32_t mDescriptorSetCount;
 
 	std::mutex mTmpDescriptorSetMutex;
 	std::mutex mTmpBufferMutex;

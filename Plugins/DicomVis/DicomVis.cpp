@@ -109,7 +109,7 @@ public:
 
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
-		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/photo_studio_01_2k.hdr"));
 		mScene->Environment()->AmbientLight(.9f);
 
 		string path = "/Data";

@@ -387,7 +387,7 @@ void Window::CreateSwapchain(::Device* device) {
 }
 
 void Window::DestroySwapchain() {
-	mDevice->FlushFrames();
+	mDevice->Flush();
 
 	for (uint32_t i = 0; i < mImageCount; i++) {
 		if (mFrameData[i].mSwapchainImageView != VK_NULL_HANDLE)

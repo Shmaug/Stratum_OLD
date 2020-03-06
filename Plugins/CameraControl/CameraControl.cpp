@@ -183,11 +183,11 @@ void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera,
 					auto p = samples.front();
 					samples.pop();
 
-					float2 pos(s.x * (p.first->mStartTime - mProfilerFrames[mSelectedFrame].mStartTime).count() * id, graphHeight + 20 + sampleHeight * p.second);
+					float2 pos(s.x * (p.first->mStartTime - mProfilerFrames[mSelectedFrame].mStartTime).count() * id, graphHeight + sampleHeight * p.second);
 					float2 size(s.x * (float)p.first->mDuration.count() * id, sampleHeight);
 					float4 col(0, 0, 0, 1);
 
-					if (c.x > pos.x&& c.y > pos.y && c.x < pos.x + size.x && c.y < pos.y + size.y) {
+					if (c.x > pos.x && c.y > pos.y && c.x < pos.x + size.x && c.y < pos.y + size.y) {
 						selected = p.first;
 						col.rgb = 1;
 					}
@@ -201,15 +201,14 @@ void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera,
 
 				if (selected) {
 					snprintf(tmpText, 64, "%s: %.2fms\n", selected->mLabel, selected->mDuration.count() * 1e-6f);
-					GUI::Rect(fRect2D(0, graphHeight, s.x, 20), float4(0,0,0,.8f));
-					GUI::DrawString(reg14, tmpText, 1, float2(s.x * .5f, graphHeight + 8), 14.f, TEXT_ANCHOR_MID, TEXT_ANCHOR_MID);
+					GUI::DrawString(reg14, tmpText, 1, c + 8, 14.f, TEXT_ANCHOR_MAX, TEXT_ANCHOR_MAX);
 				}
 			}
 
 		}
 		#endif
 
-		snprintf(tmpText, 64, "%.2f fps\n", mScene->FPS());
+		snprintf(tmpText, 64, "%.2fms\n%d DescriptorSets", mScene->FPS(), commandBuffer->Device()->DescriptorSetCount());
 		GUI::DrawString(sem16, tmpText, 1.f, float2(5, camera->FramebufferHeight() - 30), 18.f);
 	}
 }

@@ -84,7 +84,7 @@ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, ui
 }
 
 Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, const set<string>& deviceExtensions, vector<const char*> validationLayers)
-	: mInstance(instance), mFrameContexts(nullptr), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0) {
+	: mInstance(instance), mFrameContexts(nullptr), mGraphicsQueueFamily(graphicsQueueFamily), mPresentQueueFamily(presentQueueFamily), mFrameContextIndex(0), mDescriptorSetCount(0) {
 
 	#ifdef ENABLE_DEBUG_LAYERS
 	SetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(*instance, "vkSetDebugUtilsObjectNameEXT");
@@ -178,7 +178,7 @@ Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t p
 	#pragma endregion
 }
 Device::~Device() {
-	FlushFrames();
+	Flush();
 	safe_delete_array(mFrameContexts);
 	vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
 	vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
@@ -202,7 +202,7 @@ VkSampleCountFlagBits Device::GetMaxUsableSampleCount() {
 	return VK_SAMPLE_COUNT_1_BIT;
 }
 
-void Device::FlushFrames() {
+void Device::Flush() {
 	vkDeviceWaitIdle(mDevice);
 	lock_guard lock(mCommandPoolMutex);
 	for (auto& p : mCommandBuffers) {

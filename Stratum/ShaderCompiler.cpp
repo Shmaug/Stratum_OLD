@@ -558,7 +558,7 @@ int main(int argc, char* argv[]) {
 		options.SetSourceLanguage(shaderc_source_language_glsl);
 	
 	options.SetIncluder(make_unique<Includer>(include));
-	options.SetOptimizationLevel(shaderc_optimization_level_performance);
+	//options.SetOptimizationLevel(shaderc_optimization_level_performance);
 
 	Compiler* compiler = new Compiler();
 	CompiledShader* shader = Compile(compiler, inputFile);

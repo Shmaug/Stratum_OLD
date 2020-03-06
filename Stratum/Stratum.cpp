@@ -127,7 +127,7 @@ public:
 			#endif
 		}
 
-		mInstance->Device()->FlushFrames();
+		mInstance->Device()->Flush();
 
 		mPluginManager->UnloadPlugins();
 

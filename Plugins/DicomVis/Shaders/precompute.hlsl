@@ -46,7 +46,7 @@ float3 Transfer(float density) {
 }
 float Threshold(float x) {
 	x = (x - RemapMin) * InvRemapRange;
-	return saturate(x) * saturate(x);
+	return saturate(x);// * saturate(x);
 }
 
 const float4 MaskColors[8] = {

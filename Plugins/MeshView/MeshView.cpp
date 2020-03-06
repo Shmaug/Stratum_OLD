@@ -39,6 +39,7 @@ private:
 	shared_ptr<Animation> mWaspWalk;
 	SkinnedMeshRenderer* mHead;
 	ClothRenderer* mCloth;
+	Object* mClothSphere;
 
 	SkelJoint* ReadJoint(Tokenizer& t, AnimationRig& destRig, const string& name, float scale) {
 		shared_ptr<SkelJoint> j = make_shared<SkelJoint>(name, destRig.size());
@@ -405,7 +406,7 @@ public:
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
 		mScene->Environment()->AmbientLight(.25f);
-		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/lebombo_2k.hdr"));
+		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/photo_studio_01_2k.hdr"));
 
 		auto light = make_shared<Light>("Spot");
 		light->CastShadows(true);
@@ -475,7 +476,7 @@ public:
 		Font* reg14 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Regular.ttf", 14);
 		Font* bld24 = mScene->AssetManager()->LoadFont("Assets/Fonts/OpenSans-Bold.ttf", 24);
 	
-		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, camera->FramebufferHeight()/2 - 200, 250, 400), float4(.2f, .2f, .2f, 1), 10);
+		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, camera->FramebufferHeight()/2 - 300, 250, 600), float4(.2f, .2f, .2f, 1), 10);
 
 		GUI::LayoutLabel(bld24, "MeshView", 24, 20, 0, 1, 4);
 		GUI::LayoutSeparator(1, .5f);
@@ -547,15 +548,19 @@ public:
 			mCurrentAnimation = nullptr;
 			if (mWasp) mWasp->mVisible = false;
 			if (mHead) mHead->mVisible = false;
-			if (mCloth) { mCloth->mVisible = true; return; }
+			if (mCloth) { 
+				mCloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid32.fbx", .01f));
+				mCloth->mVisible = true; 
+				return; 
+			}
 
 			auto sphere = make_shared<Object>("Cloth Sphere");
 			sphere->LocalPosition(0, 1, 0);
 			mScene->AddObject(sphere);
 			mObjects.push_back(sphere.get());
+			mClothSphere = sphere.get();
 
 			auto fabmat = make_shared<Material>("Fabric", mScene->AssetManager()->LoadShader("Shaders/pbr.stm"));
-			fabmat->EnableKeyword("TWO_SIDED");
 			fabmat->EnableKeyword("TEXTURED");
 			fabmat->CullMode(VK_CULL_MODE_NONE);
 			fabmat->SetParameter("MainTextures", 0, mScene->AssetManager()->LoadTexture("Assets/Textures/fabricwool/wool_albedo.png"));
@@ -568,12 +573,11 @@ public:
 			fabmat->SetParameter("BumpStrength", 1.f);
 			fabmat->SetParameter("Emission", float3(0));
 			auto cloth = make_shared<ClothRenderer>("Cloth");
-			cloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid.fbx", .01f));
+			cloth->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/clothgrid32.fbx", .01f));
 			cloth->Material(fabmat);
 			cloth->PushConstant("TextureIndex", 0u);
-			cloth->LocalPosition(0, 1.5f, 0);
-			cloth->LocalRotation(quaternion(float3(PI * .125f, 0, 0)));
-			cloth->AddSphereCollider(sphere.get(), .3f);
+			cloth->LocalPosition(0, 2.0f, 0);
+			cloth->AddSphereCollider(sphere.get(), .5f);
 			mCloth = cloth.get();
 			mScene->AddObject(cloth);
 			mObjects.push_back(mCloth);
@@ -584,23 +588,42 @@ public:
 			float k = mCloth->Stiffness();
 			float d = mCloth->Damping();
 			float cd = mCloth->Drag();
+			float fx = mCloth->Gravity().z;
+			float3 m = mCloth->Move();
 
+			if (GUI::LayoutButton(sem16, "Pin", 16, 20, mCloth->Pin() ?  float4(.4f, .4f, .4f, 1) : float4(.25f, .25f, .25f, 1), 1, 2))
+				mCloth->Pin(!mCloth->Pin());
+			
 			GUI::LayoutLabel(sem16, "Friction: " + to_string(f), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(f, 0, 10, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(f, 0, 100, 18, float4(.5f, .5f, .5f, 1), 4);
 
 			GUI::LayoutLabel(sem16, "Stiffness: " + to_string(k), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(k, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(k, 0, 50000, 18, float4(.5f, .5f, .5f, 1), 4);
 
 			GUI::LayoutLabel(sem16, "Damping: " + to_string(d), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(d, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(d, 0, 100, 18, float4(.5f, .5f, .5f, 1), 4);
 
 			GUI::LayoutLabel(sem16, "Drag: " + to_string(cd), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
-			GUI::LayoutSlider(cd, 0, 1000, 18, float4(.5f, .5f, .5f, 1), 4);
+			GUI::LayoutSlider(cd, 0, 500, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "Wind: " + to_string(fx), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(fx, 0, 100, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "X: " + to_string(m.x), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(m.x, -.25f, .25f, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "Y: " + to_string(m.y), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(m.y, -.25f, .25f, 18, float4(.5f, .5f, .5f, 1), 4);
+
+			GUI::LayoutLabel(sem16, "Z: " + to_string(m.z), 16, 16, 0, 1, 0, TEXT_ANCHOR_MIN);
+			GUI::LayoutSlider(m.z, -.25f, .25f, 18, float4(.5f, .5f, .5f, 1), 4);
 
 			mCloth->Friction(f);
 			mCloth->Stiffness(k);
 			mCloth->Damping(d);
 			mCloth->Drag(cd);
+			mCloth->Gravity(float3(0, -9.8f, fx));
+			mCloth->Move(m);
 		}
 
 		GUI::EndLayout();
@@ -813,6 +836,12 @@ public:
 				if (Gizmos::RotationHandle("Channel Rotation", mInput->GetPointer(0), b->WorldPosition(), r, .1f))
 					b->LocalRotation(b->Parent() ? inverse(b->Parent()->WorldRotation()) * r : r);
 			}
+		}
+
+		if (mCloth && mCloth->Visible()){
+			float3 sp = mClothSphere->WorldPosition();
+			Gizmos::PositionHandle("ClothSphere", mInput->GetPointer(0), camera->WorldRotation(), sp, .6f, 1);
+			mClothSphere->LocalPosition(sp);
 		}
 	}
 };
