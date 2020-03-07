@@ -1,7 +1,7 @@
 #pragma kernel Raytrace
 
-#pragma multi_compile ACCUMULATE
 #pragma static_sampler Sampler maxAnisotropy=0 maxLod=0
+#pragma multi_compile ACCUMULATE
 
 #define PASS_RAYTRACE (1u << 23)
 #define EPSILON 0.001
@@ -33,20 +33,18 @@ struct Ray {
 
 #include "disney.hlsli"
 
-[[vk::binding(0, 0)]] RWTexture2D<float4> OutputPrimary : register(u0);
-[[vk::binding(1, 0)]] RWTexture2D<float4> OutputSecondary : register(u1);
-[[vk::binding(2, 0)]] RWTexture2D<float4> OutputMeta : register(u2);
-[[vk::binding(3, 0)]] Texture2D<float4> PreviousPrimary : register(t0);
-[[vk::binding(4, 0)]] Texture2D<float4> PreviousSecondary : register(t1);
-[[vk::binding(5, 0)]] Texture2D<float4> PreviousMeta : register(t2);
-[[vk::binding(6, 0)]] StructuredBuffer<BvhNode> SceneBvh : register(t3);
-[[vk::binding(7, 0)]] StructuredBuffer<LeafNode> LeafNodes : register(t4);
-[[vk::binding(8, 0)]] ByteAddressBuffer Vertices : register(t5);
-[[vk::binding(9, 0)]] ByteAddressBuffer Triangles : register(t6);
-[[vk::binding(10, 0)]] StructuredBuffer<uint4> Lights : register(t7);
-[[vk::binding(11, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t8);
-[[vk::binding(12, 0)]] Texture2D<float4> NoiseTex : register(t9);
-[[vk::binding(13, 0)]] SamplerState Sampler : register(s0);
+[[vk::binding(0, 0)]] RWTexture2D<float4> OutputPrimary		: register(u0);
+[[vk::binding(1, 0)]] RWTexture2D<float4> OutputMeta		: register(u1);
+[[vk::binding(2, 0)]] Texture2D<float4> PreviousPrimary		: register(t0);
+[[vk::binding(3, 0)]] Texture2D<float4> PreviousMeta		: register(t1);
+[[vk::binding(4, 0)]] StructuredBuffer<BvhNode> SceneBvh	: register(t2);
+[[vk::binding(5, 0)]] StructuredBuffer<LeafNode> LeafNodes	: register(t3);
+[[vk::binding(6, 0)]] ByteAddressBuffer Vertices			: register(t4);
+[[vk::binding(7, 0)]] ByteAddressBuffer Triangles			: register(t5);
+[[vk::binding(8, 0)]] StructuredBuffer<uint4> Lights		: register(t6);
+[[vk::binding(9, 0)]] StructuredBuffer<DisneyMaterial> Materials : register(t7);
+[[vk::binding(10, 0)]] Texture2D<float4> NoiseTex			: register(t8);
+[[vk::binding(11, 0)]] SamplerState Sampler					: register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
 	float4x4 LastViewProjection;
@@ -335,26 +333,21 @@ void Raytrace(uint3 index : SV_DispatchThreadID) {
 	rng.dimension = 1;
 	rng.scramble = rnd * 0x1fe3434f * ((FrameIndex + 133 * rnd) / (CMJ_DIM * CMJ_DIM));
 
-	float4 nt, nt1;
+	float4 nt;
 	float3 throughput = 1;
 	float pdf = 1;
 	float pdfaccum = 0;
 	float4 primary = float4(ShadeSurface(ray, rng, throughput, pdf, nt.w, nt.xyz), 1);
-	float4 secondary = float4(ShadeSurface(ray, rng, throughput, pdf, nt1.w, nt1.xyz), 1);
 
-	float sampleNumber = 0;
 	#ifdef ACCUMULATE
 	float3 worldPos = CameraPosition - LastCameraPosition + rd * nt.w;
 	float4 lc = mul(LastViewProjection, float4(worldPos, 1));
 	float2 lastUV = .5 + .5 * lc.xy / lc.w + .5 / Resolution;
 	float4 lastMeta = PreviousMeta.SampleLevel(Sampler, lastUV, 0);
-	if (lastUV.x > 0 && lastUV.y > 0 && lastUV.x < 1 && lastUV.y < 1 && abs(length(worldPos) - lastMeta.w) < .0001 && dot(lastMeta.xyz, nt.xyz) > .999) {
-		primary += PreviousPrimary.SampleLevel(Sampler, lastUV, 0);
-		secondary += PreviousSecondary.SampleLevel(Sampler, lastUV, 0);
-	}
+	if (lastUV.x > 0 && lastUV.y > 0 && lastUV.x < 1 && lastUV.y < 1 && abs(length(worldPos) - lastMeta.w) < .0001 && dot(lastMeta.xyz, nt.xyz) > .999)
+		primary = lerp(primary, PreviousPrimary.SampleLevel(Sampler, lastUV, 0), .95);
 	#endif
 
 	OutputPrimary[index.xy] = primary;
-	OutputSecondary[index.xy] = secondary;
 	OutputMeta[index.xy] = nt;
 }

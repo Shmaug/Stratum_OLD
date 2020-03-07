@@ -62,7 +62,9 @@ void fsmain(v2f i,
 	out float4 depthNormal : SV_Target1) {
 	depthNormal = 0;
 
-	float3 radiance = Exposure * Radiance.SampleLevel(Sampler, i.texcoord, 0).rgb;
+	float4 s = Radiance.SampleLevel(Sampler, i.texcoord, 0);
+
+	float3 radiance = Exposure * (s.rgb / s.w);
 	radiance = mul(ACESInputMat, radiance);
 	radiance = RRTAndODTFit(radiance);
 	radiance = mul(ACESOutputMat, radiance);

@@ -17,21 +17,6 @@ using namespace std;
 
 #pragma pack(push)
 #pragma pack(1)
-struct GpuBvhNode {
-	float3 Min;
-	uint32_t StartIndex;
-	float3 Max;
-	uint32_t PrimitiveCount;
-	uint32_t RightOffset; // 1st child is at node[index + 1], 2nd child is at node[index + mRightOffset]
-	uint32_t pad[3];
-};
-struct GpuLeafNode {
-	float4x4 NodeToWorld;
-	float4x4 WorldToNode;
-	uint32_t RootIndex;
-	uint32_t MaterialIndex;
-	uint32_t pad[2];
-};
 struct DisneyMaterial {
 	float3 BaseColor;
 	float Metallic;
@@ -48,6 +33,22 @@ struct DisneyMaterial {
 	float Transmission;
 	uint32_t pad[3];
 };
+
+struct GpuBvhNode {
+	float3 Min;
+	uint32_t StartIndex;
+	float3 Max;
+	uint32_t PrimitiveCount;
+	uint32_t RightOffset; // 1st child is at node[index + 1], 2nd child is at node[index + mRightOffset]
+	uint32_t pad[3];
+};
+struct GpuLeafNode {
+	float4x4 NodeToWorld;
+	float4x4 WorldToNode;
+	uint32_t RootIndex;
+	uint32_t MaterialIndex;
+	uint32_t pad[2];
+};
 #pragma pack(pop)
 
 class Raytracing : public EnginePlugin {
@@ -61,10 +62,7 @@ private:
 		float4x4 mInvViewProjection;
 		float3 mCameraPosition;
 		Texture* mPrimary;
-		Texture* mSecondary;
 		Texture* mMeta;
-		Texture* mResolveTmp;
-		Texture* mResolve;
 		Buffer* mNodes;
 		Buffer* mLeafNodes;
 		Buffer* mVertices;
@@ -265,10 +263,7 @@ public:
 	PLUGIN_EXPORT ~Raytracing() {
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			safe_delete(mFrameData[i].mPrimary);
-			safe_delete(mFrameData[i].mSecondary);
 			safe_delete(mFrameData[i].mMeta);
-			safe_delete(mFrameData[i].mResolveTmp);
-			safe_delete(mFrameData[i].mResolve);
 			safe_delete(mFrameData[i].mNodes);
 			safe_delete(mFrameData[i].mLeafNodes);
 			safe_delete(mFrameData[i].mVertices);
@@ -287,7 +282,6 @@ public:
 		mScene->Environment()->EnableCelestials(false);
 		mScene->Environment()->EnableScattering(false);
 		mScene->Environment()->AmbientLight(.3f);
-		//mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/old_outdoor_theater_4k.hdr"));
 	
 		#pragma region load glTF
 		string folder = "Assets/Models/";
@@ -449,10 +443,7 @@ public:
 		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
 		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
 			mFrameData[i].mPrimary = nullptr;
-			mFrameData[i].mSecondary = nullptr;
 			mFrameData[i].mMeta = nullptr;
-			mFrameData[i].mResolveTmp = nullptr;
-			mFrameData[i].mResolve = nullptr;
 			mFrameData[i].mNodes = nullptr;
 			mFrameData[i].mLeafNodes = nullptr;
 			mFrameData[i].mVertices = nullptr;
@@ -475,44 +466,29 @@ public:
 			Build(commandBuffer, fd);
 
 		VkPipelineStageFlags dstStage, srcStage;
-		VkImageMemoryBarrier barriers[4];
+		VkImageMemoryBarrier barriers[2];
 
 		if (fd.mPrimary && (fd.mPrimary->Width() != camera->FramebufferWidth() || fd.mPrimary->Height() != camera->FramebufferHeight())) {
 			safe_delete(fd.mPrimary);
-			safe_delete(fd.mSecondary);
 			safe_delete(fd.mMeta);
-			safe_delete(fd.mResolveTmp);
-			safe_delete(fd.mResolve);
 		}
+		
 		if (!fd.mPrimary) {
 			fd.mPrimary = new Texture("Raytrace Primary", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
 				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
 				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mSecondary = new Texture("Raytrace Secondary", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
+			fd.mMeta = new Texture("Raytrace Primary", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
 				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
 				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mMeta = new Texture("Raytrace Meta", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
-				VK_FORMAT_R32G32B32A32_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
-				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mResolveTmp = new Texture("Raytrace Resolve", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
-				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
-				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mResolve = new Texture("Raytrace Resolve", mScene->Instance()->Device(), camera->FramebufferWidth(), camera->FramebufferHeight(), 1,
-				VK_FORMAT_R16G16B16A16_SFLOAT, VK_SAMPLE_COUNT_1_BIT,
-				VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			
-			fd.mResolveTmp->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-
+		
 			barriers[0] = fd.mPrimary->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-			barriers[1] = fd.mSecondary->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-			barriers[2] = fd.mMeta->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-			barriers[3] = fd.mResolve->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
+			barriers[1] = fd.mMeta->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
 			vkCmdPipelineBarrier(*commandBuffer,
 				srcStage, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 				0,
 				0, nullptr,
 				0, nullptr,
-				4, barriers);
+				2, barriers);
 		}
 
 		#pragma region raytrace
@@ -548,11 +524,9 @@ public:
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("RT", trace->mDescriptorSetLayouts[0]);
 		VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), commandBuffer->Device()->Limits().minUniformBufferOffsetAlignment);
 		ds->CreateStorageTextureDescriptor(fd.mPrimary, trace->mDescriptorBindings.at("OutputPrimary").second.binding);
-		ds->CreateStorageTextureDescriptor(fd.mSecondary, trace->mDescriptorBindings.at("OutputSecondary").second.binding);
 		ds->CreateStorageTextureDescriptor(fd.mMeta, trace->mDescriptorBindings.at("OutputMeta").second.binding);
 		if (accum) {
 			ds->CreateSampledTextureDescriptor(pfd.mPrimary, trace->mDescriptorBindings.at("PreviousPrimary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateSampledTextureDescriptor(pfd.mSecondary, trace->mDescriptorBindings.at("PreviousSecondary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 			ds->CreateSampledTextureDescriptor(pfd.mMeta, trace->mDescriptorBindings.at("PreviousMeta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		}
 		ds->CreateStorageBufferDescriptor(fd.mNodes, 0, fd.mNodes->Size(), trace->mDescriptorBindings.at("SceneBvh").second.binding);
@@ -569,77 +543,17 @@ public:
 		#pragma endregion
 
 		barriers[0] = fd.mPrimary->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-		barriers[1] = fd.mSecondary->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-		barriers[2] = fd.mMeta->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			3, barriers);
-
-		uint2 ires(camera->FramebufferWidth(), camera->FramebufferHeight());
-
-		#pragma region combine x
-		ComputeShader* combine = mScene->AssetManager()->LoadShader("Shaders/resolve.stm")->GetCompute("Combine", {"MULTI_COMBINE"});
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipeline);
-
-		ds = commandBuffer->Device()->GetTempDescriptorSet("Resolve", combine->mDescriptorSetLayouts[0]);
-		ds->CreateSampledTextureDescriptor(fd.mPrimary, combine->mDescriptorBindings.at("Primary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateSampledTextureDescriptor(fd.mSecondary, combine->mDescriptorBindings.at("Secondary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateSampledTextureDescriptor(fd.mMeta, combine->mDescriptorBindings.at("Meta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(fd.mResolveTmp, combine->mDescriptorBindings.at("Output").second.binding);
-		ds->FlushWrites();
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-
-		commandBuffer->PushConstant(combine, "InvViewProj", &fd.mInvViewProjection);
-		commandBuffer->PushConstant(combine, "Resolution", &ires);
-		commandBuffer->PushConstant(combine, "CameraPosition", &fd.mCameraPosition);
-		uint32_t axis = 0;
-		commandBuffer->PushConstant(combine, "BlurAxis", &axis);
-
-		vkCmdDispatch(*commandBuffer, (fd.mResolve->Width() + 7) / 8, (fd.mResolve->Height() + 7) / 8, 1);
-		#pragma endregion
-
-		barriers[0] = fd.mResolveTmp->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
-		vkCmdPipelineBarrier(*commandBuffer,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, barriers);
-		
-		#pragma region combine y
-		combine = mScene->AssetManager()->LoadShader("Shaders/resolve.stm")->GetCompute("Combine", {});
-		vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipeline);
-
-		ds = commandBuffer->Device()->GetTempDescriptorSet("Resolve2", combine->mDescriptorSetLayouts[0]);
-		ds->CreateSampledTextureDescriptor(fd.mResolveTmp, combine->mDescriptorBindings.at("Primary").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateSampledTextureDescriptor(fd.mMeta, combine->mDescriptorBindings.at("Meta").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-		ds->CreateStorageTextureDescriptor(fd.mResolve, combine->mDescriptorBindings.at("Output").second.binding);
-		ds->FlushWrites();
-		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, combine->mPipelineLayout, 0, 1, *ds, 0, nullptr);
-
-		commandBuffer->PushConstant(combine, "InvViewProj", &fd.mInvViewProjection);
-		commandBuffer->PushConstant(combine, "Resolution", &ires);
-		commandBuffer->PushConstant(combine, "CameraPosition", &fd.mCameraPosition);
-		axis = 1;
-		commandBuffer->PushConstant(combine, "BlurAxis", &axis);
-
-		vkCmdDispatch(*commandBuffer, (fd.mResolve->Width() + 7) / 8, (fd.mResolve->Height() + 7) / 8, 1);
-		#pragma endregion
-
-		barriers[0] = fd.mResolve->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, srcStage, dstStage);
 		vkCmdPipelineBarrier(*commandBuffer,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			0,
 			0, nullptr,
 			0, nullptr,
 			1, barriers);
+
 		mFrameIndex++;
 	}
 
-	PLUGIN_EXPORT void PostRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
+	PLUGIN_EXPORT void PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override {
 		if (pass != PASS_MAIN) return;
 
 		GraphicsShader* shader = mScene->AssetManager()->LoadShader("Shaders/rtblit.stm")->GetGraphics(PASS_MAIN, {});
@@ -658,7 +572,7 @@ public:
 		commandBuffer->PushConstant(shader, "TextureST", &tst);
 		commandBuffer->PushConstant(shader, "Exposure", &exposure);
 		DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Blit", shader->mDescriptorSetLayouts[0]);
-		ds->CreateSampledTextureDescriptor(fd.mResolve, shader->mDescriptorBindings.at("Radiance").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+		ds->CreateSampledTextureDescriptor(fd.mPrimary, shader->mDescriptorBindings.at("Radiance").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 		ds->FlushWrites();
 		vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, *ds, 0, nullptr);
 		vkCmdDraw(*commandBuffer, 6, 1, 0, 0);
