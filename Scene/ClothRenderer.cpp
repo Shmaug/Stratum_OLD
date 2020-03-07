@@ -25,7 +25,7 @@ void ClothRenderer::Mesh(::Mesh* m) {
 	// safe_delete(mForceBuffer);
 	// safe_delete(mEdgeBuffer);
 	if (m) {
-		uint x = m->VertexCount()-1;
+		uint32_t x = m->VertexCount()-1;
 
 		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mVelocityBuffer = new Buffer(mName + "Velocities", m->VertexBuffer()->Device(), m->VertexCount() * sizeof(float4), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -43,7 +43,7 @@ void ClothRenderer::Mesh(std::shared_ptr<::Mesh> m) {
 	// safe_delete(mForceBuffer);
 	// safe_delete(mEdgeBuffer);
 	if (m) {
-		uint x = m->VertexCount()-1;
+		uint32_t x = m->VertexCount()-1;
 
 		mVertexBuffer = new Buffer(mName + "Vertices", m->VertexBuffer()->Device(), m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		mVelocityBuffer = new Buffer(mName + "Velocities", m->VertexBuffer()->Device(), m->VertexCount() * sizeof(float4), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);

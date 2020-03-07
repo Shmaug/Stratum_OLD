@@ -65,7 +65,7 @@ private:
 bool CompileStage(Compiler* compiler, const CompileOptions& options, const string& source, const string& filename, shaderc_shader_kind stage, const string& entryPoint,
 	CompiledVariant& dest, CompiledShader& destShader) {
 	
-	SpvCompilationResult result = compiler->CompileGlslToSpv(source.c_str(), source.length(), stage, filename.c_str(), entryPoint.c_str(), options);
+	SpvCompilationResult result = compiler->CompileGlslToSpv(source, stage, filename.c_str(), entryPoint.c_str(), options);
 	
 	string error = result.GetErrorMessage();
 	if (error.size()) fprintf_color(COLOR_RED, stderr, "%s\n", error.c_str());
@@ -537,13 +537,8 @@ int main(int argc, char* argv[]) {
 	const char* include;
 
 	if (argc < 3) {
-		//*
 		fprintf(stderr, "Usage: %s <input> <output> <global include path>\n", argv[0]);
 		return EXIT_FAILURE;
-		/*/
-		inputFile = "E:/Projects/Vulkan/Stratum/Shaders/pbr.hlsl";
-		outputFile = "Shaders/pbr.stm";
-		//*/
 	} else {
 		inputFile = argv[1];
 		outputFile = argv[2];
@@ -558,7 +553,9 @@ int main(int argc, char* argv[]) {
 		options.SetSourceLanguage(shaderc_source_language_glsl);
 	
 	options.SetIncluder(make_unique<Includer>(include));
-	//options.SetOptimizationLevel(shaderc_optimization_level_performance);
+	options.SetOptimizationLevel(shaderc_optimization_level_zero);
+	options.SetAutoBindUniforms(false);
+	options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
 
 	Compiler* compiler = new Compiler();
 	CompiledShader* shader = Compile(compiler, inputFile);
