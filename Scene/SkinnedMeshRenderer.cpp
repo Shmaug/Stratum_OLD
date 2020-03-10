@@ -23,7 +23,8 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 
 	uint32_t vc = m->VertexCount();
 	uint32_t no = offsetof(StdVertex, normal);
-	uint32_t vs = sizeof(StdVertex);
+	uint32_t to = offsetof(StdVertex, tangent);
+	uint32_t vs = m->VertexSize();
 
 	mVertexBuffer = commandBuffer->Device()->GetTempBuffer(mName + " VertexBuffer", m->VertexBuffer()->Size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	
@@ -77,6 +78,7 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 		commandBuffer->PushConstant(s, "VertexCount", &vc);
 		commandBuffer->PushConstant(s, "VertexStride", &vs);
 		commandBuffer->PushConstant(s, "NormalOffset", &no);
+		commandBuffer->PushConstant(s, "TangentOffset", &to);
 		commandBuffer->PushConstant(s, "BlendFactors", &weights);
 
 		vkCmdDispatch(*commandBuffer, (vc + 63) / 64, 1, 1);
@@ -112,6 +114,7 @@ void SkinnedMeshRenderer::PreFrame(CommandBuffer* commandBuffer) {
 		commandBuffer->PushConstant(s, "VertexCount", &vc);
 		commandBuffer->PushConstant(s, "VertexStride", &vs);
 		commandBuffer->PushConstant(s, "NormalOffset", &no);
+		commandBuffer->PushConstant(s, "TangentOffset", &to);
 
 		vkCmdDispatch(*commandBuffer, (vc + 63) / 64, 1, 1);
 	}

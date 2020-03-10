@@ -70,21 +70,21 @@ void Object::RemoveChild(Object* c) {
 }
 
 void Object::Dirty() {
-	if (mScene && LayerMask() != 0) mScene->BvhDirty(this);
+	if (mScene && LayerMask()) mScene->BvhDirty(this);
+
 	mTransformDirty = true;
 	queue<Object*> objs;
 	for (Object* c : mChildren) {
-		c->mTransformDirty = true;
-		for (Object* o : c->mChildren)
-			if (o == this) cerr << "Loop in heirarchy! " << c->mName << " -> " << mName << endl;
-			else objs.push(o);
+		if (c == this) fprintf_color(COLOR_RED, stderr, "Loop in heirarchy! %s -> %s\n", c->mName.c_str(), mName.c_str());
+		else objs.push(c);
 	}
 	while (!objs.empty()) {
 		Object* c = objs.front();
 		objs.pop();
 		c->mTransformDirty = true;
+		if (mScene && c->LayerMask()) mScene->BvhDirty(this);
 		for (Object* o : c->mChildren)
-			if (o == this) cerr << "Loop in heirarchy! " << c->mName << " -> " << mName << endl;
+			if (o == this) fprintf_color(COLOR_RED, stderr, "Loop in heirarchy! %s -> %s\n", c->mName.c_str(), mName.c_str());
 			else objs.push(o);
 	}
 }

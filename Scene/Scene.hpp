@@ -74,6 +74,8 @@ public:
 	inline void DrawGizmos(bool g) { mDrawGizmos = g; }
 	inline bool DrawGizmos() const { return mDrawGizmos; }
 
+	// All objects, in order off insertion
+	ENGINE_EXPORT std::vector<Object*> Objects() const;
 
 	ENGINE_EXPORT ObjectBvh2* BVH();
 	inline void BvhDirty(Object* reason) { mBvhDirty = true; }

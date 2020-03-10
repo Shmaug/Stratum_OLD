@@ -4,16 +4,18 @@
 
 using namespace std;
 
-void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStride, void* indices, uint32_t indexCount, VkIndexType indexType) {
+void TriangleBvh2::Build(const void* vertices, uint32_t baseVertex, uint32_t vertexCount, size_t vertexStride, const void* indices, uint32_t indexCount, VkIndexType indexType) {
 	mTriangles.clear();
 	mNodes.clear();
+
+	if (vertexCount < 3 || indexCount < 3) return;
 
 	mVertices.resize(vertexCount);
 
 	vector<AABB> aabbs;
 
 	for (uint32_t i = 0; i < vertexCount; i++)
-		mVertices[i] = *(float3*)((uint8_t*)vertices + vertexStride * i);
+		mVertices[i] = *(float3*)((uint8_t*)vertices + vertexStride * (i + baseVertex));
 
 	uint16_t* indices16 = (uint16_t*)indices;
 	uint32_t* indices32 = (uint32_t*)indices;
@@ -23,9 +25,9 @@ void TriangleBvh2::Build(void* vertices, uint32_t vertexCount, size_t vertexStri
 			uint3(indices16[i], indices16[i+1], indices16[i+2]) :
 			uint3(indices32[i], indices32[i+1], indices32[i+2]);
 		mTriangles.push_back(tri);
-		float3 v0 = mVertices[tri.x];
-		float3 v1 = mVertices[tri.y];
-		float3 v2 = mVertices[tri.z];
+		float3 v0 = mVertices[tri.x - baseVertex];
+		float3 v1 = mVertices[tri.y - baseVertex];
+		float3 v2 = mVertices[tri.z - baseVertex];
 		aabbs.push_back(AABB(min(min(v0, v1), v2) - 1e-3f, max(max(v0, v1), v2) + 1e-3f));
 	}
 

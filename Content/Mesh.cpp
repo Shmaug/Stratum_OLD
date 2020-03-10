@@ -102,7 +102,7 @@ struct AIWeight {
 	}
 };
 
-uint32_t GetDepth(aiNode* node) {
+inline uint32_t GetDepth(aiNode* node) {
 	uint32_t d = 0;
 	while (node->mParent) {
 		node = node->mParent;
@@ -110,7 +110,7 @@ uint32_t GetDepth(aiNode* node) {
 	}
 	return d;
 }
-float4x4 ConvertMatrix(const aiMatrix4x4& m) {
+inline float4x4 ConvertMatrix(const aiMatrix4x4& m) {
 	return float4x4(
 		m.a1, m.b1, m.c1, m.d1,
 		m.a2, m.b2, m.c2, m.d2,
@@ -118,8 +118,7 @@ float4x4 ConvertMatrix(const aiMatrix4x4& m) {
 		m.a4, m.b4, m.c4, m.d4
 	);
 }
-
-Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, Bone*>& boneMap, float scale) {
+inline Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, Bone*>& boneMap, float scale) {
 	if (node == root) return nullptr;
 	if (boneMap.count(node))
 		return boneMap.at(node);
@@ -340,6 +339,12 @@ Mesh::Mesh(const string& name, ::Device* device, const string& filename, float s
 	mVertexSize = sizeof(StdVertex);
 	mVertexInput = &StdVertex::VertexInput;
 
+	mBvh = new TriangleBvh2();
+	if (use32bit)
+		mBvh->Build(vertices.data(), 0, vertexCount, sizeof(StdVertex), indices32.data(), indices32.size(), VK_INDEX_TYPE_UINT32);
+	else
+		mBvh->Build(vertices.data(), 0, vertexCount, sizeof(StdVertex), indices16.data(), indices16.size(), VK_INDEX_TYPE_UINT16);
+
 	if (!uniqueBones.size())
 		mWeightBuffer = nullptr;
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices.data(), sizeof(StdVertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
@@ -356,6 +361,18 @@ Mesh::Mesh(const string& name, ::Device* device, const AABB& bounds, TriangleBvh
 	
 	mVertexBuffer = vertexBuffer;
 	mIndexBuffer = indexBuffer;
+	mWeightBuffer = nullptr;
+	mVertexSize = 0;
+	for (const auto& a : vertexInput->mAttributes)
+		mVertexSize = max(mVertexSize, a.offset + FormatSize(a.format));
+}
+Mesh::Mesh(const string& name, ::Device* device, const AABB& bounds, TriangleBvh2* bvh, shared_ptr<Buffer> vertexBuffer, shared_ptr<Buffer> indexBuffer, shared_ptr<Buffer> weightBuffer,
+	uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount, const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology)
+	: mName(name), mVertexInput(vertexInput), mBvh(bvh), mBaseIndex(baseIndex), mIndexCount(indexCount), mIndexType(indexType), mBaseVertex(baseVertex), mVertexCount(vertexCount), mBounds(bounds), mTopology(topology) {
+
+	mVertexBuffer = vertexBuffer;
+	mIndexBuffer = indexBuffer;
+	mWeightBuffer = weightBuffer;
 	mVertexSize = 0;
 	for (const auto& a : vertexInput->mAttributes)
 		mVertexSize = max(mVertexSize, a.offset + FormatSize(a.format));
@@ -381,7 +398,12 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const voi
 	}
 
 	uint32_t indexSize = mIndexType == VK_INDEX_TYPE_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
-	
+
+	if (mTopology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+		mBvh = new TriangleBvh2();
+		mBvh->Build(vertices, 0, vertexCount, vertexSize, indices, indexCount, mIndexType);
+	}
+
 	mBounds = AABB(mn, mx);
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 	mIndexBuffer  = make_shared<Buffer>(name + " Index Buffer", device, indices, indexSize * indexCount, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
@@ -407,6 +429,11 @@ Mesh::Mesh(const string& name, ::Device* device, const void* vertices, const Ver
 	}
 
 	uint32_t indexSize = mIndexType == VK_INDEX_TYPE_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
+
+	if (mTopology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+		mBvh = new TriangleBvh2();
+		mBvh->Build(vertices, 0, vertexCount, vertexSize, indices, indexCount, mIndexType);
+	}
 
 	mBounds = AABB(mn, mx);
 	mVertexBuffer = make_shared<Buffer>(name + " Vertex Buffer", device, vertices, vertexSize * vertexCount, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);

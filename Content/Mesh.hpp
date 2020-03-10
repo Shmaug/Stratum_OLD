@@ -43,12 +43,20 @@ public:
 	const std::string mName;
 
 	ENGINE_EXPORT Mesh(const std::string& name);
+	// Construct from existing vertex/index buffer
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device, const AABB& bounds, TriangleBvh2* bvh,
 		std::shared_ptr<Buffer> vertexBuffer, std::shared_ptr<Buffer> indexBuffer, uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	// Construct from existing vertex/index/weight buffer
+	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device, const AABB& bounds, TriangleBvh2* bvh,
+		std::shared_ptr<Buffer> vertexBuffer, std::shared_ptr<Buffer> indexBuffer, std::shared_ptr<Buffer> weightBuffer,
+		uint32_t baseVertex, uint32_t vertexCount, uint32_t baseIndex, uint32_t indexCount,
+		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	// Construct from vertices/indices
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
 		const void* vertices, const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,
 		const ::VertexInput* vertexInput, VkIndexType indexType, VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	// Construct from vertices/indices/weights/shapekeys
 	ENGINE_EXPORT Mesh(const std::string& name, ::Device* device,
 		const void* vertices, const VertexWeight* weights, const std::vector<std::pair<std::string, const void*>>&  shapeKeys, 
 		const void* indices, uint32_t vertexCount, uint32_t vertexSize, uint32_t indexCount,

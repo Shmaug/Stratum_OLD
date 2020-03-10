@@ -72,7 +72,7 @@ void ApplyPhaseFunctionElek(inout float3 scatterR, inout float3 scatterM, float 
 
 void vsmain(
 	[[vk::location(0)]] float3 vertex : POSITION,
-	out float4 position : SVPosition,
+	out float4 position : SV_Position,
 	out float4 screenPos : TEXCOORD0,
 	out float3 viewRay : TEXCOORD1) {
 	if (Camera.ProjParams.w) {
@@ -148,6 +148,5 @@ void fsmain(
 #else
 	color = float4(AmbientLight, 1);
 #endif
-
 	depthNormal = float4(normalize(float3(1)) * Camera.Viewport.w, 1);
 }

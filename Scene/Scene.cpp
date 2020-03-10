@@ -1,6 +1,7 @@
 #include <Scene/Scene.hpp>
 #include <Scene/Renderer.hpp>
 #include <Scene/MeshRenderer.hpp>
+#include <Scene/SkinnedMeshRenderer.hpp>
 #include <Scene/GUI.hpp>
 #include <Core/Instance.hpp>
 #include <Util/Profiler.hpp>
@@ -17,6 +18,106 @@ using namespace std;
 
 #define SHADOW_ATLAS_RESOLUTION 8192
 #define SHADOW_RESOLUTION 4096
+
+const ::VertexInput Float3VertexInput{
+	{
+		{
+			0, // binding
+			sizeof(float3), // stride
+			VK_VERTEX_INPUT_RATE_VERTEX // inputRate
+		}
+	},
+	{
+		{
+			0, // location
+			0, // binding
+			VK_FORMAT_R32G32B32_SFLOAT, // format
+			0 // offset
+		}
+	}
+};
+
+struct AIWeight {
+	string bones[4];
+	float4 weights;
+
+	AIWeight() {
+		bones[0] = bones[1] = bones[2] = bones[3] = "";
+		weights[0] = weights[1] = weights[2] = weights[3] = 0.f;
+	}
+	inline void Set(const std::string& cluster, float weight) {
+		if (weight < .001f) return;
+
+		uint32_t index = 0;
+		float m = weights[0];
+		for (uint32_t i = 0; i < 4; i++) {
+			if (cluster == bones[i]) {
+				index = i;
+				break;
+			} else if (weights[i] < m) {
+				index = i;
+				m = weights[i];
+			}
+		}
+
+		bones[index] = cluster;
+		weights[index] = weight;
+	}
+	inline void Normalize() {
+		weights /= dot(float4(1), weights);
+	}
+};
+
+inline uint32_t GetDepth(aiNode* node) {
+	uint32_t d = 0;
+	while (node->mParent) {
+		node = node->mParent;
+		d++;
+	}
+	return d;
+}
+inline float4x4 ConvertMatrix(const aiMatrix4x4& m) {
+	return float4x4(
+		m.a1, m.b1, m.c1, m.d1,
+		m.a2, m.b2, m.c2, m.d2,
+		m.a3, m.b3, m.c3, m.d3,
+		m.a4, m.b4, m.c4, m.d4
+	);
+}
+inline Bone* AddBone(AnimationRig& rig, aiNode* node, const aiScene* scene, aiNode* root, unordered_map<aiNode*, Bone*>& boneMap, float scale) {
+	if (node == root) return nullptr;
+	if (boneMap.count(node))
+		return boneMap.at(node);
+
+	float4x4 mat = ConvertMatrix(node->mTransformation);
+	Bone* parent = nullptr;
+
+	if (node->mParent) {
+		// merge empty bones
+		aiNode* p = node->mParent;
+		while (p && p->mName == aiString("")) {
+			mat = ConvertMatrix(p->mTransformation) * mat;
+			p = p->mParent;
+		}
+		// parent transform is the first non-empty parent bone
+		if (p) parent = AddBone(rig, p, scene, root, boneMap, scale);
+	}
+
+	quaternion q;
+	float3 p;
+	float3 s;
+	mat.Decompose(&p, &q, &s);
+
+	Bone* bone = new Bone(node->mName.C_Str(), (uint32_t)rig.size());
+	boneMap.emplace(node, bone);
+	rig.push_back(bone);
+	bone->LocalPosition(p * scale);
+	bone->LocalRotation(q);
+	bone->LocalScale(s);
+
+	if (parent) parent->AddChild(bone);
+	return bone;
+}
 
 bool RendererCompare(Object* oa, Object* ob) {
 	Renderer* a = dynamic_cast<Renderer*>(oa);
@@ -64,7 +165,26 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	}
 	mInstance->Device()->Execute(commandBuffer, false)->Wait();
 
-	mSkyboxCube = Mesh::CreateCube("SkyCube", mInstance->Device(), .5f);
+	float r = .5f;
+	float3 verts[8]{
+		float3(-r, -r, -r),
+		float3(r, -r, -r),
+		float3(-r, -r,  r),
+		float3(r, -r,  r),
+		float3(-r,  r, -r),
+		float3(r,  r, -r),
+		float3(-r,  r,  r),
+		float3(r,  r,  r),
+	};
+	uint16_t indices[36]{
+		2,7,6,2,3,7,
+		0,1,2,2,1,3,
+		1,5,7,7,3,1,
+		4,5,1,4,1,0,
+		6,4,2,4,0,2,
+		4,7,5,4,6,7
+	};
+	mSkyboxCube = new Mesh("SkyCube", mInstance->Device(), verts, indices, 8, sizeof(float3), 36, &Float3VertexInput, VK_INDEX_TYPE_UINT16);
 
 	mStartTime = mClock.now();
 	mLastFrame = mClock.now();
@@ -111,32 +231,48 @@ Object* Scene::LoadModelScene(const string& filename,
 	vector<shared_ptr<Material>> materials;
 	unordered_map<aiNode*, Object*> objectMap;
 
+	vector<AIWeight> weights;
+	unordered_map<string, aiBone*> uniqueBones;
+
 	vector<StdVertex> vertices;
 	vector<uint32_t> indices;
 
 	uint32_t totalVertices = 0;
 	uint32_t totalIndices = 0;
 
+	bool hasBones = false;
+
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
 		const aiMesh* mesh = scene->mMeshes[m];
 		totalVertices += mesh->mNumVertices;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++)
 			totalIndices += min(mesh->mFaces[i].mNumIndices, 3u);
+
+		if (mesh->HasBones()) hasBones = true;
 	}
 
-	shared_ptr<Buffer> vertexBuffer = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Vertices"), mInstance->Device(), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-	shared_ptr<Buffer> indexBuffer  = make_shared<Buffer>(scene->mRootNode->mName.C_Str() + string(" Indices") , mInstance->Device(), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	shared_ptr<Buffer> vertexBuffer = make_shared<Buffer>(filename + " Vertices", mInstance->Device(), sizeof(StdVertex) * totalVertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	shared_ptr<Buffer> indexBuffer  = make_shared<Buffer>(filename + " Indices" , mInstance->Device(), sizeof(uint32_t) * totalIndices  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+	shared_ptr<Buffer> weightBuffer = nullptr;
+	if (hasBones) weightBuffer = make_shared<Buffer>(filename + " Weights", mInstance->Device(), sizeof(VertexWeight) * totalVertices, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	for (uint32_t m = 0; m < scene->mNumMaterials; m++)
 		materials.push_back(materialSetupFunc(this, scene->mMaterials[m]));
 
 	for (uint32_t m = 0; m < scene->mNumMeshes; m++) {
 		const aiMesh* mesh = scene->mMeshes[m];
+
+		if (mesh->mPrimitiveTypes != aiPrimitiveType_TRIANGLE) {
+			meshes.push_back(nullptr);
+			continue;
+		}
+
 		VkPrimitiveTopology topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 		uint32_t baseVertex = (uint32_t)vertices.size();
 		uint32_t baseIndex  = (uint32_t)indices.size();
 
+		// vertex data
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
 			StdVertex vertex = {};
 			memset(&vertex, 0, sizeof(StdVertex));
@@ -150,9 +286,12 @@ Object* Scene::LoadModelScene(const string& filename,
 			}
 			if (mesh->HasTextureCoords(0)) vertex.uv = { (float)mesh->mTextureCoords[0][i].x, (float)mesh->mTextureCoords[0][i].y };
 			vertex.position *= scale;
+
 			vertices.push_back(vertex);
+			weights.push_back(AIWeight());
 		}
 
+		// index data
 		float3 mn = vertices[baseVertex].position, mx = vertices[baseVertex].position;
 		for (uint32_t i = 0; i < mesh->mNumFaces; i++) {
 			const aiFace& f = mesh->mFaces[i];
@@ -176,12 +315,103 @@ Object* Scene::LoadModelScene(const string& filename,
 		uint32_t vertexCount = (uint32_t)vertices.size() - baseVertex;
 		uint32_t indexCount  = (uint32_t)indices.size() - baseIndex;
 
-		TriangleBvh2* bvh = new TriangleBvh2();
-		bvh->Build(vertices.data() + baseVertex, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, VK_INDEX_TYPE_UINT32);
+		TriangleBvh2* bvh = nullptr;
+		if (topo == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) {
+			bvh = new TriangleBvh2();
+			bvh->Build(vertices.data() + baseVertex, 0, vertexCount, sizeof(StdVertex), indices.data() + baseIndex, indexCount, VK_INDEX_TYPE_UINT32);
+		}
 
-		meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
-			AABB(mn, mx), bvh, vertexBuffer, indexBuffer, baseVertex, vertexCount, baseIndex, indexCount,
-			&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
+		if (mesh->HasBones()) {
+			for (uint16_t c = 0; c < mesh->mNumBones; c++) {
+				aiBone* bone = mesh->mBones[c];
+				for (uint32_t i = 0; i < bone->mNumWeights; i++) {
+					uint32_t index = baseVertex + bone->mWeights[i].mVertexId;
+					weights[index].Set(bone->mName.C_Str(), (float)bone->mWeights[i].mWeight);
+				}
+				if (uniqueBones.count(bone->mName.C_Str()) == 0)
+					uniqueBones.emplace(bone->mName.C_Str(), bone);
+			}
+
+			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
+				AABB(mn, mx), bvh, vertexBuffer, indexBuffer, weightBuffer, baseVertex, vertexCount, baseIndex, indexCount,
+				&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
+		} else {
+			meshes.push_back(make_shared<Mesh>(mesh->mName.C_Str(), mInstance->Device(),
+				AABB(mn, mx), bvh, vertexBuffer, indexBuffer, baseVertex, vertexCount, baseIndex, indexCount,
+				&StdVertex::VertexInput, VK_INDEX_TYPE_UINT32, topo));
+		}
+	}
+
+	AnimationRig rig;
+
+	if (uniqueBones.size()) {
+		unordered_map<aiNode*, Bone*> boneMap;
+
+		// find root node
+		aiNode* root = scene->mRootNode;
+		uint32_t rootDepth = 0xFFFFFFFF;
+		for (auto& b : uniqueBones) {
+			aiNode* node = scene->mRootNode->FindNode(b.second->mName);
+			while (node && node->mName == aiString(""))
+				node = node->mParent;
+			uint32_t d = GetDepth(node);
+			if (d < rootDepth) {
+				rootDepth = d;
+
+				while (node->mParent && node->mParent->mName == aiString(""))
+					node = node->mParent;
+				root = node->mParent;
+			}
+		}
+
+		// compute bone matrices and bonesByName
+		unordered_map<string, uint32_t> bonesByName;
+		for (auto& b : uniqueBones) {
+			aiNode* node = scene->mRootNode->FindNode(b.second->mName);
+			Bone* bone = AddBone(rig, node, scene, root, boneMap, scale);
+			if (!bone) continue;
+			BoneTransform bt;
+			ConvertMatrix(b.second->mOffsetMatrix).Decompose(&bt.mPosition, &bt.mRotation, &bt.mScale);
+			bt.mPosition *= scale;
+			bone->mInverseBind = float4x4::TRS(bt.mPosition, bt.mRotation, bt.mScale);
+			bonesByName.emplace(b.second->mName.C_Str(), bone->mBoneIndex);
+		}
+		/*
+		float4x4 rootTransform(1.f);
+		while (root) {
+			rootTransform = rootTransform * ConvertMatrix(root->mTransformation);
+			root = root->mParent;
+		}
+		BoneTransform roott;
+		rootTransform.Decompose(&roott.mPosition, &roott.mRotation, &roott.mScale);
+		roott.mPosition *= scale;
+
+		for (auto& b : rig) {
+			if (!b->Parent()) {
+				BoneTransform bt{
+					b->LocalPosition(),
+					b->LocalRotation(),
+					b->LocalScale()
+				};
+				bt = roott * bt;
+				b->LocalPosition(bt.mPosition);
+				b->LocalRotation(bt.mRotation);
+				b->LocalScale(bt.mScale);
+			}
+		}
+		*/
+		vector<VertexWeight> vertexWeights(vertices.size());
+		for (uint32_t i = 0; i < vertices.size(); i++) {
+			weights[i].Normalize();
+			for (uint32_t j = 0; j < 4; j++) {
+				if (bonesByName.count(weights[i].bones[j])) {
+					vertexWeights[i].Indices[j] = bonesByName.at(weights[i].bones[j]);
+					vertexWeights[i].Weights[j] = weights[i].weights[j];
+				}
+			}
+		}
+
+		weightBuffer->Upload(vertexWeights.data(), vertexWeights.size() * sizeof(VertexWeight));
 	}
 
 	vertexBuffer->Upload(vertices.data(), vertices.size() * sizeof(StdVertex));
@@ -214,14 +444,21 @@ Object* Scene::LoadModelScene(const string& filename,
 
 		for (uint32_t i = 0; i < n->mNumMeshes; i++) {
 			shared_ptr<Mesh> mesh = meshes[n->mMeshes[i]];
+			if (!mesh) continue;
 			uint32_t mat = scene->mMeshes[n->mMeshes[i]]->mMaterialIndex;
 
-			shared_ptr<MeshRenderer> mr = make_shared<MeshRenderer>(n->mName.C_Str() + mesh->mName);
+			shared_ptr<MeshRenderer> mr;
+			if (mesh->WeightBuffer()) {
+				auto smr = make_shared<SkinnedMeshRenderer>(n->mName.C_Str() + mesh->mName);
+				smr->Rig(rig);
+				mr = smr;
+			} else
+				mr = make_shared<MeshRenderer>(n->mName.C_Str() + mesh->mName);
+			
 			AddObject(mr);
 			mr->Material(mat < materials.size() ? materials[mat] : nullptr);
 			mr->Mesh(mesh);
 			obj->AddChild(mr.get());
-
 			objectSetupFunc(this, mr.get(), scene->mMaterials[mat]);
 		}
 
@@ -882,14 +1119,18 @@ void Scene::Render(CommandBuffer* commandBuffer, Camera* camera, Framebuffer* fr
 	PROFILER_END;
 }
 
+vector<Object*> Scene::Objects() const {
+	vector<Object*> objs(mObjects.size());
+	for (uint32_t i = 0; i < mObjects.size(); i++)
+		objs[i] = mObjects[i].get();
+	return objs;
+}
+
 ObjectBvh2* Scene::BVH() {
 	if (mBvh && mBvhDirty) {
 		PROFILER_BEGIN("Build BVH");
-		Object** objs = new Object*[mObjects.size()];
-		for (uint32_t i = 0; i < mObjects.size(); i++)
-			objs[i] = mObjects[i].get();
-		mBvh->Build(objs, mObjects.size());
-		delete[] objs;
+		vector<Object*> objs = Objects();
+		mBvh->Build(objs.data(), objs.size());
 		mBvhDirty = false;
 		mLastBvhBuild = mInstance->FrameCount();
 		PROFILER_END;

@@ -104,14 +104,6 @@ void CameraControl::Update(CommandBuffer* commandBuffer) {
 }
 
 void CameraControl::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	PROFILER_BEGIN("Raycast");
-	float2 s(camera->FramebufferWidth(), camera->FramebufferHeight());
-	float2 c = mInput->CursorPos();
-	Ray ray = camera->ScreenToWorldRay(c / s);
-	float t;
-	if (mScene->Raycast(ray, &t))
-		Gizmos::DrawWireSphere(ray.mOrigin + ray.mDirection * t, .02f, 1);
-	PROFILER_END;
 }
 
 void CameraControl::PreRenderScene(CommandBuffer* commandBuffer, Camera* camera, PassType pass) {

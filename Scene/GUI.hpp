@@ -114,8 +114,8 @@ public:
 	ENGINE_EXPORT static void LayoutSpace(float size);
 	ENGINE_EXPORT static void LayoutSeparator(float thickness, const float4& color, float padding = 2.f);
 	ENGINE_EXPORT static void LayoutRect(float size, const float4& color, Texture* texture = nullptr, const float4& TextureST = float4(1,1,0,0), float padding = 2.f);
-	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
-	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor textAnchor = TEXT_ANCHOR_MID);
+	ENGINE_EXPORT static void LayoutLabel (Font* font, const std::string& text, float textHeight, float labelSize , const float4& color, const float4& textColor, float padding = 2.f, TextAnchor horizontalAnchor = TEXT_ANCHOR_MID, TextAnchor verticalAnchor = TEXT_ANCHOR_MID);
+	ENGINE_EXPORT static bool LayoutButton(Font* font, const std::string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding = 2.f, TextAnchor horizontalAnchor = TEXT_ANCHOR_MID, TextAnchor verticalAnchor = TEXT_ANCHOR_MID);
 	ENGINE_EXPORT static bool LayoutSlider(float& value, float minimum, float maximum, float size, const float4& color, float padding = 2.f);
 
 

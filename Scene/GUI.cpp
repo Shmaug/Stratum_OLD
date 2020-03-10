@@ -711,42 +711,18 @@ void GUI::LayoutRect(float size, const float4& color, Texture* texture, const fl
 	else
 		Rect(l.mTransform, layoutRect, color, texture, textureST, l.mClipRect);
 }
-void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
+void GUI::LayoutLabel(Font* font, const string& text, float textHeight, float labelSize, const float4& color, const float4& textColor, float padding, TextAnchor horizontalAnchor, TextAnchor verticalAnchor) {
 	GuiLayout& l = mLayoutStack.top();
 	fRect2D layoutRect = l.Get(labelSize, padding);
-
-	TextAnchor horizontalAnchor = textAnchor;
-	TextAnchor verticalAnchor = textAnchor;
-
-	switch (l.mAxis) {
-	case LAYOUT_HORIZONTAL:
-		horizontalAnchor = TEXT_ANCHOR_MID;
-		break;
-	case LAYOUT_VERTICAL:
-		verticalAnchor = TEXT_ANCHOR_MID;
-		break;
-	}
 
 	if (l.mScreenSpace)
 		Label(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
 	else
 		Label(font, text, textHeight, l.mTransform, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);
 }
-bool GUI::LayoutButton(Font* font, const string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding, TextAnchor textAnchor) {
+bool GUI::LayoutButton(Font* font, const string& text, float textHeight, float buttonSize, const float4& color, const float4& textColor, float padding, TextAnchor horizontalAnchor, TextAnchor verticalAnchor) {
 	GuiLayout& l = mLayoutStack.top();
 	fRect2D layoutRect = l.Get(buttonSize, padding);
-
-	TextAnchor horizontalAnchor = textAnchor;
-	TextAnchor verticalAnchor = textAnchor;
-
-	switch (l.mAxis) {
-	case LAYOUT_HORIZONTAL:
-		horizontalAnchor = TEXT_ANCHOR_MID;
-		break;
-	case LAYOUT_VERTICAL:
-		verticalAnchor = TEXT_ANCHOR_MID;
-		break;
-	}
 
 	if (l.mScreenSpace)
 		return Button(font, text, textHeight, layoutRect, color, textColor, horizontalAnchor, verticalAnchor, l.mClipRect);

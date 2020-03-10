@@ -15,6 +15,7 @@
 	uint VertexCount;
 	uint VertexStride;
 	uint NormalOffset;
+	uint TangentOffset;
 
 	float4 BlendFactors;
 }
@@ -34,12 +35,15 @@ void skin(uint3 index : SV_DispatchThreadID) {
 	uint address = index.x * VertexStride;
 	float3 vertex = asfloat(Vertices.Load3(address));
 	float3 normal = asfloat(Vertices.Load3(address + NormalOffset));
+	float3 tangent = asfloat(Vertices.Load3(address + TangentOffset));
 
 	vertex = mul(transform, float4(vertex, 1)).xyz;
 	normal = mul((float3x3)transform, normal);
+	tangent = mul((float3x3)transform, tangent);
 
 	Vertices.Store3(address, asuint(vertex));
 	Vertices.Store3(address + NormalOffset, asuint(normal));
+	Vertices.Store3(address + TangentOffset, asuint(tangent));
 }
 
 [numthreads(64, 1, 1)]
@@ -53,21 +57,27 @@ void blend(uint3 index : SV_DispatchThreadID) {
 
 	float3 vertex = isum * asfloat(Vertices.Load3(address));
 	float3 normal = isum * asfloat(Vertices.Load3(address + NormalOffset));
+	float3 tangent = isum * asfloat(Vertices.Load3(address + TangentOffset));
 
 	vertex += BlendFactors[0] * asfloat(BlendTarget0.Load3(address));
 	normal += BlendFactors[0] * asfloat(BlendTarget0.Load3(address + NormalOffset));
+	tangent += BlendFactors[0] * asfloat(BlendTarget0.Load3(address + TangentOffset));
 
 	vertex += BlendFactors[1] * asfloat(BlendTarget1.Load3(address));
 	normal += BlendFactors[1] * asfloat(BlendTarget1.Load3(address + NormalOffset));
+	tangent += BlendFactors[1] * asfloat(BlendTarget1.Load3(address + TangentOffset));
 
 	vertex += BlendFactors[2] * asfloat(BlendTarget2.Load3(address));
 	normal += BlendFactors[2] * asfloat(BlendTarget2.Load3(address + NormalOffset));
+	tangent += BlendFactors[2] * asfloat(BlendTarget2.Load3(address + TangentOffset));
 
 	vertex += BlendFactors[3] * asfloat(BlendTarget3.Load3(address));
 	normal += BlendFactors[3] * asfloat(BlendTarget3.Load3(address + NormalOffset));
+	tangent += BlendFactors[3] * asfloat(BlendTarget3.Load3(address + TangentOffset));
 
 	normal = normalize(normal);
 
 	Vertices.Store3(address, asuint(vertex));
 	Vertices.Store3(address + NormalOffset, asuint(normal));
+	Vertices.Store3(address + TangentOffset, asuint(tangent));
 }
