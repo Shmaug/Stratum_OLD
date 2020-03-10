@@ -5,82 +5,50 @@
 
 using namespace std;
 
-Buffer::Buffer(const std::string& name, ::Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
-	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryFlags(memoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
+Buffer::Buffer(const std::string& name, ::Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
+	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryProperties(properties), mBuffer(VK_NULL_HANDLE), mMemory({}) {
 	Allocate();
 }
-Buffer::Buffer(const std::string& name, ::Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryFlags)
-	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryFlags(memoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
-	if ((memoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
+Buffer::Buffer(const std::string& name, ::Device* device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
+	: mName(name), mDevice(device), mSize(size), mUsageFlags(usage), mMemoryProperties(properties), mBuffer(VK_NULL_HANDLE), mMemory({}) {
+	if ((properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0)
 		mUsageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 	Allocate();
 	Upload(data, size);
 }
 Buffer::Buffer(const Buffer& src)
-	: mName(src.mName), mDevice(src.mDevice), mSize(0), mUsageFlags(src.mUsageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT), mMemoryFlags(src.mMemoryFlags), mMappedData(nullptr), mBuffer(VK_NULL_HANDLE), mMemory(VK_NULL_HANDLE) {
+	: mName(src.mName), mDevice(src.mDevice), mSize(0), mUsageFlags(src.mUsageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT), mMemoryProperties(src.mMemoryProperties), mBuffer(VK_NULL_HANDLE), mMemory({}) {
 	CopyFrom(src);
 }
 Buffer::~Buffer() {
-	if (mMappedData) Unmap();
 	if (mBuffer != VK_NULL_HANDLE) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
-	if (mMemory != VK_NULL_HANDLE) {
-		vkFreeMemory(*mDevice, mMemory, nullptr);
-		#ifdef PRINT_VK_ALLOCATIONS
-		fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-		#endif
-	}
+	mDevice->FreeMemory(mMemory);
 }
 
-void* Buffer::Map() {
-	if (mMappedData) return mMappedData;
-	vkMapMemory(*mDevice, mMemory, 0, mSize, 0, &mMappedData);
-	return mMappedData;
-}
-void Buffer::Unmap() {
-	vkUnmapMemory(*mDevice, mMemory);
-	mMappedData = nullptr;
-}
 void Buffer::Upload(const void* data, VkDeviceSize size) {
 	if (!data) return;
 	if (size > mSize) throw runtime_error("Data size out of bounds");
-	if (mMemoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-		if (mMappedData) {
-			memcpy(mMappedData, data, size);
-		} else {
-			memcpy(Map(), data, size);
-			Unmap();
-		}
+	if (mMemoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+		memcpy(MappedData(), data, size);
 	} else {
 		if ((mUsageFlags & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
 			mUsageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			
 			if (mBuffer) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
-			if (mMemory) {
-				vkFreeMemory(*mDevice, mMemory, nullptr);
-				#ifdef PRINT_VK_ALLOCATIONS
-				fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-				#endif
-			}
+			mDevice->FreeMemory(mMemory);
 			mSize = size;
 			Allocate();
 		}
 		Buffer uploadBuffer(mName + " upload", mDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		memcpy(uploadBuffer.Map(), data, size);
-		uploadBuffer.Unmap();
+		memcpy(uploadBuffer.MappedData(), data, size);
 		CopyFrom(uploadBuffer);
 	}
 }
 
 void Buffer::CopyFrom(const Buffer& other) {
-	if (mMappedData) Unmap();
 	if (mSize != other.mSize) {
 		if (mBuffer) vkDestroyBuffer(*mDevice, mBuffer, nullptr);
-		if (mMemory) {
-			vkFreeMemory(*mDevice, mMemory, nullptr);
-			#ifdef PRINT_VK_ALLOCATIONS
-			fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-			#endif
-		}
+		mDevice->FreeMemory(mMemory);
 		mSize = other.mSize;
 		Allocate();
 	}
@@ -112,22 +80,11 @@ void Buffer::Allocate(){
 	bufferInfo.size = mSize;
 	bufferInfo.usage = mUsageFlags;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
 	ThrowIfFailed(vkCreateBuffer(*mDevice, &bufferInfo, nullptr, &mBuffer), "vkCreateBuffer failed for " + mName);
 	mDevice->SetObjectName(mBuffer, mName, VK_OBJECT_TYPE_BUFFER);
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*mDevice, mBuffer, &memRequirements);
-
-	mAllocationInfo = {};
-	mAllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	mAllocationInfo.allocationSize = memRequirements.size;
-	mAllocationInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryFlags);
-	ThrowIfFailed(vkAllocateMemory(*mDevice, &mAllocationInfo, nullptr, &mMemory), "vkAllocateMemory failed for " + mName);
-	#ifdef PRINT_VK_ALLOCATIONS
-	fprintf_color(COLOR_YELLOW, stdout, "Allocated %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-	#endif
-
-	vkBindBufferMemory(*mDevice, mBuffer, mMemory, 0);
-	mDevice->SetObjectName(mMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
+	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties);
+	vkBindBufferMemory(*mDevice, mBuffer, mMemory.mDeviceMemory, mMemory.mOffset);
 }

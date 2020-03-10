@@ -45,6 +45,7 @@ private:
 	ENGINE_EXPORT Texture(const std::string& name, Device* device, const std::string& px, const std::string& nx, const std::string& py, const std::string& ny, const std::string& pz, const std::string& nz, bool srgb = true);
 
 	Device* mDevice;
+	DeviceMemoryAllocation mMemory;
 	
 	uint32_t mWidth;
 	uint32_t mHeight;
@@ -62,8 +63,6 @@ private:
 
 	VkImage mImage;
 	VkImageView mView;
-	VkDeviceMemory mImageMemory;
-
 
 	ENGINE_EXPORT void CreateImage();
 	ENGINE_EXPORT void CreateImageView(VkImageAspectFlags flags);

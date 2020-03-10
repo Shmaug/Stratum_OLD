@@ -153,12 +153,8 @@ Scene::Scene(::Instance* instance, ::AssetManager* assetManager, ::InputManager*
 	mLightBuffers = new Buffer*[c];
 	mShadowBuffers = new Buffer*[c];
 	for (uint32_t i = 0; i < c; i++) {
-		mLightBuffers[i] = new Buffer("Light Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		mShadowBuffers[i] = new Buffer("Shadow Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(ShadowData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		mLightBuffers[i]->Map();
-		mShadowBuffers[i]->Map();
-
+		mLightBuffers[i] = new Buffer("Light Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(GPULight), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+		mShadowBuffers[i] = new Buffer("Shadow Buffer", mInstance->Device(), MAX_GPU_LIGHTS * sizeof(ShadowData), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 		mShadowAtlases[i] = new Texture("ShadowAtlas", mInstance->Device(), SHADOW_ATLAS_RESOLUTION, SHADOW_ATLAS_RESOLUTION, 1, VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 		
 		mShadowAtlases[i]->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer.get());

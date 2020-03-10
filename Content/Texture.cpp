@@ -52,7 +52,7 @@ uint8_t* load(const string& filename, bool srgb, uint32_t& pixelSize, int32_t& x
 	return pixels;
 }
 
-Texture::Texture(const string& name, Device* device, const string& filename, bool srgb) : mName(name), mDevice(device) {
+Texture::Texture(const string& name, Device* device, const string& filename, bool srgb) : mName(name), mDevice(device), mMemory({}) {
 	int32_t x, y, channels;
 	uint32_t size;
 	uint8_t* pixels = load(filename, srgb, size, x, y, channels, mFormat);
@@ -96,7 +96,7 @@ Texture::Texture(const string& name, Device* device, const string& filename, boo
 	//printf("Loaded %s: %dx%d %s\n", filename.c_str(), mWidth, mHeight, FormatToString(mFormat));
 }
 Texture::Texture(const string& name, Device* device, const string& px, const string& nx, const string& py, const string& ny, const string& pz, const string& nz, bool srgb)
-	: mName(name), mDevice(device) {
+	: mName(name), mDevice(device), mMemory({}) {
 	int32_t x, y, channels;
 	uint32_t size;
 	
@@ -139,7 +139,6 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 	TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer.get());
 	
 	Buffer uploadBuffer(name + " Copy", mDevice, dataSize * mArrayLayers, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	uploadBuffer.Map();
 	for (uint32_t j = 0; j < mArrayLayers; j++)
 		memcpy((uint8_t*)uploadBuffer.MappedData() + j * dataSize, pixels[j], dataSize);
 
@@ -155,7 +154,7 @@ Texture::Texture(const string& name, Device* device, const string& px, const str
 }
 
 Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize imageSize, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
-	: mName(name), mDevice(device), mWidth(width), mHeight(height), mDepth(depth), mArrayLayers(1), mMipLevels(mipLevels), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
+	: mName(name), mDevice(device), mWidth(width), mHeight(height), mDepth(depth), mArrayLayers(1), mMipLevels(mipLevels), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties), mMemory({}) {
 	
 	if (mipLevels == 0) mMipLevels = (uint32_t)std::floor(std::log2(std::max(mWidth, mHeight))) + 1;
 	if (mMipLevels > 1) mUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -194,7 +193,7 @@ Texture::Texture(const string& name, Device* device, void* pixels, VkDeviceSize 
 }
 
 Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t height, uint32_t depth, VkFormat format, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
-	: mName(name), mDevice(device), mWidth(width), mHeight(height), mDepth(depth), mArrayLayers(1), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties) {
+	: mName(name), mDevice(device), mWidth(width), mHeight(height), mDepth(depth), mArrayLayers(1), mMipLevels(1), mFormat(format), mSampleCount(numSamples), mTiling(tiling), mUsage(usage), mMemoryProperties(properties), mMemory({}) {
 
 	CreateImage();
 
@@ -219,10 +218,7 @@ Texture::Texture(const string& name, Device* device, uint32_t width, uint32_t he
 Texture::~Texture() {
 	vkDestroyImage(*mDevice, mImage, nullptr);
 	vkDestroyImageView(*mDevice, mView, nullptr);
-	vkFreeMemory(*mDevice, mImageMemory, nullptr);
-	#ifdef PRINT_VK_ALLOCATIONS
-	fprintf_color(COLOR_BLUE, stdout, "Freed %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-	#endif
+	mDevice->FreeMemory(mMemory);
 }
 
 void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
@@ -324,17 +320,8 @@ void Texture::CreateImage() {
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*mDevice, mImage, &memRequirements);
 
-	mAllocationInfo = {};
-	mAllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	mAllocationInfo.allocationSize = memRequirements.size;
-	mAllocationInfo.memoryTypeIndex = mDevice->FindMemoryType(memRequirements.memoryTypeBits, mMemoryProperties);
-	ThrowIfFailed(vkAllocateMemory(*mDevice, &mAllocationInfo, nullptr, &mImageMemory), "vkAllocateMemory failed for " + mName);
-	#ifdef PRINT_VK_ALLOCATIONS
-	fprintf_color(COLOR_YELLOW, stdout, "Allocated %.1fkb for %s\n", mAllocationInfo.allocationSize / 1024.f, mName.c_str());
-	#endif
-	
-	mDevice->SetObjectName(mImageMemory, mName + " Memory", VK_OBJECT_TYPE_DEVICE_MEMORY);
-	vkBindImageMemory(*mDevice, mImage, mImageMemory, 0);
+	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties);
+	vkBindImageMemory(*mDevice, mImage, mMemory.mDeviceMemory, mMemory.mOffset);
 }
 void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	VkImageViewCreateInfo viewInfo = {};
@@ -352,7 +339,7 @@ void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	mDevice->SetObjectName(mView, mName + " View", VK_OBJECT_TYPE_IMAGE_VIEW);
 }
 
-void AccessFlags(VkImageLayout layout, VkAccessFlags& access, VkPipelineStageFlags& stage) {
+inline void AccessFlags(VkImageLayout layout, VkAccessFlags& access, VkPipelineStageFlags& stage) {
 	switch (layout) {
 	case VK_IMAGE_LAYOUT_UNDEFINED:
 		access = 0;
@@ -387,7 +374,7 @@ void AccessFlags(VkImageLayout layout, VkAccessFlags& access, VkPipelineStageFla
 		stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		break;
 	default:
-		fprintf_color(COLOR_RED, stderr, "Unsupported layout transition\n");
+		fprintf_color(COLOR_RED, stderr, "Unsupported layout transition (add it here pls)\n");
 		throw;
 	}
 }
@@ -444,7 +431,6 @@ void Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLa
 		0, nullptr,
 		1, &barrier );
 }
-
 VkImageMemoryBarrier Texture::TransitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags& srcStage, VkPipelineStageFlags& dstStage) {
 	VkImageMemoryBarrier barrier = {};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

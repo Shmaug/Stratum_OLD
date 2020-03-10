@@ -12,11 +12,19 @@ class CommandBuffer;
 class Fence;
 class Window;
 
+struct DeviceMemoryAllocation {
+	VkDeviceMemory mDeviceMemory;
+	VkDeviceSize mOffset;
+	VkDeviceSize mSize;
+	uint32_t mMemoryType;
+	void* mMapped;
+};
+
 class Device {
 public:
 	struct FrameContext {
-		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is 'done'
-		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is 'done'
+		std::vector<std::shared_ptr<Semaphore>> mSemaphores; // semaphores that signal when this frame is done
+		std::vector<std::shared_ptr<Fence>> mFences; // fences that signal when this frame is done
 		
 		std::list<std::pair<Buffer*, uint32_t>> mTempBuffers;
 		std::unordered_map<VkDescriptorSetLayout, std::list<std::pair<DescriptorSet*, uint32_t>>> mTempDescriptorSets;
@@ -35,17 +43,8 @@ public:
 
 	ENGINE_EXPORT ~Device();
 
-	inline VkPhysicalDevice PhysicalDevice() const { return mPhysicalDevice; }
-	inline uint32_t PhysicalDeviceIndex() const { return mPhysicalDeviceIndex; }
-	inline VkQueue GraphicsQueue() const { return mGraphicsQueue; };
-	inline VkQueue PresentQueue() const { return mPresentQueue; };
-	inline uint32_t GraphicsQueueFamily() const { return mGraphicsQueueFamily; };
-	inline uint32_t PresentQueueFamily() const { return mPresentQueueFamily; };
-	inline uint32_t DescriptorSetCount() const { return mDescriptorSetCount; };
-
-	ENGINE_EXPORT void SetObjectName(void* object, const std::string& name, VkObjectType type) const;
-
-	ENGINE_EXPORT uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+	ENGINE_EXPORT DeviceMemoryAllocation AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties);
+	ENGINE_EXPORT void FreeMemory(const DeviceMemoryAllocation& allocation);
 	
 	ENGINE_EXPORT Buffer* GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 	ENGINE_EXPORT DescriptorSet* GetTempDescriptorSet(const std::string& name, VkDescriptorSetLayout layout);
@@ -54,7 +53,17 @@ public:
 	ENGINE_EXPORT std::shared_ptr<Fence> Execute(std::shared_ptr<CommandBuffer> commandBuffer, bool frameContext = true);
 	ENGINE_EXPORT void Flush();
 
+	ENGINE_EXPORT void SetObjectName(void* object, const std::string& name, VkObjectType type) const;
+
 	ENGINE_EXPORT VkSampleCountFlagBits GetMaxUsableSampleCount();
+
+	inline VkPhysicalDevice PhysicalDevice() const { return mPhysicalDevice; }
+	inline uint32_t PhysicalDeviceIndex() const { return mPhysicalDeviceIndex; }
+	inline VkQueue GraphicsQueue() const { return mGraphicsQueue; };
+	inline VkQueue PresentQueue() const { return mPresentQueue; };
+	inline uint32_t GraphicsQueueFamily() const { return mGraphicsQueueFamily; };
+	inline uint32_t PresentQueueFamily() const { return mPresentQueueFamily; };
+	inline uint32_t DescriptorSetCount() const { return mDescriptorSetCount; };
 
 	inline uint32_t MaxFramesInFlight() const { return mInstance->MaxFramesInFlight(); }
 	inline uint32_t FrameContextIndex() const { return mFrameContextIndex; }
@@ -67,18 +76,33 @@ public:
 	inline operator VkDevice() const { return mDevice; }
 
 private:
+	struct Allocation {
+		void* mMapped;
+		VkDeviceMemory mMemory;
+		VkDeviceSize mSize;
+		// <offset, size>
+		std::list<std::pair<VkDeviceSize, VkDeviceSize>> mAvailable;
+
+		ENGINE_EXPORT bool SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation);
+		ENGINE_EXPORT void Deallocate(const DeviceMemoryAllocation& allocation);
+	};
+
 	friend class DescriptorSet;
 	friend class CommandBuffer;
 	friend class ::Instance;
 	ENGINE_EXPORT Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueue, uint32_t presentQueue, const std::set<std::string>& deviceExtensions, std::vector<const char*> validationLayers);
 
+	ENGINE_EXPORT void PrintAllocations();
+
 	::Instance* mInstance;
 	uint32_t mFrameContextIndex; // assigned by mInstance
 	FrameContext* mFrameContexts;
 
-	VkPhysicalDeviceLimits mLimits;
+	std::unordered_map<uint32_t, std::vector<Allocation>> mMemoryAllocations;
 
+	VkPhysicalDeviceLimits mLimits;
 	uint32_t mMaxMSAASamples;
+
 	uint32_t mPhysicalDeviceIndex;
 	VkPhysicalDevice mPhysicalDevice;
 	VkDevice mDevice;
@@ -97,6 +121,7 @@ private:
 	std::mutex mTmpBufferMutex;
 	std::mutex mDescriptorPoolMutex;
 	std::mutex mCommandPoolMutex;
+	std::mutex mMemoryMutex;
 	std::unordered_map<std::thread::id, VkCommandPool> mCommandPools;
 	std::unordered_map<VkCommandPool, std::queue<std::shared_ptr<CommandBuffer>>> mCommandBuffers;
 

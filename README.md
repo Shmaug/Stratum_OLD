@@ -3,18 +3,7 @@
 High performance modular plugin-based Vulkan rendering engine in C++17 with minimal dependencies.
 
 ## How to Build
-
-On Windows: install the LunarG VulkanSDK and make sure the VULKAN_SDK environment variable points to it.
-
-On Linux: Install the `vulkan` and `vulkan-devel` packages.
-
-Then, clone the submodules:
-
-`git submodule update --init`
-
-Build the submodules into their respective folders using CMake with `BUILD_SHARED_LIBS` turned `OFF` to link statically. For Assimp, enable `ASSIMP_BUILD_ZLIB` unless zlib is already installed and accessible by Stratum. Also make sure to remove any library suffixes (namely for Assimp).
-
-Builduing any testing, examples, and any binary tools for the dependencies is not required and disabling them might reduce compilation time for the dependencies.
+run `setup.bat` or `setup.sh`, then build Stratum with CMake
 
 # API Overview
 - `Instance`
@@ -75,7 +64,7 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
     - Allows for raycasting for objects that implement `Object::Intersect()`
   - Computes active lights and shadows, which can be references with `Scene::LightBuffer()`, `Scene::ShadowBuffer()`, and `Scene::ShadowAtlas()`
   - Stores an `AssetManager`, `InputManager`, and `PluginManager`
-  - Use `Scene::LoadModelScene()` to efficiently load multiple `MeshRenderers` from one 3D file
+  - Use `Scene::LoadModelScene()` to efficiently load multiple `MeshRenderer`s (or `SkinnedMeshRenderer`s) from one 3D file
     - Stores all vertices and indices in the same buffer
   - Computes timing
     - `Scene::TotalTime()`: Total time in seconds since Stratum has started
@@ -87,16 +76,19 @@ Builduing any testing, examples, and any binary tools for the dependencies is no
 - `Camera`
   - Inherets `Object`. Computes View matrices based on its transform as an `Object`
   - Represents a camera in 3D space. Provides functionality for stereo rendering, and more
-  - **Note: For maximum precision, Camera view matrices are always centered at the origin**
-  - Provides a basic immediate-mode GUI system, similar to Unity's EditorGUI. It can draw GUI content in world-space and in screen-space.
+  - **Note: For precision, Camera view matrices are always centered at the origin.** Thus the 
 - `Renderer`
   - Base class for all Renderers. Inherit and override this to implement a custom renderer.
 - `MeshRenderer`
   - Renders a `Mesh` with a `Material`. The Scene will try to batch together MeshRenderers that use the same Mesh, Material and RenderQueue and draw them using Instancing.
+- `SkinnedMeshRenderer`
+  - Renders a skinned `Mesh` with a `Material`. Inherets `MeshRenderer`, computes skinning from an `AnimationRig`.
+- `ClothRenderer`
+  - Renders a `Mesh` simulating soft-body spring physics along triangle edges, and aerodynamic drag along triangle faces.
 - `Light`
   - Defines a light within the Scene's lighting system.
 - `Gizmos`
-  - Gizmos are a way to quickly draw simple 3D shapes such as boxes and lines, and are only drawn during the main pass when `Scene::DrawGizmos()` is `true`. To use these properly, only call `Gizmos` calls during `DrawGizmos()`
+  - Gizmos are a way to quickly draw simple 3D shapes such as boxes and lines, and are only drawn during the main pass when `Scene::DrawGizmos()` is `true`. To use these properly, only call `Gizmos` functions during `DrawGizmos()` events.
 - `GUI`
   - Provides a basic immediate-mode GUI system, similar to Unity's EditorGUI. It can draw GUI content in world-space and in screen-space.
 
@@ -165,15 +157,15 @@ Stratum provides a custom shader compiler. It uses SPIRV reflection and custom d
 Each frame follows the following sequence of events:
 - `InputDevice::NextFrame()`
 - Acquire SwapChain image
+- Get a `CommandBuffer`
 - Scene Update
-  - `Plugin::PreUpdate()`
   - Fixed Update Loop
       - `Object::FixedUpdate()`
       - `Plugin::FixedUpdate()`
+  - `Plugin::PreUpdate()`
   - `Plugin::Update()`
   - `Plugin::PostUpdate()`
 - Render
-  - Get a `CommandBuffer`
   - Scene PreFrame
     - `Renderer::PreFrame()`
     - Sort Cameras, use highest-priority Camera as the main camera
@@ -185,7 +177,8 @@ Each frame follows the following sequence of events:
   - `Plugin::PostProcess()`
   - Copy cameras with `TargetWindow` set to the screen
   - `Camera::PostRender()`
-  - Execute the `CommandBuffer`
+- Execute `CommandBuffer`
+- `Plugin::PrePresent()`
 - Wait for GPU to finish the oldest buffered frame before continuing (triple-buffering)
 
 ## Render Pass Overview
@@ -195,8 +188,7 @@ Each "Render `<PASS>`" call above follows the following sequence of events:
 - `Camera::PreRender()` (Updates Camera Framebuffer and Viewport)
 - `Plugin::PreRender()`
 - `Renderer::PreRender()`
-- Begin RenderPass
-- Clear Framebuffer (if `clear = true`)
+- Begin RenderPass, clear Framebuffer if `clear` is `true`
 - `Camera::Set()` (Updates Camera Uniform buffer and sets Viewport and Scissor)
 - `Plugin::PreRenderScene()`
 - Render Skybox (only for `PASS_MAIN`)
@@ -205,9 +197,10 @@ Each "Render `<PASS>`" call above follows the following sequence of events:
     - `MeshRenderer::DrawInstanced()`
   - For other `Renderer`s:
     - `Renderer::Draw()`
-- Draw Gizmos (only for `PASS_MAIN` and `Scene::DrawGizmos` is `true`)
+- Draw Gizmos (only if pass is `PASS_MAIN` and `Scene::DrawGizmos` is `true`)
   - `Object::DrawGizmos()`
   - `Plugin::DrawGizmos()`
+- Draw GUI (only for `PASS_MAIN`)
 - `Plugin::PostRenderScene()`
 - End RenderPass
 

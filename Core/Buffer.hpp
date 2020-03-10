@@ -12,17 +12,13 @@ public:
 	ENGINE_EXPORT Buffer(const Buffer& src);
 	ENGINE_EXPORT ~Buffer();
 
-	ENGINE_EXPORT void* Map();
-	ENGINE_EXPORT void Unmap();
-
 	ENGINE_EXPORT void Upload(const void* data, VkDeviceSize size);
 
-	inline void* MappedData() const { return mMappedData; }
+	inline void* MappedData() const { return mMemory.mMapped; }
 
-	inline VkDeviceMemory Memory() const { return mMemory; }
 	inline VkDeviceSize Size() const { return mSize; }
 	inline VkBufferUsageFlags Usage() const { return mUsageFlags; }
-	inline VkMemoryPropertyFlags MemoryProperties() const { return mMemoryFlags; }
+	inline VkMemoryPropertyFlags MemoryProperties() const { return mMemoryProperties; }
 
 	ENGINE_EXPORT void CopyFrom(const Buffer& other);
 	Buffer& operator=(const Buffer& other) = delete;
@@ -33,15 +29,12 @@ public:
 private:
 	::Device* mDevice;
 	VkBuffer mBuffer;
-	VkDeviceMemory mMemory;
+	DeviceMemoryAllocation mMemory;
 
-	void* mMappedData;
 	VkDeviceSize mSize;
 
 	VkBufferUsageFlags mUsageFlags;
-	VkMemoryPropertyFlags mMemoryFlags;
-
-	VkMemoryAllocateInfo mAllocationInfo;
+	VkMemoryPropertyFlags mMemoryProperties;
 
 	ENGINE_EXPORT void Allocate();
 };

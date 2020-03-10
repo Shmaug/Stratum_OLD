@@ -6,7 +6,43 @@
 #include <Util/Profiler.hpp>
 #include <Util/Util.hpp>
 
+#define PRINT_VK_ALLOCATIONS
+
+// 4mb blocks
+#define MEM_BLOCK_SIZE (4*1024*1024)
+#define MEM_MIN_ALLOC (MEM_BLOCK_SIZE*64)
+
 using namespace std;
+
+/*static*/ bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily) {
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	bool g = false;
+	bool p = false;
+
+	uint32_t i = 0;
+	for (const auto& queueFamily : queueFamilies) {
+		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			graphicsFamily = i;
+			g = true;
+		}
+
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+		if (queueFamily.queueCount > 0 && presentSupport) {
+			presentFamily = i;
+			p = true;
+		}
+
+		i++;
+	}
+
+	return g && p;
+}
 
 void Device::FrameContext::Reset() {
 	if (mFences.size()) {
@@ -51,36 +87,6 @@ Device::FrameContext::~FrameContext() {
 			safe_delete(front->first);
 			kp.second.erase(front);
 		}
-}
-
-bool Device::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface, uint32_t& graphicsFamily, uint32_t& presentFamily) {
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-
-	bool g = false;
-	bool p = false;
-
-	uint32_t i = 0;
-	for (const auto& queueFamily : queueFamilies) {
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			graphicsFamily = i;
-			g = true;
-		}
-
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-
-		if (queueFamily.queueCount > 0 && presentSupport) {
-			presentFamily = i;
-			p = true;
-		}
-
-		i++;
-	}
-
-	return g && p;
 }
 
 Device::Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueueFamily, uint32_t presentQueueFamily, const set<string>& deviceExtensions, vector<const char*> validationLayers)
@@ -184,6 +190,14 @@ Device::~Device() {
 	vkDestroyPipelineCache(mDevice, mPipelineCache, nullptr);
 	for (auto& p : mCommandBuffers)
 		vkDestroyCommandPool(mDevice, p.first, nullptr);
+	
+	for (auto kp : mMemoryAllocations) {
+		for (uint32_t i = 0; i < kp.second.size(); i++) {
+			if (kp.second[i].mAvailable.begin()->second != kp.second[i].mSize) fprintf_color(COLOR_RED_BOLD, stderr, "Device memory leak detected.\n");
+			vkFreeMemory(mDevice, kp.second[i].mMemory, nullptr);
+		}
+	}
+
 	vkDestroyDevice(mDevice, nullptr);
 }
 
@@ -226,16 +240,158 @@ void Device::SetObjectName(void* object, const string& name, VkObjectType type) 
 	#endif
 }
 
-uint32_t Device::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const {
+void Device::PrintAllocations() {
+	for (auto kp : mMemoryAllocations) {
+		printf("memory %u:\n", kp.first);
+		for (uint32_t i = 0; i < kp.second.size(); i++) {
+			printf("%llu:\t", kp.second[i].mSize / 1024);
+
+			char* buf = new char[kp.second[i].mSize / MEM_BLOCK_SIZE + 1];
+			memset(buf, '#', kp.second[i].mSize / MEM_BLOCK_SIZE);
+			for (auto it = kp.second[i].mAvailable.begin(); it != kp.second[i].mAvailable.end(); it++)
+				memset(buf + (it->first / MEM_BLOCK_SIZE), '-', it->second / MEM_BLOCK_SIZE);
+			
+			buf[kp.second[i].mSize / MEM_BLOCK_SIZE] = '\0';
+			printf("%s\n", buf);
+			delete[] buf;
+		}
+	}
+}
+
+bool Device::Allocation::SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation) {
+	if (mAvailable.empty()) return false;
+
+	auto block = mAvailable.end();
+	for (auto it = mAvailable.begin(); it != mAvailable.end(); it++)
+		if (it->second >= requirements.size && (block == mAvailable.end() || it->second < block->second))
+			block = it;
+
+	if (block == mAvailable.end()) return false;
+
+	VkDeviceSize blockSize = AlignUp(requirements.size, MEM_BLOCK_SIZE);
+
+	if (block->second > blockSize) {
+		// still room left after this allocation, shift this block over
+		block->first += blockSize;
+		block->second -= blockSize;
+	} else
+		mAvailable.erase(block);
+
+	allocation.mDeviceMemory = mMemory;
+	allocation.mOffset = block->first;
+	allocation.mSize = blockSize;
+	allocation.mMapped = ((uint8_t*)mMapped) + block->first;
+
+	return true;
+}
+void Device::Allocation::Deallocate(const DeviceMemoryAllocation& allocation) {
+	VkDeviceSize end = allocation.mOffset + allocation.mSize;
+
+	auto firstAfter = mAvailable.end();
+
+	auto startBlock = mAvailable.end();
+	auto endBlock = mAvailable.end();
+	for (auto it = mAvailable.begin(); it != mAvailable.end(); it++) {
+		if (it->first > allocation.mOffset && firstAfter == mAvailable.end()) firstAfter = it;
+
+		if (it->second == end)
+			endBlock = it;
+		else if (it->first + it->second == allocation.mOffset)
+			startBlock = it;
+	}
+
+	// merge blocks
+
+	if (startBlock == mAvailable.end() && endBlock == mAvailable.end())
+		mAvailable.insert(firstAfter, make_pair(allocation.mOffset, allocation.mSize));
+	else if (startBlock == mAvailable.end()) {
+		//  --------     |---- allocation ----|---- endBlock ----|
+		endBlock->first = allocation.mOffset;
+		endBlock->second += allocation.mSize;
+	} else if (endBlock == mAvailable.end()) {
+		//  |---- startBlock ----|---- allocation ----|     --------
+		startBlock->second += allocation.mSize;
+	} else {
+		//  |---- startBlock ----|---- allocation ----|---- endBlock ----|
+		startBlock->second += allocation.mSize + endBlock->second;
+		mAvailable.erase(endBlock);
+	}
+}
+
+DeviceMemoryAllocation Device::AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties) {
+	lock_guard lock(mMemoryMutex);
+
 	VkPhysicalDeviceMemoryProperties memProperties;
 	vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProperties);
 
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
-			return i;
+	int32_t memoryType = -1;
+	for (int32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
+		if ((requirements.memoryTypeBits & (1 << i)) && ((memProperties.memoryTypes[i].propertyFlags & properties) == properties)) {
+			memoryType = i;
+			break;
+		}
+	}
+	if (memoryType == -1) {
+		fprintf_color(COLOR_RED_BOLD, stderr, "Failed to find suitable memory type!");
+		throw;
+	}
 
-	fprintf_color(COLOR_RED, stderr, "Failed to find suitable memory type!");
-	throw;
+	DeviceMemoryAllocation alloc = {};
+	alloc.mMemoryType = memoryType;
+
+	vector<Allocation>& allocations = mMemoryAllocations[memoryType];
+
+	for (uint32_t i = 0; i < allocations.size(); i++)
+		if (allocations[i].SubAllocate(requirements, alloc)) {
+			printf("\n\nALLOCATE\n");
+			PrintAllocations();
+			return alloc;
+		}
+
+	// Failed to sub-allocate
+
+	allocations.push_back({});
+	Allocation& allocation = allocations.back();
+	
+	VkMemoryAllocateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	info.memoryTypeIndex = memoryType;
+	info.allocationSize = max(MEM_MIN_ALLOC, AlignUp(requirements.size, MEM_BLOCK_SIZE));
+	ThrowIfFailed(vkAllocateMemory(mDevice, &info, nullptr, &allocation.mMemory), "vkAllocateMemory failed\n");
+	#ifdef PRINT_VK_ALLOCATIONS
+	fprintf_color(COLOR_YELLOW, stdout, "Allocated %lukb\n", info.allocationSize / 1024);
+	#endif
+	allocation.mSize = info.allocationSize;
+	allocation.mAvailable.push_back(make_pair((VkDeviceSize)0, allocation.mSize));
+
+	if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		vkMapMemory(mDevice, allocation.mMemory, 0, allocation.mSize, 0, &allocation.mMapped);
+
+	if (!allocation.SubAllocate(requirements, alloc)) {
+		fprintf_color(COLOR_RED_BOLD, stderr, "Failed to allocate memory\n");
+		throw;
+	}
+
+	printf("\n\nALLOCATE\n");
+	PrintAllocations();
+	return alloc;
+}
+void Device::FreeMemory(const DeviceMemoryAllocation& allocation) {
+	lock_guard lock(mMemoryMutex);
+	vector<Allocation>& allocations = mMemoryAllocations[allocation.mMemoryType];
+	for (auto it = allocations.begin(); it != allocations.end(); it++)
+		if (it->mMemory == allocation.mDeviceMemory) {
+			it->Deallocate(allocation);
+			if (it->mAvailable.size() == 1 && it->mAvailable.begin()->second == it->mSize) {
+				vkFreeMemory(mDevice, it->mMemory, nullptr);
+				#ifdef PRINT_VK_ALLOCATIONS
+				fprintf_color(COLOR_YELLOW, stdout, "Freed %lukb\n", it->mSize / 1024);
+				#endif
+				allocations.erase(it);
+			}
+		}
+	printf("\n\nDEALLOCATE\n");
+	PrintAllocations();
 }
 
 shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
@@ -275,7 +431,6 @@ shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {
 
 	return commandBuffer;
 }
-
 shared_ptr<Fence> Device::Execute(shared_ptr<CommandBuffer> commandBuffer, bool frameContext) {
 	lock_guard lock(mCommandPoolMutex);
 	ThrowIfFailed(vkEndCommandBuffer(commandBuffer->mCommandBuffer), "vkEndCommandBuffer failed");
@@ -327,10 +482,8 @@ Buffer* Device::GetTempBuffer(const std::string& name, VkDeviceSize size, VkBuff
 	if (closest != frame->mTempBuffers.end()) {
 		b = closest->first;
 		frame->mTempBuffers.erase(closest);
-	} else {
+	} else
 		b = new Buffer(name, this, size, usage, properties);
-		if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) b->Map();
-	}
 	frame->mTempBuffersInUse.push_back(b);
 	return b;
 }

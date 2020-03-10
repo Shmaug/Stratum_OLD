@@ -242,8 +242,6 @@ void Environment::InitializeAtmosphere() {
 
 		device->Execute(commandBuffer, false)->Wait();
 
-		ambientBuffer.Map();
-		dirBuffer.Map();
 		std::memcpy(mAmbientLUT, ambientBuffer.MappedData(), 128 * sizeof(float4));
 		std::memcpy(mDirectionalLUT, dirBuffer.MappedData(), 128 * sizeof(float4));
 

@@ -273,7 +273,6 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 	DescriptorSet* gizmoDS = nullptr;
 	if (mInstanceBuffers[frameContextIndex].size() <= mBufferIndex[frameContextIndex]) {
 		gizmoBuffer = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
-		gizmoBuffer->Map();
 
 		gizmoDS = new DescriptorSet("Gizmos", commandBuffer->Device(), shader->mDescriptorSetLayouts[PER_OBJECT]);
 		gizmoDS->CreateStorageBufferDescriptor(gizmoBuffer, 0, gizmoBuffer->Size(), INSTANCE_BUFFER_BINDING);
@@ -286,7 +285,6 @@ void Gizmos::Draw(CommandBuffer* commandBuffer, PassType pass, Camera* camera) {
 		if (b->Size() < sizeof(Gizmo) * total) {
 			safe_delete(b);
 			b = new Buffer("Gizmos", commandBuffer->Device(), sizeof(Gizmo) * total, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
-			b->Map();
 			gizmoDS->CreateStorageBufferDescriptor(b, 0, b->Size(), INSTANCE_BUFFER_BINDING);
 		}
 

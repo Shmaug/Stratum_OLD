@@ -41,8 +41,6 @@ namespace fs = std::experimental::filesystem;
 namespace fs = std::filesystem;
 #endif
 
-//#define PRINT_VK_ALLOCATIONS
-
 #ifdef WINDOWS
 #ifdef ENGINE_CORE
 #define ENGINE_EXPORT __declspec(dllexport)
@@ -314,11 +312,6 @@ inline T AlignDown(T value, size_t alignment) {
 }
 
 template <typename T>
-inline T DivideByMultiple(T value, size_t alignment) {
-	return (T)((value + alignment - 1) / alignment);
-}
-
-template <typename T>
 inline bool IsPowerOfTwo(T value) {
 	return 0 == (value & (value - 1));
 }
@@ -369,7 +362,6 @@ private:
 	friend struct std::hash<VertexInput>;
 	size_t mHash;
 };
-
 namespace std {
 	template<>
 	struct hash<VertexInput> {
@@ -397,7 +389,6 @@ inline bool ReadFile(const std::string& filename, std::string& dest) {
 
 	return true;
 }
-
 inline bool ReadFile(const std::string& filename, std::vector<uint8_t>& dest) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -415,20 +406,6 @@ inline bool ReadFile(const std::string& filename, std::vector<uint8_t>& dest) {
 	file.close();
 
 	return true;
-}
-
-inline std::string GetDirectory(const std::string& file) {
-	size_t k = file.rfind('\\');
-	if (k == std::string::npos)
-		k = file.rfind('/');
-	if (k == std::string::npos)
-		return "";
-	return file.substr(0, (int)k);
-}
-
-
-inline static bool HasStencilComponent(VkFormat format) {
-	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
 inline void ThrowIfFailed(VkResult result, const std::string& message){
@@ -625,6 +602,10 @@ inline const VkDeviceSize FormatSize(VkFormat format) {
 
 	}
 	return 0;
+}
+
+inline static bool HasStencilComponent(VkFormat format) {
+	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
 inline const char* FormatToString(VkFormat format) {

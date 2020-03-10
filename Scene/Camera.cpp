@@ -27,7 +27,6 @@ void Camera::CreateDescriptorSet() {
 	VkDeviceSize bufSize = AlignUp(sizeof(CameraBuffer), mDevice->Limits().minUniformBufferOffsetAlignment);
 	mUniformBufferPtrs = new void*[c];
 	mUniformBuffer = new Buffer(mName + " Uniforms", mDevice, bufSize * c, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	mUniformBuffer->Map();
 	mDescriptorSets.resize(c);
 	for (uint32_t i = 0; i < c; i++) {
 		for (auto& s : combos) {
