@@ -320,7 +320,7 @@ void Texture::CreateImage() {
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(*mDevice, mImage, &memRequirements);
 
-	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties);
+	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties, mName);
 	vkBindImageMemory(*mDevice, mImage, mMemory.mDeviceMemory, mMemory.mOffset);
 }
 void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {

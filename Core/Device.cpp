@@ -8,9 +8,10 @@
 
 #define PRINT_VK_ALLOCATIONS
 
-// 4mb blocks
-#define MEM_BLOCK_SIZE (4*1024*1024)
-#define MEM_MIN_ALLOC (MEM_BLOCK_SIZE*64)
+// 4kb blocks
+#define MEM_BLOCK_SIZE (4*1024)
+// 128mb min allocation
+#define MEM_MIN_ALLOC (128*1024*1024)
 
 using namespace std;
 
@@ -193,7 +194,8 @@ Device::~Device() {
 	
 	for (auto kp : mMemoryAllocations) {
 		for (uint32_t i = 0; i < kp.second.size(); i++) {
-			if (kp.second[i].mAvailable.begin()->second != kp.second[i].mSize) fprintf_color(COLOR_RED_BOLD, stderr, "Device memory leak detected.\n");
+			for (auto it = kp.second[i].mAllocations.begin(); it != kp.second[i].mAllocations.begin(); it++)
+				fprintf_color(COLOR_RED_BOLD, stderr, "Device memory leak detected. Tag: %s\n", it->mTag.c_str());
 			vkFreeMemory(mDevice, kp.second[i].mMemory, nullptr);
 		}
 	}
@@ -258,17 +260,36 @@ void Device::PrintAllocations() {
 	}
 }
 
-bool Device::Allocation::SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation) {
+bool Device::Allocation::SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation, const string& tag) {
 	if (mAvailable.empty()) return false;
 
-	auto block = mAvailable.end();
-	for (auto it = mAvailable.begin(); it != mAvailable.end(); it++)
-		if (it->second >= requirements.size && (block == mAvailable.end() || it->second < block->second))
-			block = it;
+	VkDeviceSize blockSize = 0;
+	VkDeviceSize memLocation = 0;
+	VkDeviceSize memSize = 0;
 
+	// find smallest block that can fit the allocation
+	auto block = mAvailable.end();
+	for (auto it = mAvailable.begin(); it != mAvailable.end(); it++) {
+		VkDeviceSize offset = AlignUp(it->first, requirements.alignment);
+		VkDeviceSize blockEnd = AlignUp(offset + requirements.size, MEM_BLOCK_SIZE);
+
+		if (blockEnd > it->first + it->second) continue;
+
+		if (block == mAvailable.end() || it->second < block->second) {
+			memLocation = offset;
+			memSize = blockEnd - offset;
+			blockSize = blockEnd - it->first;
+			block = it;
+		}
+	}
 	if (block == mAvailable.end()) return false;
 
-	VkDeviceSize blockSize = AlignUp(requirements.size, MEM_BLOCK_SIZE);
+
+	allocation.mDeviceMemory = mMemory;
+	allocation.mOffset = memLocation;
+	allocation.mSize = memSize;
+	allocation.mMapped = ((uint8_t*)mMapped) + memLocation;
+	allocation.mTag = tag;
 
 	if (block->second > blockSize) {
 		// still room left after this allocation, shift this block over
@@ -277,14 +298,20 @@ bool Device::Allocation::SubAllocate(const VkMemoryRequirements& requirements, D
 	} else
 		mAvailable.erase(block);
 
-	allocation.mDeviceMemory = mMemory;
-	allocation.mOffset = block->first;
-	allocation.mSize = blockSize;
-	allocation.mMapped = ((uint8_t*)mMapped) + block->first;
+	mAllocations.push_back(allocation);
 
 	return true;
 }
 void Device::Allocation::Deallocate(const DeviceMemoryAllocation& allocation) {
+	if (allocation.mDeviceMemory != mMemory) return;
+
+	for (auto it = mAllocations.begin(); it != mAllocations.end(); it++)
+		if (it->mOffset == allocation.mOffset) {
+			mAllocations.erase(it);
+			break;
+		}
+
+
 	VkDeviceSize end = allocation.mOffset + allocation.mSize;
 
 	auto firstAfter = mAvailable.end();
@@ -318,7 +345,7 @@ void Device::Allocation::Deallocate(const DeviceMemoryAllocation& allocation) {
 	}
 }
 
-DeviceMemoryAllocation Device::AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties) {
+DeviceMemoryAllocation Device::AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties, const string& tag) {
 	lock_guard lock(mMemoryMutex);
 
 	VkPhysicalDeviceMemoryProperties memProperties;
@@ -342,13 +369,10 @@ DeviceMemoryAllocation Device::AllocateMemory(const VkMemoryRequirements& requir
 	vector<Allocation>& allocations = mMemoryAllocations[memoryType];
 
 	for (uint32_t i = 0; i < allocations.size(); i++)
-		if (allocations[i].SubAllocate(requirements, alloc)) {
-			printf("\n\nALLOCATE\n");
-			PrintAllocations();
+		if (allocations[i].SubAllocate(requirements, alloc, tag))
 			return alloc;
-		}
 
-	// Failed to sub-allocate
+	// Failed to sub-allocate, make a new allocation
 
 	allocations.push_back({});
 	Allocation& allocation = allocations.back();
@@ -356,42 +380,50 @@ DeviceMemoryAllocation Device::AllocateMemory(const VkMemoryRequirements& requir
 	VkMemoryAllocateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	info.memoryTypeIndex = memoryType;
-	info.allocationSize = max(MEM_MIN_ALLOC, AlignUp(requirements.size, MEM_BLOCK_SIZE));
+	info.allocationSize = max(MEM_MIN_ALLOC, 2*AlignUp(requirements.size, MEM_BLOCK_SIZE));
 	ThrowIfFailed(vkAllocateMemory(mDevice, &info, nullptr, &allocation.mMemory), "vkAllocateMemory failed\n");
 	#ifdef PRINT_VK_ALLOCATIONS
-	fprintf_color(COLOR_YELLOW, stdout, "Allocated %lukb\n", info.allocationSize / 1024);
+	if (info.allocationSize < 1024)
+		fprintf_color(COLOR_YELLOW, stdout, "Allocated %lu b of type %u\n", info.allocationSize, info.memoryTypeIndex);
+	else if (info.allocationSize < 1024 * 1024)
+		fprintf_color(COLOR_YELLOW, stdout, "Allocated %lu kb of type %u\n", info.allocationSize / 1024, info.memoryTypeIndex);
+	else
+		fprintf_color(COLOR_YELLOW, stdout, "Allocated %lu mb of type %u\n", info.allocationSize / (1024 * 1024), info.memoryTypeIndex);
 	#endif
 	allocation.mSize = info.allocationSize;
-	allocation.mAvailable.push_back(make_pair((VkDeviceSize)0, allocation.mSize));
+	allocation.mAvailable = { make_pair((VkDeviceSize)0, allocation.mSize) };
 
 	if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 		vkMapMemory(mDevice, allocation.mMemory, 0, allocation.mSize, 0, &allocation.mMapped);
 
-	if (!allocation.SubAllocate(requirements, alloc)) {
+	if (!allocation.SubAllocate(requirements, alloc, tag)) {
 		fprintf_color(COLOR_RED_BOLD, stderr, "Failed to allocate memory\n");
 		throw;
 	}
 
-	printf("\n\nALLOCATE\n");
-	PrintAllocations();
 	return alloc;
 }
 void Device::FreeMemory(const DeviceMemoryAllocation& allocation) {
 	lock_guard lock(mMemoryMutex);
 	vector<Allocation>& allocations = mMemoryAllocations[allocation.mMemoryType];
-	for (auto it = allocations.begin(); it != allocations.end(); it++)
+	for (auto it = allocations.begin(); it != allocations.end();)
 		if (it->mMemory == allocation.mDeviceMemory) {
 			it->Deallocate(allocation);
 			if (it->mAvailable.size() == 1 && it->mAvailable.begin()->second == it->mSize) {
 				vkFreeMemory(mDevice, it->mMemory, nullptr);
 				#ifdef PRINT_VK_ALLOCATIONS
-				fprintf_color(COLOR_YELLOW, stdout, "Freed %lukb\n", it->mSize / 1024);
+				if (allocation.mSize < 1024)
+					fprintf_color(COLOR_YELLOW, stdout, "Freed %lu b of type %u\n", allocation.mSize, allocation.mMemoryType);
+				else if (allocation.mSize < 1024 * 1024)
+					fprintf_color(COLOR_YELLOW, stdout, "Freed %lu kb of type %u\n", allocation.mSize / 1024, allocation.mMemoryType);
+				else
+					fprintf_color(COLOR_YELLOW, stdout, "Freed %lu mb of type %u\n", allocation.mSize / (1024 * 1024), allocation.mMemoryType);
 				#endif
-				allocations.erase(it);
-			}
-		}
-	printf("\n\nDEALLOCATE\n");
-	PrintAllocations();
+				it = allocations.erase(it);
+			} else
+				it++;
+		} else
+			it++;
 }
 
 shared_ptr<CommandBuffer> Device::GetCommandBuffer(const std::string& name) {

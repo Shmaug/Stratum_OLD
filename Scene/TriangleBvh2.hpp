@@ -20,6 +20,8 @@ public:
 	inline ~TriangleBvh2() {}
 
 	const std::vector<Node>& Nodes() const { return mNodes; }
+
+	float3 GetVertex(uint32_t index) const { return mVertices[index]; }
 	uint3 GetTriangle(uint32_t index) const { return mTriangles[index]; }
 	uint32_t TriangleCount() const { return mTriangles.size(); }
 

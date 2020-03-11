@@ -15,6 +15,7 @@ struct IKJoint {
 	float3 mCurrent;
 	float3 mMin;
 	float3 mMax;
+	float mTwistPenalty;
 };
 
 float4 ForwardKinematics(vector<IKJoint>& chain) {
@@ -22,7 +23,7 @@ float4 ForwardKinematics(vector<IKJoint>& chain) {
 	for (uint32_t i = 0; i < chain.size(); i++) twist += chain[i].mCurrent[chain[i].mTwistAxis];
 	return float4(chain[chain.size() - 1].mObject->WorldPosition(), twist);
 }
-float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4& cur, uint32_t joint, float increment, float twistPenalty) {
+float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4& cur, uint32_t joint, float increment) {
 	const IKJoint& j = chain[joint];
 	float3 curLocal = (j.mObject->WorldToObject() * float4(cur.xyz, 1)).xyz;
 
@@ -58,7 +59,7 @@ float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4&
 	p[1] = float4((m[1] * float4(curLocal, 1)).xyz, cur.w);
 	p[2] = float4((m[2] * float4(curLocal, 1)).xyz, cur.w);
 
-	p[j.mTwistAxis].w += r[j.mTwistAxis][j.mTwistAxis] - j.mCurrent[j.mTwistAxis];
+	p[j.mTwistAxis].w += (r[j.mTwistAxis][j.mTwistAxis] - j.mCurrent[j.mTwistAxis]) * j.mTwistPenalty;
 
 	float3 delta(
 		length(p[0] - goal),
@@ -67,12 +68,12 @@ float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4&
 
 	return (delta - length(cur - goal)) / increment;
 }
-void EvaluateChain(vector<IKJoint>& chain, const float4& goal, float increment = PI / 2048.f, float rate = .001f, float thresh = .001f, float twistPenalty = 10.f) {
+void EvaluateChain(vector<IKJoint>& chain, const float4& goal, float increment = .0001f, float rate = .001f, float thresh = .001f) {
 	for (uint32_t i = 0; i < chain.size(); i++){
 		float4 cur = ForwardKinematics(chain);
 		if (length(cur - goal) < thresh) break;
 
-		float3 gradient = PartialGradient(chain, goal, cur, i, increment, twistPenalty);
+		float3 gradient = PartialGradient(chain, goal, cur, i, increment);
 
 		chain[i].mCurrent = clamp(chain[i].mCurrent - gradient * rate, chain[i].mMin, chain[i].mMax);
 		chain[i].mObject->LocalRotation(quaternion(chain[i].mCurrent));
@@ -169,7 +170,7 @@ public:
 	}
 
 	PLUGIN_EXPORT void Update(CommandBuffer* commandBuffer) override {
-		if (mArmBase && mArmBase->mEnabled) {
+		if (mArmBase && mArmBase->mEnabled && mInput->KeyDown(MOUSE_LEFT)) {
 			Camera* camera = mScene->Cameras()[0];
 			if (!camera) return;
 			PROFILER_BEGIN("Raycast");
@@ -177,7 +178,7 @@ public:
 			float t;
 			if (mScene->Raycast(ray, &t, false, 0x1)) {
 				mIKTarget = ray.mOrigin + ray.mDirection * t;
-				for (uint32_t i = 0; i < 64; i++)
+				for (uint32_t i = 0; i < 16; i++)
 					EvaluateChain(mIKChain, mIKTarget);
 			}
 			PROFILER_END;
@@ -227,13 +228,15 @@ public:
 			mat->SetParameter("Roughness", 1.f);
 			mat->SetParameter("Emission", float3(0));
 
+			float twistPenalty = 5.f;
+
 			unordered_map<string, IKJoint> jointMap {
-				{ "Yaw",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0) } },
-				{ "Arm0",  { nullptr, 1, float3(0), float3(-PI / 2, 0, 0), float3(PI / 2, 0, 0) } },
-				{ "Arm1",  { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0) } },
-				{ "Arm2",  { nullptr, 1, float3(0), float3(-PI*2 / 3, 0, 0), float3(PI*2 / 3, 0, 0) } },
-				{ "Arm3",  { nullptr, 1, float3(0), float3(-PI*2 / 3, 0, 0), float3(PI*2 / 3, 0, 0) } },
-				{ "Tip",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0) } },
+				{ "Yaw",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), 0 } },
+				{ "Arm0",  { nullptr, 1, float3(0), float3(-PI / 2, 0, 0), float3(PI / 2, 0, 0), twistPenalty } },
+				{ "Arm1",  { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), twistPenalty } },
+				{ "Arm2",  { nullptr, 1, float3(0), float3(-PI * 2 / 3, 0, 0), float3(PI * 2 / 3, 0, 0), twistPenalty } },
+				{ "Arm3",  { nullptr, 1, float3(0), float3(-PI * 2 / 3, 0, 0), float3(PI * 2 / 3, 0, 0), twistPenalty } },
+				{ "Tip",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), twistPenalty } },
 			};
 
 			auto matFunc = [&](Scene* scene, aiMaterial* aimat) { return mat; };

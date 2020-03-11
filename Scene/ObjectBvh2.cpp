@@ -154,7 +154,7 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 	float ht = 1e20f;
 	Object* hitObject = nullptr;
 
-	uint32_t todo[64];
+	uint32_t todo[128];
 	int stackptr = 0;
 
 	todo[stackptr] = 0;
@@ -190,14 +190,8 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 			bool h0 = ray.Intersect(mNodes[n0].mBounds, t0);
 			bool h1 = ray.Intersect(mNodes[n1].mBounds, t1);
 
-			if (h0) {
-				stackptr++;
-				todo[stackptr] = n0;
-			}
-			if (h1) {
-				stackptr++;
-				todo[stackptr] = n1;
-			}
+			if (h0 && t0.y < ht) todo[++stackptr] = n0;
+			if (h1 && t1.y < ht) todo[++stackptr] = n1;
 		}
 	}
 
@@ -206,7 +200,7 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 }
 
 void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene* scene) {
-	
+	/*
 	if (mNodes.size() == 0) return;
 
 	uint32_t todo[1024];
@@ -231,4 +225,5 @@ void ObjectBvh2::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera, Scene*
 			todo[++stackptr] = n1;
 		}
 	}
+	*/
 }

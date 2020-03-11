@@ -18,6 +18,7 @@ struct DeviceMemoryAllocation {
 	VkDeviceSize mSize;
 	uint32_t mMemoryType;
 	void* mMapped;
+	std::string mTag;
 };
 
 class Device {
@@ -43,7 +44,7 @@ public:
 
 	ENGINE_EXPORT ~Device();
 
-	ENGINE_EXPORT DeviceMemoryAllocation AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties);
+	ENGINE_EXPORT DeviceMemoryAllocation AllocateMemory(const VkMemoryRequirements& requirements, VkMemoryPropertyFlags properties, const std::string& tag);
 	ENGINE_EXPORT void FreeMemory(const DeviceMemoryAllocation& allocation);
 	
 	ENGINE_EXPORT Buffer* GetTempBuffer(const std::string& name, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
@@ -82,8 +83,9 @@ private:
 		VkDeviceSize mSize;
 		// <offset, size>
 		std::list<std::pair<VkDeviceSize, VkDeviceSize>> mAvailable;
+		std::list<DeviceMemoryAllocation> mAllocations;
 
-		ENGINE_EXPORT bool SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation);
+		ENGINE_EXPORT bool SubAllocate(const VkMemoryRequirements& requirements, DeviceMemoryAllocation& allocation, const std::string& tag);
 		ENGINE_EXPORT void Deallocate(const DeviceMemoryAllocation& allocation);
 	};
 

@@ -60,8 +60,6 @@ public:
 	ENGINE_EXPORT virtual void PreRender(CommandBuffer* commandBuffer, Camera* camera, PassType pass) override;
 	ENGINE_EXPORT virtual void DrawInstanced(CommandBuffer* commandBuffer, Camera* camera, uint32_t instanceCount, VkDescriptorSet instanceDS, PassType pass);
 
-	ENGINE_EXPORT virtual void DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) override;
-
 	ENGINE_EXPORT virtual bool Intersect(const Ray& ray, float* t, bool any) override;
 	inline virtual AABB Bounds() override { UpdateTransform(); return mAABB; }
 

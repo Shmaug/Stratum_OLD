@@ -85,6 +85,6 @@ void Buffer::Allocate(){
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(*mDevice, mBuffer, &memRequirements);
-	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties);
+	mMemory = mDevice->AllocateMemory(memRequirements, mMemoryProperties, mName);
 	vkBindBufferMemory(*mDevice, mBuffer, mMemory.mDeviceMemory, mMemory.mOffset);
 }

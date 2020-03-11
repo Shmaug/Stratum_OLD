@@ -111,13 +111,21 @@ struct Ray {
 
 	inline bool Intersect(const AABB& aabb, float2& t) const {
 		float3 id = 1.f / mDirection;
-		float3 t0 = (aabb.mMin - mOrigin) * id;
-		float3 t1 = (aabb.mMax - mOrigin) * id;
-		float3 tmin = min(t0, t1);
-		float3 tmax = max(t0, t1);
-		t.x = fmaxf(fmaxf(tmin.x, tmin.y), tmin.z);
-		t.y = fminf(fminf(tmax.x, tmax.y), tmax.z);
-		return t.x < t.y;
+
+		float3 pmin = (aabb.mMin - mOrigin) * id;
+		float3 pmax = (aabb.mMax - mOrigin) * id;
+
+		float3 mn, mx;
+		mn.x = id.x >= 0.f ? pmin.x : pmax.x;
+		mn.y = id.y >= 0.f ? pmin.y : pmax.y;
+		mn.z = id.z >= 0.f ? pmin.z : pmax.z;
+		
+		mx.x = id.x >= 0.f ? pmax.x : pmin.x;
+		mx.y = id.y >= 0.f ? pmax.y : pmin.y;
+		mx.z = id.z >= 0.f ? pmax.z : pmin.z;
+
+		t = float2(fmaxf(fmaxf(mn.x, mn.y), mn.z), fminf(fminf(mx.x, mx.y), mx.z));
+		return t.y > t.x;
 	}
 	inline bool Intersect(const Sphere& sphere, float2& t) const {
 		float3 pq = mOrigin - sphere.mCenter;
@@ -130,25 +138,56 @@ struct Ray {
 		t = -.5f * float2(b + d, b - d) / a;
 		return true;
 	}
-	// returns t,u,v
-	inline bool Intersect(const float3& v0, const float3& v1, const float3& v2, float3* tuv) const {
-		float3 v1v0 = v1 - v0;
-		float3 v2v0 = v2 - v0;
-		float3 rov0 = mOrigin - v0;
 
-		// The four determinants above have lots of terms in common. Knowing the changing
-		// the order of the columns/rows doesn't change the volume/determinant, and that
-		// the volume is dot(cross(a,b,c)), we can precompute some common terms and reduce
-		// it all to:
-		float3 n = cross(v1v0, v2v0);
-		float3 q = cross(rov0, mDirection);
-		float d = 1.f / dot(mDirection, n);
-		float u = d * dot(-q, v2v0);
-		float v = d * dot( q, v1v0);
-		float t = d * dot(-n, rov0);
+	inline bool Intersect(float3 v0, float3 v1, float3 v2, float3* tuv) const {
+		// http://jcgt.org/published/0002/01/05/paper.pdf
 
-		if (u < 0 || v < 0 || (u + v) > 1.f) return false;
-		if (tuv) *tuv = float3(t, u, v);
+		v0 -= mOrigin;
+		v1 -= mOrigin;
+		v2 -= mOrigin;
+
+		float3 rd = mDirection;
+		float3 ad = abs(mDirection);
+
+		uint32_t largesti = 0;
+		if (ad[largesti] < ad[1]) largesti = 1;
+		if (ad[largesti] < ad[2]) largesti = 2;
+
+		float idz;
+		float2 rdz;
+
+		if (largesti == 0) {
+			v0 = float3(v0.y, v0.z, v0.x);
+			v1 = float3(v1.y, v1.z, v1.x);
+			v2 = float3(v2.y, v2.z, v2.x);
+			idz = 1.f / rd.x;
+			rdz = float2(rd.y, rd.z) * idz;
+		} else if (largesti == 1) {
+			v0 = float3(v0.z, v0.x, v0.y);
+			v1 = float3(v1.z, v1.x, v1.y);
+			v2 = float3(v2.z, v2.x, v2.y);
+			idz = 1.f / rd.y;
+			rdz = float2(rd.z, rd.x) * idz;
+		} else {
+			idz = 1.f / rd.z;
+			rdz = float2(rd.x, rd.y) * idz;
+		}
+
+		v0 = float3(v0.x - v0.z * rdz.x, v0.y - v0.z * rdz.y, v0.z * idz);
+		v1 = float3(v1.x - v1.z * rdz.x, v1.y - v1.z * rdz.y, v1.z * idz);
+		v2 = float3(v2.x - v2.z * rdz.x, v2.y - v2.z * rdz.y, v2.z * idz);
+
+		float u = v2.x * v1.y - v2.y * v1.x;
+		float v = v0.x * v2.y - v0.y * v2.x;
+		float w = v1.x * v0.y - v1.y * v0.x;
+
+		if (u < 0 || v < 0 || w < 0) return false; // miss
+
+		float det = u + v + w;
+		if (det == 0) return false; // co-planar
+
+		float t = u * v0.z + v * v1.z + w * v2.z;
+		if (tuv) *tuv = float3(t, u, v) / det;
 		return true;
 	}
 };

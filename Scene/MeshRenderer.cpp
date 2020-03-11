@@ -65,37 +65,6 @@ bool MeshRenderer::Intersect(const Ray& ray, float* t, bool any) {
 	if (!m) return false;
 	Ray r;
 	r.mOrigin = (WorldToObject() * float4(ray.mOrigin, 1)).xyz;
-	r.mDirection = (transpose(ObjectToWorld()) * float4(ray.mDirection, 0)).xyz;
+	r.mDirection = (WorldToObject() * float4(ray.mDirection, 0)).xyz;
 	return m->Intersect(r, t, any);
 }
-
-void MeshRenderer::DrawGizmos(CommandBuffer* commandBuffer, Camera* camera) {
-	if (!Mesh()) return;
-	TriangleBvh2* bvh = Mesh()->BVH();
-	if (!bvh) return;
-
-	auto nodes = bvh->Nodes();
-	if (nodes.size() == 0) return;
-
-	uint32_t todo[1024];
-	int32_t stackptr = 0;
-
-	todo[stackptr] = 0;
-
-	while (stackptr >= 0) {
-		int ni = todo[stackptr];
-		stackptr--;
-		const auto& node(nodes[ni]);
-
-		if (node.mRightOffset == 0) { // leaf node
-			AABB box = node.mBounds;
-			Gizmos::DrawWireCube(WorldPosition() + WorldRotation() * box.Center(), box.Extents() * WorldScale(), WorldRotation(), float4(1, .75f, .75f, .25f));
-		} else {
-			uint32_t n0 = ni + 1;
-			uint32_t n1 = ni + node.mRightOffset;
-			todo[++stackptr] = n0;
-			todo[++stackptr] = n1;
-		}
-	}
-	
-};

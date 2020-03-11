@@ -148,7 +148,7 @@ Ray Camera::ScreenToWorldRay(const float2& uv, StereoEye eye) {
 	} else {
 		float4 p1 = mInvViewProjection[eye] * float4(clip, .1f, 1);
 		ray.mDirection = normalize(p1.xyz / p1.w);
-		ray.mOrigin = WorldPosition() + ray.mDirection * mNear;
+		ray.mOrigin = WorldPosition();
 	}
 	return ray;
 }

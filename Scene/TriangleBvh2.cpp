@@ -140,7 +140,7 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 	float2 bary = 0;
 	int hitIndex = -1;
 
-	uint32_t todo[64];
+	uint32_t todo[256];
 	int stackptr = 0;
 
 	todo[stackptr] = 0;
@@ -154,12 +154,9 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 		if (node.mRightOffset == 0) {
 			for (uint32_t o = 0; o < node.mCount; ++o) {
 				uint3 tri = mTriangles[node.mStartIndex + o];
-				const float3& v0 = mVertices[tri.x];
-				const float3& v1 = mVertices[tri.y];
-				const float3& v2 = mVertices[tri.z];
 
 				float3 tuv;
-				bool h = ray.Intersect(v0, v1, v2, &tuv);
+				bool h = ray.Intersect(mVertices[tri.x], mVertices[tri.y], mVertices[tri.z], &tuv);
 
 				if (!h || tuv.x < 0) continue;
 
@@ -183,14 +180,8 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 			bool h0 = ray.Intersect(mNodes[n0].mBounds, t0);
 			bool h1 = ray.Intersect(mNodes[n1].mBounds, t1);
 
-			if (h0) {
-				stackptr++;
-				todo[stackptr] = n0;
-			}
-			if (h1) {
-				stackptr++;
-				todo[stackptr] = n1;
-			}
+			if (h0 && t0.y < ht) todo[++stackptr] = n0;
+			if (h1 && t1.y < ht) todo[++stackptr] = n1;
 		}
 	}
 
