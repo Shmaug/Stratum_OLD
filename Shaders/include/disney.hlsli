@@ -1,24 +1,24 @@
 #define PI 3.1415926535897932
 #define INV_PI 0.31830988618
 
+#include <include/sampling.hlsli>
+
 struct DisneyMaterial {
-	float3 BaseColor;
-	float Metallic;
+    float3 BaseColor;
+    float Metallic;
     float3 Emission;
     float Specular;
-	float Anisotropy;
-	float Roughness;
-	float SpecularTint;
+    float Anisotropy;
+    float Roughness;
+    float SpecularTint;
     float SheenTint;
-	float Sheen;
-	float ClearcoatGloss;
-	float Clearcoat;
+    float Sheen;
+    float ClearcoatGloss;
+    float Clearcoat;
     float Subsurface;
     float Transmission;
     uint pad[3];
 };
-
-#include "sampling.hlsli"
 
 float SchlickFresnelReflectance(float u) {
     float m = clamp(1 - u, 0, 1);

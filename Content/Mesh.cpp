@@ -454,7 +454,7 @@ Mesh* Mesh::CreatePlane(const string& name, Device* device, float s) {
 	const uint16_t indices[6]{
 		0,2,1,2,3,1
 	};
-	return new Mesh(name, device, verts, indices, 8, sizeof(StdVertex), 6, &StdVertex::VertexInput, VK_INDEX_TYPE_UINT16);
+	return new Mesh(name, device, verts, indices, 4, sizeof(StdVertex), 6, &StdVertex::VertexInput, VK_INDEX_TYPE_UINT16);
 }
 Mesh* Mesh::CreateCube(const string& name, Device* device, float r) {
 	const StdVertex verts[24]{

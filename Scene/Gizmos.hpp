@@ -11,7 +11,6 @@ class AssetManager;
 
 class Gizmos {
 public:
-
 	ENGINE_EXPORT static bool PositionHandle(const std::string& controlName, const InputPointer* input, const quaternion& plane, float3& position, float radius = .1f, const float4& color = float4(1));
 	ENGINE_EXPORT static bool RotationHandle(const std::string& controlName, const InputPointer* input, const float3& center, quaternion& rotation, float radius = .125f, float sensitivity = .3f);
 	

@@ -18,27 +18,25 @@ struct IKJoint {
 	float mTwistPenalty;
 };
 
-float4 ForwardKinematics(vector<IKJoint>& chain) {
-	float twist = 0;
-	for (uint32_t i = 0; i < chain.size(); i++) twist += chain[i].mCurrent[chain[i].mTwistAxis];
-	return float4(chain[chain.size() - 1].mObject->WorldPosition(), twist);
+float WrapAngle(float a) {
+	return fmodf(a + PI, 2 * PI) - PI;
 }
-float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4& cur, uint32_t joint, float increment) {
+
+float3 ForwardKinematics(vector<IKJoint>& chain) {
+	return chain[chain.size() - 1].mObject->WorldPosition();
+}
+float3 PartialGradient(vector<IKJoint>& chain, const float3& goal, const float3& cur, uint32_t joint, float increment) {
 	const IKJoint& j = chain[joint];
-	float3 curLocal = (j.mObject->WorldToObject() * float4(cur.xyz, 1)).xyz;
+	float3 curLocal = (j.mObject->WorldToObject() * float4(cur, 1)).xyz;
 
 	float3 r[3];
 	r[0] = clamp(j.mCurrent + float3(increment, 0, 0), j.mMin, j.mMax);
 	r[1] = clamp(j.mCurrent + float3(0, increment, 0), j.mMin, j.mMax);
 	r[2] = clamp(j.mCurrent + float3(0, 0, increment), j.mMin, j.mMax);
 
-	for (uint32_t i = 0; i < 3; i++) if (r[i].x > 2 * PI) r[i].x -= 2 * PI;
-	for (uint32_t i = 0; i < 3; i++) if (r[i].y > 2 * PI) r[i].y -= 2 * PI;
-	for (uint32_t i = 0; i < 3; i++) if (r[i].z > 2 * PI) r[i].z -= 2 * PI;
-
-	for (uint32_t i = 0; i < 3; i++) if (r[i].x < -2 * PI) r[i].x += 2 * PI;
-	for (uint32_t i = 0; i < 3; i++) if (r[i].y < -2 * PI) r[i].y += 2 * PI;
-	for (uint32_t i = 0; i < 3; i++) if (r[i].z < -2 * PI) r[i].z += 2 * PI;
+	for (uint32_t i = 0; i < 3; i++) r[i].x = WrapAngle(r[i].x);
+	for (uint32_t i = 0; i < 3; i++) r[i].y = WrapAngle(r[i].y);
+	for (uint32_t i = 0; i < 3; i++) r[i].z = WrapAngle(r[i].z);
 
 	float4x4 m[3];
 	if (j.mObject->Parent()) {
@@ -54,28 +52,31 @@ float3 PartialGradient(vector<IKJoint>& chain, const float4& goal, const float4&
 	m[1] = m[1] * float4x4::TRS(j.mObject->LocalPosition(), quaternion(r[1]), j.mObject->LocalScale());
 	m[2] = m[2] * float4x4::TRS(j.mObject->LocalPosition(), quaternion(r[2]), j.mObject->LocalScale());
 
-	float4 p[3];
-	p[0] = float4((m[0] * float4(curLocal, 1)).xyz, cur.w);
-	p[1] = float4((m[1] * float4(curLocal, 1)).xyz, cur.w);
-	p[2] = float4((m[2] * float4(curLocal, 1)).xyz, cur.w);
+	float3 p[3];
+	p[0] = (m[0] * float4(curLocal, 1)).xyz;
+	p[1] = (m[1] * float4(curLocal, 1)).xyz;
+	p[2] = (m[2] * float4(curLocal, 1)).xyz;
 
-	p[j.mTwistAxis].w += (r[j.mTwistAxis][j.mTwistAxis] - j.mCurrent[j.mTwistAxis]) * j.mTwistPenalty;
+	float3 inc(
+		length(p[0] - goal) + fabs(r[0][j.mTwistAxis]) * j.mTwistPenalty,
+		length(p[1] - goal) + fabs(r[1][j.mTwistAxis]) * j.mTwistPenalty,
+		length(p[2] - goal) + fabs(r[2][j.mTwistAxis]) * j.mTwistPenalty );
 
-	float3 delta(
-		length(p[0] - goal),
-		length(p[1] - goal),
-		length(p[2] - goal) );
-
-	return (delta - length(cur - goal)) / increment;
+	float c = length(cur - goal) + fabs(j.mCurrent[j.mTwistAxis]) * j.mTwistPenalty;
+	return (inc - c) / increment;
 }
-void EvaluateChain(vector<IKJoint>& chain, const float4& goal, float increment = .0001f, float rate = .001f, float thresh = .001f) {
-	for (uint32_t i = 0; i < chain.size(); i++){
-		float4 cur = ForwardKinematics(chain);
-		if (length(cur - goal) < thresh) break;
+void EvaluateChain(vector<IKJoint>& chain, const float3& goal, float increment = .00001f, float rate = .0005f, float thresh = .00001f) {
+	float twist = 0;
+	for (uint32_t i = 0; i < chain.size(); i++) {
+		twist += fabs(chain[i].mCurrent[chain[i].mTwistAxis]) * chain[i].mTwistPenalty;
+		float3 cur = ForwardKinematics(chain);
+		if (length(cur - goal) + twist < thresh) break;
 
 		float3 gradient = PartialGradient(chain, goal, cur, i, increment);
 
 		chain[i].mCurrent = clamp(chain[i].mCurrent - gradient * rate, chain[i].mMin, chain[i].mMax);
+		for (uint32_t j = 0; j < 3; j++)
+			chain[i].mCurrent[j] = WrapAngle(chain[i].mCurrent[j]);
 		chain[i].mObject->LocalRotation(quaternion(chain[i].mCurrent));
 	}
 }
@@ -89,6 +90,8 @@ private:
 	Object* mArmBase;
 	vector<IKJoint> mIKChain;
 	float3 mIKTarget;
+
+	Ray ray;
 
 	MouseKeyboardInput* mInput;
 
@@ -170,17 +173,19 @@ public:
 	}
 
 	PLUGIN_EXPORT void Update(CommandBuffer* commandBuffer) override {
-		if (mArmBase && mArmBase->mEnabled && mInput->KeyDown(MOUSE_LEFT)) {
+		if (mArmBase && mArmBase->mEnabled) {
 			Camera* camera = mScene->Cameras()[0];
-			if (!camera) return;
+			if (camera && mInput->KeyDown(MOUSE_LEFT))
+				ray = camera->ScreenToWorldRay(mInput->CursorPos() / float2(camera->FramebufferWidth(), camera->FramebufferHeight()));
 			PROFILER_BEGIN("Raycast");
-			Ray ray = camera->ScreenToWorldRay(mInput->CursorPos() / float2(camera->FramebufferWidth(), camera->FramebufferHeight()));
 			float t;
-			if (mScene->Raycast(ray, &t, false, 0x1)) {
+			if (mScene->Raycast(ray, &t, false, 0x1))
 				mIKTarget = ray.mOrigin + ray.mDirection * t;
-				for (uint32_t i = 0; i < 16; i++)
-					EvaluateChain(mIKChain, mIKTarget);
-			}
+			PROFILER_END;
+			
+			PROFILER_BEGIN("IK");
+			for (uint32_t i = 0; i < 512; i++)
+				EvaluateChain(mIKChain, mIKTarget);
 			PROFILER_END;
 		}
 		
@@ -228,14 +233,14 @@ public:
 			mat->SetParameter("Roughness", 1.f);
 			mat->SetParameter("Emission", float3(0));
 
-			float twistPenalty = 5.f;
+			float twistPenalty = .001f;
 
 			unordered_map<string, IKJoint> jointMap {
 				{ "Yaw",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), 0 } },
-				{ "Arm0",  { nullptr, 1, float3(0), float3(-PI / 2, 0, 0), float3(PI / 2, 0, 0), twistPenalty } },
+				{ "Arm0",  { nullptr, 1, float3(0), float3(-PI * .4f, 0, 0), float3(PI * .4f, 0, 0), 0 } },
 				{ "Arm1",  { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), twistPenalty } },
-				{ "Arm2",  { nullptr, 1, float3(0), float3(-PI * 2 / 3, 0, 0), float3(PI * 2 / 3, 0, 0), twistPenalty } },
-				{ "Arm3",  { nullptr, 1, float3(0), float3(-PI * 2 / 3, 0, 0), float3(PI * 2 / 3, 0, 0), twistPenalty } },
+				{ "Arm2",  { nullptr, 1, float3(0), float3(-PI * .4f, 0, 0), float3(PI * .4f, 0, 0), 0 } },
+				{ "Arm3",  { nullptr, 1, float3(0), float3(-PI * .4f, 0, 0), float3(PI * .4f, 0, 0), 0 } },
 				{ "Tip",   { nullptr, 1, float3(0), float3(0, -1e10f, 0), float3(0, 1e10f, 0), twistPenalty } },
 			};
 
@@ -288,7 +293,7 @@ public:
 			char buf[1024];
 
 			for (uint32_t i = 0; i < mIKChain.size(); i++) {
-				sprintf(buf, "%s: %4.2f  %4.2f  %4.2f", mIKChain[i].mObject->mName, mIKChain[i].mCurrent.x, mIKChain[i].mCurrent.y, mIKChain[i].mCurrent.z);
+				sprintf(buf, "%s: %.2f  %.2f  %.2f %.2f", mIKChain[i].mObject->mName.c_str(), mIKChain[i].mCurrent.x, mIKChain[i].mCurrent.y, mIKChain[i].mCurrent.z, fabs(mIKChain[i].mCurrent[mIKChain[i].mTwistAxis]) * mIKChain[i].mTwistPenalty);
 				GUI::LayoutLabel(sem16, buf, 16, 18, 0, 1, 2.f, TEXT_ANCHOR_MIN);
 			}
 		}

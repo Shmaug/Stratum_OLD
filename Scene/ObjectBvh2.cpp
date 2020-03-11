@@ -14,8 +14,8 @@ void ObjectBvh2::Build(Object** objects, uint32_t objectCount) {
 
 	for (uint32_t i = 0; i < objectCount; i++) {
 		AABB aabb(objects[i]->Bounds());
-		aabb.mMin -= 1e-3f;
-		aabb.mMax += 1e-3f;
+		aabb.mMin -= 1e-2f;
+		aabb.mMax += 1e-2f;
 		mPrimitives.push_back({ aabb, objects[i] });
 
 		if (dynamic_cast<Renderer*>(objects[i]))
@@ -162,7 +162,6 @@ Object* ObjectBvh2::Intersect(const Ray& ray, float* t, bool any, uint32_t mask)
 	while (stackptr >= 0) {
 		uint32_t ni = todo[stackptr];
 		stackptr--;
-
 		const Node& node = mNodes[ni];
 
 		if (node.mRightOffset == 0) {

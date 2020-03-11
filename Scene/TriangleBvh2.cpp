@@ -8,8 +8,6 @@ void TriangleBvh2::Build(const void* vertices, uint32_t baseVertex, uint32_t ver
 	mTriangles.clear();
 	mNodes.clear();
 
-	if (vertexCount < 3 || indexCount < 3) return;
-
 	mVertices.resize(vertexCount);
 
 	vector<AABB> aabbs;
@@ -107,7 +105,7 @@ void TriangleBvh2::Build(const void* vertices, uint32_t baseVertex, uint32_t ver
 			if (ext.z > ext.x) split_dim = 2;
 
 		// Split on the center of the longest axis
-		float split_coord = .5f * (bc.mMin[split_dim] + bc.mMax[split_dim]);
+		float split_coord = bc.Center()[split_dim];
 
 		// Partition the list of objects on this split
 		uint32_t mid = start;
@@ -148,7 +146,6 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 	while (stackptr >= 0) {
 		uint32_t ni = todo[stackptr];
 		stackptr--;
-
 		const Node& node = mNodes[ni];
 
 		if (node.mRightOffset == 0) {
@@ -158,9 +155,7 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 				float3 tuv;
 				bool h = ray.Intersect(mVertices[tri.x], mVertices[tri.y], mVertices[tri.z], &tuv);
 
-				if (!h || tuv.x < 0) continue;
-
-				if (tuv.x < ht) {
+				if (h && tuv.x > 0 && tuv.x < ht) {
 					ht = tuv.x;
 					bary.x = tuv.y;
 					bary.y = tuv.z;
@@ -186,5 +181,5 @@ bool TriangleBvh2::Intersect(const Ray& ray, float* t, bool any) {
 	}
 
 	if (t) *t = ht;
-	return hitIndex;
+	return hitIndex != -1;
 }

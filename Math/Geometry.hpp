@@ -152,7 +152,7 @@ struct Ray {
 		uint32_t largesti = 0;
 		if (ad[largesti] < ad[1]) largesti = 1;
 		if (ad[largesti] < ad[2]) largesti = 2;
-
+		 
 		float idz;
 		float2 rdz;
 
@@ -181,7 +181,7 @@ struct Ray {
 		float v = v0.x * v2.y - v0.y * v2.x;
 		float w = v1.x * v0.y - v1.y * v0.x;
 
-		if (u < 0 || v < 0 || w < 0) return false; // miss
+		if ((u < 0 || v < 0 || w < 0) && (u > 0 || v > 0 || w > 0)) return false;
 
 		float det = u + v + w;
 		if (det == 0) return false; // co-planar

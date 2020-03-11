@@ -31,7 +31,7 @@ struct Ray {
 	float3 InvDirection;
 };
 
-#include "disney.hlsli"
+#include <include/disney.hlsli>
 
 [[vk::binding(0, 0)]] RWTexture2D<float4> OutputPrimary		: register(u0);
 [[vk::binding(1, 0)]] RWTexture2D<float4> OutputMeta		: register(u1);
