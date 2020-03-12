@@ -87,7 +87,7 @@ private:
 	static float mCurrentDepth;
 
 	// mGlyphCache[hash] = (buffer, lifetime)
-	struct BufferCache{
+	struct BufferCache {
 		std::unordered_map<std::size_t, std::pair<Buffer*, uint32_t>> mGlyphCache;
 	 	std::list<std::pair<Buffer*, uint32_t>> mGlyphBufferCache;
 	};

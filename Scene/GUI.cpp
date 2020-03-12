@@ -31,7 +31,6 @@ void GUI::Initialize(Device* device, AssetManager* assetManager) {
 	mHotControl = -1;
 	mLastHotControl = -1;
 	mCaches = new BufferCache[device->MaxFramesInFlight()];
-	//memset(mCaches, 0, sizeof(BufferCache) * device->MaxFramesInFlight());
 }
 void GUI::Destroy(Device* device){
 	for (uint32_t i = 0; i < device->MaxFramesInFlight(); i++){

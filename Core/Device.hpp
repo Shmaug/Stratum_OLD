@@ -94,8 +94,6 @@ private:
 	friend class ::Instance;
 	ENGINE_EXPORT Device(::Instance* instance, VkPhysicalDevice physicalDevice, uint32_t physicalDeviceIndex, uint32_t graphicsQueue, uint32_t presentQueue, const std::set<std::string>& deviceExtensions, std::vector<const char*> validationLayers);
 
-	ENGINE_EXPORT void PrintAllocations();
-
 	::Instance* mInstance;
 	uint32_t mFrameContextIndex; // assigned by mInstance
 	FrameContext* mFrameContexts;

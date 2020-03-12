@@ -160,15 +160,15 @@ public:
 		mObjects.push_back(box2.get());
 		dynamic_cast<Object*>(box2.get())->LayerMask(0x1);
 
-		auto suzanne = make_shared<MeshRenderer>("Suzanne");
-		suzanne->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/suzanne.fbx", .005f));
-		suzanne->Material(gridMat);
-		suzanne->PushConstant("TextureST", float4(1, 1, 1, 1));
-		suzanne->PushConstant("TextureIndex", 0u);
-		suzanne->LocalPosition(0, .3f, 1.f);
-		mScene->AddObject(suzanne);
-		mObjects.push_back(suzanne.get());
-		dynamic_cast<Object*>(suzanne.get())->LayerMask(0x1);
+		// auto suzanne = make_shared<MeshRenderer>("Suzanne");
+		// suzanne->Mesh(mScene->AssetManager()->LoadMesh("Assets/Models/suzanne.fbx", .005f));
+		// suzanne->Material(gridMat);
+		// suzanne->PushConstant("TextureST", float4(1, 1, 1, 1));
+		// suzanne->PushConstant("TextureIndex", 0u);
+		// suzanne->LocalPosition(0, .3f, 1.f);
+		// mScene->AddObject(suzanne);
+		// mObjects.push_back(suzanne.get());
+		// dynamic_cast<Object*>(suzanne.get())->LayerMask(0x1);
 		return true;
 	}
 
@@ -184,7 +184,7 @@ public:
 			PROFILER_END;
 			
 			PROFILER_BEGIN("IK");
-			for (uint32_t i = 0; i < 512; i++)
+			for (uint32_t i = 0; i < 128; i++)
 				EvaluateChain(mIKChain, mIKTarget);
 			PROFILER_END;
 		}
