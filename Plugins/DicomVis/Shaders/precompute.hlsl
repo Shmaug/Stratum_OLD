@@ -1,20 +1,19 @@
-#pragma kernel CopyRaw
+#pragma kernel ComputeLUT
+#pragma kernel ComputeGradient
 
 #pragma multi_compile READ_MASK
-#pragma multi_compile INVERT
-#pragma multi_compile COLORED COLORIZE
+#pragma multi_compile COLORIZE
 
-#ifdef COLORED
-[[vk::binding(0, 0)]] RWTexture3D<float3> RawVolume : register(u0);
-#else
+#pragma static_sampler Sampler max_lod=0 addressMode=clamp_border borderColor=float_transparent_black
+
 [[vk::binding(0, 0)]] RWTexture3D<float> RawVolume : register(u0);
-#endif
-[[vk::binding(1, 0)]] RWTexture3D<uint> RawMask : register(u1);
-[[vk::binding(2, 0)]] RWTexture3D<float4> BakedVolume : register(u2);
-[[vk::binding(3, 0)]] RWTexture3D<float4> PrevBakedInscatter : register(u3);
-[[vk::binding(4, 0)]] RWTexture3D<float4> BakedInscatter : register(u4);
+[[vk::binding(1, 0)]] RWTexture3D<float> RawMask : register(u1);
+[[vk::binding(2, 0)]] RWTexture3D<float4> GradientAlpha : register(u2);
+[[vk::binding(3, 0)]] RWTexture1D<float4> TransferLUT : register(u3);
+[[vk::binding(4, 0)]] SamplerState Sampler : register(s0);
 
 [[vk::push_constant]] cbuffer PushConstants : register(b2) {
+	uint3 Resolution;
 	float TransferMin;
 	float TransferMax;
 	float RemapMin;
@@ -37,53 +36,45 @@ float3 RGBtoHCV(float3 rgb) {
 	return float3(H, C, Q.x);
 }
 
-float3 Transfer(float density) {
-	#ifdef COLORIZE
-	return HSVtoRGB(float3(TransferMin + density * (TransferMax - TransferMin), .5, 1));
-	#else
-	return density;
-	#endif
-}
 float Threshold(float x) {
 	x = (x - RemapMin) * InvRemapRange;
 	return saturate(x);// * saturate(x);
 }
 
-const float4 MaskColors[8] = {
-	float4( 1,  1,  1, 0),
-	float4( 1, .1, .1, 1),
-	float4(.1,  1, .1, 1),
-	float4(.1, .1,  1, 1),
-	float4( 1,  1, .1, 1),
-	float4( 1, .1,  1, 1),
-	float4(.1,  1,  1, 1),
-	float4( 1,  1,  1, 1),
-};
+[numthreads(64, 1, 1)]
+void ComputeLUT(uint3 index : SV_DispatchThreadID) {
+	if (index.x >= Resolution.x) return;
+	float a = (float)index.x / (float)(Resolution.x - 1);
+	a = Threshold(a);
+
+	#ifdef COLORIZE
+	TransferLUT[index.x] = float4(HSVtoRGB(float3(TransferMin + a * (TransferMax - TransferMin), .5, 1)), a);
+	#else
+	TransferLUT[index.x] = a;
+	#endif
+}
 
 [numthreads(4, 4, 4)]
-void CopyRaw(uint3 index : SV_DispatchThreadID) {
-	#ifdef COLORED
+void ComputeGradient(uint3 index : SV_DispatchThreadID) {
+	float3 gradient = 0;
 
-	float4 col = float4(RawVolume[index.xyz], 1);
+	for (uint i = 0; i < 3; i++) {
+		uint3 idx0 = index;
+		uint3 idx1 = index;
 
-	#else
+		if (index[i] > 0) idx0[i]--;
+		if (index[i] < Resolution[i]-1) idx1[i]++;
 
-	#ifdef INVERT
-	float r = 1 - RawVolume[index.xyz];
-	#else
-	float r = RawVolume[index.xyz];
-	#endif
+		#ifdef READ_MASK
+		gradient[i] = RawMask[idx1] * Threshold(RawVolume[idx1]) - RawMask[idx0] * Threshold(RawVolume[idx0]);
+		#else
+		gradient[i] = Threshold(RawVolume[idx1]) - Threshold(RawVolume[idx0]);
+		#endif
+	}
 
-	r = Threshold(r);
-
+	float r = RawVolume[index];
 	#ifdef READ_MASK
-	float4 col = MaskColors[RawMask[index.xyz] % 8];
-	col.a *= r;
-	#else
-	float4 col = float4(Transfer(r), r);
+	r *= RawMask[index];
 	#endif
-
-	#endif
-
-	BakedVolume[index.xyz] = col;
+	GradientAlpha[index.xyz] = float4(gradient*.5+.5, r);
 }

@@ -103,6 +103,23 @@ void DescriptorSet::CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize o
 	mPending.push_back(write);
 	mPendingBuffers.push_back(info);
 }
+void DescriptorSet::CreateStorageTexelBufferDescriptor(Buffer* buffer, uint32_t binding) {
+	uint64_t idx = (uint64_t)binding;
+	if (mCurrent.count(idx)) {
+		const VkWriteDescriptorSet& c = mCurrent.at(idx);
+		if (c.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER && c.pTexelBufferView == &buffer->View()) return;
+	}
+
+	VkWriteDescriptorSet write = {};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstSet = mDescriptorSet;
+	write.dstBinding = binding;
+	write.dstArrayElement = 0;
+	write.pTexelBufferView = &buffer->View();
+	write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+	write.descriptorCount = 1;
+	mPending.push_back(write);
+}
 
 void DescriptorSet::CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding) {
 	uint64_t idx = (uint64_t)binding;

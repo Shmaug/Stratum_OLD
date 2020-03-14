@@ -6,10 +6,7 @@
 #include <Core/EnginePlugin.hpp>
 #include <assimp/pbrmaterial.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <ThirdParty/stb_image.h>
-
-#include "Dicom.hpp"
+#include "ImageLoader.hpp"
 
 using namespace std;
 
@@ -29,7 +26,6 @@ private:
 	bool mPhysicalShading;
 	bool mLighting;
 	bool mColorize;
-	bool mInvert;
 	float mStepSize;
 	float mLightStep;
 	float mTransferMin;
@@ -43,18 +39,13 @@ private:
 
 	Texture* mRawVolume;
 	Texture* mRawMask;
+	Texture* mGradientAlpha;
+	Texture* mTransferLUT;
 	bool mRawVolumeNew;
-	bool mRawMaskNew;
-	bool mVolumeColored;
-	
-	struct FrameData {
-		// Volume color and density, post-transfer and post-threshold
-		Texture* mBakedVolume;
-		bool mImagesNew;
-		bool mDirty;
-	};
-	FrameData* mFrameData;
 
+	bool mGradientAlphaDirty;
+	bool mTransferLUTDirty;
+	
 	Camera* mMainCamera;
 
 	MouseKeyboardInput* mInput;
@@ -66,28 +57,58 @@ private:
 	ProfilerSample mProfilerFrames[PROFILER_FRAME_COUNT - 1];
 	uint32_t mSelectedFrame;
 
-	std::unordered_map<std::string, bool> mDataFolders;
+	std::thread mScanThread;
+	bool mScanDone;
 
-	inline void MarkCopyDirty() {
-		mFrameIndex = 0;
-		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++)
-			mFrameData[i].mDirty = true;
+	std::unordered_map<std::string, ImageStackType> mDataFolders;
+
+	PLUGIN_EXPORT void ScanFolders() {
+		string path = "/Data";
+		for (uint32_t i = 0; i < mScene->Instance()->CommandLineArguments().size(); i++)
+			if (mScene->Instance()->CommandLineArguments()[i] == "--datapath") {
+				i++;
+				if (i < mScene->Instance()->CommandLineArguments().size())
+					path = mScene->Instance()->CommandLineArguments()[i];
+			}
+		if (!fs::exists(path)) path = "/Data";
+		if (!fs::exists(path)) path = "/data";
+		if (!fs::exists(path)) path = "~/Data";
+		if (!fs::exists(path)) path = "~/data";
+		if (!fs::exists(path)) path = "C:/Data";
+		if (!fs::exists(path)) path = "D:/Data";
+		if (!fs::exists(path)) path = "E:/Data";
+		if (!fs::exists(path)) path = "F:/Data";
+		if (!fs::exists(path)) path = "G:/Data";
+		if (!fs::exists(path)) {
+			fprintf_color(COLOR_RED, stderr, "DicomVis: Could not locate datapath. Please specify with --datapath <path>\n");
+			return;
+		}
+
+		for (const auto& p : fs::recursive_directory_iterator(path)) {
+			if (!p.is_directory()) continue;
+			ImageStackType type = ImageLoader::FolderStackType(p.path());
+			if (type == IMAGE_STACK_NONE) continue;
+			mDataFolders[p.path().string()] = type;
+		}
+
+		mScanDone = true;
 	}
 
 public:
 	PLUGIN_EXPORT DicomVis(): mScene(nullptr), mSelected(nullptr), mShowPerformance(false), mSnapshotPerformance(false),
-		mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mRawMaskNew(false), mRawVolumeNew(false),
-		mColorize(false), mPhysicalShading(false), mInvert(false), mLighting(false),
+		mFrameIndex(0), mRawVolume(nullptr), mRawMask(nullptr), mGradientAlpha(nullptr), mTransferLUT(nullptr), mRawVolumeNew(false), mGradientAlphaDirty(false), mTransferLUTDirty(false),
+		mColorize(false), mPhysicalShading(false), mLighting(false),
 		mVolumePosition(float3(0,0,0)), mVolumeRotation(quaternion(0,0,0,1)), mDirectLight(1.f),
 		mDensity(500.f), mRemapMin(.125f), mRemapMax(1.f), mStepSize(.001f), mLightStep(.01f), mTransferMin(.01f), mTransferMax(.5f),
-		mVolumeScatter(1.f), mVolumeExtinction(.2f), mRoughness(.8f) {
+		mVolumeScatter(.2f), mVolumeExtinction(.3f), mRoughness(.8f) {
 		mEnabled = true;
 	}
 	PLUGIN_EXPORT ~DicomVis() {
+		if (mScanThread.joinable()) mScanThread.join();
 		safe_delete(mRawVolume);
-		for (uint32_t i = 0; i < mScene->Instance()->Device()->MaxFramesInFlight(); i++) {
-			safe_delete(mFrameData[i].mBakedVolume);
-		}
+		safe_delete(mRawMask);
+		safe_delete(mGradientAlpha);
+		safe_delete(mTransferLUT);
 		for (Object* obj : mObjects)
 			mScene->RemoveObject(obj);
 	}
@@ -112,36 +133,8 @@ public:
 		mScene->Environment()->EnvironmentTexture(mScene->AssetManager()->LoadTexture("Assets/Textures/photo_studio_01_2k.hdr"));
 		mScene->Environment()->AmbientLight(.9f);
 
-		string path = "/Data";
-		for (uint32_t i = 0; i < mScene->Instance()->CommandLineArguments().size(); i++)
-			if (mScene->Instance()->CommandLineArguments()[i] == "--datapath") {
-				i++;
-				if (i < mScene->Instance()->CommandLineArguments().size())
-					path = mScene->Instance()->CommandLineArguments()[i];
-			}
-		if (!fs::exists(path)) path = "/Data";
-		if (!fs::exists(path)) path = "/data";
-		if (!fs::exists(path)) path = "~/Data";
-		if (!fs::exists(path)) path = "~/data";
-		if (!fs::exists(path)) path = "C:/Data";
-		if (!fs::exists(path)) path = "D:/Data";
-		if (!fs::exists(path)) path = "E:/Data";
-		if (!fs::exists(path)) path = "F:/Data";
-		if (!fs::exists(path)) path = "G:/Data";
-
-		if (!fs::exists(path)){
-			fprintf_color(COLOR_RED, stderr, "DicomVis: Could not locate datapath. Please specify with --datapath <path>\n");
-			throw;
-		}
-
-		for (const auto& p : fs::recursive_directory_iterator(path))
-			if (p.path().extension().string() == ".dcm")
-				mDataFolders[p.path().parent_path().string()] = false;
-			else if (p.path().extension().string() == ".raw")
-				mDataFolders[p.path().parent_path().string()] = true;
-
-		mFrameData = new FrameData[mScene->Instance()->Device()->MaxFramesInFlight()];
-		memset(mFrameData, 0, sizeof(FrameData) * mScene->Instance()->Device()->MaxFramesInFlight());
+		mScanDone = false;
+		mScanThread = thread(&DicomVis::ScanFolders, this);
 
 		return true;
 	}
@@ -181,7 +174,7 @@ public:
 
 		if (mInput->GetPointer(0)->mLastGuiHitT < 0) {
 			if (mInput->ScrollDelta() != 0){
-				mZoom = clamp(mZoom - mInput->ScrollDelta() * .05f, -1.f, 5.f);
+				mZoom = clamp(mZoom - mInput->ScrollDelta() * .025f, -1.f, 5.f);
 				mMainCamera->LocalPosition(0, 1.6f, -mZoom);
 
 				mFrameIndex = 0;
@@ -294,26 +287,31 @@ public:
 			#endif
 		}
 
+		if (!mScanDone) {
+			GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 30, 300, 60), float4(.3f, .3f, .3f, 1), 10);
+			GUI::LayoutLabel(bld24, "Scanning...", 24, 38, 0, 1);
+			GUI::EndLayout();
+			return;
+		}
+		if (mScanThread.joinable()) mScanThread.join();
+
 		GUI::BeginScreenLayout(LAYOUT_VERTICAL, fRect2D(10, s.y * .5f - 425, 300, 850), float4(.3f, .3f, .3f, 1), 10);
 
-		GUI::LayoutLabel(bld24, "Load Data Set", 24, 30, 0, 1);
+		GUI::LayoutLabel(bld24, "Load Data Set", 24, 38, 0, 1);
 		GUI::LayoutSeparator(.5f, 1);
 
 		GUI::BeginScrollSubLayout(175, mDataFolders.size() * 24, float4(.2f, .2f, .2f, 1), 5);
 		for (const auto& p : mDataFolders)
-			if (GUI::LayoutButton(sem16, fs::path(p.first).stem().string(), 16, 24, p.second ? float4(.4f, .4f, .15f, 1) : float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
+			if (GUI::LayoutButton(sem16, fs::path(p.first).stem().string(), 16, 24, float4(.2f, .2f, .2f, 1), 1, 2, TEXT_ANCHOR_MID))
 				LoadVolume(commandBuffer, p.first, p.second);
 		GUI::EndLayout();
 
 		float sliderHeight = 12;
 
-		if (GUI::LayoutButton(sem16, "Invert", 16, 24, mInvert ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
-			mInvert = !mInvert;
-			MarkCopyDirty();
-		}
 		if (GUI::LayoutButton(sem16, "Colorize", 16, 24, mColorize ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mColorize = !mColorize;
-			MarkCopyDirty();
+			mTransferLUTDirty = true;
+			mFrameIndex = 0;
 		}
 		if (GUI::LayoutButton(sem16, "Physical Shading", 16, 24, mPhysicalShading ? float4(.5f, .5f, .5f, 1) : float4(.25f, .25f, .25f, 1), 1)) {
 			mPhysicalShading = !mPhysicalShading;
@@ -329,43 +327,65 @@ public:
 		GUI::LayoutSpace(8);
 
 		GUI::LayoutLabel(sem16, "Step Size: " + to_string(mStepSize), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mStepSize, .0001f, .01f, sliderHeight, float4(.5f, .5f, .5f, 1), 4));
+		if (GUI::LayoutSlider(mStepSize, .0001f, .01f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 		GUI::LayoutLabel(sem16, "Density: " + to_string(mDensity), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
 		if (GUI::LayoutSlider(mDensity, 10, 50000.f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 		GUI::LayoutSpace(20);
 
 		GUI::LayoutLabel(sem16, "Remap Min: " + to_string(mRemapMin), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mRemapMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+			mGradientAlphaDirty = true;
+			mTransferLUTDirty = true;
+			mFrameIndex = 0;
+		}
 		GUI::LayoutLabel(sem16, "Remap Max: " + to_string(mRemapMax), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-		if (GUI::LayoutSlider(mRemapMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+		if (GUI::LayoutSlider(mRemapMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+			mGradientAlphaDirty = true;
+			mTransferLUTDirty = true;
+			mFrameIndex = 0;
+		}
 
 		if (mColorize) {
 			GUI::LayoutSpace(20);
 
 			GUI::LayoutLabel(sem16, "Transfer Min: " + to_string(mTransferMin), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mTransferMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			if (GUI::LayoutSlider(mTransferMin, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+				mTransferLUTDirty = true;
+				mFrameIndex = 0;
+			}
 			GUI::LayoutLabel(sem16, "Transfer Max: " + to_string(mTransferMax), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mTransferMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) MarkCopyDirty();
+			if (GUI::LayoutSlider(mTransferMax, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+				mTransferLUTDirty = true;
+				mFrameIndex = 0;
+			}
 		}
 		if (mPhysicalShading || mLighting) {
 			GUI::LayoutSpace(20);
 
-			GUI::LayoutLabel(sem16, "Roughness: " + to_string(mRoughness), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mRoughness, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4));
-
 			float a = mScene->Environment()->AmbientLight().x;
-			GUI::LayoutLabel(sem16, "Ambient Light: " + to_string(a), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(a, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mScene->Environment()->AmbientLight(a);
 			float d = mDirectLight.x;
-			GUI::LayoutLabel(sem16, "Direct Light: " + to_string(d), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(d, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mDirectLight = d;
 
-			GUI::LayoutLabel(sem16, "Light Step: " + to_string(mLightStep), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mLightStep, 0.0005f, .05f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
-			GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
-			if (GUI::LayoutSlider(mVolumeExtinction, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+			GUI::LayoutLabel(sem16, "Roughness: " + to_string(mRoughness), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(mRoughness, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+				mFrameIndex = 0;
+			}
+
+			GUI::LayoutLabel(sem16, "Ambient Light: " + to_string(a), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(a, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+				mScene->Environment()->AmbientLight(a);
+				mFrameIndex = 0;
+			}
+			GUI::LayoutLabel(sem16, "Direct Light: " + to_string(d), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
+			if (GUI::LayoutSlider(d, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) {
+				mDirectLight = d;
+				mFrameIndex = 0;
+			}
 
 			if (mPhysicalShading) {
+				GUI::LayoutLabel(sem16, "Light Step: " + to_string(mLightStep), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
+				if (GUI::LayoutSlider(mLightStep, 0.0005f, .05f, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
+				GUI::LayoutLabel(sem16, "Extinction: " + to_string(mVolumeExtinction), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
+				if (GUI::LayoutSlider(mVolumeExtinction, 0, 1, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 				GUI::LayoutLabel(sem16, "Scattering: " + to_string(mVolumeScatter), 14, 14, 0, 1, 0, TEXT_ANCHOR_MIN);
 				if (GUI::LayoutSlider(mVolumeScatter, 0, 3, sliderHeight, float4(.5f, .5f, .5f, 1), 4)) mFrameIndex = 0;
 			}
@@ -377,20 +397,11 @@ public:
 	PLUGIN_EXPORT void PostProcess(CommandBuffer* commandBuffer, Camera* camera) override {
 		if (!mRawVolume) return;
 		
-		FrameData& fd = mFrameData[commandBuffer->Device()->FrameContextIndex()];
-		FrameData& pfd = mFrameData[(commandBuffer->Device()->FrameContextIndex() + commandBuffer->Device()->MaxFramesInFlight()-1) % commandBuffer->Device()->MaxFramesInFlight()];
-
 		if (mRawVolumeNew) {
 			mRawVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			if (mGradientAlpha) mGradientAlpha->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			if (mRawMask) mRawMask->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 			mRawVolumeNew = false;
-		}
-		if (mRawMaskNew) {
-			mRawMask->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-			mRawMaskNew = false;
-		}
-		if (fd.mImagesNew) {
-			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
-			fd.mImagesNew = false;
 		}
 		
 		float2 res(camera->FramebufferWidth(), camera->FramebufferHeight());
@@ -409,213 +420,181 @@ public:
 
 		float3 lightCol = 2;
 		float3 lightDir = normalize(float3(.1f, .5f, -1));
-
-		if (fd.mDirty) {
-			// Copy volume
+		
+		if (mGradientAlpha && mGradientAlphaDirty) {
 			set<string> kw;
 			if (mRawMask) kw.emplace("READ_MASK");
-			if (mInvert) kw.emplace("INVERT");
-			if (mVolumeColored) kw.emplace("COLORED");
-			else if (mColorize) kw.emplace("COLORIZE");
-			ComputeShader* copy = mScene->AssetManager()->LoadShader("Shaders/precompute.stm")->GetCompute("CopyRaw", kw);
-			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copy->mPipeline);
+			ComputeShader* shader = mScene->AssetManager()->LoadShader("Shaders/precompute.stm")->GetCompute("ComputeGradient", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipeline);
 			
-			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("CopyRaw", copy->mDescriptorSetLayouts[0]);
-			ds->CreateStorageTextureDescriptor(mRawVolume, copy->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			if (mRawMask) ds->CreateStorageTextureDescriptor(mRawMask, copy->mDescriptorBindings.at("RawMask").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateStorageTextureDescriptor(fd.mBakedVolume, copy->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("CopyRaw", shader->mDescriptorSetLayouts[0]);
+			ds->CreateStorageTextureDescriptor(mRawVolume, shader->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			if (mRawMask) ds->CreateStorageTextureDescriptor(mRawMask, shader->mDescriptorBindings.at("RawMask").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateStorageTextureDescriptor(mGradientAlpha, shader->mDescriptorBindings.at("GradientAlpha").second.binding, VK_IMAGE_LAYOUT_GENERAL);
 			ds->FlushWrites();
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, copy->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
-			commandBuffer->PushConstant(copy, "RemapMin", &mRemapMin);
-			commandBuffer->PushConstant(copy, "InvRemapRange", &remapRange);
-			commandBuffer->PushConstant(copy, "TransferMin", &mTransferMin);
-			commandBuffer->PushConstant(copy, "TransferMax", &mTransferMax);
+			uint3 r(mGradientAlpha->Width(), mGradientAlpha->Height(), mGradientAlpha->Depth());
+			commandBuffer->PushConstant(shader, "RemapMin", &mRemapMin);
+			commandBuffer->PushConstant(shader, "InvRemapRange", &remapRange);
+			commandBuffer->PushConstant(shader, "Resolution", &r);
 
 			vkCmdDispatch(*commandBuffer, (mRawVolume->Width() + 3) / 4, (mRawVolume->Height() + 3) / 4, (mRawVolume->Depth() + 3) / 4);
 
-			fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, commandBuffer);
-			fd.mBakedVolume->GenerateMipMaps(commandBuffer);
+			mGradientAlpha->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 
-			fd.mDirty = false;
+			mGradientAlphaDirty = false;
 		}
 
-		fd.mBakedVolume->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+		if (mTransferLUTDirty) {
+			if (!mTransferLUT) {
+				mTransferLUT = new Texture("Transfer LUT", mScene->Instance()->Device(), 256, 1, 1, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
+				mTransferLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			} else
+				mTransferLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
+			
+			set<string> kw;
+			if (mColorize) kw.emplace("COLORIZE");
+			ComputeShader* shader = mScene->AssetManager()->LoadShader("Shaders/precompute.stm")->GetCompute("ComputeLUT", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipeline);
+
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("ComputeTransferLUT", shader->mDescriptorSetLayouts[0]);
+			ds->CreateStorageTextureDescriptor(mTransferLUT, shader->mDescriptorBindings.at("TransferLUT").second.binding);
+			ds->FlushWrites();
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+
+			uint3 r(mTransferLUT->Width(), 1, 1);
+			commandBuffer->PushConstant(shader, "RemapMin", &mRemapMin);
+			commandBuffer->PushConstant(shader, "InvRemapRange", &remapRange);
+			commandBuffer->PushConstant(shader, "TransferMin", &mTransferMin);
+			commandBuffer->PushConstant(shader, "TransferMax", &mTransferMax);
+			commandBuffer->PushConstant(shader, "Resolution", &r);
+
+			vkCmdDispatch(*commandBuffer, (mTransferLUT->Width() + shader->mWorkgroupSize.x - 1) / shader->mWorkgroupSize.x, 1, 1);
+
+			mTransferLUT->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, commandBuffer);
+
+			mTransferLUTDirty = false;
+		}
 		
-		#pragma region render volume
 		{
-			float3 vres(fd.mBakedVolume->Width(), fd.mBakedVolume->Height(), fd.mBakedVolume->Depth());
+			float3 vres(mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth());
 			set<string> kw;
 			if (mPhysicalShading) kw.emplace("PHYSICAL_SHADING");
 			else if (mLighting) kw.emplace("LIGHTING");
-			if (mColorize) kw.emplace("COLORIZE");
-			ComputeShader* draw = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
-			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipeline);
+			if (mGradientAlpha) kw.emplace("PRECOMPUTED_GRADIENT");
+			ComputeShader* shader = mScene->AssetManager()->LoadShader("Shaders/volume.stm")->GetCompute("Draw", kw);
+			vkCmdBindPipeline(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipeline);
 			
-			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", draw->mDescriptorSetLayouts[0]);
-			ds->CreateSampledTextureDescriptor(fd.mBakedVolume, draw->mDescriptorBindings.at("BakedVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			if (mPhysicalShading || mLighting) {
-				//ds->CreateSampledTextureDescriptor(fd.mBakedInscatter, draw->mDescriptorBindings.at("BakedInscatter").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-				ds->CreateSampledTextureDescriptor(mScene->Environment()->EnvironmentTexture(), draw->mDescriptorBindings.at("EnvironmentTexture").second.binding);
-			}
-			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(0), draw->mDescriptorBindings.at("RenderTarget").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), draw->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
-			ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), draw->mDescriptorBindings.at("NoiseTex").second.binding);
+			DescriptorSet* ds = commandBuffer->Device()->GetTempDescriptorSet("Draw Volume", shader->mDescriptorSetLayouts[0]);
+			if (mGradientAlpha) ds->CreateSampledTextureDescriptor(mGradientAlpha, shader->mDescriptorBindings.at("GradientAlpha").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			else ds->CreateSampledTextureDescriptor(mRawVolume, shader->mDescriptorBindings.at("RawVolume").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateSampledTextureDescriptor(mTransferLUT, shader->mDescriptorBindings.at("TransferLUT").second.binding);
+			if (mPhysicalShading || mLighting)
+				ds->CreateSampledTextureDescriptor(mScene->Environment()->EnvironmentTexture(), shader->mDescriptorBindings.at("EnvironmentTexture").second.binding);
+			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(0), shader->mDescriptorBindings.at("RenderTarget").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateStorageTextureDescriptor(camera->ResolveBuffer(1), shader->mDescriptorBindings.at("DepthNormal").second.binding, VK_IMAGE_LAYOUT_GENERAL);
+			ds->CreateSampledTextureDescriptor(mScene->AssetManager()->LoadTexture("Assets/Textures/rgbanoise.png", false), shader->mDescriptorBindings.at("NoiseTex").second.binding);
 			ds->FlushWrites();
-			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, draw->mPipelineLayout, 0, 1, *ds, 0, nullptr);
+			vkCmdBindDescriptorSets(*commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader->mPipelineLayout, 0, 1, *ds, 0, nullptr);
 
 			uint2 wo(0);
 			float3 vp = mVolumePosition - camera->WorldPosition();
 			float3 ambient = mScene->Environment()->AmbientLight();
 
-			commandBuffer->PushConstant(draw, "VolumePosition", &vp);
-			commandBuffer->PushConstant(draw, "VolumeRotation", &mVolumeRotation.xyzw);
-			commandBuffer->PushConstant(draw, "VolumeScale", &mVolumeScale);
-			commandBuffer->PushConstant(draw, "InvVolumeRotation", &ivr);
-			commandBuffer->PushConstant(draw, "InvVolumeScale", &ivs);
-			commandBuffer->PushConstant(draw, "VolumeResolution", &vres);
+			commandBuffer->PushConstant(shader, "VolumePosition", &vp);
+			commandBuffer->PushConstant(shader, "VolumeRotation", &mVolumeRotation.xyzw);
+			commandBuffer->PushConstant(shader, "VolumeScale", &mVolumeScale);
+			commandBuffer->PushConstant(shader, "InvVolumeRotation", &ivr);
+			commandBuffer->PushConstant(shader, "InvVolumeScale", &ivs);
+			commandBuffer->PushConstant(shader, "VolumeResolution", &vres);
 
-			commandBuffer->PushConstant(draw, "DirectLight", &mDirectLight.x);
-			commandBuffer->PushConstant(draw, "AmbientLight", &ambient.x);
-			commandBuffer->PushConstant(draw, "Density", &mDensity);
-			commandBuffer->PushConstant(draw, "Extinction", &mVolumeExtinction);
-			commandBuffer->PushConstant(draw, "Scattering", &mVolumeScatter);
-			commandBuffer->PushConstant(draw, "Roughness", &mRoughness);
+			commandBuffer->PushConstant(shader, "DirectLight", &mDirectLight.x);
+			commandBuffer->PushConstant(shader, "AmbientLight", &ambient.x);
+			commandBuffer->PushConstant(shader, "Density", &mDensity);
+			commandBuffer->PushConstant(shader, "Extinction", &mVolumeExtinction);
+			commandBuffer->PushConstant(shader, "Scattering", &mVolumeScatter);
+			commandBuffer->PushConstant(shader, "Roughness", &mRoughness);
 
-			commandBuffer->PushConstant(draw, "StepSize", &mStepSize);
-			commandBuffer->PushConstant(draw, "LightStep", &mLightStep);
-			commandBuffer->PushConstant(draw, "FrameIndex", &mFrameIndex);
+			commandBuffer->PushConstant(shader, "StepSize", &mStepSize);
+			commandBuffer->PushConstant(shader, "LightStep", &mLightStep);
+			commandBuffer->PushConstant(shader, "FrameIndex", &mFrameIndex);
 
 			switch (camera->StereoMode()) {
 			case STEREO_NONE:
-				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				commandBuffer->PushConstant(shader, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(shader, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(shader, "WriteOffset", &wo);
+				commandBuffer->PushConstant(shader, "ScreenResolution", &res);
 				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
 				break;
 			case STEREO_SBS_HORIZONTAL:
 				res.x *= .5f;
-				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				commandBuffer->PushConstant(shader, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(shader, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(shader, "WriteOffset", &wo);
+				commandBuffer->PushConstant(shader, "ScreenResolution", &res);
 				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() / 2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
 				wo.x = camera->FramebufferWidth() / 2;
-				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
-				commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
-				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				commandBuffer->PushConstant(shader, "InvViewProj", &ivp[1]);
+				commandBuffer->PushConstant(shader, "CameraPosition", &cp[1]);
+				commandBuffer->PushConstant(shader, "WriteOffset", &wo);
 				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth()/2 + 7) / 8, (camera->FramebufferHeight() + 7) / 8, 1);
 				break;
 			case STEREO_SBS_VERTICAL:
 				res.y *= .5f;
-				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[0]);
-				commandBuffer->PushConstant(draw, "CameraPosition", &cp[0]);
-				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
-				commandBuffer->PushConstant(draw, "ScreenResolution", &res);
+				commandBuffer->PushConstant(shader, "InvViewProj", &ivp[0]);
+				commandBuffer->PushConstant(shader, "CameraPosition", &cp[0]);
+				commandBuffer->PushConstant(shader, "WriteOffset", &wo);
+				commandBuffer->PushConstant(shader, "ScreenResolution", &res);
 				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
 				wo.y = camera->FramebufferWidth() / 2;
-				commandBuffer->PushConstant(draw, "InvViewProj", &ivp[1]);
-				commandBuffer->PushConstant(draw, "CameraPosition", &cp[1]);
-				commandBuffer->PushConstant(draw, "WriteOffset", &wo);
+				commandBuffer->PushConstant(shader, "InvViewProj", &ivp[1]);
+				commandBuffer->PushConstant(shader, "CameraPosition", &cp[1]);
+				commandBuffer->PushConstant(shader, "WriteOffset", &wo);
 				vkCmdDispatch(*commandBuffer, (camera->FramebufferWidth() + 7) / 8, (camera->FramebufferHeight() / 2 + 7) / 8, 1);
 				break;
 			}
 
 			camera->ResolveBuffer(0)->TransitionImageLayout(VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, commandBuffer);
 		}
-		#pragma endregion
 
 		mFrameIndex++;
 	}
 	
-	Texture* LoadRawStack(const fs::path& folder, Device* device, float3* scale) {
-		vector<pair<int, string>> images;
-		for (const auto& p : fs::directory_iterator(folder))
-			if (p.path().extension().string() == ".png")
-				images.push_back(make_pair(atoi(p.path().stem().string().c_str()), p.path().string()));
-		if (images.empty()) return nullptr;
-		std::sort(images.begin(), images.end(), [](const pair<int, string>& a, const pair<int, string>& b) {
-			return a.first < b.first;
-		});
-
-		return nullptr;
-	}
-
-	Texture* LoadMask(const fs::path& folder, Device* device) {
-		vector<pair<int, string>> images;
-		for (const auto& p : fs::directory_iterator(folder))
-			if (p.path().extension().string() == ".png")
-				images.push_back(make_pair(atoi(p.path().stem().string().c_str()), p.path().string()));
-		if (images.empty()) return nullptr;
-		std::sort(images.begin(), images.end(), [](const pair<int, string>& a, const pair<int, string>& b) {
-			return a.first < b.first;
-		});
-
-		vector<uint8_t*> pixels(images.size());
-
-		uint32_t width = 0;
-		uint32_t height = 0;
-		uint32_t depth = images.size();
-
-		for (uint32_t i = 0; i < images.size(); i++) {
-			int x,y,c;
-			pixels[i] = stbi_load(images[i].second.c_str(), &x, &y, &c, 1);
-			width  = max(width,  (uint32_t)x);
-			height = max(height, (uint32_t)y);
-		}
-
-		//Texture* mask = new Texture();
-
-		return nullptr;
-	}
-
-	void LoadVolume(CommandBuffer* commandBuffer, const fs::path& folder, bool color) {
+	void LoadVolume(CommandBuffer* commandBuffer, const fs::path& folder, ImageStackType type) {
 		safe_delete(mRawVolume);
 		safe_delete(mRawMask);
-		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
-			safe_delete(mFrameData[i].mBakedVolume);
+		safe_delete(mGradientAlpha);
+
+		Texture* vol = nullptr;
+		switch (type) {
+		case IMAGE_STACK_STANDARD:
+			vol = ImageLoader::LoadStandardStack(folder, mScene->Instance()->Device(), &mVolumeScale);
+			break;
+		case IMAGE_STACK_DICOM:
+			vol = ImageLoader::LoadDicomStack(folder, mScene->Instance()->Device(), &mVolumeScale);
+			break;
+		case IMAGE_STACK_RAW:
+			vol = ImageLoader::LoadRawStack(folder, mScene->Instance()->Device(), &mVolumeScale);
+			break;
 		}
-
-		Texture* vol;
-		if (color) {
-			vol = LoadRawStack(folder.string(), mScene->Instance()->Device(), &mVolumeScale);
-			if (!vol) {
-				fprintf_color(COLOR_RED, stderr, "Failed to load volume!\n");
-				return;
-			}
-		} else {
-			vol = Dicom::LoadDicomStack(folder.string(), mScene->Instance()->Device(), &mVolumeScale);
-			if (!vol) {
-				fprintf_color(COLOR_RED, stderr, "Failed to load volume!\n");
-				return;
-			}
-
-			string maskPath = folder.string() + "/_mask";
-
-			if (fs::exists(maskPath)) {
-				mRawMask = LoadMask(maskPath, mScene->Instance()->Device());
-				if (!mRawMask)
-					fprintf_color(COLOR_RED, stderr, "Failed to load mask!\n");
-				else
-					mRawMaskNew = true;
-			}
-		}
-
-		mVolumeColored = color;
 		
+		if (!vol) {
+			fprintf_color(COLOR_RED, stderr, "Failed to load volume!\n");
+			return;
+		}
+
 		mVolumeRotation = quaternion(0,0,0,1);
 		mVolumePosition = float3(0, 1.6f, 0);
+
 		mRawVolume = vol;
+		mRawMask = ImageLoader::LoadStandardStack(folder.string() + "/_mask", mScene->Instance()->Device(), nullptr);
+		//mGradientAlpha = new Texture("Gradient Alpha", mScene->Instance()->Device(), nullptr, 0, mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R8G8B8A8_UNORM, 1, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+
 		mRawVolumeNew = true;
-
-		for (uint32_t i = 0; i < commandBuffer->Device()->MaxFramesInFlight(); i++) {
-			FrameData& fd = mFrameData[i];
-			fd.mBakedVolume = new Texture("Baked Volume", mScene->Instance()->Device(), nullptr, 0, mRawVolume->Width(), mRawVolume->Height(), mRawVolume->Depth(), VK_FORMAT_R16G16B16A16_UNORM, 5, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-			fd.mImagesNew = true;
-			fd.mDirty = true;
-		}
-
+		mTransferLUTDirty = true;
+		mGradientAlphaDirty = true;
 		mFrameIndex = 0;
 	}
 };

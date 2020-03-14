@@ -300,7 +300,7 @@ void Texture::GenerateMipMaps(CommandBuffer* commandBuffer) {
 void Texture::CreateImage() {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = mDepth > 1 ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+	imageInfo.imageType = mDepth > 1 ? VK_IMAGE_TYPE_3D : (mHeight > 1 ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_1D);
 	imageInfo.extent.width = mWidth;
 	imageInfo.extent.height = mHeight;
 	imageInfo.extent.depth = mDepth;
@@ -326,7 +326,7 @@ void Texture::CreateImage() {
 void Texture::CreateImageView(VkImageAspectFlags aspectFlags) {
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.viewType = mArrayLayers == 6 ? VK_IMAGE_VIEW_TYPE_CUBE : (mDepth > 1 ? VK_IMAGE_VIEW_TYPE_3D :VK_IMAGE_VIEW_TYPE_2D);
+	viewInfo.viewType = mArrayLayers == 6 ? VK_IMAGE_VIEW_TYPE_CUBE : (mDepth > 1 ? VK_IMAGE_VIEW_TYPE_3D : (mHeight > 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_1D));
 	viewInfo.format = mFormat;
 	viewInfo.subresourceRange.aspectMask = aspectFlags;
 	viewInfo.subresourceRange.baseMipLevel = 0;

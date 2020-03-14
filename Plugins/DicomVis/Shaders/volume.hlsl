@@ -2,8 +2,9 @@
 
 #pragma multi_compile PHYSICAL_SHADING LIGHTING
 #pragma multi_compile SBS_HORIZONTAL SBS_VERTICAL
+#pragma multi_compile PRECOMPUTED_GRADIENT
 
-#pragma static_sampler Sampler max_lod=5 addressMode=clamp_border borderColor=float_transparent_black
+#pragma static_sampler Sampler max_lod=0 addressMode=clamp_border borderColor=float_transparent_black
 
 #define PI 3.1415926535897932
 #define INV_PI (1 / PI)
@@ -11,8 +12,12 @@
 [[vk::binding(0, 0)]] RWTexture2D<float4> RenderTarget : register(u0);
 [[vk::binding(1, 0)]] RWTexture2D<float4> DepthNormal : register(u1);
 
-[[vk::binding(2, 0)]] Texture3D<float4> BakedVolume : register(t0);
-[[vk::binding(3, 0)]] Texture3D<float4> BakedInscatter : register(t1);
+#ifdef PRECOMPUTED_GRADIENT
+[[vk::binding(2, 0)]] Texture3D<float4> GradientAlpha : register(t0);
+#else
+[[vk::binding(2, 0)]] Texture3D<float> RawVolume : register(t0);
+#endif
+[[vk::binding(3, 0)]] Texture1D<float4> TransferLUT : register(t1);
 
 [[vk::binding(4, 0)]] Texture2D<float4> EnvironmentTexture	: register(t2);
 
@@ -101,7 +106,6 @@ float2 cmj(int s, int n, int p) {
 	float jy = randfloat(s, p * 0x711ad6a5);
 	return float2((s % n + (sy + jx) / n) / n, (s / n + (sx + jy) / n) / n);
 }
-
 float2 SampleRNG(inout RandomSampler rng) {
 	int idx = permute(rng.index, CMJ_DIM * CMJ_DIM, 0xa399d265 * rng.dimension * rng.scramble);
 	float2 s = cmj(idx, CMJ_DIM, rng.dimension * rng.scramble);
@@ -203,6 +207,21 @@ float3 BRDFIndirect(float3 diffuse, float3 specular, float oneMinusReflectivity,
 	return diffuse * diffuseLight + surfaceReduction * specularLight * FresnelLerp(specular, grazingTerm, dot(normal, view));
 }
 
+float4 Sample(float3 p, out float3 gradient) {
+	#ifdef PRECOMPUTED_GRADIENT
+	float4 s = GradientAlpha.SampleLevel(Sampler, p, 0);
+	gradient = s.xyz * 2 - 1;
+	return TransferLUT.SampleLevel(Sampler, s.a, 0);
+	#else
+	float a = RawVolume.SampleLevel(Sampler, p, 0);
+	gradient = float3(
+		RawVolume.SampleLevel(Sampler, p, 0, int3(1, 0, 0)) - RawVolume.SampleLevel(Sampler, p, 0, int3(-1, 0, 0)),
+		RawVolume.SampleLevel(Sampler, p, 0, int3(0, 1, 0)) - RawVolume.SampleLevel(Sampler, p, 0, int3(0, -1, 0)),
+		RawVolume.SampleLevel(Sampler, p, 0, int3(0, 0, 1)) - RawVolume.SampleLevel(Sampler, p, 0, int3(0, 0, -1)) );
+	return TransferLUT.SampleLevel(Sampler, a, 0);
+	#endif
+}
+
 [numthreads(8, 8, 1)]
 void Draw(uint3 index : SV_DispatchThreadID) {
 	float2 clip = 2 * index.xy / ScreenResolution - 1;
@@ -233,27 +252,23 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 
 	rd_w = -rd_w;
 
+	float3 sp = ro + rd * StepSize;
+	float3 dsp = rd * StepSize;
+
 	#ifdef PHYSICAL_SHADING
 	
 	float scaledStep = StepSize * length(rd * VolumeScale);
-
-	float3 sp = ro + rd * StepSize;
-	float3 dsp = rd * StepSize;
 
 	float3 opticalDensity = 0;
 	float3 inscatter = 0;
 
 	for (float t = StepSize; t < isect.y;) {
-		float4 localSample = BakedVolume.SampleLevel(Sampler, sp, 0);
+		float3 gradient;
+		float4 localSample = Sample(sp, gradient);
+		float3 localEval = localSample.rgb;
 
-		float3 gradient = float3(
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(1, 0, 0)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(-1, 0, 0)).a,
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 1, 0)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, -1, 0)).a,
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 0, 1)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 0, -1)).a);
 		gradient = VolumeToWorldV(gradient);
 		float l = length(gradient);
-
-		float3 localEval = localSample.rgb;
 
 		if (l > .001) {
 			gradient /= l;
@@ -267,8 +282,12 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 			float3 indirect = BRDFIndirect(diffuse, specular, oneMinusReflectivity, Roughness, rd_w, gradient, wo);
 			float3 direct   = DirectLight * BRDF(diffuse, specular, Roughness, abs(dot(rd_w, gradient)), LightDir, gradient, rd_w);
 
-			direct   *= exp(-Extinction * Density * max(0, BakedVolume.SampleLevel(Sampler, sp + WorldToVolumeV(LightDir) * LightStep, 1).a - localSample.a));
-			indirect *= exp(-Extinction * Density * max(0, BakedVolume.SampleLevel(Sampler, sp + WorldToVolumeV(wo) * LightStep, 1).a - localSample.a));
+			float3 tmp;
+			float sld = Sample(sp + WorldToVolumeV(LightDir) * LightStep, tmp).a;
+			float swo = Sample(sp + WorldToVolumeV(wo) * LightStep, tmp).a;
+
+			direct   *= exp(-Extinction * Density * max(0, sld - localSample.a));
+			indirect *= exp(-Extinction * Density * max(0, swo - localSample.a));
 
 			localEval = direct + indirect;
 		}
@@ -291,15 +310,11 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 
 	// traditional alpha blending
 	float4 sum = 0;
-	for (float t = StepSize; t < isect.y; t += StepSize) {
-		float3 sp = ro + rd * t;
-		float4 localSample = BakedVolume.SampleLevel(Sampler, sp, 0);
+	for (float t = StepSize; t < isect.y;) {
+		float3 gradient;
+		float4 localSample = Sample(sp, gradient);
 
 		#ifdef LIGHTING
-		float3 gradient = float3(
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(1, 0, 0)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(-1, 0, 0)).a,
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 1, 0)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, -1, 0)).a,
-			BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 0, 1)).a - BakedVolume.SampleLevel(Sampler, sp, 0, int3(0, 0, -1)).a);
 		gradient = VolumeToWorldV(gradient);
 		float l = length(gradient);
 		if (l > .001) {
@@ -323,6 +338,9 @@ void Draw(uint3 index : SV_DispatchThreadID) {
 
 		localSample.rgb *= localSample.a;
 		sum += (1 - sum.a) * localSample;
+
+		t += StepSize;
+		sp += dsp;
 	}
 	RenderTarget[WriteOffset + index.xy] = RenderTarget[WriteOffset + index.xy] * (1 - sum.a) + sum * sum.a;
 

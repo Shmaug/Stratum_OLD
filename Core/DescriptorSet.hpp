@@ -14,6 +14,7 @@ public:
 
 	ENGINE_EXPORT void CreateStorageBufferDescriptor(Buffer* buffer, uint32_t index, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
 	ENGINE_EXPORT void CreateStorageBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
+	ENGINE_EXPORT void CreateStorageTexelBufferDescriptor(Buffer* view, uint32_t binding);
 	ENGINE_EXPORT void CreateUniformBufferDescriptor(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, uint32_t binding);
 	
 	ENGINE_EXPORT void CreateStorageTextureDescriptor(Texture* texture, uint32_t binding, VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL);
