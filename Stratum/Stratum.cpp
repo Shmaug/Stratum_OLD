@@ -76,6 +76,7 @@ public:
 		printf("Initializing...\n");
 		mPluginManager = new PluginManager();
 		mPluginManager->LoadPlugins();
+
 		mInstance = new Instance(argc, argv, mPluginManager);
 		mInputManager = new InputManager();
 		mAssetManager = new AssetManager(mInstance->Device());
@@ -135,10 +136,12 @@ public:
 	}
 
 	~Stratum() {
+		safe_delete(mPluginManager);
+		
 		GUI::Destroy(mInstance->Device());
 		Gizmos::Destroy(mInstance->Device());
-		safe_delete(mScene);
 
+		safe_delete(mScene);
 		safe_delete(mAssetManager);
 		safe_delete(mInputManager);
 		safe_delete(mInstance);

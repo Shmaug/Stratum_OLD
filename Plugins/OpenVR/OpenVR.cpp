@@ -9,7 +9,7 @@ using namespace std;
 
 ENGINE_PLUGIN(OpenVR)
 
-OpenVR::OpenVR() : mScene(nullptr), mCamera(nullptr), mInput(nullptr){
+OpenVR::OpenVR() : mScene(nullptr), mCamera(nullptr) {
 	mEnabled = true;
 	mVRDevice = new OpenVRDevice();
 	
@@ -54,13 +54,10 @@ void OpenVR::PreDeviceInit(Instance* instance, VkPhysicalDevice device)
 }
 
 bool OpenVR::Init(Scene* scene) {
+	mScene = scene;
 
 	VkInstance i = *scene->Instance();
 	uint64_t device;
-
-
-	mScene = scene;
-	mInput = mScene->InputManager()->GetFirst<MouseKeyboardInput>();
 	
 #pragma region load glTF
 	string folder = "Assets/Models/";

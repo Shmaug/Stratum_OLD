@@ -6,7 +6,8 @@
 #include <Util/Profiler.hpp>
 #include <Util/Util.hpp>
 
-#define PRINT_VK_ALLOCATIONS
+
+//#define PRINT_VK_ALLOCATIONS
 
 // 4kb blocks
 #define MEM_BLOCK_SIZE (4*1024)

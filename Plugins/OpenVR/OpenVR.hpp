@@ -15,7 +15,7 @@ private:
 	Object* mBodyBase;
 	Object* mHead;
 	OpenVRDevice* mVRDevice;
-	MouseKeyboardInput* mInput;
+
 	std::vector<Object*> mObjects;
 	uint64_t mFrameNum;
 

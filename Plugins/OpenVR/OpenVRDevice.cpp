@@ -1,6 +1,5 @@
 #include "OpenVRDevice.hpp"
 
-#pragma region Conversion code
 // Converts to float4x4 format and flips from right-handed to left-handed
 float4x4 OpenVRDevice::ConvertMat34(vr::HmdMatrix34_t mat34) {
 	return float4x4(
@@ -10,7 +9,6 @@ float4x4 OpenVRDevice::ConvertMat34(vr::HmdMatrix34_t mat34) {
 		0.f, 0.f, 0.f, 1.f
 	);
 }
-
 float4x4 OpenVRDevice::ConvertMat44(vr::HmdMatrix44_t mat44) {
 	return float4x4(
 		mat44.m[0][0], mat44.m[0][1], mat44.m[0][2], mat44.m[0][3],

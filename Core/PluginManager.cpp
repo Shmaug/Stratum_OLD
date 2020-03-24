@@ -136,12 +136,17 @@ void PluginManager::LoadPlugins() {
 
 	sort(mPlugins.begin(), mPlugins.end(), [](const auto& a, const auto& b) {
 		return a->Priority() > b->Priority();
-		});
+	});
 }
 
 void PluginManager::InitPlugins(Scene* scene) {
-	for (const auto& p : mPlugins)
-		p->Init(scene);
+	for (auto it = mPlugins.begin(); it != mPlugins.end();) {
+		if (!(*it)->Init(scene)) {
+			safe_delete(*it);
+			it = mPlugins.erase(it);
+		} else
+			it++;
+	}
 }
 void PluginManager::UnloadPlugins() {
 	for (auto& p : mPlugins)
